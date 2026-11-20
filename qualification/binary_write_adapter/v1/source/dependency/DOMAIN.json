@@ -1,0 +1,6541 @@
+{
+  "schema": "hepta.runtime.binary-call-plan.input-domain.v1",
+  "groups": [
+    {
+      "name": "absent-00",
+      "profile": "absent",
+      "config": null,
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 1
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 2
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 3
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 4
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 5
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 6
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 7
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 8
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 9
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 10
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 11
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 12
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 13
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 14
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 15
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 16
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 17
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 18
+        }
+      ]
+    },
+    {
+      "name": "operator-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 19
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 20
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 21
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 22
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 23
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 24
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 25
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 26
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 27
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 28
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 29
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 30
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 31
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 32
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 33
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 34
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 35
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 36
+        }
+      ]
+    },
+    {
+      "name": "isolated-00",
+      "profile": "isolated",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "isolated",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": [
+              "/data/secret"
+            ]
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 37
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 38
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 39
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 40
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 41
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 42
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 43
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 44
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 45
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 46
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 47
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 48
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 49
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 50
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 51
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 52
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 53
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 54
+        }
+      ]
+    },
+    {
+      "name": "disabled-00",
+      "profile": "disabled",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": false,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 55
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 56
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 57
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 58
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 59
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 60
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 61
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 62
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 63
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 64
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 65
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 66
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 67
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 68
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 69
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 70
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 71
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 72
+        }
+      ]
+    },
+    {
+      "name": "empty-00",
+      "profile": "empty",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [],
+            "allowed_write_path_prefixes": [],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 73
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 74
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 75
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 76
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 77
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 78
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 79
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 80
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 81
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 82
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 83
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 84
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 85
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 86
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 87
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 88
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 89
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 90
+        }
+      ]
+    },
+    {
+      "name": "aliases-00",
+      "profile": "aliases",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "a": {
+            "ssh_target": "z",
+            "remote_state_dir": "/remote",
+            "execution_mode": "isolated",
+            "allow_write": false,
+            "allowed_read_path_prefixes": [
+              "/alias",
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": [
+              "/secret"
+            ]
+          },
+          "z": {
+            "ssh_target": "z-named",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 91
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 92
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 93
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 94
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 95
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 96
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 97
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 98
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 99
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 100
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 101
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 102
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 103
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 104
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 105
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 106
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 107
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 108
+        }
+      ]
+    },
+    {
+      "name": "alias_order-00",
+      "profile": "alias_order",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "a": {
+            "ssh_target": "z",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/first"
+            ],
+            "allowed_write_path_prefixes": [
+              "/first"
+            ],
+            "protected_path_prefixes": []
+          },
+          "b": {
+            "ssh_target": "z",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/second"
+            ],
+            "allowed_write_path_prefixes": [
+              "/second"
+            ],
+            "protected_path_prefixes": []
+          },
+          "z": {
+            "ssh_target": "z-host",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/first",
+              "/second"
+            ],
+            "allowed_write_path_prefixes": [
+              "/first",
+              "/second"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 109
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 110
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 111
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 112
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 113
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 114
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 115
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 116
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 117
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 118
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 119
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 120
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 121
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 122
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 123
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 124
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 125
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 126
+        }
+      ]
+    },
+    {
+      "name": "raw_roots-00",
+      "profile": "raw_roots",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/",
+              "/a",
+              "/a/",
+              "/a//",
+              "//",
+              "//a",
+              "//a/",
+              "/é",
+              "/é/文"
+            ],
+            "allowed_write_path_prefixes": [
+              "/é/文",
+              "/é",
+              "//a/",
+              "//a",
+              "//",
+              "/a//",
+              "/a/",
+              "/a",
+              "/"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "ordinary-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 127
+        },
+        {
+          "name": "ordinary-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 128
+        },
+        {
+          "name": "ordinary-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 129
+        },
+        {
+          "name": "ordinary-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 130
+        },
+        {
+          "name": "ordinary-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 131
+        },
+        {
+          "name": "pool-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 132
+        },
+        {
+          "name": "pool-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file"
+          },
+          "case_id": 133
+        },
+        {
+          "name": "unknown-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 134
+        },
+        {
+          "name": "unknown-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative"
+          },
+          "case_id": 135
+        },
+        {
+          "name": "unknown-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 136
+        },
+        {
+          "name": "unknown-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 137
+        },
+        {
+          "name": "unknown-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 138
+        },
+        {
+          "name": "encoded-bound-before-authority",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 139
+        },
+        {
+          "name": "identity-before-authority",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "chunk",
+            "upload_id": "short"
+          },
+          "case_id": 140
+        },
+        {
+          "name": "ack-before-path",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "missing",
+            "path": "relative",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": false
+          },
+          "case_id": 141
+        },
+        {
+          "name": "read-check-before-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/write-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 142
+        },
+        {
+          "name": "read-pass-then-apply-fields",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 143
+        },
+        {
+          "name": "read-only-then-write-check",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/read-only/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 144
+        }
+      ]
+    },
+    {
+      "name": "paths-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "path-0-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": ""
+          },
+          "case_id": 145
+        },
+        {
+          "name": "path-0-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": ""
+          },
+          "case_id": 146
+        },
+        {
+          "name": "path-0-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 147
+        },
+        {
+          "name": "path-0-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 148
+        },
+        {
+          "name": "path-0-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 149
+        },
+        {
+          "name": "path-1-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "relative"
+          },
+          "case_id": 150
+        },
+        {
+          "name": "path-1-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "relative"
+          },
+          "case_id": 151
+        },
+        {
+          "name": "path-1-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "relative",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 152
+        },
+        {
+          "name": "path-1-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "relative",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 153
+        },
+        {
+          "name": "path-1-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "relative",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 154
+        },
+        {
+          "name": "path-2-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/~"
+          },
+          "case_id": 155
+        },
+        {
+          "name": "path-2-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/~"
+          },
+          "case_id": 156
+        },
+        {
+          "name": "path-2-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/~",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 157
+        },
+        {
+          "name": "path-2-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/~",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 158
+        },
+        {
+          "name": "path-2-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/~",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 159
+        },
+        {
+          "name": "path-3-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/~/x"
+          },
+          "case_id": 160
+        },
+        {
+          "name": "path-3-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/~/x"
+          },
+          "case_id": 161
+        },
+        {
+          "name": "path-3-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/~/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 162
+        },
+        {
+          "name": "path-3-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/~/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 163
+        },
+        {
+          "name": "path-3-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/~/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 164
+        },
+        {
+          "name": "path-4-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data"
+          },
+          "case_id": 165
+        },
+        {
+          "name": "path-4-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data"
+          },
+          "case_id": 166
+        },
+        {
+          "name": "path-4-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 167
+        },
+        {
+          "name": "path-4-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 168
+        }
+      ]
+    },
+    {
+      "name": "paths-01",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "path-4-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 169
+        },
+        {
+          "name": "path-5-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/"
+          },
+          "case_id": 170
+        },
+        {
+          "name": "path-5-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/"
+          },
+          "case_id": 171
+        },
+        {
+          "name": "path-5-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 172
+        },
+        {
+          "name": "path-5-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 173
+        },
+        {
+          "name": "path-5-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 174
+        },
+        {
+          "name": "path-6-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/nest"
+          },
+          "case_id": 175
+        },
+        {
+          "name": "path-6-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/nest"
+          },
+          "case_id": 176
+        },
+        {
+          "name": "path-6-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/nest",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 177
+        },
+        {
+          "name": "path-6-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/nest",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 178
+        },
+        {
+          "name": "path-6-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/nest",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 179
+        },
+        {
+          "name": "path-7-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/nest/x"
+          },
+          "case_id": 180
+        },
+        {
+          "name": "path-7-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/nest/x"
+          },
+          "case_id": 181
+        },
+        {
+          "name": "path-7-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/nest/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 182
+        },
+        {
+          "name": "path-7-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/nest/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 183
+        },
+        {
+          "name": "path-7-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/nest/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 184
+        },
+        {
+          "name": "path-8-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/../x"
+          },
+          "case_id": 185
+        },
+        {
+          "name": "path-8-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/../x"
+          },
+          "case_id": 186
+        },
+        {
+          "name": "path-8-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/../x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 187
+        },
+        {
+          "name": "path-8-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/../x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 188
+        },
+        {
+          "name": "path-8-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/../x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 189
+        },
+        {
+          "name": "path-9-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/..hidden"
+          },
+          "case_id": 190
+        },
+        {
+          "name": "path-9-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/..hidden"
+          },
+          "case_id": 191
+        },
+        {
+          "name": "path-9-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/..hidden",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 192
+        }
+      ]
+    },
+    {
+      "name": "paths-02",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "path-9-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/..hidden",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 193
+        },
+        {
+          "name": "path-9-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/..hidden",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 194
+        },
+        {
+          "name": "path-10-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a/./b"
+          },
+          "case_id": 195
+        },
+        {
+          "name": "path-10-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a/./b"
+          },
+          "case_id": 196
+        },
+        {
+          "name": "path-10-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a/./b",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 197
+        },
+        {
+          "name": "path-10-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a/./b",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 198
+        },
+        {
+          "name": "path-10-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a/./b",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 199
+        },
+        {
+          "name": "path-11-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/./"
+          },
+          "case_id": 200
+        },
+        {
+          "name": "path-11-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/./"
+          },
+          "case_id": 201
+        },
+        {
+          "name": "path-11-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/./",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 202
+        },
+        {
+          "name": "path-11-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/./",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 203
+        },
+        {
+          "name": "path-11-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/./",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 204
+        },
+        {
+          "name": "path-12-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/零/é"
+          },
+          "case_id": 205
+        },
+        {
+          "name": "path-12-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/零/é"
+          },
+          "case_id": 206
+        },
+        {
+          "name": "path-12-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/零/é",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 207
+        },
+        {
+          "name": "path-12-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/零/é",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 208
+        },
+        {
+          "name": "path-12-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/零/é",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 209
+        },
+        {
+          "name": "path-13-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/quote\"\\\n\t\u0000"
+          },
+          "case_id": 210
+        },
+        {
+          "name": "path-13-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/quote\"\\\n\t\u0000"
+          },
+          "case_id": 211
+        },
+        {
+          "name": "path-13-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/quote\"\\\n\t\u0000",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 212
+        },
+        {
+          "name": "path-13-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/quote\"\\\n\t\u0000",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 213
+        },
+        {
+          "name": "path-13-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/quote\"\\\n\t\u0000",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 214
+        },
+        {
+          "name": "path-14-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a\u0001\u001f"
+          },
+          "case_id": 215
+        },
+        {
+          "name": "path-14-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a\u0001\u001f"
+          },
+          "case_id": 216
+        }
+      ]
+    },
+    {
+      "name": "paths-03",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "path-14-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a\u0001\u001f",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 217
+        },
+        {
+          "name": "path-14-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a\u0001\u001f",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 218
+        },
+        {
+          "name": "path-14-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/a\u0001\u001f",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 219
+        },
+        {
+          "name": "path-15-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//double"
+          },
+          "case_id": 220
+        },
+        {
+          "name": "path-15-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//double"
+          },
+          "case_id": 221
+        },
+        {
+          "name": "path-15-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//double",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 222
+        },
+        {
+          "name": "path-15-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//double",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 223
+        },
+        {
+          "name": "path-15-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//double",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 224
+        },
+        {
+          "name": "path-16-kind-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/database"
+          },
+          "case_id": 225
+        },
+        {
+          "name": "path-16-kind-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/database"
+          },
+          "case_id": 226
+        },
+        {
+          "name": "path-16-kind-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/database",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 227
+        },
+        {
+          "name": "path-16-kind-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/database",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 228
+        },
+        {
+          "name": "path-16-kind-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/database",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 229
+        },
+        {
+          "name": "path-17-kind-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data//x"
+          },
+          "case_id": 230
+        },
+        {
+          "name": "path-17-kind-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data//x"
+          },
+          "case_id": 231
+        },
+        {
+          "name": "path-17-kind-3",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data//x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 232
+        },
+        {
+          "name": "path-17-kind-4",
+          "kind": 4,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data//x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 233
+        },
+        {
+          "name": "path-17-kind-5",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data//x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 234
+        }
+      ]
+    },
+    {
+      "name": "read-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "kind": 2,
+          "name": "limit-0-offset-0",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": null,
+            "offset": null,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 235
+        },
+        {
+          "kind": 2,
+          "name": "limit-0-offset-1",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": null,
+            "offset": 0,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 236
+        },
+        {
+          "kind": 2,
+          "name": "limit-0-offset-2",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": null,
+            "offset": 1,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 237
+        },
+        {
+          "kind": 2,
+          "name": "limit-0-offset-3",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": null,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 238
+        },
+        {
+          "kind": 2,
+          "name": "limit-1-offset-0",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 0,
+            "offset": null,
+            "expected_version": ""
+          },
+          "case_id": 239
+        },
+        {
+          "kind": 2,
+          "name": "limit-1-offset-1",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 0,
+            "offset": 0,
+            "expected_version": ""
+          },
+          "case_id": 240
+        },
+        {
+          "kind": 2,
+          "name": "limit-1-offset-2",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 0,
+            "offset": 1,
+            "expected_version": ""
+          },
+          "case_id": 241
+        },
+        {
+          "kind": 2,
+          "name": "limit-1-offset-3",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 0,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": ""
+          },
+          "case_id": 242
+        },
+        {
+          "kind": 2,
+          "name": "limit-2-offset-0",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 1,
+            "offset": null,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 243
+        },
+        {
+          "kind": 2,
+          "name": "limit-2-offset-1",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 1,
+            "offset": 0,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 244
+        },
+        {
+          "kind": 2,
+          "name": "limit-2-offset-2",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 1,
+            "offset": 1,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 245
+        },
+        {
+          "kind": 2,
+          "name": "limit-2-offset-3",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 1,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 246
+        },
+        {
+          "kind": 2,
+          "name": "limit-3-offset-0",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32767,
+            "offset": null,
+            "expected_version": ""
+          },
+          "case_id": 247
+        },
+        {
+          "kind": 2,
+          "name": "limit-3-offset-1",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32767,
+            "offset": 0,
+            "expected_version": ""
+          },
+          "case_id": 248
+        },
+        {
+          "kind": 2,
+          "name": "limit-3-offset-2",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32767,
+            "offset": 1,
+            "expected_version": ""
+          },
+          "case_id": 249
+        },
+        {
+          "kind": 2,
+          "name": "limit-3-offset-3",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32767,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": ""
+          },
+          "case_id": 250
+        },
+        {
+          "kind": 2,
+          "name": "limit-4-offset-0",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32768,
+            "offset": null,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 251
+        },
+        {
+          "kind": 2,
+          "name": "limit-4-offset-1",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32768,
+            "offset": 0,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 252
+        },
+        {
+          "kind": 2,
+          "name": "limit-4-offset-2",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32768,
+            "offset": 1,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 253
+        },
+        {
+          "kind": 2,
+          "name": "limit-4-offset-3",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 32768,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 254
+        },
+        {
+          "kind": 2,
+          "name": "limit-5-offset-0",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65535,
+            "offset": null,
+            "expected_version": ""
+          },
+          "case_id": 255
+        },
+        {
+          "kind": 2,
+          "name": "limit-5-offset-1",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65535,
+            "offset": 0,
+            "expected_version": ""
+          },
+          "case_id": 256
+        },
+        {
+          "kind": 2,
+          "name": "limit-5-offset-2",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65535,
+            "offset": 1,
+            "expected_version": ""
+          },
+          "case_id": 257
+        },
+        {
+          "kind": 2,
+          "name": "limit-5-offset-3",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65535,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": ""
+          },
+          "case_id": 258
+        }
+      ]
+    },
+    {
+      "name": "read-01",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "kind": 2,
+          "name": "limit-6-offset-0",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65536,
+            "offset": null,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 259
+        },
+        {
+          "kind": 2,
+          "name": "limit-6-offset-1",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65536,
+            "offset": 0,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 260
+        },
+        {
+          "kind": 2,
+          "name": "limit-6-offset-2",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65536,
+            "offset": 1,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 261
+        },
+        {
+          "kind": 2,
+          "name": "limit-6-offset-3",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65536,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 262
+        },
+        {
+          "kind": 2,
+          "name": "limit-7-offset-0",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65537,
+            "offset": null,
+            "expected_version": ""
+          },
+          "case_id": 263
+        },
+        {
+          "kind": 2,
+          "name": "limit-7-offset-1",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65537,
+            "offset": 0,
+            "expected_version": ""
+          },
+          "case_id": 264
+        },
+        {
+          "kind": 2,
+          "name": "limit-7-offset-2",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65537,
+            "offset": 1,
+            "expected_version": ""
+          },
+          "case_id": 265
+        },
+        {
+          "kind": 2,
+          "name": "limit-7-offset-3",
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 65537,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": ""
+          },
+          "case_id": 266
+        },
+        {
+          "kind": 2,
+          "name": "limit-8-offset-0",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": {
+              "$u64": "18446744073709551615"
+            },
+            "offset": null,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 267
+        },
+        {
+          "kind": 2,
+          "name": "limit-8-offset-1",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": {
+              "$u64": "18446744073709551615"
+            },
+            "offset": 0,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 268
+        },
+        {
+          "kind": 2,
+          "name": "limit-8-offset-2",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": {
+              "$u64": "18446744073709551615"
+            },
+            "offset": 1,
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 269
+        },
+        {
+          "kind": 2,
+          "name": "limit-8-offset-3",
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": {
+              "$u64": "18446744073709551615"
+            },
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "é\u0000\n\"\\v"
+          },
+          "case_id": 270
+        }
+      ]
+    },
+    {
+      "name": "write-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "encoded-size-0",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                0
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 271
+        },
+        {
+          "name": "encoded-size-1",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 272
+        },
+        {
+          "name": "encoded-size-1398103",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398103
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 273
+        },
+        {
+          "name": "encoded-size-1398104",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398104
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 274
+        },
+        {
+          "name": "encoded-size-1398105",
+          "kind": 3,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 275
+        },
+        {
+          "name": "utf8-byte-bound-okay",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "é",
+                699052
+              ]
+            },
+            "expected_version": "\u0000\"\t"
+          },
+          "case_id": 276
+        },
+        {
+          "name": "utf8-byte-bound-over",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": {
+              "$repeat": [
+                "é",
+                699053
+              ]
+            },
+            "expected_version": "absent"
+          },
+          "case_id": 277
+        },
+        {
+          "name": "caller-does-not-decode",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "not base64: \u0000é!==",
+            "expected_version": "absent"
+          },
+          "case_id": 278
+        }
+      ]
+    },
+    {
+      "name": "upload-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "id-\"aaaaaaa\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "aaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 279
+        },
+        {
+          "name": "id-\"aaaaaaa\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "aaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 280
+        },
+        {
+          "name": "id-\"aaaaaaa\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "aaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 281
+        },
+        {
+          "name": "id-\"aaaaaaaa\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "aaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 282
+        },
+        {
+          "name": "id-\"aaaaaaaa\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "aaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 283
+        },
+        {
+          "name": "id-\"aaaaaaaa\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "aaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 284
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 285
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 286
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 287
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 288
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 289
+        },
+        {
+          "name": "id-\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 290
+        },
+        {
+          "name": "id-\"id_good-\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "id_good-",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 291
+        },
+        {
+          "name": "id-\"id_good-\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "id_good-",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 292
+        },
+        {
+          "name": "id-\"id_good-\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "id_good-",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 293
+        },
+        {
+          "name": "id-\"id space\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "id space",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 294
+        },
+        {
+          "name": "id-\"id space\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "id space",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 295
+        },
+        {
+          "name": "id-\"id space\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "id space",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 296
+        },
+        {
+          "name": "id-\"id\\u0000bad_\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "id\u0000bad_",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 297
+        },
+        {
+          "name": "id-\"id\\u0000bad_\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "id\u0000bad_",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 298
+        },
+        {
+          "name": "id-\"id\\u0000bad_\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "id\u0000bad_",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 299
+        },
+        {
+          "name": "id-\"éééé\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "éééé",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 300
+        },
+        {
+          "name": "id-\"éééé\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "éééé",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 301
+        },
+        {
+          "name": "id-\"éééé\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "éééé",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 302
+        }
+      ]
+    },
+    {
+      "name": "upload-01",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "id-\"ID-UP_01\"-chunk",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "ID-UP_01",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 303
+        },
+        {
+          "name": "id-\"ID-UP_01\"-commit",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "ID-UP_01",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 304
+        },
+        {
+          "name": "id-\"ID-UP_01\"-abort",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "ID-UP_01",
+            "expected_version": "",
+            "data_base64": "",
+            "size": 0,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "case_id": 305
+        },
+        {
+          "name": "chunk-none-none",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": null,
+            "expected_version": null,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 306
+        },
+        {
+          "name": "chunk-empty-none",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": "",
+            "expected_version": null,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 307
+        },
+        {
+          "name": "chunk-none-empty",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": null,
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 308
+        },
+        {
+          "name": "chunk-empty-empty",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": "",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 309
+        },
+        {
+          "name": "chunk-exact",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398104
+              ]
+            },
+            "expected_version": "v",
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 310
+        },
+        {
+          "name": "chunk-over",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "chunk",
+            "upload_id": "upload_01",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "expected_version": "v",
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "sha256": "ignored"
+          },
+          "case_id": 311
+        },
+        {
+          "name": "commit-sha-0-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": null,
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 312
+        },
+        {
+          "name": "commit-sha-0-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": null,
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 313
+        },
+        {
+          "name": "commit-sha-0-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": null,
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 314
+        },
+        {
+          "name": "commit-sha-1-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 315
+        },
+        {
+          "name": "commit-sha-1-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 316
+        },
+        {
+          "name": "commit-sha-1-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 317
+        },
+        {
+          "name": "commit-sha-2-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 318
+        },
+        {
+          "name": "commit-sha-2-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 319
+        },
+        {
+          "name": "commit-sha-2-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 320
+        },
+        {
+          "name": "commit-sha-3-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 321
+        },
+        {
+          "name": "commit-sha-3-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 322
+        },
+        {
+          "name": "commit-sha-3-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 323
+        },
+        {
+          "name": "commit-sha-4-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 324
+        },
+        {
+          "name": "commit-sha-4-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 325
+        },
+        {
+          "name": "commit-sha-4-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 326
+        }
+      ]
+    },
+    {
+      "name": "upload-02",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "commit-sha-5-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCDEF0",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 327
+        },
+        {
+          "name": "commit-sha-5-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCDEF0",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 328
+        },
+        {
+          "name": "commit-sha-5-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCDEF0",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 329
+        },
+        {
+          "name": "commit-sha-6-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 330
+        },
+        {
+          "name": "commit-sha-6-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 331
+        },
+        {
+          "name": "commit-sha-6-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 332
+        },
+        {
+          "name": "commit-sha-7-size-0",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+            "size": null,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 333
+        },
+        {
+          "name": "commit-sha-7-size-1",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+            "size": 0,
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 334
+        },
+        {
+          "name": "commit-sha-7-size-2",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "commit",
+            "upload_id": "upload_01",
+            "sha256": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "data_base64": "ignored\u0000",
+            "expected_version": "",
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 335
+        },
+        {
+          "name": "abort-ignores-optional-size",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                1398105
+              ]
+            },
+            "sha256": "bad",
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "size": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": ""
+          },
+          "case_id": 336
+        }
+      ]
+    },
+    {
+      "name": "inode-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "apply-false-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 337
+        },
+        {
+          "name": "apply-false-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 338
+        },
+        {
+          "name": "apply-true-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 339
+        },
+        {
+          "name": "apply-true-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 340
+        },
+        {
+          "name": "status-false-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 341
+        },
+        {
+          "name": "status-false-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 342
+        },
+        {
+          "name": "status-true-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 343
+        },
+        {
+          "name": "status-true-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 344
+        },
+        {
+          "name": "recover-false-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "recover",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 345
+        },
+        {
+          "name": "recover-false-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "recover",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": false,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 346
+        },
+        {
+          "name": "recover-true-false",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "recover",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": false,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 347
+        },
+        {
+          "name": "recover-true-true",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "recover",
+            "transaction_id": "\u0000unvalidated",
+            "acknowledge_non_atomic": true,
+            "preserve_special_bits": true,
+            "offset": {
+              "$u64": "18446744073709551615"
+            },
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 348
+        },
+        {
+          "name": "apply-bound-0",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "v",
+            "expected_sha256": "not-validated-here",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                0
+              ]
+            },
+            "offset": null
+          },
+          "case_id": 349
+        },
+        {
+          "name": "apply-bound-87383",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "v",
+            "expected_sha256": "not-validated-here",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                87383
+              ]
+            },
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 350
+        },
+        {
+          "name": "apply-bound-87384",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "v",
+            "expected_sha256": "not-validated-here",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                87384
+              ]
+            },
+            "offset": null
+          },
+          "case_id": 351
+        },
+        {
+          "name": "apply-bound-87385",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "v",
+            "expected_sha256": "not-validated-here",
+            "data_base64": {
+              "$repeat": [
+                "A",
+                87385
+              ]
+            },
+            "offset": {
+              "$u64": "18446744073709551615"
+            }
+          },
+          "case_id": 352
+        },
+        {
+          "name": "apply-missing-expected_version",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 353
+        },
+        {
+          "name": "apply-null-expected_version",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": null,
+            "expected_sha256": "",
+            "data_base64": ""
+          },
+          "case_id": 354
+        },
+        {
+          "name": "apply-missing-expected_sha256",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "data_base64": ""
+          },
+          "case_id": 355
+        },
+        {
+          "name": "apply-null-expected_sha256",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": null,
+            "data_base64": ""
+          },
+          "case_id": 356
+        },
+        {
+          "name": "apply-missing-data_base64",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": ""
+          },
+          "case_id": 357
+        },
+        {
+          "name": "apply-null-data_base64",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "expected_version": "",
+            "expected_sha256": "",
+            "data_base64": null
+          },
+          "case_id": 358
+        },
+        {
+          "name": "status-ignores-over-data",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "data_base64": {
+              "$repeat": [
+                "A",
+                87385
+              ]
+            }
+          },
+          "case_id": 359
+        },
+        {
+          "name": "recover-offset-default",
+          "kind": 5,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 360
+        }
+      ]
+    },
+    {
+      "name": "types-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "hidden-root-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "root": "/"
+          },
+          "case_id": 361
+        },
+        {
+          "name": "missing-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "path": "/data/file"
+          },
+          "case_id": 362
+        },
+        {
+          "name": "numeric-path-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": 1
+          },
+          "case_id": 363
+        },
+        {
+          "name": "null-host-1",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": null,
+            "path": "/data/file"
+          },
+          "case_id": 364
+        },
+        {
+          "name": "hidden-root-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "root": "/"
+          },
+          "case_id": 365
+        },
+        {
+          "name": "missing-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "path": "/data/file"
+          },
+          "case_id": 366
+        },
+        {
+          "name": "numeric-path-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": 1
+          },
+          "case_id": 367
+        },
+        {
+          "name": "null-host-2",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": null,
+            "path": "/data/file"
+          },
+          "case_id": 368
+        },
+        {
+          "name": "hidden-root-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent",
+            "root": "/"
+          },
+          "case_id": 369
+        },
+        {
+          "name": "missing-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 370
+        },
+        {
+          "name": "numeric-path-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": 1,
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 371
+        },
+        {
+          "name": "null-host-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": null,
+            "path": "/data/file",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 372
+        },
+        {
+          "name": "hidden-root-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01",
+            "root": "/"
+          },
+          "case_id": 373
+        },
+        {
+          "name": "missing-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 374
+        },
+        {
+          "name": "numeric-path-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": 1,
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 375
+        },
+        {
+          "name": "null-host-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": null,
+            "path": "/data/file",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 376
+        },
+        {
+          "name": "hidden-root-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true,
+            "root": "/"
+          },
+          "case_id": 377
+        },
+        {
+          "name": "missing-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 378
+        },
+        {
+          "name": "numeric-path-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": 1,
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 379
+        },
+        {
+          "name": "null-host-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": null,
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 380
+        },
+        {
+          "name": "negative-offset",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "offset": -1
+          },
+          "case_id": 381
+        },
+        {
+          "name": "fraction-limit",
+          "kind": 2,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "limit": 1.5
+          },
+          "case_id": 382
+        },
+        {
+          "name": "untyped-action",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "execute",
+            "upload_id": "upload_01"
+          },
+          "case_id": 383
+        },
+        {
+          "name": "missing-ack",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/data/file",
+            "action": "status",
+            "transaction_id": "patch_01"
+          },
+          "case_id": 384
+        }
+      ]
+    },
+    {
+      "name": "names-00",
+      "profile": "operator",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/data/nest",
+              "/read-only"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "name-\"\"",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "",
+            "path": "/data/file"
+          },
+          "case_id": 385
+        },
+        {
+          "name": "name-inode-\"\"",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 386
+        },
+        {
+          "name": "name-\"private-target\"",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "private-target",
+            "path": "/data/file"
+          },
+          "case_id": 387
+        },
+        {
+          "name": "name-inode-\"private-target\"",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "private-target",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 388
+        },
+        {
+          "name": "name-\"h\\u0000\"",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "h\u0000",
+            "path": "/data/file"
+          },
+          "case_id": 389
+        },
+        {
+          "name": "name-inode-\"h\\u0000\"",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h\u0000",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 390
+        },
+        {
+          "name": "name-\"é\"",
+          "kind": 1,
+          "pool": false,
+          "params": {
+            "host": "é",
+            "path": "/data/file"
+          },
+          "case_id": 391
+        },
+        {
+          "name": "name-inode-\"é\"",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "é",
+            "path": "/data/file",
+            "action": "apply",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 392
+        }
+      ]
+    },
+    {
+      "name": "alias-extra-00",
+      "profile": "aliases",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "a": {
+            "ssh_target": "z",
+            "remote_state_dir": "/remote",
+            "execution_mode": "isolated",
+            "allow_write": false,
+            "allowed_read_path_prefixes": [
+              "/alias",
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": [
+              "/secret"
+            ]
+          },
+          "z": {
+            "ssh_target": "z-named",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "alias-/first/x-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/first/x"
+          },
+          "case_id": 393
+        },
+        {
+          "name": "alias-/first/x-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/first/x"
+          },
+          "case_id": 394
+        },
+        {
+          "name": "alias-/first/x-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/first/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 395
+        },
+        {
+          "name": "alias-/first/x-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/first/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 396
+        },
+        {
+          "name": "alias-/first/x-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/first/x",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 397
+        },
+        {
+          "name": "alias-/second/x-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/second/x"
+          },
+          "case_id": 398
+        },
+        {
+          "name": "alias-/second/x-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/second/x"
+          },
+          "case_id": 399
+        },
+        {
+          "name": "alias-/second/x-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/second/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 400
+        },
+        {
+          "name": "alias-/second/x-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/second/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 401
+        },
+        {
+          "name": "alias-/second/x-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/second/x",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 402
+        },
+        {
+          "name": "alias-/secret/x-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/secret/x"
+          },
+          "case_id": 403
+        },
+        {
+          "name": "alias-/secret/x-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/secret/x"
+          },
+          "case_id": 404
+        },
+        {
+          "name": "alias-/secret/x-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/secret/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 405
+        },
+        {
+          "name": "alias-/secret/x-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/secret/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 406
+        },
+        {
+          "name": "alias-/secret/x-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/secret/x",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 407
+        },
+        {
+          "name": "alias-/alias/x-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/alias/x"
+          },
+          "case_id": 408
+        },
+        {
+          "name": "alias-/alias/x-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/alias/x"
+          },
+          "case_id": 409
+        },
+        {
+          "name": "alias-/alias/x-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/alias/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 410
+        },
+        {
+          "name": "alias-/alias/x-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/alias/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 411
+        },
+        {
+          "name": "alias-/alias/x-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/alias/x",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 412
+        },
+        {
+          "name": "alias-/data/x-1",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/data/x"
+          },
+          "case_id": 413
+        },
+        {
+          "name": "alias-/data/x-2",
+          "kind": 2,
+          "pool": true,
+          "params": {
+            "host": "z",
+            "path": "/data/x"
+          },
+          "case_id": 414
+        },
+        {
+          "name": "alias-/data/x-3",
+          "kind": 3,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/data/x",
+            "data_base64": "AA==",
+            "expected_version": "absent"
+          },
+          "case_id": 415
+        },
+        {
+          "name": "alias-/data/x-4",
+          "kind": 4,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/data/x",
+            "action": "abort",
+            "upload_id": "upload_01"
+          },
+          "case_id": 416
+        }
+      ]
+    },
+    {
+      "name": "alias-extra-01",
+      "profile": "aliases",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "a": {
+            "ssh_target": "z",
+            "remote_state_dir": "/remote",
+            "execution_mode": "isolated",
+            "allow_write": false,
+            "allowed_read_path_prefixes": [
+              "/alias",
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": [
+              "/secret"
+            ]
+          },
+          "z": {
+            "ssh_target": "z-named",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/data",
+              "/secret"
+            ],
+            "allowed_write_path_prefixes": [
+              "/data",
+              "/data/nest/",
+              "/write-only"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "alias-/data/x-5",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "z",
+            "path": "/data/x",
+            "action": "status",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 417
+        }
+      ]
+    },
+    {
+      "name": "raw-extra-00",
+      "profile": "raw_roots",
+      "config": {
+        "state_dir": "$STATE",
+        "controller_workspace_roots": [],
+        "hosts": {
+          "h": {
+            "ssh_target": "private-target",
+            "remote_state_dir": "/remote",
+            "execution_mode": "operator",
+            "allow_write": true,
+            "allowed_read_path_prefixes": [
+              "/",
+              "/a",
+              "/a/",
+              "/a//",
+              "//",
+              "//a",
+              "//a/",
+              "/é",
+              "/é/文"
+            ],
+            "allowed_write_path_prefixes": [
+              "/é/文",
+              "/é",
+              "//a/",
+              "//a",
+              "//",
+              "/a//",
+              "/a/",
+              "/a",
+              "/"
+            ],
+            "protected_path_prefixes": []
+          }
+        }
+      },
+      "cases": [
+        {
+          "name": "info-/",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/"
+          },
+          "case_id": 418
+        },
+        {
+          "name": "inode-/",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 419
+        },
+        {
+          "name": "info-////",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "////"
+          },
+          "case_id": 420
+        },
+        {
+          "name": "inode-////",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "////",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 421
+        },
+        {
+          "name": "info-/a",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/a"
+          },
+          "case_id": 422
+        },
+        {
+          "name": "inode-/a",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/a",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 423
+        },
+        {
+          "name": "info-/a/",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/a/"
+          },
+          "case_id": 424
+        },
+        {
+          "name": "inode-/a/",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/a/",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 425
+        },
+        {
+          "name": "info-/a/x",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/a/x"
+          },
+          "case_id": 426
+        },
+        {
+          "name": "inode-/a/x",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/a/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 427
+        },
+        {
+          "name": "info-//a/x",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "//a/x"
+          },
+          "case_id": 428
+        },
+        {
+          "name": "inode-//a/x",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "//a/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 429
+        },
+        {
+          "name": "info-///a/x",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "///a/x"
+          },
+          "case_id": 430
+        },
+        {
+          "name": "inode-///a/x",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "///a/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 431
+        },
+        {
+          "name": "info-/é/文/x",
+          "kind": 1,
+          "pool": true,
+          "params": {
+            "host": "h",
+            "path": "/é/文/x"
+          },
+          "case_id": 432
+        },
+        {
+          "name": "inode-/é/文/x",
+          "kind": 5,
+          "pool": false,
+          "params": {
+            "host": "h",
+            "path": "/é/文/x",
+            "action": "recover",
+            "transaction_id": "patch_01",
+            "acknowledge_non_atomic": true
+          },
+          "case_id": 433
+        }
+      ]
+    }
+  ],
+  "cases": 433,
+  "group_count": 24,
+  "by_kind": {
+    "1": 63,
+    "2": 89,
+    "3": 59,
+    "4": 110,
+    "5": 112
+  },
+  "original_tests": 4,
+  "per_process_seconds": 60,
+  "config_process_seconds": 45,
+  "expected_outputs_embedded": false
+}

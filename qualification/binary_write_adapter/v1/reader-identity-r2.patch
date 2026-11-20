@@ -1,0 +1,359 @@
+--- a/scripts/read_capture.py
++++ b/scripts/read_capture.py
+@@ -197,6 +197,186 @@
+     code,release,_=terminal(records,used,row['release_calls'],8,b'HBWAQ001'+PACK(3,WORD(first,16),0,0,0))
+     require(code==row['release_code']==64 and release.hex()==row['release_frame'] and WORD(release,8)==0,'actual final adapter release')
+     return result
++
++
++def private_refusal_specs(wire,ready):
++    """Independently bind each named refusal to complete physical input bytes."""
++    valid=b'HBWAQ001'+PACK(1,0,0,len(wire)+len(ready),len(wire))+wire+ready
++    specs={}
++    def add(name,packet,oc=64,wc=256,before=None):
++        require(name not in specs,'unique independent refusal contract')
++        specs[name]=dict(wire=packet,output_capacity=oc,workspace_capacity=wc,
++            before_sha256=SHA(bytes(wc)if before is None else before),code=SHORT if oc<64 else INVALID)
++    for capacity in (0,1,63):add('short-output-'+str(capacity),valid,oc=capacity)
++    for length in (0,1,47):add('short-input-'+str(length),valid[:length])
++    maximum=(1<<64)-1
++    # Offsets are the declared HBWAQ001/HBPLQ001/HBPRR001 layouts, not a
++    # producer-supplied expected_code, label, packet or mutation description.
++    offsets=[('magic',0,0),('command-zero',8,0),('command-four',8,4),
++        ('start-sequence',16,1),('start-return',24,64),
++        ('payload-short',32,len(valid)-49),('payload-long',32,len(valid)-47),
++        ('request-small',40,303),('request-max',40,maximum),
++        ('planner-magic',48,0),('planner-phase-zero',56,0),('planner-phase-one',56,1),
++        ('planner-pool',64,2),('typed-small',72,255),('typed-max',72,maximum),
++        ('feedback-length',80,0),('planner-reserved',88,1),('typed-magic',96,0),
++        ('typed-status',104,1),('typed-kind',112,4),('typed-action',120,1),
++        ('typed-option',128,1),('typed-error-length',168,1),('typed-required',176,1),
++        ('host-max',184,maximum),('path-max',192,maximum),('data-max',200,maximum),
++        ('version-max',208,maximum),('foreign-string',216,1),('typed-reserved',248,1)]
++    root=48+48+WORD(wire,24)
++    offsets.extend([('root-magic',root,0),('root-error',root+8,1),
++        ('root-reserved',root+16,1),('root-length',root+24,maximum)])
++    at=48+len(wire)
++    offsets.extend([('ready-magic',at,0),('ready-error',at+8,1),('ready-kind',at+16,2),
++        ('ready-phase',at+24,1),('ready-operation',at+32,2),('ready-audit',at+40,0),
++        ('ready-pool',at+48,1),('ready-length',at+56,maximum)])
++    for name,offset,value in offsets:
++        changed=bytearray(valid);struct.pack_into('<Q',changed,offset,value)
++        add(name,bytes(changed))
++    workspace=256+len(wire)+len(ready)
++    add('dirty-workspace',valid,wc=workspace,before=b'\x55'*workspace)
++    add('sequence-overflow',valid,wc=workspace,
++        before=b'HBWAS001'+PACK(0,maximum,0,0,0)+bytes(workspace-48))
++    require(len(specs)==50,'all fifty independent physical refusal contracts')
++    return specs
++
++
++def control_identity(native,calls,case,label,owner):
++    require(type(calls)is list and calls,'complete explicit control call list')
++    contexts=set()
++    for call in calls:
++        require(type(call)is int and call in native,'existing integer control invocation')
++        row=native[call][0]
++        require(row['case_id']==case and row['label']==label and row['owner']==owner,
++            'exact control case/label/image ownership')
++        contexts.add(row['context'])
++    require(len(contexts)==1,'one retained context per control operation')
++    return next(iter(contexts))
++
++
++def read_private_refusal(row,native,used,spec,case):
++    require(row['kind']=='private-invalid' and len(row['calls'])==1 and row['expected_code']==spec['code'],
++        'independent single-call refusal kind and return')
++    context=control_identity(native,row['calls'],case,row['name'],8)
++    code,frame,_=terminal(native,used,row['calls'],8,spec['wire'])
++    actual=native[row['calls'][0]][0]
++    require(code==spec['code'] and frame==b'','exact physical refusal result')
++    require(all(actual[key]==spec[key]for key in ('output_capacity','workspace_capacity','before_sha256')),
++        'independent exact refusal capacities and complete initial workspace')
++    return context
++
++
++def read_lifecycle(row,native,used,wire,ready,case):
++    """Bind the complete ordered sixteen-event trace, including real growth."""
++    request=lambda command,seq=0,code=0,payload=b'',split=0:b'HBWAQ001'+PACK(command,seq,code,len(payload),split)+payload
++    frame=lambda kind,seq,payload=b'':b'HBWAR001'+PACK(kind,seq,len(payload),0,0,0,0)+payload
++    growth=lambda kind,size:b'HGRWS002'+PACK(kind,size,0)
++    valid=request(1,payload=wire+ready,split=len(wire))
++    parent=parent_request(ready)
++    work=256+len(wire)+len(ready);start_size=64+len(wire);end_size=64+len(parent)
++    require(64<len(ready) and 64<end_size<start_size and work>256,
++        'fixed original lifecycle fixture exercises both exact growth boundaries')
++    # Each record tuple is (return, published bytes, output capacity, workspace
++    # capacity). These are independent of all mutable event/result metadata.
++    invalid=lambda oc:[(INVALID,b'',oc,work)]
++    plan=[(GROW,growth(2,len(ready)),64,512),(len(ready),ready,len(ready),512)]
++    first=[(GROW,growth(1,work),64,256),(GROW,growth(2,start_size),64,work),
++        (start_size,frame(1,1,wire),start_size,work)]
++    second=[(GROW,growth(2,start_size),end_size,work),(start_size,frame(1,2,wire),start_size,work)]
++    resume1=request(2,1,len(ready),ready);resume2=request(2,2,len(ready),ready)
++    expectations=[
++        ('release-idle',8,request(3,1),[(INVALID,b'',64,256)]),
++        ('first-start',8,valid,first),
++        ('start-while-waiting',8,valid,invalid(start_size)),
++        ('release-before-child',8,request(3,1),invalid(start_size)),
++        ('lifecycle-fixed-child',7,wire,plan),
++        ('stale-child-sequence',8,resume2,invalid(start_size)),
++        ('valid-resume-after-output-shrink',8,resume1,[(GROW,growth(2,end_size),64,work),(end_size,frame(2,1,parent),end_size,work)]),
++        ('duplicate-resume',8,resume1,invalid(end_size)),
++        ('start-before-release',8,valid,invalid(end_size)),
++        ('first-release',8,request(3,1),[(64,frame(0,1),end_size,work)]),
++        ('duplicate-release',8,request(3,1),invalid(end_size)),
++        ('second-start',8,valid,second),
++        ('stale-previous-generation',8,resume1,invalid(start_size)),
++        ('second-fixed-child',7,wire,plan),
++        ('second-resume',8,resume2,[(end_size,frame(2,2,parent),start_size,work)]),
++        ('second-release',8,request(3,2),[(64,frame(0,2),start_size,work)])]
++    events=row['events']
++    require(row['kind']=='lifecycle' and len(events)==16 and [e['name']for e in events]==[e[0]for e in expectations],
++        'independent exact sixteen-event lifecycle order')
++    context=None;children=set();ordered=[]
++    for event,(name,owner,packet,expected)in zip(events,expectations):
++        current=control_identity(native,event['calls'],case,name,owner)
++        if owner==8:
++            if context is None:context=current
++            require(current==context,'same retained adapter context across both generations')
++        else:
++            require(current!=context and current not in children,'fresh fixed planner context for each generation')
++            children.add(current)
++        code,published,_=terminal(native,used,event['calls'],owner,packet)
++        require(len(event['calls'])==len(expected),'complete exact lifecycle growth invocation count')
++        for call,(returned,output,oc,wc)in zip(event['calls'],expected):
++            actual,actual_wire,actual_frame=native[call]
++            require((actual['return_code'],actual_frame,actual['output_capacity'],actual['workspace_capacity'])==(returned,output,oc,wc),
++                'exact lifecycle result, growth, capacities and full publication')
++        require(code==event['code']==expected[-1][0],'independent lifecycle terminal return')
++        if code==INVALID:
++            require(event.get('expected_invalid')is True and published==b'','independent lifecycle refusal')
++        else:
++            require('expected_invalid'not in event and event['frame']==published.hex(),'complete independent lifecycle publication')
++        ordered.extend(event['calls'])
++    require(len(children)==2 and ordered==list(range(ordered[0],ordered[-1]+1)),
++        'complete chronological lifecycle journal without permutation or omission')
++    return ordered,{context,*children}
++
++
++def read_controls(rows,native,data):
++    control_domain=json.loads(owned(ROOT,'CONTROL_DOMAIN.json').read_bytes())
++    good=next(s for old in data['plan_cases']if old['kind']==3 for s in old['stages']if s['eligible'])
++    wire,ready=UNBASE(good['request']),UNBASE(good['actual_result'])
++    specs=private_refusal_specs(wire,ready);names=list(specs)
++    expected_names=names[:-2]+['whole-json-mismatch','actual-planner-utf8-rejection']+names[-2:]+['complete-lifecycle-and-growth']
++    require(len(rows)==control_domain['cases']==53 and [r['name']for r in rows]==control_domain['names']==expected_names,
++        'complete independently ordered ABI and lifecycle domain')
++    used=set();contexts=set();ordered=[];counts=collections.Counter()
++    for index,row in enumerate(rows):
++        name=row['name'];case=200000+index
++        if name in specs:
++            context=read_private_refusal(row,native,used,specs[name],case)
++            require(context not in contexts,'fresh physical refusal context');contexts.add(context)
++            ordered.extend(row['calls']);counts['private_refusal_controls']+=1
++        elif name in ('whole-json-mismatch','actual-planner-utf8-rejection'):
++            require(row['kind']=='fixed-child-mismatch','exact actual child control kind')
++            detail=2 if name=='whole-json-mismatch'else 1
++            changed_wire,changed_ready=bytearray(wire),bytearray(ready)
++            if detail==2:changed_ready[-2]^=1
++            else:changed_wire[304]=255
++            require(row['expected_detail']==detail,'independent fixed child mismatch class')
++            composed=row['composition'];owner_context=None;child_context=None
++            for field,suffix,owner in [('start_calls','start',8),('planner_calls','fixed-child',7),('resume_calls','resume',8),('release_calls','release',8)]:
++                calls=composed[field];current=control_identity(native,calls,case,name+'-'+suffix,owner)
++                if owner==8:
++                    if owner_context is None:
++                        owner_context=current;first=native[calls[0]][0]
++                        require((first['output_capacity'],first['workspace_capacity'])==(64,256),'actual child control initial adapter capacities')
++                    require(current==owner_context,'one retained mismatch adapter context')
++                else:
++                    child_context=current;first=native[calls[0]][0]
++                    require((first['output_capacity'],first['workspace_capacity'])==(64,512),'actual fixed child initial capacities')
++                ordered.extend(calls)
++            require(owner_context!=child_context and not contexts.intersection((owner_context,child_context)),
++                'fresh exact mismatch owner and child contexts')
++            contexts.update((owner_context,child_context))
++            composition(composed,native,used,bytes(changed_wire),bytes(changed_ready),detail)
++            counts['actual_child_mismatch_controls']+=1
++        else:
++            calls,current=read_lifecycle(row,native,used,wire,ready,case)
++            require(not contexts.intersection(current),'fresh retained lifecycle and planner contexts')
++            contexts.update(current);ordered.extend(calls);counts['lifecycle_controls']+=1
++    require(used==set(native) and ordered==list(range(1,len(native)+1)),
++        'entire actual control journal in exact domain and event order')
++    counts['control_cases']=53
++    return used,counts
+ 
+ 
+ def read_worker(folder,source,images_pin,mode,group,data):
+@@ -267,45 +447,8 @@
+                     counts['interface_plan_rejections']+=1
+             counts['parent_interface_inputs']+=1
+     else:
+-        control_domain=json.loads(owned(ROOT,'CONTROL_DOMAIN.json').read_bytes())
+-        require(mode=='controls' and len(rows)==control_domain['cases']==53 and [row['name']for row in rows]==control_domain['names'],'complete fixed ABI/lifecycle control domain')
+-        good=next(s for old in data['plan_cases']if old['kind']==3 for s in old['stages']if s['eligible'])
+-        good_wire,good_ready=UNBASE(good['request']),UNBASE(good['actual_result'])
+-        for row in rows:
+-            if row['kind']=='private-invalid':
+-                code,frame,_=terminal(native,used,row['calls'],8)
+-                require(code==row['expected_code'] and frame==b'','actual complete private refusal')
+-                counts['private_refusal_controls']+=1
+-            elif row['kind']=='fixed-child-mismatch':
+-                first=native[row['composition']['start_calls'][0]][1]
+-                split=WORD(first,40);wire=first[48:48+split];ready=first[48+split:]
+-                if row['expected_detail']==2:
+-                    changed=bytearray(good_ready);changed[-2]^=1
+-                    require(wire==good_wire and ready==bytes(changed),'whole JSON mismatch exact input control')
+-                else:
+-                    changed=bytearray(good_wire);changed[304]=255
+-                    require(wire==bytes(changed) and ready==good_ready,'actual UTF-8 child refusal exact input control')
+-                composition(row['composition'],native,used,wire,ready,row['expected_detail']);counts['actual_child_mismatch_controls']+=1
+-            else:
+-                require(row['kind']=='lifecycle','declared lifecycle controls')
+-                events=row['events'];require(len(events)==16,'complete lifecycle event order')
+-                found={}
+-                for event in events:
+-                    owner=7 if event['name'].endswith('fixed-child')else 8
+-                    code,frame,wire=terminal(native,used,event['calls'],owner)
+-                    require(code==event['code'],'actual lifecycle return')
+-                    if event.get('expected_invalid'):require(code==INVALID and frame==b'','full stale/busy/duplicate refusal')
+-                    else:require(frame.hex()==event['frame'],'complete lifecycle frame')
+-                    found[event['name']]=(code,frame,wire,event['calls'])
+-                one=found['first-start'][1];two=found['second-start'][1]
+-                require(WORD(one,16)==1 and WORD(two,16)==2 and one[64:]==two[64:]==good_wire,'new real generations and same immutable request')
+-                for prefix,child_name,resume_name in [('first','lifecycle-fixed-child','valid-resume-after-output-shrink'),('second','second-fixed-child','second-resume')]:
+-                    child=found[child_name][1];result=found[resume_name][1]
+-                    require(child==good_ready and WORD(result,8)==2 and result[64:]==parent_request(child),'complete actual lifecycle composition')
+-                    require(WORD(found[prefix+'-release'][1],8)==0,'complete actual release')
+-                require(any(native[c][0]['return_code']==GROW for c in found['valid-resume-after-output-shrink'][3]),'actual parent output growth exercised')
+-                counts['lifecycle_controls']+=1
+-        counts['control_cases']=len(rows)
++        require(mode=='controls','declared control worker')
++        used,counts=read_controls(rows,native,data)
+     require(used==set(native),'every original and control native call attributed exactly once')
+     return dict(counts=counts,summary=summary)
+ 
+--- a/tests/test_reader.py
++++ b/tests/test_reader.py
+@@ -1,5 +1,6 @@
+ """Meaningful negative evidence controls; no application/compiler execution."""
+ from pathlib import Path
++import copy
+ import json
+ import shutil
+ import struct
+@@ -10,15 +11,21 @@
+ sys.dont_write_bytecode=True
+ ROOT=Path(__file__).resolve().parents[1]
+ sys.path.insert(0,str(ROOT/'scripts'))
+-from common import PACK,WORD,UNBASE,inputs,source_evidence
+-from read_capture import parent_request,publication,INVALID,GROW
++from common import PACK,WORD,UNBASE,SHA,inputs,source_evidence,pin
++from read_capture import parent_request,publication,INVALID,GROW,records,read_controls
+ 
+ 
+ class ReaderControls(unittest.TestCase):
+     @classmethod
+     def setUpClass(cls):
+-        _,data=inputs()
++        _,data=inputs();cls.data=data
+         cls.ready=[(UNBASE(s['request']),UNBASE(s['actual_result']))for row in data['plan_cases']for s in row['stages']if s['eligible']]
++        fixture=ROOT/'inputs/reader-controls-original'
++        origin=json.loads((fixture/'ORIGIN.json').read_bytes())
++        for name,identity in origin['actual_files'].items():
++            if pin(fixture/name)!=identity:raise AssertionError('actual retained control fixture changed')
++        cls.control_rows=json.loads((fixture/'RESULTS.json').read_bytes())
++        cls.control_native,cls.control_summary=records(fixture)
+ 
+     def test_01_all_nineteen_actual_ready_packets_match_typed_and_root_bytes(self):
+         self.assertEqual(len(self.ready),19)
+@@ -79,5 +86,73 @@
+             target.write_bytes(raw);(copied/'undeclared.hepta').write_bytes(b'')
+             with self.assertRaises(ValueError):source_evidence(copied)
+ 
++    def test_08_all_retained_actual_controls_pass_strict_independent_contracts(self):
++        used,counts=read_controls(self.control_rows,self.control_native,self.data)
++        self.assertEqual(used,set(self.control_native))
++        self.assertEqual(counts,dict(private_refusal_controls=50,actual_child_mismatch_controls=2,lifecycle_controls=1,control_cases=53))
++        self.assertEqual(self.control_summary['calls'],85)
++
++    def test_09_every_named_refusal_rejects_a_different_valid_refusal_packet(self):
++        # Model an integrity-checked journal carrying another actual refusal.
++        # Hash integrity alone cannot establish which named condition was run.
++        alternatives={row['name']:self.control_native[row['calls'][0]][1]
++            for row in self.control_rows if row['name']in('magic','command-zero')}
++        for row in self.control_rows:
++            if row['kind']!='private-invalid':continue
++            native=copy.deepcopy(self.control_native);call=row['calls'][0]
++            metadata,wire,frame=native[call]
++            replacement=alternatives['command-zero'if row['name']=='magic'else'magic']
++            self.assertNotEqual(wire,replacement)
++            metadata.update(input_bytes=len(replacement),input_sha256=SHA(replacement))
++            native[call]=(metadata,replacement,frame)
++            with self.subTest(name=row['name']),self.assertRaises(ValueError):
++                read_controls(self.control_rows,native,self.data)
++
++    def test_10_mutable_return_capacity_workspace_and_identity_are_not_authority(self):
++        for field,value in [('output_capacity',65),('workspace_capacity',257),
++            ('before_sha256','0'*64),('case_id',0),('label','command-zero')]:
++            native=copy.deepcopy(self.control_native)
++            row=next(row for row in self.control_rows if row['name']=='magic')
++            native[row['calls'][0]][0][field]=value
++            with self.subTest(field=field),self.assertRaises(ValueError):read_controls(self.control_rows,native,self.data)
++        rows=copy.deepcopy(self.control_rows);native=copy.deepcopy(self.control_native)
++        rows[0]['expected_code']=INVALID;native[rows[0]['calls'][0]][0]['return_code']=INVALID
++        with self.assertRaises(ValueError):read_controls(rows,native,self.data)
++
++    def test_11_name_kind_and_actual_child_class_cannot_be_relabelled(self):
++        for name,key,value in [('magic','kind','lifecycle'),
++            ('whole-json-mismatch','expected_detail',1),('actual-planner-utf8-rejection','expected_detail',2)]:
++            rows=copy.deepcopy(self.control_rows)
++            next(row for row in rows if row['name']==name)[key]=value
++            with self.subTest(name=name),self.assertRaises(ValueError):read_controls(rows,self.control_native,self.data)
++
++    def test_12_all_lifecycle_event_permutations_fail(self):
++        for index in range(15):
++            rows=copy.deepcopy(self.control_rows);events=rows[-1]['events']
++            events[index],events[index+1]=events[index+1],events[index]
++            with self.subTest(index=index),self.assertRaises(ValueError):read_controls(rows,self.control_native,self.data)
++
++    def test_13_stale_busy_and_duplicate_requests_require_their_exact_sequence(self):
++        events=self.control_rows[-1]['events']
++        for event in events:
++            if not event.get('expected_invalid'):continue
++            native=copy.deepcopy(self.control_native);call=event['calls'][0]
++            metadata,wire,frame=native[call]
++            changed=bytearray(wire);struct.pack_into('<Q',changed,16,WORD(wire,16)+37)
++            metadata['input_sha256']=SHA(changed)
++            native[call]=(metadata,bytes(changed),frame)
++            with self.subTest(name=event['name']),self.assertRaises(ValueError):
++                read_controls(self.control_rows,native,self.data)
++
++    def test_14_lifecycle_must_retain_context_and_exact_actual_growth(self):
++        event=next(e for e in self.control_rows[-1]['events']if e['name']=='valid-resume-after-output-shrink')
++        for field,value in [('context',98765),('output_capacity',65),('workspace_capacity',781)]:
++            native=copy.deepcopy(self.control_native);native[event['calls'][0]][0][field]=value
++            with self.subTest(field=field),self.assertRaises(ValueError):read_controls(self.control_rows,native,self.data)
++        rows=copy.deepcopy(self.control_rows)
++        event=next(e for e in rows[-1]['events']if e['name']=='valid-resume-after-output-shrink')
++        event['calls']=event['calls'][1:]
++        with self.assertRaises(ValueError):read_controls(rows,self.control_native,self.data)
++
+ 
+ if __name__=='__main__':unittest.main()
+--- a/README.md
++++ b/README.md
+@@ -34,6 +34,11 @@
+ two mismatches involving the actual unchanged child, and a 16-event lifecycle
+ case. The source rejects stale/duplicate/busy continuations, preserves full
+ workspace on growth/refusal, and records complete mismatching child bytes.
++The DATA reader independently reconstructs every named refusal's complete input,
++initial capacities, workspace and return code. It also binds all 16 lifecycle
++events to exact ordered requests, generation numbers, retained contexts, actual
++growth records and complete output bytes. The earlier capture is retained as a
++reader regression fixture; it supplies no native execution credit for this source.
+ 
+ ## Actual qualification commands
+ 
