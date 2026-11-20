@@ -8,23 +8,26 @@ sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from common import canonical,decode,pin,require
 import readonly
+import binary_root_successor
 HERE=Path(__file__).resolve().parent
 PUBLIC=dict(bytes=26247168,sha256="cfc51c7004da6dd45d7d42314188563b6e83c6b03df4478a2281ef0b5d750755")
 COMPILER="d3e2c90173cf733e42b299d0c4274df4b593a12f"
 B3="bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
 def inputs():
+    binary_root_successor.verify_recipe(HERE)
     manifest=decode((HERE/"SOURCE_MANIFEST.json").read_bytes())
     require(set(manifest["sources"])|{"SOURCE_MANIFEST.json"}=={p.relative_to(HERE).as_posix() for p in HERE.rglob("*") if p.is_file()},"complete recipe source")
     for name,expected in manifest["sources"].items():require(pin(HERE/name)==expected,"exact frozen recipe bytes")
     return decode((HERE/"SOURCE_ROWS.json").read_bytes()),decode((HERE/"PATCH.json").read_bytes())
 def check_source(root):
     rows,proof=inputs()
+    successor=binary_root_successor.profile(root)
     require(len(rows)==536 and len({r["path"] for r in rows})==536,"exact536 source paths")
     for row in rows:
         name=Path(row["path"]);require(not name.is_absolute() and ".." not in name.parts,"source relative path")
         path=root/name
         require(not any(p.is_symlink() for p in (path,*path.parents)) and path.is_file(),"ordinary source")
-        raw=path.read_bytes()
+        raw=successor["originals"].get(str(name),path.read_bytes())
         require(dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())==
             {k:row[k] for k in ("bytes","sha256")},"complete source bytes: "+str(name))
         require(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"],"exact Git source object")
@@ -40,7 +43,8 @@ def check_source(root):
     old,new=proof["old"],proof["new"]
     a='"scripts/hia_native_runtime_mcp_build.py": {\n      "bytes": '+str(old["bytes"])+',\n      "sha256": "'+old["sha256"]+'"\n    }'
     b='"scripts/hia_native_runtime_mcp_build.py": {\n      "bytes": '+str(new["bytes"])+',\n      "sha256": "'+new["sha256"]+'"\n    }'
-    binding=(root/"native/runtime_mcp_sources.json").read_text()
+    binding=successor["originals"].get("native/runtime_mcp_sources.json",
+        (root/"native/runtime_mcp_sources.json").read_bytes()).decode()
     require(baseline.count(a)==1 and baseline.replace(a,b,1)==binding,"raw source-binding exact inverse")
     model=decode(binding.encode())
     require(len(model["sources"])==535 and set(model["sources"])=={r["path"] for r in rows}-{"native/runtime_mcp_sources.json"},
@@ -48,14 +52,20 @@ def check_source(root):
     for row in rows:
         if row["path"] in model["sources"]:
             require(model["sources"][row["path"]]=={k:row[k] for k in ("bytes","sha256")},"source closure")
-    return dict(source_files=536,source_binding=pin(root/"native/runtime_mcp_sources.json"),hia_sources_changed=0,
+    result=dict(source_files=536,source_binding=pin(root/"native/runtime_mcp_sources.json"),hia_sources_changed=0,
         runtime_boundary_changed=False,exact_inverse=True)
+    if successor["active"]:
+        result.update(source_files=537,hia_sources_changed=1,runtime_boundary_changed=True,
+            binary_root_operation9=True,additional_sources=[binary_root_successor.COMPOSITION])
+    return result
 def prepare(source,capture):
     require(not capture.exists(),"fresh default-entry output")
     checked=check_source(source);capture.mkdir(parents=True)
     target=capture/"source"
     for row in inputs()[0]:
         src=source/row["path"];dst=target/row["path"];dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst)
+    for name in checked.get("additional_sources",[]):
+        src=source/name;dst=target/name;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst)
     require(check_source(target)==checked,"complete copied source")
     for path in sorted(target.rglob("*.py")):compile(path.read_bytes(),str(path),"exec")
     (capture/"SOURCE.json").write_bytes(canonical(checked))
@@ -63,6 +73,7 @@ def prepare(source,capture):
 def read(capture):
     source=capture/"source";out=capture/"default-build"
     checked=check_source(source)
+    expected_public=binary_root_successor.PUBLIC if checked.get("binary_root_operation9") else PUBLIC
     require(decode((capture/"SOURCE.json").read_bytes())==checked,"recorded preparation")
     build=decode((out/"BUILD.json").read_bytes())
     require(build["status"]=="NATIVE_BUILD_PASS" and build["physical_images"]==117 and build["runtime_hia_images"]==124
@@ -103,9 +114,9 @@ def read(capture):
         require(pin(leaf.parent/data["image"])==dict(bytes=member["image_bytes"],sha256=member["image_sha256"])
             and data["image_sha256"]==member["image_sha256"],"whole compiled image")
     binary=move(build["elf"])
-    require(binary==manifest.parent/model["elf"] and pin(binary)==PUBLIC
-        and model["elf_sha256"]==PUBLIC["sha256"] and model["elf_bytes"]==PUBLIC["bytes"]
-        and build["elf_sha256"]==PUBLIC["sha256"] and build["elf_bytes"]==PUBLIC["bytes"],
+    require(binary==manifest.parent/model["elf"] and pin(binary)==expected_public
+        and model["elf_sha256"]==expected_public["sha256"] and model["elf_bytes"]==expected_public["bytes"]
+        and build["elf_sha256"]==expected_public["sha256"] and build["elf_bytes"]==expected_public["bytes"],
         "actual default binary must equal the retained actual124 public ELF")
     component=decode((source/"native/bellman_port_component.json").read_bytes())
     port=model["packed_capabilities"]["57"]
@@ -119,9 +130,12 @@ def read(capture):
         require(process["exit_code"]==0 and process["timed_out"] is False,"actual link/pack boundary process")
     require(build["full_async_runtime_qualified"] is False and build["full_sdk_qualified"] is False
         and build["production_activated"] is False,"scope flags")
-    return dict(status="ACTUAL_DEFAULT124_ENTRY_COMPLETE_READ_PASS",source=checked,public_binary=PUBLIC,
+    result=dict(status="ACTUAL_DEFAULT124_ENTRY_COMPLETE_READ_PASS",source=checked,public_binary=expected_public,
         direct_fresh=116,packed_fresh=8,physical_images=117,descriptors=69,retained124_public_binary_identical=True,ordinary686_on124_pending=True,
         hia_executed=False,rust_executed=False,full_async=False,full_sdk=False,production_installed=False)
+    if checked.get("binary_root_operation9"):
+        result.update(retained124_public_binary_identical=False,binary_root_product_binary_identical=True)
+    return result
 def main():
     p=argparse.ArgumentParser();p.add_argument("mode",choices=("prepare","read"))
     p.add_argument("--source",type=Path);p.add_argument("--capture",type=Path,required=True);p.add_argument("--output",type=Path)

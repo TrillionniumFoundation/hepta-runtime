@@ -1,0 +1,126 @@
+{
+  "base_commit": "328953dc96d26ceb5ab02a172172deb7916873c7",
+  "bridge": {
+    "after": {
+      "bytes": 58697,
+      "sha256": "2850c36e059efbbcba47145303bcb371dbf6ca104f4fc1519c6a9c904467fc9a"
+    },
+    "before": {
+      "bytes": 58628,
+      "sha256": "5a60c6f2b103f48f51cec92a9a4637f1237ab7cbffc961c3e9619b4cce13e917"
+    },
+    "exact_replacements": [
+      [
+        "    cmp rax, 7\n    jb runtime_grow_bad\n    cmp rax, 8\n    ja runtime_grow_bad\nruntime_grow_config_query_admitted:",
+        "    cmp rax, 7\n    jb runtime_grow_bad\n    cmp rax, 9\n    ja runtime_grow_bad\nruntime_grow_config_query_admitted:"
+      ],
+      [
+        "    /* op1/2/7 are installed-state reads without state-setting effects.\n     * A short output is retried only for these exact operations. */\n    mov rdx, [rsp]\n    cmp qword ptr [rdx + 8], 1",
+        "    /* op1/2/6/7/9 are installed-state reads without state-setting effects.\n     * A short output is retried only for these exact operations. */\n    mov rdx, [rsp]\n    cmp qword ptr [rdx + 8], 9\n    je runtime_grow_config_output\n    cmp qword ptr [rdx + 8], 1"
+      ]
+    ],
+    "path": "scripts/runtime_mcp_extra_engine.S"
+  },
+  "engine_slots": 69,
+  "entry_change": "Admit operation 9 beside operation 8 into the existing installed query branch.",
+  "footer_kind": 1,
+  "full_136_route_qualified": false,
+  "native_functions_after": 60,
+  "native_functions_before": 52,
+  "new_owner_functions": [
+    "f8",
+    "f53",
+    "f54",
+    "f55",
+    "f56",
+    "f57",
+    "f58",
+    "f59"
+  ],
+  "old_path_removed": false,
+  "operation": 9,
+  "owner": {
+    "after": {
+      "bytes": 319711,
+      "sha256": "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5"
+    },
+    "before": {
+      "bytes": 288259,
+      "sha256": "6a0e7817013c32bd7189864c91dc768764ae44988cabe4391446ceafea9b5d81"
+    },
+    "exact_qualified_source_bytes": true,
+    "path": "native/config_directory_owner_span.hepta"
+  },
+  "physical_images": 117,
+  "production_activated": false,
+  "public_binary_write_registered": false,
+  "public_frontend_changed": false,
+  "qualification_scope": "Existing qualified private binary root owner installed into the current fixed product graph; public binary_write remains unrouted.",
+  "qualified_handoff_commit": "19d586be0db6a13d18a6f7e1356ce6c8dc55abce",
+  "qualified_source_commit": "36d89dd2656077248c7e5e5a387cddb3a9268e83",
+  "qualified_source_path": "qualification/binary_root/v1/source/native/config_directory_owner_span.hepta",
+  "query_magic": "HRCFGQ01",
+  "remote_binary_write_integrated": false,
+  "request_audit_integrated": false,
+  "result_magic": "HRCFGM01",
+  "retained_functions_unchanged": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17",
+    "f18",
+    "f19",
+    "f20",
+    "f21",
+    "f22",
+    "f23",
+    "f24",
+    "f25",
+    "f26",
+    "f27",
+    "f28",
+    "f29",
+    "f30",
+    "f31",
+    "f32",
+    "f33",
+    "f34",
+    "f35",
+    "f36",
+    "f37",
+    "f38",
+    "f39",
+    "f40",
+    "f41",
+    "f42",
+    "f43",
+    "f44",
+    "f45",
+    "f46",
+    "f47",
+    "f48",
+    "f49",
+    "f50",
+    "f51"
+  ],
+  "retained_query_function": {
+    "from": "f8",
+    "to": "f52",
+    "unchanged_body": true
+  },
+  "runtime_hia_images": 124,
+  "schema": "hepta.runtime.binary-root.product-integration.v1",
+  "selector": 11
+}

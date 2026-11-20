@@ -457,7 +457,7 @@ runtime_grow_publication_installed:
     je runtime_grow_config_query_admitted
     cmp rax, 7
     jb runtime_grow_bad
-    cmp rax, 8
+    cmp rax, 9
     ja runtime_grow_bad
 runtime_grow_config_query_admitted:
     mov rcx, [rsp + 8]
@@ -515,9 +515,11 @@ runtime_grow_classify_return:
     jne runtime_grow_classify_result
     cmp ebp, 11
     jne runtime_grow_classify_result
-    /* op1/2/7 are installed-state reads without state-setting effects.
+    /* op1/2/6/7/9 are installed-state reads without state-setting effects.
      * A short output is retried only for these exact operations. */
     mov rdx, [rsp]
+    cmp qword ptr [rdx + 8], 9
+    je runtime_grow_config_output
     cmp qword ptr [rdx + 8], 1
     je runtime_grow_config_empty_query
     cmp qword ptr [rdx + 8], 2

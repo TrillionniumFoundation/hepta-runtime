@@ -5,17 +5,25 @@ default graph. The active integration remains on its separately qualified
 111-component version until the candidate's remaining gates and root review
 finish. Component counts do not describe public-handler coverage.
 
-The materializer binds 536 current source files, six extra authority files
+The materializer binds 537 current source files, six extra authority files
 and four unchanged current workflow identities before it writes an owned
 output directory. Its 120 old restored files are byte-for-byte unchanged
 from the preceding v5 profile. They retain the original 58 graph, LocalRead
 inputs, seven authority files and the exact old Local body workflow.
 
-The source view excludes 392 current-only inputs: the preceding 247 paths and
-the 145 newly added production paths. native/directory_errno.hepta is newly
+The source view excludes 393 current-only inputs: the preceding 247 paths,
+145 publication production paths and the binary-root integration record.
+native/directory_errno.hepta is newly
 used by the candidate but already existed on main, so it stays in the
 historical view. The three shared Batch performance inputs also remain.
 The complete packed-worker runtime_support tree is checked before exclusion.
+
+The v7 profile admits the exact qualified operation-9 owner and mechanical
+bridge in the current 124 graph. It restores the original operation-8 owner
+and historical bridge only inside the owned 58-image output. All 120 historical
+restore pins, the old graph binding, authority sources, workflow identities,
+original domains and deadlines are unchanged. This is a source-profile
+successor, not a new historical application pass.
 
 Use the current checkout to create a fresh historical source root:
 
