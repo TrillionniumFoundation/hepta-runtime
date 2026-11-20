@@ -1,7 +1,7 @@
 """Small JSON tool contract shared by the manifest and stdin dispatcher."""
 from __future__ import annotations
 
-VERSION = "0.1.8"
+VERSION = "0.1.13-integrity-cache-import"
 REQ = {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"}
 STR = {"type": "string"}
 INT = {"type": "integer"}
@@ -22,8 +22,8 @@ TOOLS = {
     "resume": ("Reconcile or observe the original execution without submitting a new version.", {"request_id": REQ}, ["request_id"]),
     "wait": ("Observe the recorded execution for at most 60 seconds.", {"request_id": REQ, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 60}}, ["request_id"]),
     "logs": ("Read a bounded, redacted log snapshot with a generation-aware cursor.", {"request_id": REQ, "cursor": STR, "limit": {"type": "integer", "minimum": 1, "maximum": 65536}}, ["request_id"]),
-    "artifacts": ("Download fixed-version output files. With a manifest, require its payload sizes/SHA-256 and verified HTTP lengths, recording provider-size conflicts; without one, require provider-size matches.",
-                  {"request_id": REQ, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 68719476736}, "manifest_name": STR}, ["request_id"]),
+    "artifacts": ("Download fixed-version outputs. Optional recovered-cache import requires a fresh authenticated original-version manifest, prior manifest SHA-256, complete declared payload hashes and original accepted identity; cache bytes are not remote acknowledgements or fresh HTTP downloads.",
+                  {"request_id": REQ, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 68719476736}, "manifest_name": STR, "cache_root": STR, "cache_manifest_sha256": STR}, ["request_id"]),
     "cancel": ("Cancel only a proven Kaggle session ID and observe the remote terminal state. An acknowledgement does not mean stopped.",
                {"request_id": REQ, "wait_seconds": {"type": "integer", "minimum": 0, "maximum": 60}}, ["request_id"]),
     "inspect": ("Read the local durable request receipt without remote requests.", {"request_id": REQ}, ["request_id"]),
