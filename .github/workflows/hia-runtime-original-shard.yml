@@ -125,7 +125,7 @@ jobs:
         if: ${{ always() && steps.shard.outcome != 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: hia-original-diagnostics-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}
+          name: hia-original-diagnostics-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/hia-original-diagnostics/
           include-hidden-files: true
           if-no-files-found: error
