@@ -11,11 +11,11 @@
 .global runtime_grow_owned
 .global runtime_grow_suspended
 .global runtime_grow_target
-.equ RG_SLOTS, 69
+.equ RG_SLOTS, 71
 .equ RG_ENGINE, 16384
 .equ RG_TABLE, 8192
-.equ RG_WORK_HIGH, 12608
-.equ RG_OUTPUT_HIGH, 12616
+.equ RG_WORK_HIGH, 12736
+.equ RG_OUTPUT_HIGH, 12744
 .equ RG_HIGH_BYTES, 8
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -608,6 +608,10 @@ runtime_grow_text_classified:
     je runtime_grow_extract_params_result
     cmp ebp, 65
     je runtime_grow_publication_params_result
+    cmp ebp, 69
+    je runtime_grow_binary_write_params_result
+    cmp ebp, 70
+    je runtime_grow_binary_call_plan_result
     cmp ebp, 48
     je runtime_grow_batch_params_result
     cmp ebp, 51
@@ -1085,6 +1089,139 @@ runtime_grow_publication_params_error:
     or rdx, [r13 + 40]
     jnz runtime_grow_bad
     jmp runtime_grow_text_params_error
+
+/* Qualified binary leaves keep application decisions in their HIA owners.
+ * Only complete private ABI frames and owned capacity are interpreted here. */
+runtime_grow_binary_write_params_result:
+    cmp eax, 256
+    jne runtime_grow_bad
+    mov rdx, 0x3130305252504248 /* HBPRR001 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 16], 3
+    jne runtime_grow_bad
+    xor ecx, ecx
+runtime_grow_binary_write_reserved:
+    cmp qword ptr [r13 + rcx * 8 + 152], 0
+    jne runtime_grow_bad
+    inc ecx
+    cmp ecx, 13
+    jb runtime_grow_binary_write_reserved
+    mov rdx, [r13 + 24]
+    or rdx, [r13 + 32]
+    or rdx, [r13 + 40]
+    or rdx, [r13 + 48]
+    or rdx, [r13 + 56]
+    or rdx, [r13 + 64]
+    or rdx, [r13 + 120]
+    or rdx, [r13 + 128]
+    or rdx, [r13 + 136]
+    or rdx, [r13 + 144]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 8]
+    cmp rax, 4
+    ja runtime_grow_bad
+    test rax, rax
+    jz runtime_grow_binary_write_success
+    mov rdx, [r13 + 88]
+    or rdx, [r13 + 96]
+    or rdx, [r13 + 104]
+    or rdx, [r13 + 112]
+    jnz runtime_grow_bad
+    cmp rax, 1
+    je runtime_grow_binary_write_error
+    cmp qword ptr [r13 + 72], 0
+    jne runtime_grow_bad
+    cmp rax, 4
+    je runtime_grow_resource
+    mov rdx, [r13 + 80]
+    lea rsi, [rax - 1]
+    jmp runtime_grow_resize_requested
+runtime_grow_binary_write_error:
+    cmp qword ptr [r13 + 80], 0
+    jne runtime_grow_bad
+    mov rax, [r13 + 72]
+    add rax, 256
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_binary_write_success:
+    mov rdx, [r13 + 72]
+    or rdx, [r13 + 80]
+    jnz runtime_grow_bad
+    mov rax, [r13 + 88]
+    add rax, [r13 + 96]
+    jc runtime_grow_bad
+    add rax, [r13 + 104]
+    jc runtime_grow_bad
+    add rax, [r13 + 112]
+    jc runtime_grow_bad
+    add rax, 256
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+
+runtime_grow_binary_call_plan_result:
+    cmp rax, 64
+    jb runtime_grow_bad
+    mov rdx, 0x313030524c504248 /* HBPLR001 */
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    mov rdx, rax
+    sub rdx, 64
+    cmp [r13 + 56], rdx
+    jne runtime_grow_bad
+    mov rcx, [r13 + 16]
+    dec rcx
+    cmp rcx, 4
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 40], 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 48], 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 8], 1
+    je runtime_grow_binary_call_plan_error
+    cmp qword ptr [r13 + 8], 2
+    je runtime_grow_binary_call_plan_query
+    cmp qword ptr [r13 + 8], 3
+    jne runtime_grow_bad
+    cmp qword ptr [r13 + 24], 0
+    jne runtime_grow_bad
+    mov rcx, [r13 + 32]
+    dec rcx
+    cmp rcx, 6
+    ja runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_binary_call_plan_error:
+    mov rcx, [r13 + 24]
+    or rcx, [r13 + 32]
+    or rcx, [r13 + 40]
+    or rcx, [r13 + 48]
+    jnz runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_binary_call_plan_query:
+    mov rcx, [r13 + 24]
+    dec rcx
+    cmp rcx, 1
+    ja runtime_grow_bad
+    mov rcx, [r13 + 32]
+    sub rcx, 8
+    cmp rcx, 1
+    ja runtime_grow_bad
+    cmp qword ptr [r13 + 48], 0
+    jne runtime_grow_bad
+    /* The owner supplies the full installed-config request. No host or path
+     * policy is reimplemented by this carrier. */
+    cmp rdx, 64
+    jb runtime_grow_bad
+    mov rcx, 0x3130514746435248 /* HRCFGQ01 */
+    cmp [r13 + 64], rcx
+    jne runtime_grow_bad
+    mov rcx, [r13 + 32]
+    cmp [r13 + 72], rcx
+    jne runtime_grow_bad
+    sub rdx, 24
+    cmp [r13 + 80], rdx
+    jne runtime_grow_bad
+    jmp runtime_grow_extent_ready
 
 runtime_grow_batch_params_result:
     cmp eax, 128
@@ -2116,6 +2253,7 @@ runtime_grow_action_magics:
     .ascii "HTPCCA01" /* 66 publisher caller */
     .quad 0 /* 67 descriptor-owned synchronous publisher capability */
     .quad 0 /* 68 fixed publisher Forget Scope output loan */
+    .quad 0, 0 /* 69 binary typed params and 70 pure plan: no child action. */
 runtime_grow_publication_gateway_targets:
     .byte 65, 27, 5, 6, 11, 9, 7, 66, 3
 runtime_grow_publication_caller_targets:

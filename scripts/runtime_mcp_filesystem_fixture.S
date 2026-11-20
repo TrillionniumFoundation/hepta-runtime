@@ -112,6 +112,10 @@ fs_fixture_next:
     jne fs_fixture_failure
     cmp qword ptr [r12 + 72], 1
     ja fs_fixture_failure
+    cmp qword ptr [r12 + 80], 69
+    je fs_fixture_authority_selector
+    cmp qword ptr [r12 + 80], 70
+    je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 64
     je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 56
@@ -274,7 +278,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 552 /* 69 fixed engine slots; private extract selector64 remains a fixture alias. */
+    .zero 568 /* 71 fixed slots; private extract selector64 remains a fixture alias. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:
