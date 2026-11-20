@@ -419,9 +419,9 @@ class NativePipelineTests(unittest.TestCase):
         self.assertIn("      fail-fast: false\n", block)
         self.assertIn("    needs: prepare\n", block)
         self.assertEqual(block.count('--prepared-sha256 "${{ needs.prepare.outputs.prepared_sha256 }}"'), 1)
-        self.assertEqual(block.count('--invocation "${{ github.run_id }}-${{ github.run_attempt }}"'), 1)
-        self.assertIn('name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}', block)
-        self.assertIn('name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}', block)
+        self.assertEqual(block.count('--invocation "${{ needs.prepare.outputs.invocation }}"'), 1)
+        self.assertIn('name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}', block)
+        self.assertIn('name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}-${{ matrix.group }}', block)
         originals = re.findall(r"^  original_([a-z]+):$", workflow, re.MULTILINE)
         self.assertEqual(originals, ["bytes", "state", "services", "json", "config", "system", "batch", "storage"])
         original_workflow = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
@@ -431,6 +431,125 @@ class NativePipelineTests(unittest.TestCase):
         changed["config"] = ()
         with self.assertRaisesRegex(ValueError, "independent partition"):
             p.partition_tests(changed)
+
+    def replay_workflow_artifact_bindings(self, workflow, reusable, producer_attempt, retry_attempt):
+        # This is a source/data control, not a GitHub job execution. Read the
+        # actual artifact and argument templates, preserving completed producer
+        # outputs while advancing only the consumer's execution attempt.
+        def jobs(text):
+            body = text.split("\njobs:\n", 1)[1]
+            return dict(re.findall(r"(?ms)^  ([a-z_]+):\n(.*?)(?=^  [a-z_]+:\n|\Z)", body))
+        def scalar(block, name, spaces):
+            values = re.findall(r"^" + " " * spaces + re.escape(name) + r": (.+)$", block, re.MULTILINE)
+            self.assertEqual(len(values), 1, (name, values))
+            return values[0]
+        def artifact(block, prefix):
+            values = re.findall(r"^          (?:name|pattern): (" + re.escape(prefix) + r"[^\n]+)$", block, re.MULTILINE)
+            self.assertEqual(len(values), 1, (prefix, values))
+            return values[0]
+        def render(value, context):
+            def replace(match):
+                key = match[1].strip()
+                self.assertIn(key, context, key)
+                return context[key]
+            return re.sub(r"\$\{\{(.*?)\}\}", replace, value)
+        def invocation(block, context, expected, count):
+            values = re.findall(r'--invocation "([^\n"]+)"', block)
+            self.assertEqual(len(values), count)
+            self.assertEqual([render(value, context) for value in values], [expected] * count)
+
+        graph = jobs(workflow)
+        original = jobs(reusable)["original"]
+        context = {"github.run_id": "44688261179", "github.run_attempt": str(producer_attempt),
+            "github.event.pull_request.head.sha || github.sha": "5e0fb6d5c88290db6581490bf5bd08e18776343f"}
+        produced = render(scalar(graph["prepare"], "invocation", 6), context)
+        self.assertEqual(produced, "44688261179-" + str(producer_attempt))
+        invocation(graph["prepare"], context, produced, 1)
+        build_name = render(artifact(graph["prepare"], "hia-native-build-"), context)
+        context.update({"github.run_attempt": str(retry_attempt), "needs.prepare.outputs.invocation": produced})
+        self.assertEqual(render(artifact(graph["native"], "hia-native-build-"), context), build_name)
+        invocation(graph["native"], context, produced, 1)
+        native_names = []
+        for group in p.PARTITIONS:
+            context["matrix.group"] = group
+            native_names.append(render(artifact(graph["native"], "hia-native-shard-"), context))
+        collector = graph["native_collect"]
+        self.assertEqual(render(artifact(collector, "hia-native-build-"), context), build_name)
+        pattern = render(artifact(collector, "hia-native-shard-"), context)
+        self.assertEqual([name for name in native_names if fnmatch.fnmatchcase(name, pattern)], native_names)
+        invocation(collector, context, produced, 2)
+        collected = render(scalar(collector, "invocation", 6), context)
+        self.assertEqual(collected, produced)
+        context["needs.native_collect.outputs.invocation"] = collected
+        complete_name = render(artifact(collector, "hia-native-complete-"), context)
+        originals = [name.removeprefix("original_") for name in graph if name.startswith("original_")]
+        self.assertEqual(originals, ["bytes", "state", "services", "json", "config", "system", "batch", "storage"])
+        original_names = []
+        for group in originals:
+            caller = graph["original_" + group]
+            bound = render(scalar(caller, "invocation", 6), context)
+            self.assertEqual(bound, produced)
+            context.update({"inputs.invocation": bound, "inputs.group": group,
+                "inputs.runtime-sha": render(scalar(caller, "runtime-sha", 6), context)})
+            self.assertEqual(render(artifact(original, "hia-native-complete-"), context), complete_name)
+            invocation(original, context, produced, 1)
+            original_names.append(render(artifact(original, "hia-original-shard-"), context))
+        final = graph["qualify"]
+        self.assertEqual(render(artifact(final, "hia-native-complete-"), context), complete_name)
+        pattern = render(artifact(final, "hia-original-shard-"), context)
+        self.assertEqual([name for name in original_names if fnmatch.fnmatchcase(name, pattern)], original_names)
+        invocation(final, context, produced, 1)
+        self.assertEqual(len(set(native_names)), len(p.PARTITIONS))
+        self.assertEqual(len(set(original_names)), 8)
+        # A different producer batch cannot match this completed batch's names.
+        wrong = complete_name.replace("-" + produced, "-44688261179-999")
+        self.assertNotEqual(complete_name, wrong)
+        return complete_name, graph, original, context, artifact, render
+
+    def test_workflow_failed_only_and_full_retries_preserve_distinct_producer_batches(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        reusable = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
+        first = self.replay_workflow_artifact_bindings(workflow, reusable, 1, 1)[0]
+        retry = self.replay_workflow_artifact_bindings(workflow, reusable, 1, 2)[0]
+        later_retry = self.replay_workflow_artifact_bindings(workflow, reusable, 1, 5)[0]
+        fresh = self.replay_workflow_artifact_bindings(workflow, reusable, 2, 2)[0]
+        self.assertEqual(first, retry)
+        self.assertEqual(first, later_retry)
+        self.assertNotEqual(first, fresh)
+
+    def test_workflow_recomputed_consumer_attempts_are_rejected(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        reusable = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
+        changes = (
+            ("native", 'name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}',
+             'name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}'),
+            ("native", '--invocation "${{ needs.prepare.outputs.invocation }}"', '--invocation "${{ github.run_id }}-${{ github.run_attempt }}"'),
+            ("native_collect", 'invocation: ${{ needs.prepare.outputs.invocation }}', 'invocation: ${{ github.run_id }}-${{ github.run_attempt }}'),
+            ("original_system", 'invocation: ${{ needs.native_collect.outputs.invocation }}', 'invocation: ${{ github.run_id }}-${{ github.run_attempt }}'),
+            ("qualify", 'pattern: hia-original-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.native_collect.outputs.invocation }}-*',
+             'pattern: hia-original-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-*'),
+        )
+        for name, old, new in changes:
+            prefix, rest = workflow.split("\n  " + name + ":\n", 1)
+            block, *tail = re.split(r"(?=\n  [a-z_]+:\n)", rest, maxsplit=1)
+            self.assertEqual(block.count(old), 1)
+            changed = prefix + "\n  " + name + ":\n" + block.replace(old, new) + "".join(tail)
+            with self.subTest(job=name, field=old), self.assertRaises(AssertionError):
+                self.replay_workflow_artifact_bindings(changed, reusable, 1, 2)
+
+    def test_workflow_failure_diagnostics_keep_each_actual_execution_attempt(self):
+        workflow = (ROOT / ".github/workflows/hia-runtime-native.yml").read_text()
+        reusable = (ROOT / ".github/workflows/hia-runtime-original-shard.yml").read_text()
+        _, _, original, context, artifact, render = self.replay_workflow_artifact_bindings(workflow, reusable, 1, 2)
+        template = artifact(original, "hia-original-diagnostics-")
+        context["github.run_attempt"] = "1"
+        old = render(template, context)
+        context["github.run_attempt"] = "2"
+        new = render(template, context)
+        self.assertNotEqual(old, new)
+        self.assertTrue(old.endswith("-attempt-1"))
+        self.assertTrue(new.endswith("-attempt-2"))
+        self.assertNotIn("overwrite: true", workflow + reusable)
 
     def test_batch_families_cannot_be_recombined_or_move_evidence_across_jobs(self):
         for change in ("recombine", "move_apply", "split_plan_evidence"):
