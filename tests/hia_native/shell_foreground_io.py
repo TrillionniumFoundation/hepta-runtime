@@ -5,7 +5,7 @@ import subprocess, sys, time, traceback
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT/'scripts'), str(ROOT/'tests/hia_native')]
-from hia_native_shell_foreground_build import read_evidence as read_build
+from hia_native_shell_foreground_build import read_evidence as read_build, admit_execution
 from shell_output_original_io import io_specs, command_for, expected_reads, GATE_PREFIX
 from shell_output_io import decode_trace as decode_io_trace, inspect_stat
 SCHEMA = 'hepta.runtime.shell-foreground-io.v1'
@@ -1262,7 +1262,7 @@ def run(output,native_manifest,selected=None):
     report=dict(schema=SCHEMA,status='RUNNING',recorded_directory=str(output),**SCOPE)
     (output/'report.json').write_bytes(encoded(report))
     try:
-        build=read_build(native_manifest,source_root=ROOT)
+        build=admit_execution(native_manifest,source_root=ROOT)
         metadata=decode(ordinary(native_manifest));exe=native_manifest.parent/metadata['elf']
         sources={n:pin(ROOT/n) for n in SOURCE_NAMES}
         for name in SOURCE_NAMES: save(output/'source-snapshots'/name,ordinary(ROOT/name))
@@ -1271,12 +1271,16 @@ def run(output,native_manifest,selected=None):
         validations=[]
         for spec in specs:
             folder=output/'cases'/spec['name']
+            require(admit_execution(native_manifest,source_root=ROOT)==build,
+                    'foreground execution host or build changed')
             run_case(folder,spec,exe)
             _read_case(folder,native_manifest,retired=False,save_derived=True)
             retire_case(folder)
             result=_read_case(folder,native_manifest);validations.append(result['causal'])
             print(json.dumps(dict(case=spec['name'],status='ACTUAL_NATIVE_PASS')),flush=True)
         require(sources=={n:pin(ROOT/n) for n in SOURCE_NAMES},'producer source changed during actual execution')
+        require(admit_execution(native_manifest,source_root=ROOT)==build,
+                'foreground execution host or build changed')
         complete=len(specs)==len(all_specs)
         report.update(status='NATIVE_FOREGROUND_PASS',native_manifest=str(native_manifest),
                       native_manifest_pin=pin(native_manifest),native_build=build,source_pins=sources,

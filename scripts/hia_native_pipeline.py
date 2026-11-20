@@ -25,6 +25,7 @@ import traceback
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qualify_hia_runtime_native as q
+import hia_native_shell_consumer as shell_consumer
 
 PARTITIONS = {
     "storage": tuple(q.storage_pipeline.KEYS),
@@ -404,6 +405,13 @@ def shard(output: Path, hepta: Path, expected: str, invocation: str, group: str,
                                        "prepared_sha256": expected, "tests": list(tests)})
     q.save_report(output / "result.json", report)
     try:
+        if group == "shell":
+            report["shell_consumer_build"] = shell_consumer.build(
+                output, hepta, prepared, expected, source_root=q.ROOT)
+            report["modules"].update(shell_consumer.read(
+                output, prepared, report["shell_consumer_build"], expected,
+                source_root=q.ROOT, full=True)["modules"])
+            q.save_report(output / "result.json", report)
         q.run_native_checks(output, report, tests, q.native_environment(output, hepta, report), timeout=180,
                             commands=q.native_commands(output, report, tests))
         # Re-admit the original bytes without accepting any newly created file
@@ -439,6 +447,9 @@ def admit_shard(data: Path, receipt_path: Path, report_path: Path, prepared: dic
     report = read_json(report_path)
     changed = {"status", "phase", "native_components_status", "checks"}
     additions = {"qualification_shard", "native_parallel_receipts", "shard_elapsed_seconds", "shard_finished_at"}
+    if group == "shell":
+        changed.add("modules")
+        additions.add("shell_consumer_build")
     if (set(report) != set(prepared) | additions
             or any(q.json_bytes(report.get(key)) != q.json_bytes(value)
                    for key, value in prepared.items() if key not in changed)
@@ -450,7 +461,10 @@ def admit_shard(data: Path, receipt_path: Path, report_path: Path, prepared: dic
     # Build manifests contain relative paths; the source-owned command prefix
     # and output location come from the prepared cold invocation, not a shard.
     output = Path(prepared["checks"][0]["command"][-1]).parent
-    commands = q.native_commands(output, prepared, tests)
+    if group == "shell":
+        shell_consumer.admit_report(output, prepared, report, expected,
+            source_root=q.ROOT, data_root=data, full=not exact_files)
+    commands = q.native_commands(output, report, tests)
     by_name = {}
     for row in report["checks"][1:]:
         name = row["name"]
@@ -477,7 +491,7 @@ def verify_pipeline_receipts(output: Path, report: dict) -> None:
         raise ValueError("complete native pipeline inventory differs")
     seal, prepared, _ = admit_prepared(output, Path(report["compiler_checkout"]), pipeline["prepared_sha256"],
                                       pipeline["invocation"], exact=False)
-    native_rows, parallel = {}, {}
+    native_rows, parallel, shell = {}, {}, None
     for group, identities in pipeline["shards"].items():
         prefix = "qualification-shards/" + group + "/"
         if set(identities) != {"shard.json", "shard-report.json"}:
@@ -489,6 +503,11 @@ def verify_pipeline_receipts(output: Path, report: dict) -> None:
                              prepared, pipeline["prepared_sha256"], pipeline["invocation"], group, exact_files=False)
         native_rows.update({row["name"]: row for row in part["checks"][1:]})
         parallel.update(part["native_parallel_receipts"])
+        if group == "shell":
+            shell = part
+    if (shell is None or report.get("modules") != shell.get("modules")
+            or report.get("shell_consumer_build") != shell.get("shell_consumer_build")):
+        raise ValueError("aggregate host-linked modules differ from the admitted shell consumer")
     expected_rows = prepared["checks"] + [native_rows[name] for name in q.native_tests()]
     native_names = {row["name"] for row in expected_rows}
     if (q.json_bytes(report["checks"][:len(expected_rows)]) != q.json_bytes(expected_rows)
@@ -547,6 +566,8 @@ def collect(output: Path, hepta: Path, expected: str, invocation: str, shards: P
             parallel.update(part["native_parallel_receipts"])
         report["checks"] = prepared["checks"] + [native_rows[name] for name in q.native_tests()]
         report["native_parallel_receipts"] = parallel
+        report["modules"] = copy.deepcopy(parts["shell"][2]["modules"])
+        report["shell_consumer_build"] = copy.deepcopy(parts["shell"][2]["shell_consumer_build"])
         report["qualification_pipeline"] = {"schema": "hepta.runtime.native-pipeline.v1", "invocation": invocation,
             "prepared_sha256": expected, "shards": receipts, "tests": list(q.native_tests())}
         verify_pipeline_receipts(output, report)

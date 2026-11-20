@@ -26,6 +26,10 @@ import hia_native_view_fixture_qualification as fixtures
 import hia_native_runtime_mcp_fixtures as public_fixtures
 import hia_native_service_pipeline as service
 
+# Exercise transport-only controls alongside the existing reporting controls;
+# these synthetic bytes never replace the full native shell suites.
+ShellConsumerAdmissionTests = q._shell_test_module("test_shell_consumer.py").ShellConsumerAdmissionTests
+
 
 class NativePipelineTests(unittest.TestCase):
     def setUp(self):
@@ -760,6 +764,7 @@ class NativePipelineTests(unittest.TestCase):
         prepared = {"status": "NATIVE_BUILD_READY", "phase": "native_build_complete",
             "native_components_status": "PENDING", "compiler_checkout": str(self.root / "compiler"),
             "started_at": datetime.now(timezone.utc).isoformat(), "whole_runtime_replaced": False,
+            "modules": {},
             "source_sha256": {"synthetic_reporting_fixture": "unchanged"},
             "checks": [{"name": "compiler-full-cold", "command":
                        ["synthetic-cold-identity-only", "--output", str(output / "compiler-cold.json")]}]}
@@ -775,6 +780,8 @@ class NativePipelineTests(unittest.TestCase):
                                     ordered_groups=(), timeout=180)
             report.update(status="NATIVE_SHARD_PASS", phase="native_shard_complete", native_components_status="PARTIAL",
                           shard_elapsed_seconds=report["checks"][-1]["elapsed_seconds"], shard_finished_at="fixture")
+            if group == "shell":
+                report["shell_consumer_build"] = {"synthetic_reporting_fixture_only": True}
             p.export_shard(run, artifacts / group, {"files": {}}, report)
         def finish(_, report, builder):
             report.update(status="NATIVE_COMPONENTS_PASS", native_components_status="PASS")
@@ -784,6 +791,7 @@ class NativePipelineTests(unittest.TestCase):
             stack.enter_context(patch.object(q, "native_tests", return_value=names))
             stack.enter_context(patch.object(q, "native_commands", return_value={}))
             stack.enter_context(patch.object(p, "admit_prepared", return_value=({"files": {}}, prepared, object())))
+            stack.enter_context(patch.object(p.shell_consumer, "admit_report", return_value={}))
             evidence = stack.enter_context(patch.object(q, "collect_native_evidence"))
             stack.enter_context(patch.object(q, "finish_native", side_effect=finish))
             result = p.collect(output, self.root / "compiler", "b" * 64, "all-actual-processes", artifacts)
