@@ -20,10 +20,10 @@ def read(root,name):
     return path.read_bytes()
 def check(source):
     raw=read(source,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(raw)
-    assert profile["schema"]=="hepta.historical-public58.source-profile.v6"
+    assert profile["schema"]=="hepta.historical-public58.source-profile.v7"
     assert profile["historical_images"]==58 and profile["current_default_images"]==124
-    assert len(profile["current_graph_files"])==536 and len(profile["restore"])==120
-    assert len(profile["remove_current_public_only"])==392
+    assert len(profile["current_graph_files"])==537 and len(profile["restore"])==120
+    assert len(profile["remove_current_public_only"])==393
     assert len(profile["current_authority_profile_files"])==6
     assert profile["retained_global_batch_input_paths"]==["native/batch_plan_input_performance.json",
         "scripts/author_input_fixed.py","scripts/performance_baselines/batch_plan_input.hepta"]
@@ -88,7 +88,7 @@ def main():
     source=a.source.resolve(strict=True);profile,profile_sha=check(source)
     if a.check_only:
         print(json.dumps(dict(status="CURRENT124_AND_HISTORICAL58_AUTHORITY_SOURCE_IDENTITIES_PASS",
-            current_graph_files=536,current_authority_profile_files=6,current_workflow_files=4,historical_files=120,profile_sha256=profile_sha,
+            current_graph_files=537,current_authority_profile_files=6,current_workflow_files=4,historical_files=120,profile_sha256=profile_sha,
             default_current_images=124,historical_images=58,native_or_rust_executed=False),sort_keys=True));return
     assert a.output is not None;output=a.output.absolute()
     assert not output.exists() and not output.is_relative_to(source)

@@ -115,6 +115,12 @@ The ordinary default builder remains unchanged and can compile the complete
 candidate from source without reusing earlier member images. No CI workflow,
 deadline or completion flag is relaxed here.
 
+The follow-up described in `CI_COMPATIBILITY.md` preserves the original normal
+CI failures and connects the exact new source identities to the historical58
+and current-default124 checks. A real full fresh 116+8 build and guarded old/new
+DATA reads pass. The only workflow edit updates its two exact recipe-manifest
+SHA values; all commands and qualification requirements remain in place.
+
 ## Remaining binary_write product work
 
 The 101-input qualified writer domain recovered in PR #133 is a private body
