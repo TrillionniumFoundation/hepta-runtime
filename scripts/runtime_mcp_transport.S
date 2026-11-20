@@ -395,7 +395,7 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 552 /* 69 fixed engine slots; extract59..63 and publication64..68. */
+    .zero 568 /* 71 fixed slots; existing routes plus binary owners69..70. */
 
 /* G2 selects the actual final SDK initialization outcome. This fixed boundary
  * writes its admitted stderr span and retains its exit across config teardown. */

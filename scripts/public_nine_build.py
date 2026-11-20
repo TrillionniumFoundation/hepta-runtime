@@ -195,6 +195,8 @@ MEMBERS = [
     ('publisher_body', 'text_file_publication', 'history.v1'),
     ('publisher_errno', 'directory_errno', 'history.v1'),
     ('publisher_worker', 'publication_worker', 'history.v1'),
+    ('binary_write_params', 'binary_write_params', 'history.v1'),
+    ('binary_call_plan', 'binary_call_plan', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -281,6 +283,7 @@ FALSE_FLAGS = ['complete_sdk_frontend', 'whole_view_replaced', 'whole_runtime_re
 EXTRA.extend([None, 'request_tasks'])
 EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])
 EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])
+EXTRA.extend(['binary_write_params', 'binary_call_plan'])
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
@@ -457,7 +460,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 116
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 118
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -553,6 +556,11 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'config_span_owner_control_offsets': [1024, 1032],
               'config_span_footer_from_capacity': 256,
               'physical_image_members': [next(member for member, image in images.items() if image == path) for path in physical],
+              'binary_write_params_slot': 69, 'binary_call_plan_slot': 70,
+              'binary_owner_private_graph_installed': True, 'public_binary_write_registered': False,
+              'binary_write_effects_qualified': False, 'binary_write_audit_qualified': False,
+              'binary_write_lifecycle_qualified': False,
+              'private_slots': 71, 'private_work_high': 12736, 'private_output_high': 12744,
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
               'frontend_transport_fixed_input_limit': 16777216, 'frontend_reply_fixed_byte_limit': None,
