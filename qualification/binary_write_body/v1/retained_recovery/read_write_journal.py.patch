@@ -1,0 +1,19 @@
+--- actual/scripts/read_write_journal.py
++++ retained_recovery/read_write_journal.py
+@@ -1,5 +1,6 @@
+ """Read every complete write/entropy/publish/read/metadata/codec boundary; no application execution."""
+-import base64,binascii,hashlib,struct
++import binascii,hashlib,struct
++from base64_3123 import strict_decode
+ from evidence_common import require
+ from protocol import U,I,result,error_frame,stat_decode,version
+ import read_publish_journal as publication
+@@ -203,7 +204,7 @@
+                         and payload[24:]==start[96+U(start,40)+U(start,48):]and cwa==cw,
+                         "strict Base64 complete admitted string and preserved workspace")
+                     require(child[:8]==b"HBRDS001"and len(child)==64+U(child,56),"complete strict decoder envelope")
+-                    try:decoded=base64.b64decode(payload[24:].decode("utf-8"),validate=True);error=None
++                    try:decoded=strict_decode(payload[24:].decode("utf-8"));error=None
+                     except(ValueError,binascii.Error)as e:decoded=None;error=e
+                     if error is None:require(U(child,8)==0 and child[64:]==decoded,"strict Base64 actual result bytes")
+                     else:
