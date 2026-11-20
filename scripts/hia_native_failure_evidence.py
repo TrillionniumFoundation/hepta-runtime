@@ -180,6 +180,17 @@ def archive(source, output):
         result["error"] = error_record(error)
     result["finished_unix_ns"] = time.time_ns()
     result["duration_ns"] = time.monotonic_ns() - started
+    # Keep the actual process outcome in the job log before the potentially
+    # long full-archive hash and member scan. A later archive/upload failure
+    # must not erase whether this particular attempt reached its own deadline.
+    print("HIA_ARCHIVE_PROCESS " + json.dumps({
+        "source": str(source), "output": str(output), "argv": result["argv"],
+        "pid": result["pid"], "deadline_seconds": result["deadline_seconds"],
+        "started_unix_ns": result["started_unix_ns"],
+        "finished_unix_ns": result["finished_unix_ns"],
+        "duration_ns": result["duration_ns"], "timed_out": result["timed_out"],
+        "exit_code": result["exit_code"], "error": result["error"]},
+        ensure_ascii=True, sort_keys=True), flush=True)
     for stream in ("stdout", "stderr"):
         path = output / ("tar." + stream)
         if not path.exists():
@@ -245,6 +256,11 @@ def retain(source, output):
         "status": report["status"], "manifest": str(output / "manifest.json"),
         "diagnostics_complete": diagnostics_complete, "archive_complete": report["archive"]["complete"],
         "tar_exit_code": report["archive"]["exit_code"],
+        "tar_timed_out": report["archive"]["timed_out"],
+        "tar_duration_ns": report["archive"]["duration_ns"],
+        "tar_error": report["archive"]["error"],
+        "tar_process": {"path": str(output / "tar.process.json"),
+                        **pin(output / "tar.process.json")},
         "original_failure_reclassified_as_pass": False}, sort_keys=True), flush=True)
     return report
 

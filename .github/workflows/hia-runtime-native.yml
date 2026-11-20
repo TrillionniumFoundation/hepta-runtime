@@ -708,6 +708,7 @@ jobs:
             2> "$RUNNER_TEMP/hia-runtime-native/regex-evidence-controls.stderr"
 
       - name: Archive complete evidence with original Unix fixture names
+        id: archive_complete
         if: success()
         run: |
           python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
@@ -725,7 +726,7 @@ jobs:
           retention-days: 14
 
       - name: Stage failure diagnostics and archive untouched fixtures
-        if: failure()
+        if: failure() && steps.archive_complete.outcome == 'skipped'
         run: |
           python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
@@ -736,6 +737,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-native-failure-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-aggregate
-          path: ${{ runner.temp }}/hia-native-failure-evidence/
+          path: ${{ runner.temp }}/hia-native-${{ steps.archive_complete.outcome == 'skipped' && 'failure' || 'complete' }}-evidence/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
