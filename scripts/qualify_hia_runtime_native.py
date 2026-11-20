@@ -614,6 +614,7 @@ def sources() -> dict:
         "hia_native_shell_outcome_build.py", "hia_native_shell_outcome_qualification.py",
         "hia_native_shell_output_build.py", "hia_native_shell_output_qualification.py",
         "hia_native_shell_foreground_build.py", "hia_native_shell_foreground_qualification.py",
+        "hia_native_shell_consumer.py",
         "shell_foreground_adapter.S",
         "hia_native_failure_evidence.py", "shell_output_adapter.S",
         "shell_process_adapter.S", "qualify_hia_shell_process.py",

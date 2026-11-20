@@ -692,9 +692,10 @@ def read_evidence(manifest, *, source_root=ROOT):
     need(ordinary(folder / "outcome.o") == ordinary(member(op, om["object"])), "foreground unchanged outcome object")
     allocator = metadata["allocator"]; loader = metadata["interpreter"]
     need(allocator["path"] == om["allocator"]["path"] and allocator["pin"] == om["allocator"]["before"] and
-         pin(Path(allocator["path"])) == allocator["pin"] == pin(folder / "allocator-libc.so.6") and
-         loader["path"] == str(interpreter_path()) and
-         pin(Path(loader["path"])) == loader["pin"] == pin(folder / "interpreter.bin"), "foreground actual loader/allocator bytes")
+         type(allocator["path"]) is str and Path(allocator["path"]).is_absolute() and
+         allocator["pin"] == pin(folder / "allocator-libc.so.6") and
+         type(loader["path"]) is str and Path(loader["path"]).is_absolute() and
+         loader["pin"] == pin(folder / "interpreter.bin"), "foreground retained loader/allocator bytes")
     for spec in tool_specs(folder, loader["path"]): read_tool(folder, spec)
     adapter = ordinary(folder / "adapter.o"); av = elf(adapter, 1); _, at = section(av, ".text")
     need(ordinary(folder / "adapter.text.bin") == contents(adapter, at), "actual objcopy complete adapter text")
@@ -729,6 +730,27 @@ def read_evidence(manifest, *, source_root=ROOT):
             "packer_invocations": count, "whole_text_bytes_reconstructed": inspection["text_bytes"],
             "current_source_bytes_verified": True, "runtime_python_required": False,
             "runtime_libc_required": True, **SCOPE}
+
+
+def admit_execution(manifest, *, source_root=ROOT):
+    """Require this host's exact loader and allocator before native execution.
+
+    A collector only reconstructs retained bytes and must not substitute its
+    own runner image for the recorded consumer. Actual execution still rejects
+    any loader/allocator drift, including equal-version libraries with different
+    bytes. The outcome owner's independent loaded-allocator check is unchanged.
+    """
+    reviewed = read_evidence(manifest, source_root=source_root)
+    metadata = strict_json(ordinary(Path(manifest)))
+    allocator, loader = metadata["allocator"], metadata["interpreter"]
+    current, current_pin, current_version = outcome.loaded_allocator()
+    outcome_metadata = strict_json(ordinary(Path(metadata["outcome_manifest"])))
+    need(str(current) == allocator["path"] and current_pin == allocator["pin"] and
+         current_version == outcome_metadata["allocator"]["runtime_version"] and
+         pin(Path(allocator["path"])) == allocator["pin"] and
+         loader["path"] == str(interpreter_path()) and
+         pin(Path(loader["path"])) == loader["pin"], "foreground actual loader/allocator bytes")
+    return reviewed
 
 
 def build_shell_foreground(hepta, build_root, *, source_root=ROOT,
@@ -807,7 +829,7 @@ def build_shell_foreground(hepta, build_root, *, source_root=ROOT,
         state["files"] = {n: pin(member(folder, n)) for n in sorted(names)}; save()
         metadata["build_evidence_sha256"] = sha(ordinary(folder / "build-evidence.json"))
         manifest = folder / "manifest.json"; nb.write_new(manifest, nb.json_bytes(metadata))
-        read_evidence(manifest, source_root=root)
+        admit_execution(manifest, source_root=root)
         return manifest
     except Exception as error:
         state["status"] = "FAIL"; state["error"] = type(error).__name__ + ": " + str(error); save(); raise
