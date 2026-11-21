@@ -1,9 +1,9 @@
 {
   "schema": "hepta.canonical-owner-CI-policy.v1",
   "status": "ROOT_AUTHORIZED_ONE_SOURCE_PUBLICATION",
-  "scope": "D1b_canonical_root_owner_no_debuginfo_CI",
+  "scope": "D1c_canonical_owner_reuse_binary_permission_repair_CI",
   "automatic_retry": false,
-  "publication_manifest_sha256": "d82c91876d1e8e698770edef3a12f5fd0868bce6b7b5804ff4e7d6e26f4e989c",
+  "publication_manifest_sha256": "66df151aa8462fcc8afd9f754a028218a89761cb603d82324b49d6a3052cc852",
   "limits": {
     "CPU_soft": 1800,
     "CPU_hard": 2100,
@@ -20,7 +20,7 @@
   "private_inputs_allowed": false,
   "CPU_limit_scope": "aggregate observed owned child-group soft stop with per-process hard RLIMIT guard; supervisor/bootstrap/checkout/upload/download separately accounted, not a complete-platform all-in ceiling",
   "failure_accounting": "actual descendant total unknown; retain reaped CPU and observed lower bound; same-group residual cleanup and adopted orphan reaping qualified by DS",
-  "root_review_required_before_final_policy_publication": false,
+  "root_review_required_before_final_policy_publication": true,
   "profile_overrides": {
     "CARGO_PROFILE_DEV_DEBUG": "0",
     "CARGO_PROFILE_TEST_DEBUG": "0"
@@ -39,17 +39,8 @@
     "receipt_sha256": "13cecf65cf320537ee04bc37689e7c40d54b429bd18e070178d194ff0d897f7b",
     "scope": "Exact same Rust/Cargo/vendor bytes; prior debug2 profile lint. New debug0 profile lint is not claimed."
   },
-  "resource_note": "12GiB is per-process virtual address limit, not physical RAM. Record actual runner MemTotal and cgroup memory.max and supervisor peak RSS. Fresh runner cold target; no old target artifacts were retained.",
-  "retained_failure": {
-    "run_id": 44904714088,
-    "source_head": "2df8e11a3db4f21174acc761284b2604d92c01bb",
-    "failure": "rustc-LLVM allocation failure at full lib test codegen with debuginfo2 under6GiB address cap",
-    "recorded_waited_CPU_plus_wrapper_seconds": 618.6965628389999,
-    "actual_descendant_CPU_total": null,
-    "old_attempt_remains_FAILED": true,
-    "new_workflow_attempt_only": true
-  },
-  "authorization_scope": "Separate finite engineering stage after reviewed debug/memory repair, not a rerun of run44904714088; private models/test execution forbidden.",
+  "resource_note": "Fresh runner cold target builds and lints no-default-features only; retained all-features binary reuses its previous1079.999894 measured compile CPU.12GiB is per-process virtual address cap, not physical RAM. Runner MemTotal/cgroup and peak RSS recorded.",
+  "authorization_scope": "Separate finite engineering stage after reviewed permission repair and authenticated prior-binary reuse. No workflow rerun, repeated all-features compile, private model/test, or production call.",
   "primary_profile_sources": [
     "https://doc.rust-lang.org/cargo/reference/environment-variables.html",
     "https://doc.rust-lang.org/cargo/reference/profiles.html",
@@ -62,15 +53,64 @@
     "overflow_checks": true,
     "test": true
   },
-  "compiler_artifact_profile_missing_field": "FAIL_CLOSED",
+  "compiler_artifact_profile_missing_field": "Fresh no-default compiler messages: FAIL_CLOSED. Reused all-features profile object remains null and separately identified executed-control-flow evidence is required.",
   "codegen_units_evidence": "256 in unchanged Cargo.toml only; compiler-artifact JSON has no codegen_units field",
-  "root_review": {
-    "created_utc": "2026-11-21T12:52:31.914384+00:00",
-    "proposal_sha256": "3c3d20ae88dc063f676f255ac725826054eb3afc5ab6671e21274b3f4812a76f",
-    "scope": "Reviewed complete two Python files and exact deltas; actual root compiler-artifact profile validation; unchanged canonical Rust/Cargo/vendor bytes and fixed synthetic/private exclusion; source-bound reuse of completed old-profile all-features lint, no-default lint still runs; debug-only profile/memory correction after retained LLVM allocation failure.",
-    "source_publication_and_new_CI_admitted_once": true,
-    "old_D1_relabelled": false,
-    "private_D2_admission": false,
-    "budget_scope": "1800/2100 child CPU with observed aggregate soft stop;3600wall;12GiB per-process virtual address cap; actual RAM/cgroup/peakRSS reported. Infrastructure/checkout/setup/upload/download not zero-imputed."
+  "reuse_all_features_binary": {
+    "source_head": "7b5d01686c6256cc6bf293d86371387431bab876",
+    "run_id": 44906160387,
+    "artifact_id": 14709140569,
+    "artifact_zip_sha256": "f7ea41a7fd09d77db4c45bfd57e314b65cac72802b9096c748ea47b7ca18a652",
+    "raw_binary_sha256": "9d9391c57084842281f26c941a9aceb95a6822495be67da1b17e2db331930c85",
+    "inputs_manifest_sha256": "3900dfb18003f987eed037070366ab17e96d17dd693c93693f67caadd903fcbb",
+    "new_compile_calls": 0,
+    "scope": "Unqualified D1b compiled binary is authenticated, copied writable, stripped, made read-only, then the same eight synthetic tests execute once.",
+    "actual_compiler_profile_json": null,
+    "profile_evidence": "Executed pinned validation control flow only; raw Cargo compiler-artifact JSON was not retained and is not reconstructed."
+  },
+  "retained_failures": [
+    {
+      "run_id": 44904714088,
+      "source_head": "2df8e11a3db4f21174acc761284b2604d92c01bb",
+      "failure": "rustc-LLVM allocation failure at full lib test codegen with debuginfo2 under6GiB address cap",
+      "recorded_waited_CPU_plus_wrapper_seconds": 618.6965628389999,
+      "actual_descendant_CPU_total": null,
+      "old_attempt_remains_FAILED": true,
+      "new_workflow_attempt_only": true
+    },
+    {
+      "run_id": 44906160387,
+      "source_head": "7b5d01686c6256cc6bf293d86371387431bab876",
+      "failure": "GNU strip Permission denied because copied binary was chmod0500 before strip.",
+      "recorded_waited_CPU_plus_wrapper_seconds": 1242.842010757,
+      "actual_descendant_CPU_total": null,
+      "all_features_compile_CPU_seconds": 1079.999894,
+      "synthetic_tests_executed": 0,
+      "no_default_compile_executed": false,
+      "old_attempt_remains_FAILED": true,
+      "new_workflow_attempt_only": true
+    }
+  ],
+  "new_full_root_compile_calls": 1,
+  "fixed_synthetic_test_executions": 16,
+  "download_accounting": "The fixed public artifact download action is outside bounded child CPU; actual step wall and unknown platform CPU must be reported separately, not treated as zero or inside child1800/2100 ceiling.",
+  "download_action": {
+    "repository": "actions/download-artifact",
+    "commit": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
+    "verified_source": "https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/action.yml",
+    "workflow_permissions": {
+      "contents": "read",
+      "actions": "read"
+    },
+    "private_inputs_allowed": false
+  },
+  "root_authorization": {
+    "proposal_pin": {
+      "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/d1c_ci_plan/CI_POLICY_PROPOSED.json",
+      "bytes": 5487,
+      "sha256": "7de373912df429d96f184822f57aaf4a3e9861e83c288e343f9784746ad1a5c9"
+    },
+    "created_utc": "2026-11-21T13:30:40.248874+00:00",
+    "review": "Root full source/policy review and finance independent static review completed. Exact old binary provenance remains executed-control-flow evidence; actual retained profile JSON null. Rust/Cargo/vendor must remain identical, fixed eight public tests per feature, no private call.",
+    "scope": "One separate D1c push, no repeated all-features compile, no automatic rerun. CI download/host overhead remains separate and unknown."
   }
 }
