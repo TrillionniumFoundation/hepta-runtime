@@ -1,0 +1,56 @@
+name: Weight semantic adapter qualification
+
+on:
+  pull_request:
+    paths:
+      - "qualification/weight_semantic_adapter_20261120/**"
+      - ".github/workflows/weight-semantic-adapter.yml"
+  push:
+    branches: [main]
+    paths:
+      - "qualification/weight_semantic_adapter_20261120/**"
+      - ".github/workflows/weight-semantic-adapter.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone:
+    name: Synthetic source gates (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [all-features, no-default-features]
+    defaults:
+      run:
+        shell: bash
+        working-directory: qualification/weight_semantic_adapter_20261120
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - name: Check out exact source head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy --no-self-update
+      - name: Check formatting
+        run: cargo +1.95.0 fmt --all -- --check
+      - name: Check standalone crate
+        run: cargo +1.95.0 check --locked --all-targets --${{ matrix.features }}
+      - name: Run synthetic unit tests
+        run: |
+          umask 022
+          cargo +1.95.0 test --locked --all-targets --${{ matrix.features }} -- --test-threads=1
+      - name: Lint standalone crate
+        run: cargo +1.95.0 clippy --locked --all-targets --${{ matrix.features }} -- -D warnings
