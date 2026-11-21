@@ -1,0 +1,33 @@
+{
+  "schema": "hepta.canonical-owner-CI-policy.v1",
+  "status": "ROOT_AUTHORIZED_ONE_SOURCE_PUBLICATION",
+  "scope": "D1_canonical_root_owner_CI",
+  "automatic_retry": false,
+  "publication_manifest_sha256": "17203bb40f1d8e3f7df724bf19cfbca2777d9faa59758f0e116c55a0e17917f8",
+  "limits": {
+    "CPU_soft": 1800,
+    "CPU_hard": 2100,
+    "wall_hard": 3600,
+    "address_space_bytes": 6442450944,
+    "cleanup_wall_reserve": 15
+  },
+  "allowed_feature_modes": [
+    "all-features",
+    "no-default-features"
+  ],
+  "synthetic_tests_per_feature": 8,
+  "private_test_executions": 0,
+  "private_inputs_allowed": false,
+  "CPU_limit_scope": "aggregate observed owned child-group soft stop with per-process hard RLIMIT guard; supervisor/bootstrap/checkout/upload/download separately accounted, not a complete-platform all-in ceiling",
+  "failure_accounting": "actual descendant total unknown; retain reaped CPU and observed lower bound; same-group residual cleanup and adopted orphan reaping qualified by DS",
+  "root_review_required_before_final_policy_publication": false,
+  "root_review": {
+    "created_utc": "2026-11-21T12:28:12.172674+00:00",
+    "proposal_sha256": "2a50a9ecb0ac4a23c3285d91431564d5b126a227142be93b7832396d567d4c80",
+    "DS_actual_controls": "7/7 passed; negative child outcomes retained as failed/unknown",
+    "scope": "Reviewed complete-root build commands, fixed16 synthetic tests across2 feature modes, ignored private test exclusion, explicit upload allowlist, source closure/bootstrap, subreaper cleanup and truthful failure CPU accounting. Private models are forbidden in CI. Only the final source-pinned work-branch push may run this phase.",
+    "production_admission": false,
+    "private_D2_admission": false,
+    "automatic_retry": false
+  }
+}
