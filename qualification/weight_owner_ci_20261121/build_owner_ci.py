@@ -8,9 +8,8 @@ import resource
 import shutil
 import subprocess
 import time
-from reuse_owner import verify_reuse
 
-PRIVATE_TEST='mcp::weight_artifact::private_tests::canonical_f64_private_reject_restores_all_source_bytes'
+PRIVATE_TEST='mcp::weight_artifact::private_tests::sufficient_positive::canonical_f64_sufficient_heads_accept_then_restore'
 SYNTHETIC_TESTS=[
  'mcp::weight_tensor::tests::exact_f32_f16_bf16_offsets_and_noop_bits_are_preserved',
  'mcp::weight_tensor::tests::exact_f64_preserves_subnormals_signed_zero_and_large_finite_bits',
@@ -62,38 +61,25 @@ def main():
         versions={name:pin(run([name,'--version'])) for name in ['rustc','cargo']}
         run(['cargo','fmt','--all','--','--check'])
         if {key:env.get(key) for key in c['profile_overrides']}!=c['profile_overrides']:raise ValueError('actual build profile differs')
-        for mode in ['all-features','no-default-features']:
-            lint=['cargo','clippy','--locked','--lib','--tests','--'+mode,'--','-D','warnings']
-            if mode=='all-features':
-                previous_pin=c['reuse_all_features_clippy_receipt_pin']
-                if pin(previous_pin['path'])!=previous_pin:raise ValueError('retained lint receipt changed')
-                previous=json.loads(Path(previous_pin['path']).read_text())
-                matches=[row for row in previous['steps'] if row['command']==lint]
-                if previous['status']!='FAILED' or previous['source_head']!=c['reuse_all_features_clippy_source_head'] or previous['source_unchanged'] is not True or len(matches)!=1 or matches[0]['returncode']!=0:raise ValueError('prior source-identical all-features lint was not completed')
-                reused_lints.append(dict(feature=mode,scope='same Rust/Cargo/vendor bytes, previous debug2 profile; not a new-profile lint execution',
-                    source_head=previous['source_head'],receipt_pin=previous_pin,step=matches[0],new_profile_lint_executed=False))
-            else:
-                run(lint)
+        for mode in ['no-default-features']:
+            run(['cargo','clippy','--locked','--lib','--tests','--'+mode,'--','-D','warnings'])
             artifact=None;profile=None;reuse=None
-            if mode=='all-features':
-                original,reuse=verify_reuse(c)
-                save(package/'REUSE_D1B_RECEIPT.json',reuse)
-            else:
-                messages=run(['cargo','test','--locked','--lib','--'+mode,'--no-run','--message-format=json'])
-                matches=[]
-                for line in messages.read_text().splitlines():
-                    try:record=json.loads(line)
-                    except ValueError:continue
-                    if record.get('reason')=='compiler-artifact' and record.get('profile',{}).get('test') and 'lib' in record.get('target',{}).get('kind',[]) and record.get('executable'):
-                        matches.append(record)
-                if len(matches)!=1:raise ValueError('one exact root library test binary required')
-                artifact=matches[0];profile=artifact['profile']
-                expected_profile={'opt_level':'1','debuginfo':0,'debug_assertions':True,'overflow_checks':True,'test':True}
-                if {key:profile[key] for key in expected_profile}!=expected_profile or type(profile['debuginfo']) is not int or any(profile[key] is not True for key in ['debug_assertions','overflow_checks','test']):raise ValueError('root compiler-artifact profile differs')
-                if Path(artifact['manifest_path']).resolve()!=root/'Cargo.toml' or Path(artifact['target']['src_path']).resolve()!=root/'src/lib.rs':raise ValueError('compiler-artifact is not the root library')
-                original=Path(artifact['executable']).resolve();expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
-                if not original.is_relative_to(expected_target):raise ValueError('binary outside isolated target')
-                save(package/'COMPILER_ARTIFACT_no-default-features.json',artifact)
+            messages=run(['cargo','test','--locked','--lib','--'+mode,'--no-run','--message-format=json'])
+            matches=[]
+            for line in messages.read_text().splitlines():
+                try:record=json.loads(line)
+                except ValueError:continue
+                if record.get('reason')=='compiler-artifact' and record.get('profile',{}).get('test') and 'lib' in record.get('target',{}).get('kind',[]) and record.get('executable'):
+                    matches.append(record)
+            if len(matches)!=1:raise ValueError('one exact root library test binary required')
+            artifact=matches[0];profile=artifact['profile']
+            if artifact['features']!=[]:raise ValueError('only no-default feature mode is admitted')
+            expected_profile={'opt_level':'1','debuginfo':0,'debug_assertions':True,'overflow_checks':True,'test':True}
+            if {key:profile[key] for key in expected_profile}!=expected_profile or type(profile['debuginfo']) is not int or any(profile[key] is not True for key in ['debug_assertions','overflow_checks','test']):raise ValueError('root compiler-artifact profile differs')
+            if Path(artifact['manifest_path']).resolve()!=root/'Cargo.toml' or Path(artifact['target']['src_path']).resolve()!=root/'src/lib.rs':raise ValueError('compiler-artifact is not the root library')
+            original=Path(artifact['executable']).resolve();expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
+            if not original.is_relative_to(expected_target):raise ValueError('binary outside isolated target')
+            save(package/'COMPILER_ARTIFACT_no-default-features.json',artifact)
             original_pin=pin(original);binary=package/('owner-tests-'+mode)
             shutil.copyfile(original,binary);binary.chmod(0o700)
             run(['strip','--strip-debug',str(binary)])
@@ -121,14 +107,14 @@ def main():
                 shutil.copyfile(source,package/('FAILED_STEP_'+stream.upper()+'.txt'))
     source_unchanged=all(pin(p['path'])==p for p in c['source_pins'])
     if not source_unchanged:status='FAILED'
-    result=dict(schema='hepta.canonical-owner-ci-results.v1',status=status,failure=failure,steps=rows,binaries=binaries,
+    result=dict(schema='hepta.sufficient-owner-ci-results.v1',status=status,failure=failure,steps=rows,binaries=binaries,
                 reused_lints=reused_lints,profile_overrides=c['profile_overrides'],runner_hardware=c['runner_hardware'],
                 source_head=c['source_head'],source_tree=c['source_tree'],source_manifest_pin=c['source_manifest_pin'],source_unchanged=source_unchanged,
                 planned_new_compile_feature_modes=['no-default-features'],
                 actual_successful_new_compile_feature_modes=[row['command'][4].removeprefix('--') for row in rows if row['command'][:4]==['cargo','test','--locked','--lib'] and row['returncode']==0],
                 reused_binary_qualified_feature_modes=[row['feature'] for row in binaries if row['reused_binary_provenance'] is not None],
                 versions=versions if 'versions' in locals() else None,private_models_uploaded=0,private_test_executions=0,
-                production_owner_calls=0,scope='complete root crate canonical owner synthetic tests; private checkpoint lifecycle requires separate local execution')
+                production_owner_calls=0,scope='complete no-default root crate with new sufficient-head positive private entry; only the unchanged eight synthetic tests executed; private five-case lifecycle requires separate local admission')
     save(output/'RESULTS.json',result)
     # This is an explicit allowlist: never copy a fixture, workspace, state root or arbitrary log.
     save(package/'SYNTHETIC_RESULTS.json',result)

@@ -310,3 +310,6 @@ async fn canonical_f64_private_reject_restores_all_source_bytes() -> Result<()> 
 	assert!(all_passed,"private canonical owner qualification failed after restoration; inspect retained private receipts");
 	Ok(())
 }
+
+#[path = "weight_artifact_positive_tests.rs"]
+mod sufficient_positive;

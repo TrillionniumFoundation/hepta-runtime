@@ -6,6 +6,9 @@
 
 #[path = "../../weight_full_native_20261121/src/inputs.rs"]
 mod inputs;
+mod sealed_hex;
+mod sufficient;
+mod sufficient_source;
 
 use anyhow::{anyhow, bail, Result};
 use hepta_continuation_runtime_study::{source::authenticate_source, task};
@@ -291,6 +294,18 @@ fn evaluate(
 fn main() -> Result<()> {
 	let args: Vec<_> = std::env::args().skip(1).collect();
 	match args.first().map(String::as_str) {
+		Some("prepare-sufficient") if args.len() == 4 => {
+			sufficient::prepare(Path::new(&args[1]), &args[2], Path::new(&args[3]))
+		}
+		Some("evaluate-sufficient") | Some("restored-sufficient") if args.len() == 5 => {
+			sufficient::evaluate(
+				Path::new(&args[1]),
+				&args[2],
+				Path::new(&args[3]),
+				Path::new(&args[4]),
+				args[0] == "restored-sufficient",
+			)
+		}
 		Some("prepare") if args.len() == 4 => {
 			prepare(Path::new(&args[1]), &args[2], Path::new(&args[3]))
 		}

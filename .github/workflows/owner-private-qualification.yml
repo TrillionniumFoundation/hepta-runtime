@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: wsp-private-owner-${{ github.sha }}
@@ -24,15 +23,6 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Download the fixed retained public binary artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: '14709140569'
-          run-id: '44906160387'
-          repository: TrillionniumFoundation/hepta-runtime
-          github-token: ${{ github.token }}
-          path: retained-d1b
-          merge-multiple: true
       - name: Compile and check the complete canonical owner
         env:
           EXPECTED_HEAD_SHA: ${{ github.sha }}
@@ -51,12 +41,10 @@ jobs:
             owner-ci-attempt001/PROCESS.json
             owner-ci-attempt001/LAUNCH.json
             owner-ci-attempt001/output/RESULTS.json
-            owner-ci-attempt001/public_artifact/owner-tests-all-features
             owner-ci-attempt001/public_artifact/owner-tests-no-default-features
             owner-ci-attempt001/public_artifact/SYNTHETIC_RESULTS.json
             owner-ci-attempt001/public_artifact/SOURCE_MANIFEST.json
             owner-ci-attempt001/public_artifact/PACKAGE_FILES.json
-            owner-ci-attempt001/public_artifact/REUSE_D1B_RECEIPT.json
             owner-ci-attempt001/public_artifact/COMPILER_ARTIFACT_no-default-features.json
             owner-ci-attempt001/public_artifact/FAILED_STEP_STDOUT.txt
             owner-ci-attempt001/public_artifact/FAILED_STEP_STDERR.txt
