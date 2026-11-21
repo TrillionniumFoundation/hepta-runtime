@@ -1,0 +1,24 @@
+[package]
+name = "hepta-event-history-study"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "Apache-2.0"
+
+[workspace]
+
+[dependencies]
+anyhow = "=1.0.104"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+flate2 = "=1.1.10"
+hepta-semantic-source-adapter-study = { path = "../weight_semantic_adapter_20261120" }
+hepta-continuation-runtime-study = { path = "../weight_continuation_runtime_20261121" }
+
+[features]
+default = []
+
+[profile.dev]
+debug = 0
+opt-level = 1
+overflow-checks = true
