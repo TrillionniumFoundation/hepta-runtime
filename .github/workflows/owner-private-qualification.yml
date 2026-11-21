@@ -1,0 +1,50 @@
+name: WSP canonical owner qualification
+
+on:
+  push:
+    branches: ['work/wsp-native-owner-20261121']
+    paths: ['qualification/weight_owner_ci_20261121/CI_POLICY_FROZEN.json']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wsp-private-owner-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  owner-binaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Checkout source for the bounded qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Compile and check the complete canonical owner
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.sha }}
+        run: python3 -B qualification/weight_owner_ci_20261121/ci_bootstrap.py
+      - name: Preserve synthetic results and qualified binaries
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wsp-owner-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            owner-ci-control/BOOTSTRAP.json
+            owner-ci-control/CONTRACT.json
+            owner-ci-control/ADMISSION.json
+            owner-ci-attempt001/PROCESS.json
+            owner-ci-attempt001/LAUNCH.json
+            owner-ci-attempt001/output/RESULTS.json
+            owner-ci-attempt001/public_artifact/owner-tests-all-features
+            owner-ci-attempt001/public_artifact/owner-tests-no-default-features
+            owner-ci-attempt001/public_artifact/SYNTHETIC_RESULTS.json
+            owner-ci-attempt001/public_artifact/SOURCE_MANIFEST.json
+            owner-ci-attempt001/public_artifact/PACKAGE_FILES.json
+            owner-ci-attempt001/public_artifact/FAILED_STEP_STDOUT.txt
+            owner-ci-attempt001/public_artifact/FAILED_STEP_STDERR.txt
