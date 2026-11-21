@@ -8,6 +8,7 @@ import resource
 import shutil
 import subprocess
 import time
+from reuse_owner import verify_reuse
 
 PRIVATE_TEST='mcp::weight_artifact::private_tests::canonical_f64_private_reject_restores_all_source_bytes'
 SYNTHETIC_TESTS=[
@@ -73,23 +74,30 @@ def main():
                     source_head=previous['source_head'],receipt_pin=previous_pin,step=matches[0],new_profile_lint_executed=False))
             else:
                 run(lint)
-            messages=run(['cargo','test','--locked','--lib','--'+mode,'--no-run','--message-format=json'])
-            matches=[]
-            for line in messages.read_text().splitlines():
-                try:record=json.loads(line)
-                except ValueError:continue
-                if record.get('reason')=='compiler-artifact' and record.get('profile',{}).get('test') and 'lib' in record.get('target',{}).get('kind',[]) and record.get('executable'):
-                    matches.append(record)
-            if len(matches)!=1:raise ValueError('one exact root library test binary required')
-            artifact=matches[0];profile=artifact['profile']
-            expected_profile={'opt_level':'1','debuginfo':0,'debug_assertions':True,'overflow_checks':True,'test':True}
-            if {key:profile[key] for key in expected_profile}!=expected_profile or type(profile['debuginfo']) is not int or any(profile[key] is not True for key in ['debug_assertions','overflow_checks','test']):raise ValueError('root compiler-artifact profile differs')
-            if Path(artifact['manifest_path']).resolve()!=root/'Cargo.toml' or Path(artifact['target']['src_path']).resolve()!=root/'src/lib.rs':raise ValueError('compiler-artifact is not the root library')
-            original=Path(artifact['executable']).resolve();expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
-            if not original.is_relative_to(expected_target):raise ValueError('binary outside isolated target')
+            artifact=None;profile=None;reuse=None
+            if mode=='all-features':
+                original,reuse=verify_reuse(c)
+                save(package/'REUSE_D1B_RECEIPT.json',reuse)
+            else:
+                messages=run(['cargo','test','--locked','--lib','--'+mode,'--no-run','--message-format=json'])
+                matches=[]
+                for line in messages.read_text().splitlines():
+                    try:record=json.loads(line)
+                    except ValueError:continue
+                    if record.get('reason')=='compiler-artifact' and record.get('profile',{}).get('test') and 'lib' in record.get('target',{}).get('kind',[]) and record.get('executable'):
+                        matches.append(record)
+                if len(matches)!=1:raise ValueError('one exact root library test binary required')
+                artifact=matches[0];profile=artifact['profile']
+                expected_profile={'opt_level':'1','debuginfo':0,'debug_assertions':True,'overflow_checks':True,'test':True}
+                if {key:profile[key] for key in expected_profile}!=expected_profile or type(profile['debuginfo']) is not int or any(profile[key] is not True for key in ['debug_assertions','overflow_checks','test']):raise ValueError('root compiler-artifact profile differs')
+                if Path(artifact['manifest_path']).resolve()!=root/'Cargo.toml' or Path(artifact['target']['src_path']).resolve()!=root/'src/lib.rs':raise ValueError('compiler-artifact is not the root library')
+                original=Path(artifact['executable']).resolve();expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
+                if not original.is_relative_to(expected_target):raise ValueError('binary outside isolated target')
+                save(package/'COMPILER_ARTIFACT_no-default-features.json',artifact)
             original_pin=pin(original);binary=package/('owner-tests-'+mode)
-            shutil.copyfile(original,binary);binary.chmod(0o500)
+            shutil.copyfile(original,binary);binary.chmod(0o700)
             run(['strip','--strip-debug',str(binary)])
+            binary.chmod(0o500)
             listing=run([str(binary),'--list']).read_text().splitlines()
             found={line.removesuffix(': test') for line in listing if line.endswith(': test')}
             if not set(SYNTHETIC_TESTS+[PRIVATE_TEST]).issubset(found):raise ValueError('canonical owner test identity differs')
@@ -99,7 +107,9 @@ def main():
                 stdout=run([str(binary),'--exact',test,'--test-threads=1','--nocapture'])
                 if 'test result: ok. 1 passed; 0 failed; 0 ignored;' not in stdout.read_text():raise ValueError('one synthetic test was not actually executed')
             binaries.append(dict(feature=mode,unstripped_binary_pin=original_pin,qualified_binary_pin=pin(binary),synthetic_tests=SYNTHETIC_TESTS,private_test=PRIVATE_TEST,private_test_executed=False,
-                actual_compiler_profile=profile,compiler_artifact_identity={key:artifact[key] for key in ['package_id','manifest_path','target','features','fresh']},
+                actual_compiler_profile=profile,compiler_artifact_identity={key:artifact[key] for key in ['package_id','manifest_path','target','features','fresh']} if artifact else None,
+                reused_binary_provenance=reuse,original_build_source_head=reuse['source_head'] if reuse else c['source_head'],
+                qualified_against_source_head=c['source_head'],same_Rust_Cargo_vendor_source=True,
                 codegen_units_evidence='256 in unchanged Cargo.toml; compiler-artifact JSON does not report this field'))
         status='PASS'
     except Exception as error:
@@ -114,6 +124,9 @@ def main():
     result=dict(schema='hepta.canonical-owner-ci-results.v1',status=status,failure=failure,steps=rows,binaries=binaries,
                 reused_lints=reused_lints,profile_overrides=c['profile_overrides'],runner_hardware=c['runner_hardware'],
                 source_head=c['source_head'],source_tree=c['source_tree'],source_manifest_pin=c['source_manifest_pin'],source_unchanged=source_unchanged,
+                planned_new_compile_feature_modes=['no-default-features'],
+                actual_successful_new_compile_feature_modes=[row['command'][4].removeprefix('--') for row in rows if row['command'][:4]==['cargo','test','--locked','--lib'] and row['returncode']==0],
+                reused_binary_qualified_feature_modes=[row['feature'] for row in binaries if row['reused_binary_provenance'] is not None],
                 versions=versions if 'versions' in locals() else None,private_models_uploaded=0,private_test_executions=0,
                 production_owner_calls=0,scope='complete root crate canonical owner synthetic tests; private checkpoint lifecycle requires separate local execution')
     save(output/'RESULTS.json',result)
