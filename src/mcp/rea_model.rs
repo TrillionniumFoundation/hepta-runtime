@@ -412,9 +412,11 @@ pub(super) async fn inspect_tensor_descriptor(
 		|| source["size_bytes"].as_u64() != Some(before.len())
 		|| tensor["name"].as_str() != Some(tensor_name)
 		|| tensor["storage_length_verified"] != true
-		|| !matches!(tensor["dtype"].as_str(), Some("F32" | "F16" | "BF16"))
-	{
-		bail!("tensor edit requires a bound safetensors F32/F16/BF16 descriptor");
+		|| !matches!(
+			tensor["dtype"].as_str(),
+			Some("F64" | "F32" | "F16" | "BF16")
+		) {
+		bail!("tensor edit requires a bound safetensors F64/F32/F16/BF16 descriptor");
 	}
 	let header_length = source["header_bytes"]
 		.as_u64()

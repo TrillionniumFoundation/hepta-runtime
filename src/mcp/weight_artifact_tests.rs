@@ -115,6 +115,11 @@ async fn exact_patch_improves_a_separate_linear_fixture_and_restores_every_paren
 #[tokio::test]
 async fn no_op_and_f16_bf16_edits_roundtrip_exactly() {
 	for (dtype, before, after) in [
+		(
+			"F64",
+			(-0.0_f64).to_le_bytes().to_vec(),
+			f64::from_bits(1).to_le_bytes().to_vec(),
+		),
 		("F16", vec![0, 0x3c], vec![0, 0x40]),
 		("BF16", vec![0x80, 0x3f], vec![0, 0x40]),
 		("F32", vec![0, 0, 0x80, 0x3f], vec![0, 0, 0, 0x40]),

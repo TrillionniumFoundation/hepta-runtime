@@ -7,7 +7,9 @@ use super::*;
 use serde_json::json;
 
 fn input(dtype: &str) -> (PatchTensorParams, Value) {
-	let (bytes, size) = if dtype == "F32" {
+	let (bytes, size) = if dtype == "F64" {
+		("000000000000f03f", 32)
+	} else if dtype == "F32" {
 		("0000803f", 16)
 	} else {
 		("003c", 8)
@@ -24,6 +26,40 @@ fn input(dtype: &str) -> (PatchTensorParams, Value) {
 	};
 	let report = json!({"format":"safetensors","source":{"size_bytes":128+size,"header_bytes":128},"result":{"tensor":{"name":"weight","dtype":dtype,"storage_length_verified":true,"file_offset":128,"byte_length":size}}});
 	(params, report)
+}
+
+#[test]
+fn exact_f64_preserves_subnormals_signed_zero_and_large_finite_bits() {
+	let (mut params, report) = input("F64");
+	for value in [f64::from_bits(1), -0.0, f64::MAX] {
+		params.edits[0].replacement_hex = value
+			.to_le_bytes()
+			.iter()
+			.map(|b| format!("{b:02x}"))
+			.collect();
+		let plan = prepare(&params, &report).unwrap();
+		assert_eq!(plan.changes[0].file_offset, 144);
+		assert_eq!(
+			plan.changes[0].replacement_hex,
+			params.edits[0].replacement_hex
+		);
+	}
+	for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+		params.edits[0].replacement_hex = value
+			.to_le_bytes()
+			.iter()
+			.map(|b| format!("{b:02x}"))
+			.collect();
+		assert!(prepare(&params, &report).is_err());
+	}
+	params.edits[0].replacement_hex = "0000803f".into();
+	assert!(prepare(&params, &report).is_err());
+	let mut json_report = report;
+	json_report["format"] = json!("joint-policy-json-f64");
+	assert!(
+		prepare(&params, &json_report).is_err(),
+		"JSON requires the explicit lossless bridge"
+	);
 }
 
 #[test]

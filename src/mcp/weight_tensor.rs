@@ -28,7 +28,7 @@ pub struct PatchTensorParams {
 	/// Complete source-file SHA-256, not the model header digest.
 	pub expected_sha256: String,
 	pub tensor_name: String,
-	/// 1..=1024 distinct elements of one F32, F16 or BF16 tensor.
+	/// 1..=1024 distinct elements of one F64, F32, F16 or BF16 tensor.
 	pub edits: Vec<ExactElementEdit>,
 }
 
@@ -53,8 +53,8 @@ pub(super) struct TensorPatch {
 }
 
 pub(super) fn unhex(text: &str) -> Result<Vec<u8>> {
-	if !text.len().is_multiple_of(2) || text.len() > 8 {
-		bail!("element bytes must contain at most four complete bytes");
+	if !text.len().is_multiple_of(2) || text.len() > 16 {
+		bail!("element bytes must contain at most eight complete bytes");
 	}
 	text.as_bytes()
 		.as_chunks::<2>()
@@ -73,14 +73,16 @@ pub(super) fn unhex(text: &str) -> Result<Vec<u8>> {
 
 fn width(dtype: &str) -> Result<u64> {
 	match dtype {
+		"F64" => Ok(8),
 		"F32" => Ok(4),
 		"F16" | "BF16" => Ok(2),
-		_ => bail!("exact native weight patches support F32/F16/BF16 safetensors only"),
+		_ => bail!("exact native weight patches support F64/F32/F16/BF16 safetensors only"),
 	}
 }
 
 fn finite(dtype: &str, bytes: &[u8]) -> Result<bool> {
 	Ok(match dtype {
+		"F64" => f64::from_le_bytes(bytes.try_into()?).is_finite(),
 		"F32" => f32::from_le_bytes(bytes.try_into()?).is_finite(),
 		"F16" => u16::from_le_bytes(bytes.try_into()?) & 0x7c00 != 0x7c00,
 		"BF16" => u16::from_le_bytes(bytes.try_into()?) & 0x7f80 != 0x7f80,
