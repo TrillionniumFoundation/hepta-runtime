@@ -1,9 +1,13 @@
 {
-  "schema": "hepta.canonical-owner-CI-policy.v1",
+  "schema": "hepta.native-ci-publication-policy.v1",
   "status": "ROOT_AUTHORIZED_ONE_SOURCE_PUBLICATION",
-  "scope": "D1c_canonical_owner_reuse_binary_permission_repair_CI",
+  "scope": "D3CI_fixed_sufficient_positive_owner_no_default_CI",
+  "created_utc": "2026-11-21T14:01:56.829527+00:00",
   "automatic_retry": false,
-  "publication_manifest_sha256": "66df151aa8462fcc8afd9f754a028218a89761cb603d82324b49d6a3052cc852",
+  "publication_manifest_sha256": "950db6f9841cef298669d2381cc2ad6905cc913ebc897b27608ec62dfbf23ca1",
+  "source_precondition": "D3E actual PASS and 51 formatted source files rehashed. Root must review and freeze policy; D3CI/D3P remain unexecuted.",
+  "base_commit": "7ac568995f8aa24d43779424d329dafc9e5c05a9",
+  "branch": "work/wsp-native-owner-20261121",
   "limits": {
     "CPU_soft": 1800,
     "CPU_hard": 2100,
@@ -11,106 +15,83 @@
     "address_space_bytes": 12884901888,
     "cleanup_wall_reserve": 15
   },
-  "allowed_feature_modes": [
-    "all-features",
-    "no-default-features"
-  ],
-  "synthetic_tests_per_feature": 8,
-  "private_test_executions": 0,
-  "private_inputs_allowed": false,
-  "CPU_limit_scope": "aggregate observed owned child-group soft stop with per-process hard RLIMIT guard; supervisor/bootstrap/checkout/upload/download separately accounted, not a complete-platform all-in ceiling",
-  "failure_accounting": "actual descendant total unknown; retain reaped CPU and observed lower bound; same-group residual cleanup and adopted orphan reaping qualified by DS",
-  "root_review_required_before_final_policy_publication": true,
   "profile_overrides": {
     "CARGO_PROFILE_DEV_DEBUG": "0",
     "CARGO_PROFILE_TEST_DEBUG": "0"
   },
-  "unchanged_profile_semantics": [
-    "opt-level1",
-    "codegen-units256",
-    "debug-assertions on",
-    "original overflow checks",
-    "same canonical Rust/Cargo/vendor bytes",
-    "same8 synthetic tests per feature"
+  "feature_queue": [
+    "no-default-features"
   ],
-  "reuse_all_features_clippy": {
-    "source_head": "2df8e11a3db4f21174acc761284b2604d92c01bb",
-    "run_id": 44904714088,
-    "receipt_sha256": "13cecf65cf320537ee04bc37689e7c40d54b429bd18e070178d194ff0d897f7b",
-    "scope": "Exact same Rust/Cargo/vendor bytes; prior debug2 profile lint. New debug0 profile lint is not claimed."
-  },
-  "resource_note": "Fresh runner cold target builds and lints no-default-features only; retained all-features binary reuses its previous1079.999894 measured compile CPU.12GiB is per-process virtual address cap, not physical RAM. Runner MemTotal/cgroup and peak RSS recorded.",
-  "authorization_scope": "Separate finite engineering stage after reviewed permission repair and authenticated prior-binary reuse. No workflow rerun, repeated all-features compile, private model/test, or production call.",
-  "primary_profile_sources": [
-    "https://doc.rust-lang.org/cargo/reference/environment-variables.html",
-    "https://doc.rust-lang.org/cargo/reference/profiles.html",
-    "https://doc.rust-lang.org/cargo/reference/external-tools.html#artifact-messages"
-  ],
-  "compiler_artifact_profile_required": {
+  "root_private_test": "mcp::weight_artifact::private_tests::sufficient_positive::canonical_f64_sufficient_heads_accept_then_restore",
+  "private_test_executions": 0,
+  "fixed_synthetic_owner_tests": 8,
+  "new_complete_root_compile_calls": 1,
+  "cache": "Cold isolated Cargo target required absent before bootstrap; no D1c target/cache artifact exists; no assumed warm compilation",
+  "actual_profile_gate": {
     "opt_level": "1",
     "debuginfo": 0,
     "debug_assertions": true,
     "overflow_checks": true,
-    "test": true
+    "test": true,
+    "features": []
   },
-  "compiler_artifact_profile_missing_field": "Fresh no-default compiler messages: FAIL_CLOSED. Reused all-features profile object remains null and separately identified executed-control-flow evidence is required.",
-  "codegen_units_evidence": "256 in unchanged Cargo.toml only; compiler-artifact JSON has no codegen_units field",
-  "reuse_all_features_binary": {
-    "source_head": "7b5d01686c6256cc6bf293d86371387431bab876",
-    "run_id": 44906160387,
-    "artifact_id": 14709140569,
-    "artifact_zip_sha256": "f7ea41a7fd09d77db4c45bfd57e314b65cac72802b9096c748ea47b7ca18a652",
-    "raw_binary_sha256": "9d9391c57084842281f26c941a9aceb95a6822495be67da1b17e2db331930c85",
-    "inputs_manifest_sha256": "3900dfb18003f987eed037070366ab17e96d17dd693c93693f67caadd903fcbb",
-    "new_compile_calls": 0,
-    "scope": "Unqualified D1b compiled binary is authenticated, copied writable, stripped, made read-only, then the same eight synthetic tests execute once.",
-    "actual_compiler_profile_json": null,
-    "profile_evidence": "Executed pinned validation control flow only; raw Cargo compiler-artifact JSON was not retained and is not reconstructed."
+  "codegen_units": "256 inherited unchanged Cargo.toml; not reported by Cargo compiler-artifact JSON",
+  "observed_cost_evidence": {
+    "source": "D1c actual no-default new compilation",
+    "compile_CPU_seconds": 697.2322469999998,
+    "lint_CPU_seconds": 136.197912,
+    "is_new_stage_cost_guarantee": false
   },
-  "retained_failures": [
-    {
-      "run_id": 44904714088,
-      "source_head": "2df8e11a3db4f21174acc761284b2604d92c01bb",
-      "failure": "rustc-LLVM allocation failure at full lib test codegen with debuginfo2 under6GiB address cap",
-      "recorded_waited_CPU_plus_wrapper_seconds": 618.6965628389999,
-      "actual_descendant_CPU_total": null,
-      "old_attempt_remains_FAILED": true,
-      "new_workflow_attempt_only": true
-    },
-    {
-      "run_id": 44906160387,
-      "source_head": "7b5d01686c6256cc6bf293d86371387431bab876",
-      "failure": "GNU strip Permission denied because copied binary was chmod0500 before strip.",
-      "recorded_waited_CPU_plus_wrapper_seconds": 1242.842010757,
-      "actual_descendant_CPU_total": null,
-      "all_features_compile_CPU_seconds": 1079.999894,
-      "synthetic_tests_executed": 0,
-      "no_default_compile_executed": false,
-      "old_attempt_remains_FAILED": true,
-      "new_workflow_attempt_only": true
-    }
+  "output_allowlist": "Workflow explicit file list: no model, private queue, state, workspace archive or target cache",
+  "source_actions": "root publishes source group first, final frozen policy is unique trigger; no workflow rerun/dispatch",
+  "CPU_scope": "DS supervisor bounds child subtree; supervisor/bootstrap/checkout/upload/action platform costs recorded separately; not global all-in hard CPU cap",
+  "all_previous_failures_preserved": true,
+  "D3P_admission": false,
+  "production_admission": false,
+  "expected_new_mutation_paths": [
+    "qualification/weight_owner_private_20261121/src/main.rs",
+    "qualification/weight_owner_private_20261121/src/sealed_hex.rs",
+    "qualification/weight_owner_private_20261121/src/sufficient_source.rs",
+    "qualification/weight_owner_private_20261121/src/sufficient.rs",
+    "src/mcp/weight_artifact_private_tests.rs",
+    "src/mcp/weight_artifact_positive_tests.rs",
+    "qualification/weight_owner_ci_20261121/build_owner_ci.py",
+    "qualification/weight_owner_ci_20261121/ci_bootstrap.py",
+    ".github/workflows/owner-private-qualification.yml",
+    "qualification/weight_owner_ci_20261121/PUBLICATION_MANIFEST.json",
+    "qualification/weight_owner_ci_20261121/CI_POLICY_FROZEN.json"
   ],
-  "new_full_root_compile_calls": 1,
-  "fixed_synthetic_test_executions": 16,
-  "download_accounting": "The fixed public artifact download action is outside bounded child CPU; actual step wall and unknown platform CPU must be reported separately, not treated as zero or inside child1800/2100 ceiling.",
-  "download_action": {
-    "repository": "actions/download-artifact",
-    "commit": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
-    "verified_source": "https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/action.yml",
-    "workflow_permissions": {
-      "contents": "read",
-      "actions": "read"
-    },
-    "private_inputs_allowed": false
+  "publication_manifest_bytes": 11111,
+  "D3E_process_pin": {
+    "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/attempt_D3E_001/PROCESS.json",
+    "bytes": 16026,
+    "sha256": "794ae44f46ffb4007c14f0e47b7ec024a6d87c1994b712d710d68a5151cd23a2"
   },
-  "root_authorization": {
+  "D3E_result_pin": {
+    "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/attempt_D3E_001/output/RESULTS.json",
+    "bytes": 17935,
+    "sha256": "0a19463594a3337b20b2daa77abfc8b45f013679fdf72758d7cffd4acba618db"
+  },
+  "D3E_qualified_helper_pin": {
+    "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/attempt_D3E_001/qualified/hepta-owner-private-check",
+    "bytes": 2218112,
+    "sha256": "5602ad05408728ea05efa9a709fe56326208ff1abd2096eb950a6c1c7b58b45f"
+  },
+  "root_admission": {
+    "created_utc": "2026-11-21T14:05:33.883404+00:00",
     "proposal_pin": {
-      "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/d1c_ci_plan/CI_POLICY_PROPOSED.json",
-      "bytes": 5487,
-      "sha256": "7de373912df429d96f184822f57aaf4a3e9861e83c288e343f9784746ad1a5c9"
+      "path": "/workspace/scratch/4b91365ace88/wsp_closure_20261121/native/d3_ci_plan/CI_POLICY_PROPOSED_R2.json",
+      "bytes": 3824,
+      "sha256": "69eca6b51985054cfb97f7da0d816447c664e4579ad83ef9d341d9977d640d48"
     },
-    "created_utc": "2026-11-21T13:30:40.248874+00:00",
-    "review": "Root full source/policy review and finance independent static review completed. Exact old binary provenance remains executed-control-flow evidence; actual retained profile JSON null. Rust/Cargo/vendor must remain identical, fixed eight public tests per feature, no private call.",
-    "scope": "One separate D1c push, no repeated all-features compile, no automatic rerun. CI download/host overhead remains separate and unknown."
+    "source_review": "New positive owner test, helper, sealed F64 decoder, exporter and full CI scripts read; exact D3E formatted closure and four unchanged production core files verified",
+    "actual_D3E_qualified": true,
+    "source_files_verified": 55,
+    "private_execution_admitted": false,
+    "cold_target_required": true,
+    "attempts": 1,
+    "automatic_retry_or_budget_expansion": false,
+    "meaning": "Qualification of the newly compiled research entry and unchanged eight public synthetic owner controls only; no model or private lifecycle in CI",
+    "prior_failures_preserved": true
   }
 }
