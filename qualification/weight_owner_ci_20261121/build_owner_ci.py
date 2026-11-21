@@ -41,7 +41,7 @@ def main():
     for key in list(env):
         if key.startswith('HEPTA_PRIVATE_'):env.pop(key)
     env['RUSTUP_TOOLCHAIN']='1.95.0'
-    rows=[];binaries=[]
+    rows=[];binaries=[];reused_lints=[]
     def run(command):
         index=len(rows);start=time.monotonic();before=resource.getrusage(resource.RUSAGE_CHILDREN)
         out=output/f'step_{index:02d}.stdout';err=output/f'step_{index:02d}.stderr'
@@ -60,17 +60,32 @@ def main():
         run(['rustup','component','add','rustfmt','clippy','--toolchain','1.95.0'])
         versions={name:pin(run([name,'--version'])) for name in ['rustc','cargo']}
         run(['cargo','fmt','--all','--','--check'])
+        if {key:env.get(key) for key in c['profile_overrides']}!=c['profile_overrides']:raise ValueError('actual build profile differs')
         for mode in ['all-features','no-default-features']:
-            run(['cargo','clippy','--locked','--lib','--tests','--'+mode,'--','-D','warnings'])
+            lint=['cargo','clippy','--locked','--lib','--tests','--'+mode,'--','-D','warnings']
+            if mode=='all-features':
+                previous_pin=c['reuse_all_features_clippy_receipt_pin']
+                if pin(previous_pin['path'])!=previous_pin:raise ValueError('retained lint receipt changed')
+                previous=json.loads(Path(previous_pin['path']).read_text())
+                matches=[row for row in previous['steps'] if row['command']==lint]
+                if previous['status']!='FAILED' or previous['source_head']!=c['reuse_all_features_clippy_source_head'] or previous['source_unchanged'] is not True or len(matches)!=1 or matches[0]['returncode']!=0:raise ValueError('prior source-identical all-features lint was not completed')
+                reused_lints.append(dict(feature=mode,scope='same Rust/Cargo/vendor bytes, previous debug2 profile; not a new-profile lint execution',
+                    source_head=previous['source_head'],receipt_pin=previous_pin,step=matches[0],new_profile_lint_executed=False))
+            else:
+                run(lint)
             messages=run(['cargo','test','--locked','--lib','--'+mode,'--no-run','--message-format=json'])
             matches=[]
             for line in messages.read_text().splitlines():
                 try:record=json.loads(line)
                 except ValueError:continue
                 if record.get('reason')=='compiler-artifact' and record.get('profile',{}).get('test') and 'lib' in record.get('target',{}).get('kind',[]) and record.get('executable'):
-                    matches.append(Path(record['executable']).resolve())
+                    matches.append(record)
             if len(matches)!=1:raise ValueError('one exact root library test binary required')
-            original=matches[0];expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
+            artifact=matches[0];profile=artifact['profile']
+            expected_profile={'opt_level':'1','debuginfo':0,'debug_assertions':True,'overflow_checks':True,'test':True}
+            if {key:profile[key] for key in expected_profile}!=expected_profile or type(profile['debuginfo']) is not int or any(profile[key] is not True for key in ['debug_assertions','overflow_checks','test']):raise ValueError('root compiler-artifact profile differs')
+            if Path(artifact['manifest_path']).resolve()!=root/'Cargo.toml' or Path(artifact['target']['src_path']).resolve()!=root/'src/lib.rs':raise ValueError('compiler-artifact is not the root library')
+            original=Path(artifact['executable']).resolve();expected_target=Path(env['CARGO_TARGET_DIR']).resolve()
             if not original.is_relative_to(expected_target):raise ValueError('binary outside isolated target')
             original_pin=pin(original);binary=package/('owner-tests-'+mode)
             shutil.copyfile(original,binary);binary.chmod(0o500)
@@ -83,7 +98,9 @@ def main():
             for test in SYNTHETIC_TESTS:
                 stdout=run([str(binary),'--exact',test,'--test-threads=1','--nocapture'])
                 if 'test result: ok. 1 passed; 0 failed; 0 ignored;' not in stdout.read_text():raise ValueError('one synthetic test was not actually executed')
-            binaries.append(dict(feature=mode,unstripped_binary_pin=original_pin,qualified_binary_pin=pin(binary),synthetic_tests=SYNTHETIC_TESTS,private_test=PRIVATE_TEST,private_test_executed=False))
+            binaries.append(dict(feature=mode,unstripped_binary_pin=original_pin,qualified_binary_pin=pin(binary),synthetic_tests=SYNTHETIC_TESTS,private_test=PRIVATE_TEST,private_test_executed=False,
+                actual_compiler_profile=profile,compiler_artifact_identity={key:artifact[key] for key in ['package_id','manifest_path','target','features','fresh']},
+                codegen_units_evidence='256 in unchanged Cargo.toml; compiler-artifact JSON does not report this field'))
         status='PASS'
     except Exception as error:
         failure=repr(error)
@@ -95,6 +112,7 @@ def main():
     source_unchanged=all(pin(p['path'])==p for p in c['source_pins'])
     if not source_unchanged:status='FAILED'
     result=dict(schema='hepta.canonical-owner-ci-results.v1',status=status,failure=failure,steps=rows,binaries=binaries,
+                reused_lints=reused_lints,profile_overrides=c['profile_overrides'],runner_hardware=c['runner_hardware'],
                 source_head=c['source_head'],source_tree=c['source_tree'],source_manifest_pin=c['source_manifest_pin'],source_unchanged=source_unchanged,
                 versions=versions if 'versions' in locals() else None,private_models_uploaded=0,private_test_executions=0,
                 production_owner_calls=0,scope='complete root crate canonical owner synthetic tests; private checkpoint lifecycle requires separate local execution')
