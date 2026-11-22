@@ -49,7 +49,7 @@ jobs:
           sha256sum Cargo.toml Cargo.lock > evidence/source-manifests.sha256
           if ! cargo metadata --locked --format-version 1 > evidence/metadata.json 2> evidence/metadata.stderr; then
             cp Cargo.lock evidence/retained-input-Cargo.lock
-            cargo generate-lockfile > evidence/lock-repair.stdout 2> evidence/lock-repair.stderr || true
+            cargo metadata --format-version 1 > evidence/lock-repair.stdout 2> evidence/lock-repair.stderr || true
             cp Cargo.lock evidence/proposed-Cargo.lock
             exit 1
           fi
