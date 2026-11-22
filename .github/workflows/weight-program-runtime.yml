@@ -1,0 +1,50 @@
+name: Native weight program qualification
+
+on:
+  pull_request:
+    paths:
+      - "qualification/weight_program_runtime_20261122/**"
+      - "qualification/weight_semantic_adapter_20261120/**"
+      - "qualification/weight_recovery_runtime_20261122/**"
+      - ".github/workflows/weight-program-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  program:
+    name: Semantic program and finite planner (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [all-features, no-default-features]
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - name: Check out exact source head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy --no-self-update
+      - name: Check formatting
+        run: cargo +1.95.0 fmt --manifest-path qualification/weight_program_runtime_20261122/Cargo.toml --all -- --check
+      - name: Check and lint program
+        run: |
+          cargo +1.95.0 check --manifest-path qualification/weight_program_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }}
+          cargo +1.95.0 clippy --manifest-path qualification/weight_program_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }} -- -D warnings
+      - name: Verify semantic, arithmetic and planner controls
+        run: cargo +1.95.0 test --manifest-path qualification/weight_program_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }} -- --test-threads=1
