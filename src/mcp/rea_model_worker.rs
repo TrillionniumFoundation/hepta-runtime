@@ -33,9 +33,20 @@ fn apply_limits() -> Result<()> {
 			super::MAX_INDEX_RESPONSE_BYTES as libc::rlim_t,
 		),
 	] {
+		let mut inherited = libc::rlimit {
+			rlim_cur: 0,
+			rlim_max: 0,
+		};
+		if unsafe { libc::getrlimit(kind, &mut inherited) } != 0 {
+			return Err(std::io::Error::last_os_error())
+				.context("cannot inspect inherited model parser resource limits");
+		}
+		// A bounded parent may already be stricter than the parser's ceiling.
+		// Never raise either inherited limit or require privilege to do so.
+		let bounded = allowed.min(inherited.rlim_cur).min(inherited.rlim_max);
 		let limits = libc::rlimit {
-			rlim_cur: allowed,
-			rlim_max: allowed,
+			rlim_cur: bounded,
+			rlim_max: bounded,
 		};
 		if unsafe { libc::setrlimit(kind, &limits) } != 0 {
 			return Err(std::io::Error::last_os_error())

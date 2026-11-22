@@ -1,0 +1,78 @@
+name: Native weight lifecycle worker
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/weight_lifecycle_runtime_20261122/**'
+      - 'qualification/weight_program_runtime_20261122/**'
+      - 'qualification/weight_recovery_runtime_20261122/**'
+      - 'src/mcp/weight_artifact*'
+      - '.github/workflows/weight-lifecycle-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [all-features, no-default-features]
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: qualification/weight_lifecycle_runtime_20261122 -> target
+          key: lifecycle-${{ matrix.features }}
+      - name: Check exact locked resolution
+        working-directory: qualification/weight_lifecycle_runtime_20261122
+        shell: bash
+        run: |
+          mkdir -p evidence
+          rustc -Vv > evidence/rustc.txt
+          cargo -V > evidence/cargo.txt
+          git rev-parse HEAD > evidence/source-commit.txt
+          sha256sum Cargo.toml Cargo.lock > evidence/source-manifests.sha256
+          if ! cargo metadata --locked --format-version 1 > evidence/metadata.json 2> evidence/metadata.stderr; then
+            cp Cargo.lock evidence/retained-input-Cargo.lock
+            cargo metadata --format-version 1 > evidence/lock-repair.stdout 2> evidence/lock-repair.stderr || true
+            cp Cargo.lock evidence/proposed-Cargo.lock
+            exit 1
+          fi
+      - name: Format, check, lint and unit boundaries
+        working-directory: qualification/weight_lifecycle_runtime_20261122
+        run: |
+          cargo fmt -- --check
+          /usr/bin/time -v -o evidence/check.time cargo check --locked --all-targets --${{ matrix.features }}
+          /usr/bin/time -v -o evidence/clippy.time cargo clippy --locked --all-targets --${{ matrix.features }} -- -D warnings
+          /usr/bin/time -v -o evidence/test.time cargo test --locked --${{ matrix.features }} -- --test-threads=1
+      - name: Build source-bound worker for private checkpoint execution
+        working-directory: qualification/weight_lifecycle_runtime_20261122
+        run: |
+          /usr/bin/time -v -o evidence/build.time cargo build --locked --${{ matrix.features }} --bin hepta-weight-lifecycle-study
+          cp target/debug/hepta-weight-lifecycle-study evidence/worker-${{ matrix.features }}
+          sha256sum evidence/worker-${{ matrix.features }} > evidence/worker.sha256
+          ldd evidence/worker-${{ matrix.features }} > evidence/worker.ldd
+      - name: Retain every attempt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-weight-lifecycle-${{ matrix.features }}
+          path: qualification/weight_lifecycle_runtime_20261122/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
