@@ -50,6 +50,58 @@ impl VerifiedSource {
 		}
 		Ok(())
 	}
+	/// Read-only numerical access for the separately bounded full-policy evaluator.
+	pub fn validate_schedule(&self, public: &Public) -> Result<()> {
+		public.validate()?;
+		self.law.validate_schedule(public)
+	}
+	pub fn endpoint_posterior(&self, public: &Public, state: &State) -> Result<f64> {
+		crate::task::validate_state(public, state)?;
+		self.law.posterior(public, state)
+	}
+	pub fn completion_probability(
+		&self,
+		public: &Public,
+		state: &State,
+		completion: Completion,
+	) -> Result<f64> {
+		crate::task::validate_state(public, state)?;
+		self.law.probability(public, state, completion)
+	}
+	/// Renewal mass plus the three reviewed threshold forecasts, all in F64.
+	/// This exposes no mutable law or hidden-parameter handle.
+	pub fn representation(&self, public: &Public, state: &State) -> Result<Vec<f64>> {
+		crate::task::validate_state(public, state)?;
+		let mass = self.law.mass(public, state)?;
+		let horizons = [(state.tick + 1).min(6), (state.tick + 2).min(6), 6];
+		let mut forecasts = std::collections::BTreeMap::new();
+		let mut future = mass.clone();
+		for tick in state.tick..=6 {
+			if horizons.contains(&tick) {
+				let mut row = [0.0; 3];
+				for (value, coordinate) in future.iter().zip(&self.law.coordinates) {
+					for (i, threshold) in [-0.5, 0.0, 0.5].iter().enumerate() {
+						if coordinate > threshold {
+							row[i] += value;
+						}
+					}
+				}
+				forecasts.insert(tick, row);
+			}
+			if tick < 6 {
+				future = self.law.propagate(&future, public, tick)?;
+			}
+		}
+		let mut out = mass;
+		for horizon in horizons {
+			out.extend_from_slice(
+				forecasts
+					.get(&horizon)
+					.ok_or_else(|| anyhow!("missing forecast"))?,
+			);
+		}
+		Ok(out)
+	}
 }
 
 pub fn authenticate_source(

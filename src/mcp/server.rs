@@ -2775,7 +2775,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Create a separate native safetensors artifact by applying 1 to 1024 exact F32/F16/BF16 element-byte replacements to one tensor. Requires the complete source SHA-256 and exact prior bytes. Streams at most 2 GiB with bounded buffers; source remains unchanged. Publishes the verified candidate and reverse-patch manifest together in private runtime storage. Exact no-ops preserve every source byte. Identical requests verify and reuse their artifact. No Python, inference, training or production activation."
+		description = "Create a separate native safetensors artifact by applying 1 to 1024 exact F64/F32/F16/BF16 element-byte replacements to one tensor. Requires the complete source SHA-256 and exact prior bytes. Streams at most 2 GiB with bounded buffers; source remains unchanged. Publishes the verified candidate and reverse-patch manifest together in private runtime storage. Exact no-ops preserve every source byte. Identical requests verify and reuse their artifact. No Python, inference, training or production activation."
 	)]
 	async fn weight_artifact_patch(
 		&self,

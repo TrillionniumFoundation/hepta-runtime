@@ -454,7 +454,7 @@ pub(super) async fn apply_with_roots(
 		|| params
 			.edits
 			.iter()
-			.any(|edit| edit.expected_hex.len() > 8 || edit.replacement_hex.len() > 8)
+			.any(|edit| edit.expected_hex.len() > 16 || edit.replacement_hex.len() > 16)
 	{
 		bail!("invalid source digest or bounded edit count");
 	}
@@ -623,3 +623,7 @@ pub async fn restore(params: RestoreParams) -> Result<String> {
 #[cfg(all(test, target_os = "linux"))]
 #[path = "weight_artifact_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "weight_artifact_private_tests.rs"]
+mod private_tests;
