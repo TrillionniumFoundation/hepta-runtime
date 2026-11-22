@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Boundary tests for admission and actual value acceptance.
 
-use super::{evaluation, inputs};
+use super::{evaluation, inputs, owner};
 use anyhow::Result;
 use hepta_semantic_source_adapter_study::{digest, SourcePin};
 use serde_json::json;
@@ -64,6 +64,27 @@ fn local_gzip_location_cannot_replace_or_choose_ambiguous_origin() -> Result<()>
 	receipt_pin.sha256 = digest(&absent);
 	receipt_pin.size_bytes = absent.len() as u64;
 	assert!(evaluation::original_compressed_pin(&file, &receipt_pin, &absent).is_err());
+	Ok(())
+}
+
+#[test]
+fn local_owner_configuration_validates_without_remote_capabilities() -> Result<()> {
+	let root = Path::new("/private/research-root");
+	let config = owner::local_owner_config(root)?;
+	config.validate()?;
+	assert_eq!(config.state_dir, root.join("owner-state"));
+	assert_eq!(config.controller_workspace_roots, vec![root.to_path_buf()]);
+	assert_eq!(config.hosts.len(), 1);
+	let host = config.host("disabled_localhost")?;
+	assert_eq!(host.ssh_target, "localhost");
+	assert!(!host.allow_execute && !host.allow_pty && !host.allow_write);
+	assert!(!host.allow_job_network && !host.allow_detached_fallback);
+	assert!(host.allowed_read_path_prefixes.is_empty());
+	assert!(host.allowed_write_path_prefixes.is_empty());
+	assert!(host.privileged_actions.is_empty());
+	assert!(host.checkpoint_binary.is_none() && host.checkpoint_binary_sha256.is_none());
+	assert!(config.weight_workers.is_empty());
+	assert!(config.rea_static_profiles.is_empty() && config.hia_worker.is_none());
 	Ok(())
 }
 

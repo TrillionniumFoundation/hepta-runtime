@@ -55,15 +55,26 @@ KEEP before any publication.
 
 Fault injection parks only at named boundaries in a fresh isolated research run.
 An external supervisor sends real SIGKILL and starts a new process for recovery.
-The process includes compiler, coordinator, canonical owner and evaluator;
-there is no external evaluator child left behind by supervisor death.
+The process includes compiler, coordinator, canonical owner and task evaluator.
+The existing canonical owner additionally uses its bounded descriptor parser
+child. This executable delegates the strict `rea-model-worker --request JSON`
+entry to the existing parser, retaining its read-only inherited descriptor,
+parent-death signal, limits, timeout and seccomp restrictions. Parser ceilings
+never raise a stricter inherited soft or hard limit. A separate integration test
+exercises the real non-test binary under lower CPU and address-space limits.
 
 Per-policy graph-start, DP-start and DP-complete files distinguish attempted work
 from known completion. If a process dies between computation and its durable
 completion record, completion is unknown, never imputed as zero. Per-task full
 outputs are individually bounded and hashed by the final evaluation record.
-External wall/CPU/RSS measurements include failed processes. The canonical owner
-copies/hashes complete checkpoints; patch byte count is not the I/O cost.
+Phase records keep process CPU and reaped descendant CPU separate, and provide
+their sum. The outer supervisor measures completed process trees, including the
+canonical parser, and attempts bounded process-group cleanup after failures.
+Incomplete reaping leaves a failed/unknown result and a cost lower bound. Runtime
+polling supplements per-process kernel limits; it is not a kernel whole-tree
+quota. A successful campaign must also satisfy the final aggregate CPU/wall gate.
+Lifecycle CLI invocation counts exclude internal parser entries. The canonical
+owner copies/hashes complete checkpoints; patch bytes are not the I/O cost.
 
 The worker source is checked and linked against the complete root library in
 both feature modes. Root Cargo.toml and Cargo.lock remain unchanged. These gates

@@ -126,6 +126,7 @@ fn run(args: &[String]) -> Result<()> {
 	}
 	let begin = Instant::now();
 	let total_cpu_start = meter::cpu_seconds()?;
+	let total_children_start = meter::reaped_child_cpu_seconds()?;
 	let auth_stamp = meter::Stamp::start()?;
 	let fresh = args[0] == "run";
 	let selected = args.get(5).cloned().unwrap_or_default();
@@ -297,7 +298,9 @@ fn run(args: &[String]) -> Result<()> {
 		"candidate_bytes":context.original.len(),"restored_bytes":restored.len(),"owner_inspected_model_bytes":owner.inspected_model_bytes,
 		"source_unchanged":inputs::read(&source_path,inputs::MAX_INPUT)?==context.original,"restoration_exact":true,
 		"next_task":next,"wall_seconds":begin.elapsed().as_secs_f64(),"process_cpu_seconds_before_final_result_write":meter::cpu_seconds()?-total_cpu_start,"production_adoption":false,
-		"complete_native_evaluator":true,"external_evaluator_processes":0});
+		"reaped_child_cpu_seconds_before_final_result_write":meter::reaped_child_cpu_seconds()?-total_children_start,
+		"complete_native_evaluator":true,"external_evaluator_processes":0,
+		"canonical_artifact_descriptor_parser":"existing isolated rea-model-worker child; included in reaped child CPU"});
 	inputs::save_json(&root.join(&args[4]), &result)?;
 	println!(
 		"{}",
@@ -309,5 +312,9 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-	run(&std::env::args().skip(1).collect::<Vec<_>>())
+	let args: Vec<_> = std::env::args().skip(1).collect();
+	if args.len() == 3 && args[0] == "rea-model-worker" && args[1] == "--request" {
+		return hepta_runtime::mcp::rea_model::serve_once(&args[2]);
+	}
+	run(&args)
 }

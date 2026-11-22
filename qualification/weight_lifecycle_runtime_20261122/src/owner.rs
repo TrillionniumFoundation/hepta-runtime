@@ -21,12 +21,27 @@ pub struct NativeOwner {
 	pub inspected_model_bytes: u64,
 }
 
+pub(crate) fn local_owner_config(root: &Path) -> Result<runtime::RuntimeConfig> {
+	// The existing runtime schema requires a host descriptor. This localhost
+	// descriptor grants no remote capability and initialization opens no SSH link.
+	let config: runtime::RuntimeConfig = serde_json::from_value(json!({
+		"state_dir":root.join("owner-state"),"controller_workspace_roots":[root],
+		"hosts":{"disabled_localhost":{"ssh_target":"localhost",
+			"remote_state_dir":root.join("disabled-remote-state"),
+			"execution_mode":"isolated","platform":"linux",
+			"allow_execute":false,"allow_pty":false,"allow_write":false,
+			"allow_job_network":false,"allow_detached_fallback":false,
+			"allowed_read_path_prefixes":[],"allowed_write_path_prefixes":[]}}
+	}))?;
+	config.validate()?;
+	Ok(config)
+}
+
 impl NativeOwner {
 	pub fn new(root: &Path) -> Result<Self> {
 		inputs::private_dir(root)?;
 		let state = root.join("owner-state");
-		let config: runtime::RuntimeConfig = serde_json::from_value(json!({"state_dir":state,
-			"controller_workspace_roots":[root],"hosts":{}}))?;
+		let config = local_owner_config(root)?;
 		runtime::init_runtime(config)?;
 		let rt = tokio::runtime::Builder::new_multi_thread()
 			.worker_threads(1)
