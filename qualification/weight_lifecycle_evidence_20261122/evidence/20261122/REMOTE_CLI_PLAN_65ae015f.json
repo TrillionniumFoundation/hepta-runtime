@@ -1,0 +1,171 @@
+{
+  "schema": "hepta.lifecycle-public-entry-plan.v1",
+  "source_commit": "65ae015f0ccee9366f29d4477ce9a9015682b6c0",
+  "binary_sha256": "086c1f1529bed2e51260ff0212224c7b110e15a8320f0bbd8d9650700439585b",
+  "binary_bytes": 11982768,
+  "request": {
+    "path": "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+    "sha256": "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+    "bytes": 4770
+  },
+  "local_qualification": {
+    "result": "campaign_attempt004/all-features/RESULTS.json",
+    "sha256": "7b92204511959f574a9c7705f38382c87b1f86f456e53c5cd6c65283ac1859e0",
+    "status": "PASS"
+  },
+  "roots_must_be_new": true,
+  "jobs": [
+    {
+      "case": "normal",
+      "mode": "run",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "run",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11",
+        "run.json"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-normal-run",
+      "timeout_seconds": 60,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11/run.json",
+      "expected": {
+        "record_stage": "Complete",
+        "record_decision": "ResearchAcceptedRestored",
+        "evaluator_calls_this_process": 1,
+        "full_policy_dps_this_process": 2,
+        "successful_owner_operations": [
+          "publish",
+          "restore"
+        ]
+      }
+    },
+    {
+      "case": "normal",
+      "mode": "recover",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "recover",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11",
+        "recover.json"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-normal-recover",
+      "timeout_seconds": 60,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11/recover.json",
+      "expected": {
+        "record_stage": "Complete",
+        "record_decision": "ResearchAcceptedRestored",
+        "evaluator_calls_this_process": 0,
+        "full_policy_dps_this_process": 0,
+        "successful_owner_operations": []
+      }
+    },
+    {
+      "case": "normal",
+      "mode": "next-task",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "next-task",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11",
+        "next-task.json"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-normal-next-task",
+      "timeout_seconds": 60,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-normal-fit11/next-task.json",
+      "expected": {
+        "record_stage": "Complete",
+        "record_decision": "ResearchAcceptedRestored",
+        "evaluator_calls_this_process": 0,
+        "full_policy_dps_this_process": 1,
+        "successful_owner_operations": []
+      }
+    },
+    {
+      "case": "published_timeout",
+      "mode": "run",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "run",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11",
+        "run.json",
+        "published"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-published-timeout-run",
+      "timeout_seconds": 20,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11/run.json",
+      "expected": {
+        "terminal_job_status": "public job timeout, actual status must be read back",
+        "cut_marker": {
+          "phase": "published"
+        },
+        "last_journal_stage": "Published",
+        "result_file_expected": false,
+        "successful_owner_operations": [
+          "publish"
+        ],
+        "complete_acceptance_evidence": false,
+        "policy_dp_records": 0
+      }
+    },
+    {
+      "case": "published_timeout",
+      "mode": "recover",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "recover",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11",
+        "recover.json"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-published-timeout-recover",
+      "timeout_seconds": 60,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11/recover.json",
+      "expected": {
+        "record_stage": "Complete",
+        "record_decision": "InterruptedRestored",
+        "evaluator_calls_this_process": 0,
+        "full_policy_dps_this_process": 0,
+        "successful_owner_operations": [
+          "restore"
+        ]
+      }
+    },
+    {
+      "case": "published_timeout",
+      "mode": "next-task",
+      "executable": "/tmp/hepta-wsp-next-20261122-267e/worker-65ae015f-all-features",
+      "argv": [
+        "next-task",
+        "/tmp/hepta-wsp-next-20261122-267e/lifecycle-inputs/requests/fit_11_accept.json",
+        "40ab6ad32881024d8646d490c99fa466c52640b4bc5eb8ef9edcf6d6a33569d5",
+        "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11",
+        "next-task.json"
+      ],
+      "suggested_stable_key": "wsp-65ae-fit11-published-timeout-next-task",
+      "timeout_seconds": 60,
+      "result_path": "/tmp/hepta-wsp-next-20261122-267e/public-65ae015f-published-timeout-fit11/next-task.json",
+      "expected": {
+        "record_stage": "Complete",
+        "record_decision": "InterruptedRestored",
+        "evaluator_calls_this_process": 0,
+        "full_policy_dps_this_process": 1,
+        "successful_owner_operations": []
+      }
+    }
+  ],
+  "next_task_identity": {
+    "model_sha256": "83f8cbc665bcca76693de68e94eb05fbdf9cb29537e3218879f4ef5579d7920e",
+    "snapshot_sha256": "76110847055ecec1716b43d6468d5a83b033986f8eae25cc3b5a8753f680672f",
+    "full_model_bytes": 643760,
+    "actual_path": "from returned record.restoration.artifact_id under the case root/owner-state/weight-artifacts-v1; must read actual model.safetensors and hash full bytes"
+  },
+  "candidate_sha256": "4fd80e542a4bbfc3e2f47f7e20f226c11c2c7b5075d550d33601b8279b81e01b",
+  "scope": "Only existing public process entry, this binary, these fresh research roots and observed timeout. No service/live pointer/production adoption/power-loss qualification. Remote artifact IDs are recomputed from remote source identity and need not equal local IDs."
+}
