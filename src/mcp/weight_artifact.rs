@@ -396,6 +396,127 @@ async fn find_reusable(
 	Ok(None)
 }
 
+/// A killed publisher can leave fully fsynced stage files before rename. Only
+/// the identical request may reconcile that complete stage while holding the
+/// canonical store lock; partial and unrelated stages remain retained evidence.
+struct PendingRequest<'a> {
+	params: &'a PatchTensorParams,
+	plan: &'a TensorPatch,
+	parent: Option<&'a str>,
+	kind: &'a str,
+	restored_sha: Option<&'a str>,
+}
+
+async fn reconcile_matching_pending(
+	root: &Path,
+	request: PendingRequest<'_>,
+	source: &mut tokio::fs::File,
+	before: &std::fs::Metadata,
+) -> Result<()> {
+	let PendingRequest {
+		params,
+		plan,
+		parent,
+		kind,
+		restored_sha,
+	} = request;
+	let mut entries = tokio::fs::read_dir(root).await?;
+	let mut count = 0usize;
+	while let Some(entry) = entries.next_entry().await? {
+		count += 1;
+		if count > MAX_ARTIFACTS {
+			bail!("pending reconciliation exceeds store entry budget");
+		}
+		let name = entry
+			.file_name()
+			.into_string()
+			.map_err(|_| anyhow!("invalid stage name"))?;
+		if !name.starts_with(".pending-") || name.starts_with(".pending-cohort-") {
+			continue;
+		}
+		let stage = entry.path();
+		verify_private_directory(&stage).await?;
+		let manifest_path = stage.join("manifest.json");
+		if !tokio::fs::try_exists(&manifest_path).await? {
+			continue;
+		}
+		let bytes = super::rea_files::read_private_bounded(
+			&manifest_path,
+			&[root.to_owned()],
+			MAX_MANIFEST_BYTES,
+		)
+		.await?;
+		let saved: Manifest = match super::rea_evidence::parse_unique_json(&bytes)
+			.and_then(|value| Ok(serde_json::from_value(value)?))
+		{
+			Ok(value) => value,
+			Err(_) => continue,
+		};
+		if saved.source_path != params.path
+			|| saved.source_sha256 != params.expected_sha256
+			|| saved.patch != *plan
+			|| saved.kind != kind
+			|| saved.parent_artifact_id.as_deref() != parent
+		{
+			continue;
+		}
+		if saved.schema != "hepta.weight.native-artifact.v1"
+			|| id_for(&saved)? != saved.artifact_id
+			|| saved.no_op != (saved.source_sha256 == saved.target_sha256)
+		{
+			bail!("matching pending artifact identity is inconsistent");
+		}
+		let mut members = tokio::fs::read_dir(&stage).await?;
+		let mut names = Vec::new();
+		while let Some(member) = members.next_entry().await? {
+			let metadata = tokio::fs::symlink_metadata(member.path()).await?;
+			if !metadata.is_file() || metadata.file_type().is_symlink() {
+				bail!("unexpected pending member");
+			}
+			names.push(member.file_name());
+			if names.len() > 2 {
+				bail!("pending artifact has extra members");
+			}
+		}
+		names.sort();
+		if names
+			!= [
+				std::ffi::OsString::from("manifest.json"),
+				std::ffi::OsString::from("model.safetensors"),
+			] {
+			bail!("pending artifact is incomplete");
+		}
+		let (mut staged, staged_before) = open_manifest_model(root, &name, &saved).await?;
+		if file_hash(&mut staged, staged_before.len()).await? != saved.target_sha256 {
+			bail!("matching pending content differs from its manifest");
+		}
+		unchanged(&staged_before, &staged.metadata().await?)?;
+		let (source_hash, target_hash, changed) = transform(source, None, plan).await?;
+		unchanged(before, &source.metadata().await?)?;
+		if source_hash != params.expected_sha256
+			|| target_hash != saved.target_sha256
+			|| changed != saved.changed_bytes
+			|| restored_sha.is_some_and(|sha| sha != target_hash)
+		{
+			bail!("pending artifact does not reproduce the current exact request");
+		}
+		let destination = root.join(&saved.artifact_id);
+		if tokio::fs::try_exists(&destination).await? {
+			let published = read_manifest(root, &saved.artifact_id).await?;
+			if serde_json::to_value(&published)? != serde_json::to_value(&saved)? {
+				bail!("pending artifact conflicts with published identity");
+			}
+			drop(staged);
+			tokio::fs::remove_dir_all(&stage).await?;
+		} else {
+			drop(staged);
+			rename_exclusive(&stage, &destination).await?;
+		}
+		tokio::fs::File::open(root).await?.sync_all().await?;
+	}
+	Ok(())
+}
+
 async fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
 	#[cfg(target_os = "linux")]
 	{
@@ -407,6 +528,9 @@ async fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
 		tokio::task::spawn_blocking(move || {
 			#[cfg(test)]
 			cohort::before_rename_test_hook(&test_paths.0, &test_paths.1)
+				.map_err(std::io::Error::other)?;
+			#[cfg(test)]
+			recovery_tests::before_rename(&test_paths.0, &test_paths.1)
 				.map_err(std::io::Error::other)?;
 			let result = unsafe {
 				libc::renameat2(
@@ -469,6 +593,19 @@ pub(super) async fn apply_with_roots(
 	let kind = if parent.is_some() { "restore" } else { "patch" };
 	let root = store_root(state).await?;
 	let _lock = lock_store(&root).await?;
+	reconcile_matching_pending(
+		&root,
+		PendingRequest {
+			params: &params,
+			plan: &plan,
+			parent: parent.as_deref(),
+			kind,
+			restored_sha: restored_sha.as_deref(),
+		},
+		&mut source,
+		&before,
+	)
+	.await?;
 	if let Some(saved) = find_reusable(&root, &params, &plan, parent.as_deref(), kind).await? {
 		let (source_hash, target_hash, changed) = transform(&mut source, None, &plan).await?;
 		unchanged(&before, &source.metadata().await?)?;
@@ -627,3 +764,7 @@ mod tests;
 #[cfg(test)]
 #[path = "weight_artifact_private_tests.rs"]
 mod private_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "weight_artifact_recovery_tests.rs"]
+mod recovery_tests;

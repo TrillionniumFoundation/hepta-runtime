@@ -1,0 +1,75 @@
+name: Native weight recovery qualification
+
+on:
+  pull_request:
+    paths:
+      - "qualification/weight_recovery_runtime_20261122/**"
+      - "src/mcp/weight_artifact.rs"
+      - "src/mcp/weight_artifact_recovery_tests.rs"
+      - ".github/workflows/weight-recovery-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-owner:
+    name: Canonical owner recovery (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [all-features, no-default-features]
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - name: Check out exact source head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy --no-self-update
+      - name: Check formatting
+        run: |
+          cargo +1.95.0 fmt --all -- --check
+          cargo +1.95.0 fmt --manifest-path qualification/weight_recovery_runtime_20261122/Cargo.toml --all -- --check
+      - name: Check and lint recovery coordination
+        run: |
+          cargo +1.95.0 check --manifest-path qualification/weight_recovery_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }}
+          cargo +1.95.0 clippy --manifest-path qualification/weight_recovery_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }} -- -D warnings
+          cargo +1.95.0 test --manifest-path qualification/weight_recovery_runtime_20261122/Cargo.toml --locked --all-targets --${{ matrix.features }} -- --test-threads=1
+      - name: Check complete root library
+        run: cargo +1.95.0 check --locked --lib --${{ matrix.features }}
+      - name: Lint complete root library and test bridge
+        run: cargo +1.95.0 clippy --locked --lib --tests --${{ matrix.features }} -- -D warnings
+      - name: Build complete root test binary
+        run: |
+          umask 022
+          /usr/bin/time -v -o "$RUNNER_TEMP/recovery-build-time.txt" cargo +1.95.0 test --locked --lib --${{ matrix.features }} --no-run --message-format=json > "$RUNNER_TEMP/recovery-compiler.jsonl"
+      - name: Execute real SIGKILL and fresh-process recovery
+        run: |
+          python3 qualification/weight_recovery_runtime_20261122/run_canonical.py --compiler-json "$RUNNER_TEMP/recovery-compiler.jsonl" --source "$(git rev-parse HEAD)" --features "${{ matrix.features }}" --output "$RUNNER_TEMP/canonical-recovery-results"
+      - name: Retain synthetic qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-recovery-${{ matrix.features }}
+          path: |
+            ${{ runner.temp }}/recovery-build-time.txt
+            ${{ runner.temp }}/recovery-compiler.jsonl
+            ${{ runner.temp }}/canonical-recovery-results/
+          if-no-files-found: warn
+          retention-days: 14
+          # Only the bounded synthetic fixture tree is uploaded, including retained stages.
+          include-hidden-files: true

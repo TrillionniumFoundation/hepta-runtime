@@ -1,0 +1,19 @@
+[package]
+name = "hepta-weight-recovery-study"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+
+[workspace]
+
+[dependencies]
+anyhow = "=1.0.104"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
+sha2 = "=0.11.0"
+libc = "=0.2.191"
+
+[profile.dev]
+debug = 0
+opt-level = 1
+overflow-checks = true
