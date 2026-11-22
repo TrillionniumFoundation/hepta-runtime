@@ -41,9 +41,9 @@ impl Pin {
 		self.verify(&bytes)?;
 		Ok(bytes)
 	}
-	pub fn source_pin(&self) -> SourcePin {
+	pub fn source_pin(&self, original_source_id: &str) -> SourcePin {
 		SourcePin {
-			source_id: self.path.clone(),
+			source_id: original_source_id.into(),
 			sha256: self.sha256.clone(),
 			size_bytes: self.bytes as u64,
 		}

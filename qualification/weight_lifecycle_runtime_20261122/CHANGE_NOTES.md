@@ -37,3 +37,27 @@ manifest and lock remain unchanged. The much broader first lockfile proposal was
 not adopted.
 
 These corrections still require exact-source CI and real checkpoint execution.
+
+## First actual checkpoint attempt: provenance and local paths
+
+Exact source `3c167ba81720a548bd994b5d25daaabc39c67143` passed both CI feature
+modes. The first real fit11 invocation then failed closed before creating its
+execution root: the adapter had incorrectly used the local gzip path as the
+compressed checkpoint's logical source identity. The source authenticator
+correctly required its original repository URL in the pinned transfer receipt.
+This attempt used 0.11339 worker CPU seconds, performed no policy DP and made no
+artifact-owner call. Its original stderr, result and outer process measurement
+were retained; the second feature mode was not started.
+
+The correction verifies the profile and its transfer-receipt pin, then requires
+exactly one receipt row matching the actual compressed file SHA256 and complete
+byte length. It obtains the original source identity from that authenticated row.
+No match, duplicate rows or identical bytes recorded under multiple origins are
+rejected. The existing source authenticator still checks URL, hash, length, the retained Git
+blob field, gzip derivation and decoded source bytes. Local path relocation
+only changes the file capability; it cannot create or replace provenance.
+
+A focused regression covers relocated local paths, receipt tampering, ambiguous
+same-byte origins and missing origins. Request schema, original input pins,
+contracts, program, source bytes, legal edit domain and dependency lock remain
+unchanged. New exact-source CI and a newly identified real campaign are required.

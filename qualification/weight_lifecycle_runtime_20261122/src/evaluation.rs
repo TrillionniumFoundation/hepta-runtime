@@ -13,7 +13,7 @@ use hepta_full_native_study::{codec, dag, forward};
 use hepta_semantic_source_adapter_study::{
 	digest,
 	semantics::{verify_profile, ProfilePin},
-	unique_json,
+	unique_json, SourcePin,
 };
 use hepta_weight_program_study::{
 	edit::EditProgram,
@@ -33,6 +33,34 @@ pub struct Context {
 	pub authenticated: AuthenticatedSnapshot,
 	pub model: Value,
 	pub hardware_key: String,
+}
+
+/// A local file capability is not its repository provenance. The receipt pin
+/// below comes from the already verified profile, not from the proposed edit.
+pub(crate) fn original_compressed_pin(
+	file: &inputs::Pin,
+	receipt_pin: &SourcePin,
+	receipt: &[u8],
+) -> Result<SourcePin> {
+	receipt_pin.verify(receipt, hepta_semantic_source_adapter_study::MAX_JSON_BYTES)?;
+	let origin = unique_json(receipt)?;
+	let files = origin["files"]
+		.as_array()
+		.ok_or_else(|| anyhow!("authenticated repository receipt has no files"))?;
+	let matching: Vec<_> = files
+		.iter()
+		.filter(|row| {
+			row["sha256"] == file.sha256 && row["bytes"].as_u64() == Some(file.bytes as u64)
+		})
+		.collect();
+	if matching.len() != 1 {
+		bail!("compressed checkpoint bytes have no unique authenticated repository origin");
+	}
+	let original_source_id = matching[0]["url"]
+		.as_str()
+		.filter(|value| !value.is_empty())
+		.ok_or_else(|| anyhow!("authenticated checkpoint origin has no source identity"))?;
+	Ok(file.source_pin(original_source_id))
 }
 
 impl Context {
@@ -69,12 +97,18 @@ impl Context {
 			.map(|(k, v)| (k, v.into_bytes()))
 			.collect();
 		let profile = verify_profile(&pin, &evidence)?;
-		let source = authenticate_source(
-			&gzip,
-			&request.source_gzip.source_pin(),
-			&request.decoded_source,
-			&profile,
+		let compressed_pin = original_compressed_pin(
+			&request.source_gzip,
+			profile
+				.sources()
+				.get("checkpoint_fetch_receipt")
+				.ok_or_else(|| anyhow!("verified checkpoint receipt pin missing"))?,
+			evidence
+				.get("checkpoint_fetch_receipt")
+				.ok_or_else(|| anyhow!("verified checkpoint receipt bytes missing"))?,
 		)?;
+		let source =
+			authenticate_source(&gzip, &compressed_pin, &request.decoded_source, &profile)?;
 		let decoded = codec::decode(&bridge)?;
 		request.decoded_source.verify(&decoded, inputs::MAX_INPUT)?;
 		let model = unique_json(&decoded)?;

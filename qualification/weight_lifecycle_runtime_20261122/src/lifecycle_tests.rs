@@ -5,7 +5,8 @@
 
 use super::{evaluation, inputs};
 use anyhow::Result;
-use hepta_semantic_source_adapter_study::digest;
+use hepta_semantic_source_adapter_study::{digest, SourcePin};
+use serde_json::json;
 use std::path::Path;
 
 #[test]
@@ -27,6 +28,43 @@ fn pins_check_actual_bytes_and_length() {
 	assert!(pin.verify(b"abc").is_ok());
 	assert!(pin.verify(b"abd").is_err());
 	assert!(pin.verify(b"abc\0").is_err());
+}
+
+#[test]
+fn local_gzip_location_cannot_replace_or_choose_ambiguous_origin() -> Result<()> {
+	let file = inputs::Pin {
+		path: "/relocated/private/model.gz".into(),
+		sha256: digest(b"gzip bytes"),
+		bytes: 10,
+	};
+	let row = json!({"sha256":file.sha256,"bytes":file.bytes,
+		"url":"https://reviewed-origin/revision/model.gz"});
+	let receipt = serde_json::to_vec(&json!({"files":[row.clone()]}))?;
+	let mut receipt_pin = SourcePin {
+		source_id: "reviewed-repository-transfer".into(),
+		sha256: digest(&receipt),
+		size_bytes: receipt.len() as u64,
+	};
+	let original = evaluation::original_compressed_pin(&file, &receipt_pin, &receipt)?;
+	assert_eq!(
+		original.source_id,
+		"https://reviewed-origin/revision/model.gz"
+	);
+	assert_ne!(original.source_id, file.path);
+	assert_eq!(original.sha256, file.sha256);
+	assert_eq!(original.size_bytes, file.bytes as u64);
+	let mut second = row.clone();
+	second["url"] = json!("https://different-origin/same-bytes.gz");
+	let ambiguous = serde_json::to_vec(&json!({"files":[row,second]}))?;
+	assert!(evaluation::original_compressed_pin(&file, &receipt_pin, &ambiguous).is_err());
+	receipt_pin.sha256 = digest(&ambiguous);
+	receipt_pin.size_bytes = ambiguous.len() as u64;
+	assert!(evaluation::original_compressed_pin(&file, &receipt_pin, &ambiguous).is_err());
+	let absent = serde_json::to_vec(&json!({"files":[]}))?;
+	receipt_pin.sha256 = digest(&absent);
+	receipt_pin.size_bytes = absent.len() as u64;
+	assert!(evaluation::original_compressed_pin(&file, &receipt_pin, &absent).is_err());
+	Ok(())
 }
 
 #[test]
