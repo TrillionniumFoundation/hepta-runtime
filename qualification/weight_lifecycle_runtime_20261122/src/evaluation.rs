@@ -78,10 +78,20 @@ impl Context {
 		let decoded = codec::decode(&bridge)?;
 		request.decoded_source.verify(&decoded, inputs::MAX_INPUT)?;
 		let model = unique_json(&decoded)?;
-		if codec::protected_hash(&model)? != source.receipt().protected_fields_sha256
-			|| source.receipt().protected_fields_sha256 != snapshot.protected_fields_sha256
+		// Source authentication protects all non-network fields. The edit snapshot
+		// additionally protects w1/b1, so these are deliberately distinct hash domains.
+		let mut physics_and_task = model.clone();
+		physics_and_task
+			.as_object_mut()
+			.ok_or_else(|| anyhow!("checkpoint must be a JSON object"))?
+			.remove("network");
+		if digest(&serde_json::to_vec(&physics_and_task)?)
+			!= source.receipt().protected_fields_sha256
 		{
-			bail!("checkpoint law and bridge protected semantics differ");
+			bail!("checkpoint and bridge non-network semantics differ");
+		}
+		if codec::protected_hash(&model)? != snapshot.protected_fields_sha256 {
+			bail!("bridge law and protected frontend differ from edit snapshot");
 		}
 		let program: EditProgram = serde_json::from_value(unique_json(&program)?)?;
 		let hardware_key = digest(&serde_json::to_vec(
