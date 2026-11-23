@@ -28,9 +28,12 @@ fn main() -> Result<()> {
 	if let Commands::WeightPolicy {
 		fee_band,
 		uncertainty,
+		plan_q_bias,
+		verify_q_bias,
 	} = &cli.command
 	{
-		return weight_policy::run(fee_band, uncertainty).map_err(anyhow::Error::msg);
+		return weight_policy::run(fee_band, uncertainty, plan_q_bias, verify_q_bias)
+			.map_err(anyhow::Error::msg);
 	}
 	if matches!(&cli.command, Commands::ReaRecordedCoreWorker) {
 		let code = mcp::rea_recorded_core_worker::run_worker()?;

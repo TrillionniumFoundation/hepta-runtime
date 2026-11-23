@@ -16,3 +16,16 @@ hepta-runtime weight-policy < graph.txt
 ```
 
 An agent can call this command as a bounded job on an existing admitted host. Supply a frozen input graph and retain its hash with the source checkpoint and the proposal. A caller seeking strict improvement compares the PROPOSAL paired lower bound against its fixed margin, keeps the original on failure, and evaluates the materialized checkpoint before adopting it. The standalone research entry point calls the same Rust functions. The command takes no filesystem paths, uses no broker or model credentials and emits no parameter write.
+
+
+## Planning a physical readout-bias proposal
+
+Run `hepta-runtime weight-policy --plan-q-bias MIN_FEE MAX_FEE RADIUS`. Append the token `HEPTA_Q_SCORES_V1` to the existing graph, followed by six finite scores per state in graph order. The solver checks that the legal frozen argmax matches the incumbent. One shared scalar shifts the WAIT, READ and REPAIR readout biases. The other three scores and all relative rankings within each group are fixed. Radius is a coordinate bound; the three-coordinate Euclidean shift has magnitude sqrt(3) times the returned absolute scalar.
+
+The program considers KEEP and the representable open-cell midpoints between distinct action thresholds inside the scalar radius. It maximizes the smaller of the two root gains relative to the incumbent. A strict gain above 1e-10 is required for a proposal. Among gains within 1e-12 of the best admissible gain it chooses the smallest absolute scalar, then the smaller signed scalar. Isolated ties and the two exact radius boundaries are outside this search. The evaluator caps the product of states and representable cells at 50 million.
+
+The single output row is `Q_BIAS_PLAN shift gain_at_min_fee gain_at_max_fee open_cell_count actions`. The graph fixes the transition law and rewards. Reopen the actual edited checkpoint and compare its full legal action vector with the returned vector before accepting its value. Physical rounding in a serialized neural readout can affect decisions at a score boundary. The separate uncertainty mode can then certify relative gain over independent transition and fee variations. The command only computes a proposal and reads its input from stdin.
+
+### Verifying a reopened candidate
+
+After independently binding the source and candidate to their file digests, recompute the complete candidate action vector from the reopened weights. Run `hepta-runtime weight-policy --verify-q-bias MIN_FEE MAX_FEE` with the same graph, setting its three action fields to incumbent, reopened candidate and predicted candidate respectively. Use plain graph input without a score table. The output gives the status, both **realized** candidate gains, count of planner/reopened disagreements and the final action vector. VERIFIED requires strict positive realized gains at both endpoints. KEEP indicates identical behavior, and REJECT returns the original vector when a change lacks strict relative gain. When rounding changes a proposed action, the decision uses the reopened gain. A caller must check graph and file identities and bind candidate promotion or rollback to the returned decision.

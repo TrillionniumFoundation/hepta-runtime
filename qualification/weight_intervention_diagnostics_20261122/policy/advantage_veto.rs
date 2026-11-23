@@ -15,11 +15,13 @@ fn execute() -> Result<(), String> {
 		})
 		.collect::<Result<Vec<_>, _>>()?;
 	match mode.as_deref() {
-		None => weight_policy::run(&[], &[]),
-		Some("--fee-band") if values.len() == 2 => weight_policy::run(&values, &[]),
-		Some("--uncertainty") if values.len() == 3 => weight_policy::run(&[], &values),
+		None => weight_policy::run(&[], &[], &[], &[]),
+		Some("--fee-band") if values.len() == 2 => weight_policy::run(&values, &[], &[], &[]),
+		Some("--uncertainty") if values.len() == 3 => weight_policy::run(&[], &values, &[], &[]),
+        Some("--plan-q-bias") if values.len() == 3 => weight_policy::run(&[], &[], &values, &[]),
+		Some("--verify-q-bias") if values.len() == 2 => weight_policy::run(&[], &[], &[], &values),
 		_ => {
-			Err("expected --fee-band MIN MAX, --uncertainty MIN MAX RADIUS, or no arguments".into())
+			Err("expected --fee-band MIN MAX, --uncertainty MIN MAX RADIUS, --plan-q-bias MIN MAX RADIUS, --verify-q-bias MIN MAX, or no arguments".into())
 		}
 	}
 }
