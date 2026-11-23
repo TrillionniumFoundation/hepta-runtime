@@ -6,3 +6,13 @@ Build the versioned worker with `rustc --edition=2021 -D warnings -O policy/adva
 * `--uncertainty MIN MAX RADIUS` allows independent fee multipliers per edge in the closed interval and one independent tilt per state and action. The ordered branch scores are evenly spaced in [-1,1], or zero for a single branch. Multiply each probability by one plus tilt times its score, then normalize. The absolute tilt must be less than one. Fixed support, action masks, rewards, input order and the acyclic graph are part of this contract.
 * The uncertainty output has five columns: name, minimum value, maximum value, a conservative lower bound on the change from BASE under a shared law, and action vector. BASE is the supplied incumbent. PROPOSAL evaluates the supplied candidate. MAXIMIN solves the worst-value objective by backward induction. DOMINANT refines decisions subject to a parent-relative bound. A positive minimum absolute value and a positive lower bound on change test different properties. An editor can keep the incumbent whenever a proposed change fails its required margin.
 * These operators evaluate the supplied decision graph. Converting domain observations into a defensible graph, checkpoint localization, immutable edit receipts and model deployment belong to the caller.
+
+The normal runtime entry point is now available from the installed binary:
+
+```sh
+hepta-runtime weight-policy --uncertainty 1 3 0.4 < graph.txt
+hepta-runtime weight-policy --fee-band 1 2 < graph.txt
+hepta-runtime weight-policy < graph.txt
+```
+
+An agent can call this command as a bounded job on an existing admitted host. Supply a frozen input graph and retain its hash with the source checkpoint and the proposal. A caller seeking strict improvement compares the PROPOSAL paired lower bound against its fixed margin, keeps the original on failure, and evaluates the materialized checkpoint before adopting it. The standalone research entry point calls the same Rust functions. The command takes no filesystem paths, uses no broker or model credentials and emits no parameter write.
