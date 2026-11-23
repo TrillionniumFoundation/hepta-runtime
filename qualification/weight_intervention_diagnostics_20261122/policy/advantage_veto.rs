@@ -1,4 +1,6 @@
 //! Hard-action planning for a supplied finite, acyclic task law.
+mod fee_band;
+mod ambiguity;
 use std::io::{self, Read};
 use std::str::{FromStr, SplitWhitespace};
 
@@ -214,6 +216,18 @@ fn run() -> Outcome<()> {
         return Err("input size cap".into());
     }
     let graph = Graph::parse(&input)?;
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--uncertainty") {
+        return ambiguity::run(&graph, &args[1..]);
+    }
+    if !args.is_empty() {
+        if args.len() != 3 || args[0] != "--fee-band" {
+            return Err("expected --fee-band MIN MAX or no arguments".into());
+        }
+        let lo = args[1].parse::<f64>().map_err(|_| "invalid minimum fee multiplier")?;
+        let hi = args[2].parse::<f64>().map_err(|_| "invalid maximum fee multiplier")?;
+        return fee_band::emit(&graph, lo, hi);
+    }
     for (name,policy,value) in graph.solve()? {
         let actions: String = policy.iter().map(|&a| char::from(b'0' + a as u8)).collect();
         println!("{name} {value:.17e} {actions}");
