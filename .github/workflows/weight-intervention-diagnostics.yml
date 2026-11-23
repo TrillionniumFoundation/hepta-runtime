@@ -52,3 +52,5 @@ jobs:
           for _, value, actions in rows:
               assert math.isclose(float(value), 0.7 if actions == "14" else 0.0, abs_tol=1e-12)
           PY
+      - name: Verify fee and transition uncertainty through the compiled worker
+        run: python3 policy/test_policy_ranges.py "$RUNNER_TEMP/advantage-veto"
