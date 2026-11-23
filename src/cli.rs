@@ -102,6 +102,9 @@ pub enum Commands {
 		/// Plan a shared WAIT/READ/REPAIR readout-bias shift from a graph and frozen scores.
 		#[arg(long, value_names = ["MIN", "MAX", "RADIUS"], num_args = 3, conflicts_with_all = ["fee_band", "uncertainty"])]
 		plan_q_bias: Vec<f64>,
+		/// Verify the actual reopened candidate actions against KEEP at both fee limits.
+		#[arg(long, value_names = ["MIN", "MAX"], num_args = 2, conflicts_with_all = ["fee_band", "uncertainty", "plan_q_bias"])]
+		verify_q_bias: Vec<f64>,
 	},
 	/// Internal pinned native transport for an existing weight worker job.
 	#[command(hide = true)]

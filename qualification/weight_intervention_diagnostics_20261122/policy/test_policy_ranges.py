@@ -55,3 +55,18 @@ assert (name, float(delta), int(cells), actions) == ("Q_BIAS_PLAN", .1875, 2, "1
 assert math.isclose(float(lower), .7) and math.isclose(float(upper), .6)
 assert plan(q_graph, ".125").stdout.split()[-1] == "04"
 assert plan(q_graph.replace("-.125", "1"), ".25").returncode != 0
+
+# Realized candidate actions may differ from predicted actions after an F64 write.
+verification_graph = q_graph.split("HEPTA_Q_SCORES_V1")[0]
+def verify_candidate(graph, upper):
+    proc = subprocess.run([*sys.argv[1:], "--verify-q-bias", "1", upper], input=graph,
+                          capture_output=True, text=True, check=True)
+    status, low, high, mismatches, actions = proc.stdout.split()
+    return status, float(low), float(high), int(mismatches), actions
+state, lower, upper, mismatches, actions = verify_candidate(verification_graph, "2")
+assert (state, mismatches, actions) == ("Q_BIAS_VERIFIED", 1, "14")
+assert math.isclose(lower,.7) and math.isclose(upper,.6)
+assert verify_candidate(verification_graph,"10")[::3] == ("Q_BIAS_REJECT", 1)
+assert verify_candidate(verification_graph,"10")[-1] == "04"
+same = verification_graph.replace("0 1 0 1 1 1 .1", "0 0 1 1 1 1 .1")
+assert verify_candidate(same,"2") == ("Q_BIAS_KEEP",0.,0.,1,"04")

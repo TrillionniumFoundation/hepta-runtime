@@ -276,7 +276,12 @@ impl Graph {
 }
 
 /// Read one bounded graph from stdin, then emit policies and certified root values.
-pub(crate) fn run(fee_band: &[f64], uncertainty: &[f64], plan_q_bias: &[f64]) -> Outcome<()> {
+pub(crate) fn run(
+	fee_band: &[f64],
+	uncertainty: &[f64],
+	plan_q_bias: &[f64],
+	verify_q_bias: &[f64],
+) -> Outcome<()> {
 	let mut input = String::new();
 	let n = io::stdin()
 		.take(MAX_INPUT_BYTES + 1)
@@ -284,6 +289,12 @@ pub(crate) fn run(fee_band: &[f64], uncertainty: &[f64], plan_q_bias: &[f64]) ->
 		.map_err(|e| e.to_string())?;
 	if n > MAX_INPUT_BYTES as usize {
 		return Err("input size cap".into());
+	}
+	if !verify_q_bias.is_empty() {
+		return match (fee_band, uncertainty, plan_q_bias, verify_q_bias) {
+			([], [], [], [lo, hi]) => q_bias::verify(&Graph::parse(&input)?, [*lo, *hi]),
+			_ => Err("expected --verify-q-bias MIN MAX by itself".into()),
+		};
 	}
 	if !plan_q_bias.is_empty() {
 		return match (fee_band, uncertainty, plan_q_bias) {

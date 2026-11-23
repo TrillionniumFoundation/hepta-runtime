@@ -155,6 +155,40 @@ pub(super) fn run(input: &str, fees: [f64; 2], radius: f64) -> Outcome<()> {
 	Ok(())
 }
 
+/// Original, direct and reverse carry the incumbent, reopened and proposed actions.
+pub(super) fn verify(graph: &Graph, fees: [f64; 2]) -> Outcome<()> {
+	fee_band::validate(graph, fees)?;
+	let source: Vec<_> = graph.states.iter().map(|s| s.original).collect();
+	let actual: Vec<_> = graph.states.iter().map(|s| s.direct).collect();
+	let base = fee_band::evaluate(graph, &source, fees)[graph.initial];
+	let values = fee_band::evaluate(graph, &actual, fees)[graph.initial];
+	let gains = [values[0] - base[0], values[1] - base[1]];
+	if !gains.iter().all(|v| v.is_finite()) {
+		return Err("nonfinite reopened root gain".into());
+	}
+	let mismatch = graph
+		.states
+		.iter()
+		.filter(|s| s.direct != s.reverse)
+		.count();
+	let (status, selected) = if source == actual {
+		("Q_BIAS_KEEP", &source)
+	} else if gains.iter().all(|g| *g > TOLERANCE) {
+		("Q_BIAS_VERIFIED", &actual)
+	} else {
+		("Q_BIAS_REJECT", &source)
+	};
+	let codes: String = selected
+		.iter()
+		.map(|&a| char::from(b'0' + a as u8))
+		.collect();
+	println!(
+		"{status} {:.17e} {:.17e} {mismatch} {codes}",
+		gains[0], gains[1]
+	);
+	Ok(())
+}
+
 #[cfg(test)]
 #[path = "q_bias_tests.rs"]
 mod tests;
