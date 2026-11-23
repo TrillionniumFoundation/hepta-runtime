@@ -40,3 +40,18 @@ for args in [("--fee-band", "3", "1"), ("--uncertainty", "1", "3", "1"),
              ("--uncertainty", "1", "nan", ".1")]:
     run = invoke(*args)
     assert run.returncode != 0 and not run.stdout.strip(), (args, run)
+
+# Exercise the scalar planner through the same executable that consumers call.
+q_graph = ("HEPTA_DAG_V1 2 0\n0 3 0 0 0 0 1 0 1 1 1 .1 0 0\n"
+           "1 16 0 .8 0 4 4 4 0 0 0\nHEPTA_Q_SCORES_V1\n"
+           "0 -.125 3 9 7 8\n2 7 8 9 .8 -.8\n")
+def plan(graph, radius):
+    return subprocess.run([*sys.argv[1:], "--plan-q-bias", "1", "2", radius],
+                          input=graph, capture_output=True, text=True)
+response = plan(q_graph, ".25")
+response.check_returncode()
+name, delta, lower, upper, cells, actions = response.stdout.split()
+assert (name, float(delta), int(cells), actions) == ("Q_BIAS_PLAN", .1875, 2, "14")
+assert math.isclose(float(lower), .7) and math.isclose(float(upper), .6)
+assert plan(q_graph, ".125").stdout.split()[-1] == "04"
+assert plan(q_graph.replace("-.125", "1"), ".25").returncode != 0

@@ -19,7 +19,7 @@ fn q(state: &State, action: usize, children: &[Endpoints], factors: Endpoints) -
 	})
 }
 
-fn evaluate(graph: &Graph, policy: &[usize], factors: Endpoints) -> Vec<Endpoints> {
+pub(super) fn evaluate(graph: &Graph, policy: &[usize], factors: Endpoints) -> Vec<Endpoints> {
 	let mut result = vec![[0.; 2]; graph.states.len()];
 	for &i in graph.order.iter().rev() {
 		result[i] = q(&graph.states[i], policy[i], &result, factors);
@@ -31,12 +31,7 @@ fn improvement(x: Endpoints, anchor: Endpoints) -> f64 {
 	(x[0] - anchor[0]).min(x[1] - anchor[1])
 }
 
-fn solve(
-	graph: &Graph,
-	factors: Endpoints,
-	restrict: bool,
-	backward: bool,
-) -> Outcome<(Vec<usize>, Endpoints)> {
+pub(super) fn validate(graph: &Graph, factors: Endpoints) -> Outcome<()> {
 	if !factors.iter().all(|x| x.is_finite() && *x >= 0.) || factors[0] > factors[1] {
 		return Err("require finite ordered nonnegative fee multipliers".into());
 	}
@@ -44,6 +39,16 @@ fn solve(
 	if !max_fee.is_finite() || max_fee > f64::MAX / (8. * (graph.deadline as f64 + 1.)) {
 		return Err("fee band exceeds the numerical range".into());
 	}
+	Ok(())
+}
+
+fn solve(
+	graph: &Graph,
+	factors: Endpoints,
+	restrict: bool,
+	backward: bool,
+) -> Outcome<(Vec<usize>, Endpoints)> {
+	validate(graph, factors)?;
 	let mut policy: Vec<_> = graph.states.iter().map(|s| s.original).collect();
 	let base = evaluate(graph, &policy, factors);
 	let mut values = base.clone();

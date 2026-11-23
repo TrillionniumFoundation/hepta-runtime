@@ -99,6 +99,9 @@ pub enum Commands {
 		/// Bounds for independent fees and ordered branch-probability tilts.
 		#[arg(long, value_names = ["MIN", "MAX", "RADIUS"], num_args = 3)]
 		uncertainty: Vec<f64>,
+		/// Plan a shared WAIT/READ/REPAIR readout-bias shift from a graph and frozen scores.
+		#[arg(long, value_names = ["MIN", "MAX", "RADIUS"], num_args = 3, conflicts_with_all = ["fee_band", "uncertainty"])]
+		plan_q_bias: Vec<f64>,
 	},
 	/// Internal pinned native transport for an existing weight worker job.
 	#[command(hide = true)]

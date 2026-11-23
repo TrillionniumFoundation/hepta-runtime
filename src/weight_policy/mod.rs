@@ -4,6 +4,7 @@
 //! Hard-action planning for a supplied finite, acyclic task law.
 mod ambiguity;
 mod fee_band;
+mod q_bias;
 use std::io::{self, Read};
 use std::str::{FromStr, SplitWhitespace};
 
@@ -275,7 +276,7 @@ impl Graph {
 }
 
 /// Read one bounded graph from stdin, then emit policies and certified root values.
-pub(crate) fn run(fee_band: &[f64], uncertainty: &[f64]) -> Outcome<()> {
+pub(crate) fn run(fee_band: &[f64], uncertainty: &[f64], plan_q_bias: &[f64]) -> Outcome<()> {
 	let mut input = String::new();
 	let n = io::stdin()
 		.take(MAX_INPUT_BYTES + 1)
@@ -283,6 +284,12 @@ pub(crate) fn run(fee_band: &[f64], uncertainty: &[f64]) -> Outcome<()> {
 		.map_err(|e| e.to_string())?;
 	if n > MAX_INPUT_BYTES as usize {
 		return Err("input size cap".into());
+	}
+	if !plan_q_bias.is_empty() {
+		return match (fee_band, uncertainty, plan_q_bias) {
+			([], [], [lo, hi, radius]) => q_bias::run(&input, [*lo, *hi], *radius),
+			_ => Err("expected --plan-q-bias MIN MAX RADIUS by itself".into()),
+		};
 	}
 	let graph = Graph::parse(&input)?;
 	match (fee_band, uncertainty) {
