@@ -7,7 +7,7 @@ import sys
 def invoke(*args, fee=0.1):
     graph = (f"HEPTA_DAG_V1 2 0\n0 3 0 0 0 0 1 0 1 1 1 {fee} 0 0\n"
              "1 16 0 .8 0 4 4 4 0 0 0\n")
-    return subprocess.run([sys.argv[1], *args], input=graph, text=True, capture_output=True)
+    return subprocess.run([*sys.argv[1:], *args], input=graph, text=True, capture_output=True)
 
 
 def read(*args, fee=0.1):

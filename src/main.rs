@@ -18,12 +18,20 @@ use clap::Parser;
 use tracing::Level;
 
 mod cli;
+mod weight_policy;
 use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
+	if let Commands::WeightPolicy {
+		fee_band,
+		uncertainty,
+	} = &cli.command
+	{
+		return weight_policy::run(fee_band, uncertainty).map_err(anyhow::Error::msg);
+	}
 	if matches!(&cli.command, Commands::ReaRecordedCoreWorker) {
 		let code = mcp::rea_recorded_core_worker::run_worker()?;
 		if code != 0 {
@@ -163,6 +171,9 @@ async fn run(cli: Cli) -> Result<()> {
 			if code != 0 {
 				std::process::exit(code);
 			}
+		}
+		Commands::WeightPolicy { .. } => {
+			anyhow::bail!("weight policy must run before Tokio initialization");
 		}
 		Commands::ReaBrowserCapture(_) => {
 			anyhow::bail!("browser capture must run before Tokio initialization");

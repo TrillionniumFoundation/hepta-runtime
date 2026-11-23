@@ -5,6 +5,9 @@ on:
     paths:
       - 'qualification/weight_intervention_diagnostics_20261122/**'
       - '.github/workflows/weight-intervention-diagnostics.yml'
+      - 'src/weight_policy/**'
+      - 'src/main.rs'
+      - 'src/cli.rs'
   workflow_dispatch:
 
 permissions:
@@ -54,3 +57,15 @@ jobs:
           PY
       - name: Verify fee and transition uncertainty through the compiled worker
         run: python3 policy/test_policy_ranges.py "$RUNNER_TEMP/advantage-veto"
+
+  shipped-command:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582
+      - run: cargo build --locked --bin hepta-runtime
+      - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_policy_ranges.py ./target/debug/hepta-runtime weight-policy

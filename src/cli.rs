@@ -91,6 +91,15 @@ pub enum Commands {
 		#[arg(long)]
 		request: String,
 	},
+	/// Evaluate a finite acyclic policy graph read from standard input.
+	WeightPolicy {
+		/// Bounds for one common settlement fee multiplier.
+		#[arg(long, value_names = ["MIN", "MAX"], num_args = 2, conflicts_with = "uncertainty")]
+		fee_band: Vec<f64>,
+		/// Bounds for independent fees and ordered branch-probability tilts.
+		#[arg(long, value_names = ["MIN", "MAX", "RADIUS"], num_args = 3)]
+		uncertainty: Vec<f64>,
+	},
 	/// Internal pinned native transport for an existing weight worker job.
 	#[command(hide = true)]
 	WeightClient(hepta_runtime::mcp::weight_native::WeightClientArgs),
