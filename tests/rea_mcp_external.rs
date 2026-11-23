@@ -33,17 +33,18 @@ struct RunningMcp {
 }
 
 impl RunningMcp {
-	fn start(config_path: &std::path::Path) -> Self {
+	fn start(config_path: &std::path::Path, stderr: Stdio) -> Self {
 		let mut command = Command::new(env!("CARGO_BIN_EXE_hepta-runtime"));
 		command
 			.arg("mcp")
 			.arg("--runtime-config")
 			.arg(config_path)
 			.env_clear()
+			.env("RUST_LOG", "info")
 			.current_dir("/")
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
-			.stderr(Stdio::null());
+			.stderr(stderr);
 		#[cfg(unix)]
 		{
 			use std::os::unix::process::CommandExt;
@@ -183,7 +184,17 @@ fn external_mcp_policy_worker_and_controller_restart() {
 
 	let mut retained_id: Option<String> = None;
 	for iteration in 0..2 {
-		let mut mcp = RunningMcp::start(&config_file);
+		// Exercise the restart with an unavailable diagnostic sink on Linux.
+		let stderr = if cfg!(target_os = "linux") && iteration == 1 {
+			let sink = std::fs::OpenOptions::new()
+				.write(true)
+				.open("/dev/full")
+				.expect("open full diagnostic sink");
+			Stdio::from(sink)
+		} else {
+			Stdio::null()
+		};
+		let mut mcp = RunningMcp::start(&config_file, stderr);
 		mcp.initialize();
 		let discovered = mcp.request(2, "tools/list", json!({}));
 		let names: Vec<_> = discovered["tools"]
@@ -298,7 +309,7 @@ fn model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers() {
 		"state_dir":root.path().join("state"),"controller_workspace_roots":[workspace],
 		"hosts":{"denied":{"ssh_target":"never-connect-ci","remote_state_dir":root.path().join("remote"),"allow_execute":false}}
 	})).unwrap()).unwrap();
-	let mut mcp = RunningMcp::start(&config);
+	let mut mcp = RunningMcp::start(&config, Stdio::null());
 	mcp.initialize();
 	let first = mcp.request(
 		20,
@@ -312,7 +323,7 @@ fn model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers() {
 	assert_eq!(first["source"]["identity_scope"], "full_file");
 	let page = json!({"path":model,"offset":1,"limit":1,"expected_version":first["source"]["observed_version"],"expected_header_sha256":first["source"]["header_sha256"]});
 	drop(mcp);
-	let mut mcp = RunningMcp::start(&config);
+	let mut mcp = RunningMcp::start(&config, Stdio::null());
 	mcp.initialize();
 	let next = mcp.request(
 		21,

@@ -400,11 +400,12 @@ impl tracing::Subscriber for StderrSubscriber {
 	fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
 
 	fn event(&self, event: &tracing::Event<'_>) {
-		use std::fmt::Write;
+		use std::{fmt::Write as _, io::Write as _};
 		let mut msg = String::new();
 		let _ = write!(msg, "[{}] ", event.metadata().level());
 		event.record(&mut MessageVisitor(&mut msg));
-		eprintln!("{}", msg);
+		// Diagnostic sink failures must not interrupt an in-flight MCP request.
+		let _ = writeln!(std::io::stderr().lock(), "{msg}");
 	}
 
 	fn enter(&self, _span: &tracing::span::Id) {}
