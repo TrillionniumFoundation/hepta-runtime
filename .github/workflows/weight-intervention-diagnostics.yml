@@ -1,0 +1,54 @@
+name: Native weight intervention diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/weight_intervention_diagnostics_20261122/**'
+      - '.github/workflows/weight-intervention-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-worker-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: qualification/weight_intervention_diagnostics_20261122
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+      - name: Test both readout protocols through the compiled executable
+        run: |
+          rustc --edition=2021 -D warnings -O readout/localize.rs -o "$RUNNER_TEMP/localize"
+          python3 readout/test_entry.py "$RUNNER_TEMP/localize"
+      - name: Test policy bounds and malformed inputs
+        run: |
+          rustc --edition=2021 -D warnings --test policy/advantage_veto.rs -o "$RUNNER_TEMP/veto-tests"
+          "$RUNNER_TEMP/veto-tests"
+      - name: Check native policy input and output
+        run: |
+          rustc --edition=2021 -D warnings -O policy/advantage_veto.rs -o "$RUNNER_TEMP/advantage-veto"
+          python3 - "$RUNNER_TEMP/advantage-veto" <<'PY'
+          import math
+          import subprocess
+          import sys
+
+          graph = """HEPTA_DAG_V1 2 0
+          0 3 0 0 0 0 1 0 1 1 1 .1 0 0
+          1 16 0 .8 0 4 4 4 0 0 0
+          """
+          run = subprocess.run([sys.argv[1]], input=graph, text=True, capture_output=True, check=True)
+          rows = [line.split() for line in run.stdout.splitlines()]
+          expected_actions = {"KEEP": "04", "EXACT_RAW": "14", "EXACT_H1": "04", "EXACT_H2": "14",
+                              "EXACT_VPI": "14", "REVERSE_RAW": "04", "REVERSE_VPI": "04", "ALL_VPI": "14"}
+          assert len(rows) == len(expected_actions)
+          assert {name: actions for name, _, actions in rows} == expected_actions
+          for _, value, actions in rows:
+              assert math.isclose(float(value), 0.7 if actions == "14" else 0.0, abs_tol=1e-12)
+          PY
