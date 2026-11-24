@@ -2,7 +2,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Plan one common additive shift for the three continuation readout biases.
-//! Search representable midpoints of open score cells plus the exact incumbent.
+//! Search open score cells, their exact boundaries and the closed radius endpoints.
 use super::{fee_band, token, Graph, Outcome, State, ACTIONS, TOLERANCE};
 
 const MARKER: &str = "HEPTA_Q_SCORES_V1";
@@ -102,15 +102,19 @@ fn solve(input: &str, fees: [f64; 2], radius: f64) -> Outcome<Plan> {
 			(w[0] < mid && mid < w[1]).then_some(mid)
 		})
 		.collect();
-	if graph.states.len().saturating_mul(midpoints.len()) > MAX_STATE_CELLS {
-		return Err("state by open-cell evaluation count exceeds planner budget".into());
+	// A tied legal argmax can differ from both neighboring policies: stop action 0
+	// wins a tie, while continuation actions 1..=3 beat stop actions 4 and 5.
+	// The radius is closed, so its two endpoints are admissible as well.
+	let evaluated_shifts = midpoints.len().saturating_add(limits.len());
+	if graph.states.len().saturating_mul(evaluated_shifts) > MAX_STATE_CELLS {
+		return Err("state by evaluated-shift count exceeds planner budget".into());
 	}
 	let incumbent: Vec<_> = graph.states.iter().map(|s| s.original).collect();
 	let baseline = fee_band::evaluate(&graph, &incumbent, fees)[graph.initial];
 	let policy = |shift| switches.iter().map(|s| s.action(shift)).collect::<Vec<_>>();
-	let mut candidates = Vec::with_capacity(midpoints.len());
+	let mut candidates = Vec::with_capacity(evaluated_shifts);
 	let mut best = 0.0_f64;
-	for &shift in &midpoints {
+	for &shift in midpoints.iter().chain(&limits) {
 		let values = fee_band::evaluate(&graph, &policy(shift), fees)[graph.initial];
 		let gains = [values[0] - baseline[0], values[1] - baseline[1]];
 		if !gains.iter().all(|v| v.is_finite()) {

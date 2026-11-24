@@ -70,3 +70,28 @@ assert verify_candidate(verification_graph,"10")[::3] == ("Q_BIAS_REJECT", 1)
 assert verify_candidate(verification_graph,"10")[-1] == "04"
 same = verification_graph.replace("0 1 0 1 1 1 .1", "0 0 1 1 1 1 .1")
 assert verify_candidate(same,"2") == ("Q_BIAS_KEEP",0.,0.,1,"04")
+
+# Closed radius endpoints and isolated exact ties can be the only improving
+# scalar policies. Exercise them through both the standalone and shipped CLI.
+closed_cases = [
+    (".125", .125, "14", [.7, .6],
+     "HEPTA_DAG_V1 2 0\n0 18 0 0 0 4 1 4 1 1 1 .1 0 0\n"
+     "1 16 0 .8 0 4 4 4 0 0 0\nHEPTA_Q_SCORES_V1\n"
+     "-1 0 -1 -1 .125 -1\n2 7 8 9 .8 -.8\n"),
+    (".125", -.125, "04", [.9, 1.],
+     "HEPTA_DAG_V1 2 0\n0 3 .8 0 0 1 0 1 1 1 1 .1 0 0\n"
+     "1 16 0 0 0 4 4 4 0 0 0\nHEPTA_Q_SCORES_V1\n"
+     "-.125 0 -1 -1 -1 -1\n0 0 0 0 1 0\n"),
+    (".25", .125, "100", [.7, .6],
+     "HEPTA_DAG_V1 3 0\n0 18 0 0 0 4 1 4 1 1 1 .1 0 0\n"
+     "1 3 .8 0 0 0 0 0 1 1 2 .1 0 0\n"
+     "2 1 0 0 0 0 0 0 0 0 0\nHEPTA_Q_SCORES_V1\n"
+     "-1 0 -1 -1 .125 -1\n.125 0 -1 -1 -1 -1\n0 -1 -1 -1 -1 -1\n"),
+]
+for radius, expected_shift, expected_actions, expected_gains, graph in closed_cases:
+    response = plan(graph, radius)
+    response.check_returncode()
+    name, shift, low, high, _, actions = response.stdout.split()
+    assert (name, float(shift), actions) == ("Q_BIAS_PLAN", expected_shift, expected_actions)
+    assert all(math.isclose(float(a), b, abs_tol=1e-12)
+               for a, b in zip((low, high), expected_gains))
