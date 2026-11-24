@@ -45,7 +45,14 @@ async fn proxy_submission(
 	let (reply, receive) = oneshot::channel();
 	let input = command.as_bytes().to_vec();
 	proxy
-		.enqueue("fixture", command, input, deadline, cancel, reply)
+		.enqueue(
+			"fixture",
+			command,
+			ObservationInput::Legacy(input),
+			deadline,
+			cancel,
+			reply,
+		)
 		.await?;
 	Ok(receive)
 }
@@ -80,7 +87,10 @@ async fn proxy_accepts_beyond_old_queue_and_admission_caps_once_per_identity() {
 		let request = receiver.try_recv().unwrap();
 		assert_eq!(request.command, format!("queued-{index}"));
 		assert_eq!(request.host, "fixture");
-		assert_eq!(request.input.as_slice(), request.command.as_bytes());
+		let ObservationInput::Legacy(ref original_input) = request.input else {
+			panic!("legacy observation changed input variant");
+		};
+		assert_eq!(original_input.as_slice(), request.command.as_bytes());
 		assert_eq!(request.deadline, deadline);
 		assert!(!request.cancel.is_cancelled());
 	}
@@ -659,7 +669,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			let request = Request {
 				host: "fixture".into(),
 				command: "NEVER_DISPATCH".into(),
-				input: vec![],
+				input: ObservationInput::Legacy(vec![]),
 				deadline,
 				cancel: request_cancel.clone(),
 				reply,
@@ -787,7 +797,7 @@ fn enqueue_fair_request(
 	let request = Request {
 		host: host.into(),
 		command: command.into(),
-		input: vec![],
+		input: ObservationInput::Legacy(vec![]),
 		deadline,
 		cancel: cancel.clone(),
 		reply,
@@ -969,7 +979,7 @@ async fn owned_admission_fixture(core: &Arc<Core>) {
 	let request = Request {
 		host: "fixture".into(),
 		command: "NEVER_EXECUTE".into(),
-		input: vec![],
+		input: ObservationInput::Legacy(vec![]),
 		deadline: Instant::now() + Duration::from_secs(5),
 		cancel: CancellationToken::new(),
 		reply,
@@ -1168,7 +1178,13 @@ async fn postverify_dispatch(core: Arc<Core>, request: Request, control: Arc<Pos
 		// A real pinned, descriptor-owned ssh -G child must be captured and
 		// reaped before its lifetime lease ends or any output can be delivered.
 		let output = core
-			.captured(args, &[], request.deadline, &request.cancel, vec![host])
+			.captured(
+				args,
+				&ObservationInput::Legacy(vec![]),
+				request.deadline,
+				&request.cancel,
+				vec![host],
+			)
 			.await?;
 		assert!(output.status.success());
 		assert!(!output.stdout.is_empty());
@@ -1628,7 +1644,7 @@ async fn isolated_helper() {
 				let request = Request {
 					host: "fixture".into(),
 					command: "NEVER_DISPATCH".into(),
-					input: vec![],
+					input: ObservationInput::Legacy(vec![]),
 					deadline: Instant::now() + Duration::from_secs(40),
 					cancel: cancel.clone(),
 					reply,
@@ -1662,7 +1678,7 @@ async fn isolated_helper() {
 				assert!(core
 					.captured(
 						args.clone(),
-						&[],
+						&ObservationInput::Legacy(vec![]),
 						Instant::now() + Duration::from_secs(1),
 						&cancel,
 						vec![]
@@ -1672,7 +1688,7 @@ async fn isolated_helper() {
 				assert!(core
 					.captured(
 						args,
-						&[],
+						&ObservationInput::Legacy(vec![]),
 						Instant::now() - Duration::from_millis(1),
 						&CancellationToken::new(),
 						vec![]
@@ -1715,7 +1731,7 @@ async fn isolated_helper() {
 				let output = core
 					.captured(
 						args,
-						&[],
+						&ObservationInput::Legacy(vec![]),
 						Instant::now() + Duration::from_secs(5),
 						&CancellationToken::new(),
 						vec![],
@@ -1750,7 +1766,7 @@ async fn isolated_helper() {
 					task_core
 						.captured(
 							args,
-							&[],
+							&ObservationInput::Legacy(vec![]),
 							Instant::now() + Duration::from_secs(5),
 							&task_cancel,
 							vec![Arc::new(lease)],
@@ -1799,7 +1815,7 @@ async fn isolated_helper() {
 						other
 							.captured(
 								args,
-								&[],
+								&ObservationInput::Legacy(vec![]),
 								Instant::now() + Duration::from_secs(1),
 								&CancellationToken::new(),
 								vec![],

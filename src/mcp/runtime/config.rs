@@ -53,8 +53,69 @@ fn default_action_timeout() -> u64 {
 	30
 }
 
+/// One administrator-selected installed role. Tool callers cannot supply these pins.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeJobPin {
+	pub executable: String,
+	pub sha256: String,
+}
+
+/// Presence selects the complete native-only Linux job transport profile.
+/// Missing roles fail deserialization; failed admission never selects Python.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeJobEntries {
+	pub entry: NativeJobPin,
+	pub submit: NativeJobPin,
+	pub observation: NativeJobPin,
+	pub cancel: NativeJobPin,
+	pub launcher: NativeJobPin,
+}
+
+impl NativeJobEntries {
+	pub(super) fn roles(&self) -> [(&'static str, &NativeJobPin); 5] {
+		[
+			("hia-job-entry", &self.entry),
+			("hia-job-submit", &self.submit),
+			("hia-job-observation", &self.observation),
+			("hia-job-cancel", &self.cancel),
+			("hia-job-launch", &self.launcher),
+		]
+	}
+
+	pub(super) fn validate(&self) -> Result<()> {
+		for (role, pin) in self.roles() {
+			let path = Path::new(&pin.executable);
+			if !path.is_absolute()
+				|| pin.executable.len() > 4096
+				|| pin.executable.chars().any(char::is_control)
+				|| pin
+					.executable
+					.split('/')
+					.skip(1)
+					.any(|part| part.is_empty() || part == "." || part == "..")
+				|| path.file_name().and_then(|name| name.to_str()) != Some(role)
+				|| pin.sha256.len() != 64
+				|| !pin
+					.sha256
+					.bytes()
+					.all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+			{
+				bail!(
+					"invalid native job role {role}: expected a normalized absolute installed role path and lowercase SHA256"
+				);
+			}
+		}
+		Ok(())
+	}
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HostConfig {
+	/// Complete administrator-bound native job bundle; absence retains legacy configuration identity.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub native_jobs: Option<NativeJobEntries>,
 	/// Optional administrator-pinned CRIU executable. Disabled when absent.
 	#[serde(default)]
 	pub checkpoint_binary: Option<String>,
@@ -201,6 +262,14 @@ impl RuntimeConfig {
 			}
 		}
 		for (name, host) in &self.hosts {
+			if let Some(native) = &host.native_jobs {
+				if host.platform != Platform::Linux {
+					bail!("native job transport requires Linux on host `{name}`");
+				}
+				native
+					.validate()
+					.with_context(|| format!("native job profile for host `{name}`"))?;
+			}
 			match (&host.checkpoint_binary, &host.checkpoint_binary_sha256) {
 				(None, None) => {}
 				(Some(binary), Some(sha)) => {
@@ -231,7 +300,9 @@ impl RuntimeConfig {
 					|| !host.allowed_cwd_prefixes.is_empty()
 					|| !host.allowed_dangerous_executables.is_empty()
 				{
-					bail!("operator host `{name}` cannot claim command/path sandboxing; use isolated mode or OS permissions");
+					bail!(
+						"operator host `{name}` cannot claim command/path sandboxing; use isolated mode or OS permissions"
+					);
 				}
 				if (host.allow_execute || host.allow_pty) && !host.allow_job_network {
 					bail!("operator host `{name}` requires explicit allow_job_network=true");
@@ -257,7 +328,9 @@ impl RuntimeConfig {
 					bail!("macOS host `{name}` requires allow_detached_fallback for durable jobs");
 				}
 				if !host.allow_job_network {
-					bail!("macOS host `{name}` cannot enforce the Linux private-network sandbox; allow_job_network must be true");
+					bail!(
+						"macOS host `{name}` cannot enforce the Linux private-network sandbox; allow_job_network must be true"
+					);
 				}
 			}
 			for prefix in host
@@ -276,17 +349,25 @@ impl RuntimeConfig {
 					bail!("host `{name}` has invalid privileged action `{action_name}`");
 				}
 				if action.timeout_seconds == 0 || action.timeout_seconds > 300 {
-					bail!("host `{name}` privileged action `{action_name}` timeout must be 1..300 seconds");
+					bail!(
+						"host `{name}` privileged action `{action_name}` timeout must be 1..300 seconds"
+					);
 				}
 				if action.allow_extra_args == action.extra_arg_patterns.is_empty() {
-					bail!("host `{name}` privileged action `{action_name}` must pair allow_extra_args with explicit extra_arg_patterns");
+					bail!(
+						"host `{name}` privileged action `{action_name}` must pair allow_extra_args with explicit extra_arg_patterns"
+					);
 				}
 				if action.extra_arg_patterns.len() > 32 {
-					bail!("host `{name}` privileged action `{action_name}` has too many argument patterns");
+					bail!(
+						"host `{name}` privileged action `{action_name}` has too many argument patterns"
+					);
 				}
 				for pattern in &action.extra_arg_patterns {
 					Regex::new(&format!(r"\A(?:{pattern})\z")).with_context(|| {
-						format!("host `{name}` privileged action `{action_name}` has invalid argument regex")
+						format!(
+							"host `{name}` privileged action `{action_name}` has invalid argument regex"
+						)
 					})?;
 				}
 			}
@@ -650,8 +731,8 @@ fn validate_execution(
 		|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)
 	{
 		bail!(
-            "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
-        );
+			"executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
+		);
 	}
 	if cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {
 		bail!("cwd is required when execution roots are configured for host `{host_name}`");

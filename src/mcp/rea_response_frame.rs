@@ -49,7 +49,9 @@ impl<S: Service<RoleServer>> Service<RoleServer> for ReaFramedService<S> {
 		if super::hia_wire_candidate::negotiation_selected()
 			&& matches!(&request, ClientRequest::InitializeRequest(_))
 		{
-			let selected = context.extensions.get::<super::hia_wire_candidate::LegacyChoice>()
+			let selected = context
+				.extensions
+				.get::<super::hia_wire_candidate::LegacyChoice>()
 				.and_then(|choice| choice.0.clone())
 				.ok_or_else(|| ErrorData::invalid_params("HIA wire negotiation refused", None))?;
 			return match self.inner.handle_request(request, context).await? {
@@ -57,7 +59,10 @@ impl<S: Service<RoleServer>> Service<RoleServer> for ReaFramedService<S> {
 					result.protocol_version = selected;
 					Ok(ServerResult::InitializeResult(result))
 				}
-				_ => Err(ErrorData::internal_error("unexpected result for HIA wire negotiation", None)),
+				_ => Err(ErrorData::internal_error(
+					"unexpected result for HIA wire negotiation",
+					None,
+				)),
 			};
 		}
 		let frame = match &request {

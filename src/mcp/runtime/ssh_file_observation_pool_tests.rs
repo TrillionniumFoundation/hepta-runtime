@@ -70,7 +70,7 @@ async fn queued_file_wire_retains_its_original_payload_deadline_and_cancel_ident
 		.enqueue(
 			"fixture",
 			command.clone(),
-			input.clone(),
+			ObservationInput::Legacy(input.clone()),
 			deadline,
 			cancel.clone(),
 			send,
@@ -83,7 +83,10 @@ async fn queued_file_wire_retains_its_original_payload_deadline_and_cancel_ident
 	}
 	let request = receiver.recv().await.unwrap();
 	assert_eq!(request.command, command);
-	assert_eq!(request.input, input);
+	let ObservationInput::Legacy(ref original_input) = request.input else {
+		panic!("legacy file observation changed input variant");
+	};
+	assert_eq!(original_input, &input);
 	assert_eq!(request.deadline, deadline);
 	cancel.cancel();
 	assert!(request.cancel.is_cancelled());

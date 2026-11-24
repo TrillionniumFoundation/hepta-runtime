@@ -73,10 +73,27 @@ async fn master_socket_readiness(socket: &Path, owned_pid: u32) -> Result<Option
 	Ok(Some(stamp))
 }
 
+enum ObservationInput {
+	Legacy(Vec<u8>),
+	Native(super::super::native_jobs::NativeJobInput),
+}
+
+impl ObservationInput {
+	async fn write_to<W: tokio::io::AsyncWrite + Unpin>(
+		&self,
+		writer: &mut W,
+	) -> std::io::Result<()> {
+		match self {
+			Self::Legacy(bytes) => writer.write_all(bytes).await,
+			Self::Native(input) => input.write_to(writer).await,
+		}
+	}
+}
+
 struct Request {
 	host: String,
 	command: String,
-	input: Vec<u8>,
+	input: ObservationInput,
 	deadline: Instant,
 	cancel: CancellationToken,
 	reply: oneshot::Sender<Result<Captured>>,
@@ -289,11 +306,37 @@ pub(super) async fn capture(
 	duration: Duration,
 ) -> Result<Captured> {
 	super::validate_observation_bytes(&command, &input)?;
+	let deadline = Instant::now()
+		.checked_add(duration)
+		.context("observation deadline exceeds monotonic range")?;
+	capture_input(host, command, ObservationInput::Legacy(input), deadline).await
+}
+
+pub(super) async fn capture_native(
+	host: &str,
+	prepared: super::super::native_jobs::PreparedNativeJob,
+	deadline: Instant,
+) -> Result<Captured> {
+	prepared.input.validate_observation(&prepared.command)?;
+	capture_input(
+		host,
+		prepared.command,
+		ObservationInput::Native(prepared.input),
+		deadline,
+	)
+	.await
+}
+
+async fn capture_input(
+	host: &str,
+	command: String,
+	input: ObservationInput,
+	deadline: Instant,
+) -> Result<Captured> {
 	let pool = POOL.get().context("observation pool was not requested")?;
 	if !pool.healthy.load(Ordering::Acquire) || pool.stop.is_cancelled() {
 		bail!("observation pool unavailable; no fallback or automatic retry");
 	}
-	let deadline = Instant::now() + duration;
 	let cancel = CancellationToken::new();
 	let _guard = CancelOnDrop(cancel.clone());
 	let (reply, receive) = oneshot::channel();
@@ -310,7 +353,7 @@ impl Proxy {
 		&self,
 		host: &str,
 		command: String,
-		input: Vec<u8>,
+		input: ObservationInput,
 		deadline: Instant,
 		cancel: CancellationToken,
 		reply: oneshot::Sender<Result<Captured>>,
@@ -330,7 +373,9 @@ impl Proxy {
 			|| Instant::now() >= deadline
 			|| self.sender.is_closed()
 		{
-			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
+			bail!(
+				"observation cancelled, expired or unavailable before queue submission; no automatic retry"
+			);
 		}
 		self.sender
 			.send(request)
@@ -953,7 +998,7 @@ impl Core {
 	async fn captured(
 		&self,
 		args: Vec<String>,
-		input: &[u8],
+		input: &ObservationInput,
 		deadline: Instant,
 		cancel: &CancellationToken,
 		leases: Vec<Arc<Lease>>,
@@ -973,7 +1018,7 @@ impl Core {
 			let stdout = pipes.1.context("observation SSH stdout unavailable")?;
 			let stderr = pipes.2.context("observation SSH stderr unavailable")?;
 			let io = async {
-				let write = async { stdin.write_all(input).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) };
+				let write = async { input.write_to(&mut stdin).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) };
 				let (_, stdout, stderr, status) = tokio::try_join!(write, super::read_bounded(stdout), super::read_bounded(stderr), owned.wait())?;
 				Ok::<_, anyhow::Error>(Output { status, stdout, stderr })
 			};
@@ -998,7 +1043,13 @@ impl Core {
 	) -> Result<()> {
 		let args = self.arguments(host, mode, socket, true)?;
 		let result = self
-			.captured(args, &[], deadline, &self.stop, vec![])
+			.captured(
+				args,
+				&ObservationInput::Legacy(vec![]),
+				deadline,
+				&self.stop,
+				vec![],
+			)
 			.await?;
 		if !result.status.success()
 			|| result.stdout.len() > 256 * 1024

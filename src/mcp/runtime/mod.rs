@@ -18,6 +18,7 @@ pub mod jobs;
 pub mod multi_read;
 #[cfg(unix)]
 mod namespace_version;
+mod native_jobs;
 pub mod operator;
 mod privileged_ledger;
 pub mod pty;

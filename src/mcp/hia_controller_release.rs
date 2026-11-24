@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Admit the installed HIA controller as one release, before serving traffic.
@@ -7,9 +8,9 @@ use std::{
 	env,
 	fs::{File, OpenOptions},
 	io::Read,
-	os::unix::fs::{MetadataExt, OpenOptionsExt},
+	os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt},
 	path::Path,
-	sync::OnceLock,
+	sync::{Arc, OnceLock},
 };
 
 use anyhow::{ensure, Context, Result};
@@ -43,6 +44,7 @@ const OWNER_FILE_LOCK_SCHEMA: &str = "hepta.hia.mcp.controller.v22";
 const OWNER_MARKER_SCHEMA: &str = "hepta.hia.mcp.controller.v23";
 const OWNER_CUSTODY_SCHEMA: &str = "hepta.hia.mcp.controller.v24";
 const NATIVE_JOB_OWNER_SCHEMA: &str = "hepta.hia.mcp.controller.v25";
+const NATIVE_JOB_TRANSPORT_SCHEMA: &str = "hepta.hia.mcp.controller.v26";
 const JOB_SUPERVISOR: &str = "hia-job-supervisor";
 const WITNESS_ROLE: &str = "JOB_WITNESS";
 const WITNESS_PATH: &str = "HIA_LOCAL_MCP_JOB_WITNESS_IMAGE";
@@ -51,6 +53,14 @@ const JOB_RECEIPT: &str = "hia-job-receipt";
 const TERMINAL_RECEIPT_ROLE: &str = "JOB_TERMINAL_RECEIPT";
 const JOB_TERMINAL_RECEIPT: &str = "hia-agent-job-terminal-receipt";
 const WORKER_PREPARE: &str = "hia-worker-prepare";
+const NATIVE_JOB_ROLES: [(&str, &str, usize); 5] = [
+	("JOB_ENTRY", "hia-job-entry", 2 << 20),
+	("JOB_SUBMIT", "hia-job-submit", 4 << 20),
+	("JOB_OBSERVATION", "hia-job-observation", 2 << 20),
+	("JOB_CANCEL", "hia-job-cancel", 1 << 20),
+	("JOB_LAUNCH", "hia-job-launch", 1 << 20),
+];
+const NATIVE_JOB_HELPERS: [&str; 3] = [WORKER_PREPARE, JOB_RECEIPT, JOB_SUPERVISOR];
 const FILTERS: [(&str, &str); 9] = [
 	("WIRE", "hia-agent-mcp-request"),
 	("REPLY", "hia-agent-mcp-reply"),
@@ -90,7 +100,13 @@ struct Release {
 	supervisor_protocol: u8,
 	terminal_artifacts: Option<serde_json::Value>,
 	images: BTreeMap<&'static str, File>,
+	native_artifacts: BTreeMap<&'static str, NativeJobArtifact>,
 	catalog: Vec<u8>,
+}
+
+struct NativeJobArtifact {
+	sha256: String,
+	bytes: OnceLock<Arc<[u8]>>,
 }
 
 static RELEASE: OnceLock<Release> = OnceLock::new();
@@ -164,10 +180,12 @@ impl Release {
 			| OWNER_FILE_LOCK_SCHEMA
 			| OWNER_MARKER_SCHEMA
 			| OWNER_CUSTODY_SCHEMA
-			| NATIVE_JOB_OWNER_SCHEMA => true,
+			| NATIVE_JOB_OWNER_SCHEMA
+			| NATIVE_JOB_TRANSPORT_SCHEMA => true,
 			_ => anyhow::bail!("invalid installed HIA controller schema"),
 		};
 		let supervisor_protocol = match admitted.schema.as_str() {
+			NATIVE_JOB_TRANSPORT_SCHEMA => 26,
 			NATIVE_JOB_OWNER_SCHEMA => 25,
 			OWNER_CUSTODY_SCHEMA => 24,
 			OWNER_MARKER_SCHEMA => 23,
@@ -191,6 +209,7 @@ impl Release {
 			_ => 0,
 		};
 		let native_job_owner = supervisor_protocol >= 25;
+		let native_job_transport = supervisor_protocol == 26;
 		let witness_publisher = supervisor_protocol >= 6;
 		let lifecycle_owner = admitted.schema == LIFECYCLE_OWNER_SCHEMA || witness_publisher;
 		let with_terminal_receipt = admitted.schema == TERMINAL_RECEIPT_SCHEMA || lifecycle_owner;
@@ -200,7 +219,8 @@ impl Release {
 				== FILTERS.len()
 					+ 2 + usize::from(with_receipt)
 					+ usize::from(with_terminal_receipt)
-					+ usize::from(native_job_owner),
+					+ usize::from(native_job_owner)
+					+ usize::from(native_job_transport) * NATIVE_JOB_ROLES.len(),
 			"invalid installed HIA controller role inventory"
 		);
 		let load = |name: &str, limit: usize| -> Result<Vec<u8>> {
@@ -221,6 +241,7 @@ impl Release {
 			"installed HIA controller catalog differs from this runtime"
 		);
 		let mut images = BTreeMap::new();
+		let mut native_artifacts = BTreeMap::new();
 		let mut terminal_artifacts = witness_publisher.then(serde_json::Map::new);
 		for name in FILTERS
 			.map(|(_, name)| name)
@@ -229,8 +250,13 @@ impl Release {
 			.chain(with_receipt.then_some(JOB_RECEIPT))
 			.chain(with_terminal_receipt.then_some(JOB_TERMINAL_RECEIPT))
 			.chain(native_job_owner.then_some(JOB_SUPERVISOR))
-		{
-			let bytes = load(name, 1 << 20)?;
+			.chain(
+				NATIVE_JOB_ROLES
+					.iter()
+					.filter(|_| native_job_transport)
+					.map(|(_, name, _)| *name),
+			) {
+			let bytes = load(name, native_job_limit(name).unwrap_or(1 << 20))?;
 			ensure!(
 				bytes.starts_with(b"\x7fELF\x02\x01\x01")
 					&& bytes.get(16..20) == Some(&[2, 0, 62, 0]),
@@ -259,6 +285,19 @@ impl Release {
 					}),
 				);
 			}
+			if native_job_transport && native_job_limit(name).is_some() {
+				native_artifacts.insert(
+					name,
+					NativeJobArtifact {
+						sha256: admitted
+							.files
+							.get(name)
+							.context("missing native job image pin")?
+							.clone(),
+						bytes: OnceLock::new(),
+					},
+				);
+			}
 			images.insert(name, sealed(c"hia-controller-release", &bytes, true)?);
 		}
 		Ok(Self {
@@ -267,9 +306,105 @@ impl Release {
 			supervisor_protocol,
 			terminal_artifacts: terminal_artifacts.map(serde_json::Value::Object),
 			images,
+			native_artifacts,
 			catalog,
 		})
 	}
+
+	fn native_job_pin(&self, name: &str) -> Result<&NativeJobArtifact> {
+		ensure!(
+			self.supervisor_protocol == 26,
+			"native job transport requires a complete v26 HIA controller release"
+		);
+		self.native_artifacts
+			.get(name)
+			.context("unlisted native job artifact role")
+	}
+
+	fn native_job_artifact(&self, name: &str, expected_sha: &str) -> Result<Arc<[u8]>> {
+		let artifact = self.native_job_pin(name)?;
+		ensure!(
+			expected_sha == artifact.sha256,
+			"native job artifact {name} differs from the configured identity"
+		);
+		if let Some(bytes) = artifact.bytes.get() {
+			return Ok(Arc::clone(bytes));
+		}
+		let image = self
+			.images
+			.get(name)
+			.context("missing sealed native job image")?;
+		verify_native_image_seals(image)?;
+		let limit = native_job_limit(name).context("unlisted native job image extent")?;
+		let length = usize::try_from(image.metadata()?.len())?;
+		ensure!(
+			length > 0 && length <= limit,
+			"invalid sealed native job image extent"
+		);
+		let mut bytes = vec![0; length];
+		image
+			.read_exact_at(&mut bytes, 0)
+			.context("cannot capture sealed native job image")?;
+		ensure!(
+			hia_contract::sha256(&bytes) == expected_sha,
+			"sealed native job image identity changed"
+		);
+		// Every caller shares the same immutable bytes even when the first reads
+		// race. Queued observations retain an Arc, not another image allocation.
+		let _ = artifact.bytes.set(Arc::from(bytes));
+		artifact
+			.bytes
+			.get()
+			.map(Arc::clone)
+			.context("native job image cache was not initialized")
+	}
+}
+
+fn native_job_limit(name: &str) -> Option<usize> {
+	if NATIVE_JOB_HELPERS.contains(&name) {
+		return Some(1 << 20);
+	}
+	NATIVE_JOB_ROLES
+		.iter()
+		.find(|(_, known, _)| *known == name)
+		.map(|(_, _, limit)| *limit)
+}
+
+#[cfg(target_os = "linux")]
+fn verify_native_image_seals(image: &File) -> Result<()> {
+	use std::os::fd::AsRawFd;
+	let required = libc::F_SEAL_SEAL | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_WRITE;
+	let observed = unsafe { libc::fcntl(image.as_raw_fd(), libc::F_GET_SEALS) };
+	ensure!(
+		observed >= 0 && observed & required == required,
+		"native job image has not retained all immutability seals"
+	);
+	Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn verify_native_image_seals(_image: &File) -> Result<()> {
+	anyhow::bail!("native job transport requires Linux sealed descriptors")
+}
+
+pub(super) fn has_native_job_transport() -> bool {
+	RELEASE
+		.get()
+		.is_some_and(|release| release.supervisor_protocol == 26)
+}
+
+pub(super) fn native_job_artifact(name: &str, expected_sha: &str) -> Result<Arc<[u8]>> {
+	RELEASE
+		.get()
+		.context("native job transport requires an installed HIA controller release")?
+		.native_job_artifact(name, expected_sha)
+}
+
+pub(super) fn native_job_artifact_sha256(name: &str) -> Result<String> {
+	let release = RELEASE
+		.get()
+		.context("native job transport requires an installed HIA controller release")?;
+	Ok(release.native_job_pin(name)?.sha256.clone())
 }
 
 pub(super) fn lifecycle_owner_selected() -> bool {
@@ -299,6 +434,7 @@ pub fn install(manifest: &Path, pin: &str) -> Result<()> {
 			.map(|(role, _)| *role)
 			.chain(WORKER_ROLES)
 			.chain([RECEIPT_ROLE, WITNESS_ROLE, TERMINAL_RECEIPT_ROLE])
+			.chain(NATIVE_JOB_ROLES.map(|(role, _, _)| role))
 			.any(|role| {
 				env::var_os(format!("HIA_LOCAL_MCP_{role}_IMAGE")).is_some()
 					|| env::var_os(format!("HIA_LOCAL_MCP_{role}_SHA256")).is_some()
@@ -323,11 +459,18 @@ fn release_name(path_key: &str) -> Option<&'static str> {
 	if role == WITNESS_ROLE || WORKER_ROLES.contains(&role) {
 		return Some(WORKER_PREPARE);
 	}
+	if let Some((_, name, _)) = NATIVE_JOB_ROLES.iter().find(|(known, _, _)| *known == role) {
+		return Some(*name);
+	}
 	FILTERS
 		.iter()
 		.find(|(known, _)| *known == role)
 		.map(|(_, name)| *name)
 }
+
+#[cfg(test)]
+#[path = "hia_controller_native_jobs_tests.rs"]
+mod native_jobs_tests;
 
 fn admitted_image<'a>(release: &'a Release, path_key: &str) -> Option<&'a File> {
 	if path_key == WITNESS_PATH && !release.witness {

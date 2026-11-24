@@ -12,7 +12,7 @@ use std::{
 	time::Duration,
 };
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{bail, ensure, Context, Result};
 use tokio::{io::AsyncReadExt, process::Command, time::timeout};
 
 use super::hia_contract::MAX_WORKER_BYTES;

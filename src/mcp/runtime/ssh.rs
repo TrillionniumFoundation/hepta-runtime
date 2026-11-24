@@ -2,13 +2,13 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! SSH transport with original child custody and verified configured hosts.
-use anyhow::{Context, Result, anyhow, bail};
-use serde::Serialize;
+use anyhow::{anyhow, bail, Context, Result};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::path::{Component, Path};
 use std::process::Stdio;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
@@ -263,7 +263,9 @@ fn parse_file_observation(
 	})
 }
 
-fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
+fn observation_request(
+	value: JobObservation<'_>,
+) -> Result<(Option<ObservationScript>, serde_json::Value, Duration, bool)> {
 	use serde_json::json;
 	let fields: &[&str] = match &value {
 		JobObservation::PythonStatus {
@@ -371,6 +373,11 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			true,
 		),
 	};
+	Ok((script, input, timeout, system))
+}
+
+fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
+	let (script, input, timeout, system) = observation_request(value)?;
 	let command = match script {
 		Some(script) => job_observation_command(script)?.to_owned(),
 		None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
@@ -388,8 +395,35 @@ pub(super) async fn run_job_observation(
 	value: JobObservation<'_>,
 ) -> Result<serde_json::Value> {
 	let host = super::config::runtime_config()?.host(host_name)?;
-	let (command, bytes, duration, system) = prepare_observation(value)?;
-	let output = capture_observation(host_name, command, bytes, duration).await?;
+	let (output, system) = if host.native_jobs.is_some() {
+		// Establish the original budget before encoding, Store image admission
+		// or queueing. Only control bytes are per-request; the image is shared.
+		let started = tokio::time::Instant::now();
+		let (script, request, duration, system) = observation_request(value)?;
+		if system {
+			bail!("native-only job profile does not admit legacy system jobctl observations; no fallback");
+		}
+		use super::native_jobs::NativeJobOperation;
+		let operation = match script {
+			Some(ObservationScript::Status) => NativeJobOperation::Status(&request),
+			Some(ObservationScript::Read) => NativeJobOperation::Read(&request),
+			None => bail!("unsupported native job observation; no fallback"),
+		};
+		let prepared = super::native_jobs::prepare(host, operation)?;
+		let deadline = started
+			.checked_add(duration)
+			.context("SSH observation deadline exceeds monotonic range")?;
+		(
+			capture_native_observation(host_name, prepared, deadline).await?,
+			false,
+		)
+	} else {
+		let (command, bytes, duration, system) = prepare_observation(value)?;
+		(
+			capture_observation(host_name, command, bytes, duration).await?,
+			system,
+		)
+	};
 	if !output.status.success() {
 		if system {
 			bail!(
@@ -428,6 +462,22 @@ async fn capture_observation(
 	{
 		let _ = (host, command, bytes, duration);
 		bail!("observation SSH pooling requires Linux");
+	}
+}
+
+async fn capture_native_observation(
+	host: &str,
+	prepared: super::native_jobs::PreparedNativeJob,
+	deadline: tokio::time::Instant,
+) -> Result<CapturedObservation> {
+	#[cfg(target_os = "linux")]
+	{
+		observation_pool::capture_native(host, prepared, deadline).await
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (host, prepared, deadline);
+		bail!("native job observation pooling requires Linux; no fallback");
 	}
 }
 
@@ -551,6 +601,41 @@ where
 	direct::capture_with_entry(target, command, stdin_data, deadline, enter).await
 }
 
+pub(super) async fn run_native_job_json<O: DeserializeOwned>(
+	host: &HostConfig,
+	operation: super::native_jobs::NativeJobOperation<'_>,
+	timeout: Duration,
+) -> Result<O> {
+	let deadline = tokio::time::Instant::now()
+		.checked_add(timeout)
+		.context("SSH deadline exceeds the monotonic clock range")?;
+	let prepared = super::native_jobs::prepare(host, operation)?;
+	let wire = prepared.input.wire()?;
+	let output = run_capture_until(host, &prepared.command, &wire, deadline).await?;
+	decode_remote_json(host, output)
+}
+
+pub(super) async fn run_native_job_json_with_entry<O, F, G>(
+	host: &HostConfig,
+	operation: super::native_jobs::NativeJobOperation<'_>,
+	timeout: Duration,
+	enter: F,
+) -> Result<O>
+where
+	O: DeserializeOwned,
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	let deadline = tokio::time::Instant::now()
+		.checked_add(timeout)
+		.context("SSH deadline exceeds the monotonic clock range")?;
+	let prepared = super::native_jobs::prepare(host, operation)?;
+	let wire = prepared.input.wire()?;
+	let output =
+		run_capture_until_with_entry(host, &prepared.command, &wire, deadline, enter).await?;
+	decode_remote_json(host, output)
+}
+
 pub async fn run_python_json<I, O>(
 	host: &HostConfig,
 	code: &str,
@@ -585,7 +670,7 @@ where
 	let payload = serde_json::to_vec(input)?;
 	let output =
 		run_capture_until_with_entry(host, &remote_command, &payload, deadline, enter).await?;
-	decode_python_json(host, output)
+	decode_remote_json(host, output)
 }
 
 pub(crate) fn validate_python_interpreter(interpreter: &str) -> Result<()> {
@@ -630,10 +715,10 @@ where
 	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
 	let output = run_capture_until(host, &remote_command, &payload, deadline).await?;
-	decode_python_json(host, output)
+	decode_remote_json(host, output)
 }
 
-fn decode_python_json<O: DeserializeOwned>(
+fn decode_remote_json<O: DeserializeOwned>(
 	host: &HostConfig,
 	output: std::process::Output,
 ) -> Result<O> {

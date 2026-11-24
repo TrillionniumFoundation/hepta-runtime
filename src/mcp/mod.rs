@@ -42,6 +42,8 @@ mod rea_response_frame;
 mod rea_response_order;
 mod rea_structured_wire;
 pub use rea_response_frame::ReaFramedService;
+#[cfg(target_os = "linux")]
+mod hia_wire_candidate;
 pub mod rea_elf_notes;
 pub mod rea_evidence;
 mod rea_evidence_checkpoint;
@@ -56,8 +58,6 @@ mod rea_inline_order;
 pub mod rea_javascript;
 pub mod rea_javascript_graph;
 mod rea_mcp_input;
-#[cfg(target_os = "linux")]
-mod hia_wire_candidate;
 #[cfg(target_os = "linux")]
 pub use hia_wire_candidate::capture_hia_resource_http;
 #[cfg(target_os = "linux")]

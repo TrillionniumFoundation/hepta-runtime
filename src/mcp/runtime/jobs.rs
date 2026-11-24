@@ -4969,11 +4969,18 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
 	check_binding(record)?;
+	if record.system_jobctl && host.native_jobs.is_some() {
+		bail!("native-only job profile does not admit legacy system jobctl status; no fallback");
+	}
 	if record.system_jobctl {
 		let request = json!({"op":"status","job_id":record.id});
 		return poll_job_status(record, wait_seconds, false, || run_jobctl(host, &request)).await;
 	}
-	let code = bound_remote_code(STATUS_CODE)?;
+	let code = if host.native_jobs.is_some() {
+		None
+	} else {
+		Some(bound_remote_code(STATUS_CODE)?)
+	};
 	observe_operator_status(
 		record,
 		wait_seconds,
@@ -5012,7 +5019,23 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 						request["hia_status_lifecycle_owner"] = json!(true);
 					}
 				}
-				run_python_json(host, code, &request, Duration::from_secs(wait + 10)).await
+				if host.native_jobs.is_some() {
+					super::ssh::run_native_job_json(
+						host,
+						super::native_jobs::NativeJobOperation::Status(&request),
+						Duration::from_secs(wait + 10),
+					)
+					.await
+				} else {
+					run_python_json(
+						host,
+						code.as_deref()
+							.context("legacy status source unavailable")?,
+						&request,
+						Duration::from_secs(wait + 10),
+					)
+					.await
+				}
 			}
 		},
 	)
@@ -5775,6 +5798,11 @@ where
 {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!(
+			"native-only job profile does not admit legacy system jobctl submission; no fallback"
+		);
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -5888,6 +5916,14 @@ where
 				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
 				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
 			}),
+			enter,
+		)
+		.await
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json_with_entry(
+			host,
+			super::native_jobs::NativeJobOperation::Submit(&request),
+			Duration::from_secs(20),
 			enter,
 		)
 		.await
@@ -6177,6 +6213,9 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	};
 	let record = check_ref(&reference)?;
 	let host = runtime_config()?.host(&record.host)?;
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!("native-only job profile does not admit legacy system jobctl reads; no fallback");
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -6213,6 +6252,13 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	} else if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"read","job_id":record.id,
             "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json(
+			host,
+			super::native_jobs::NativeJobOperation::Read(&request),
+			Duration::from_secs(15),
+		)
+		.await?
 	} else {
 		run_python_json(
 			host,
@@ -6260,6 +6306,11 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	// fenced off. Carry that verified binding, without acquiring a new owner.
 	let record = Arc::new(check_ref(&reference)?);
 	let host = runtime_config()?.host(&record.host)?;
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!(
+			"native-only job profile does not admit legacy system jobctl cancellation; no fallback"
+		);
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -6292,6 +6343,13 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	let record = run_cancel_intent(intent, record, append_audit).await?;
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json(
+			host,
+			super::native_jobs::NativeJobOperation::Cancel(&request),
+			Duration::from_secs(45),
+		)
+		.await
 	} else {
 		run_python_json(
 			host,

@@ -2049,22 +2049,37 @@ async fn selected_hia_poll_refusal_is_not_an_ordinary_missing_status() {
 		Err(crate::mcp::hia_request_prepare::JobStatusUnavailable::Poll.into())
 	})
 	.await;
-	assert_eq!(result.unwrap_err().to_string(), "HIA job observation unavailable");
+	assert_eq!(
+		result.unwrap_err().to_string(),
+		"HIA job observation unavailable"
+	);
 }
 
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn selected_hia_terminal_projection_requires_the_bound_typed_snapshot() {
 	let ordinary = json!({"job_id":"original-job","state":"running","backend":"systemd"});
-	assert_eq!(project_terminal_status(ordinary.clone(), "original-job").await.unwrap(), ordinary);
+	assert_eq!(
+		project_terminal_status(ordinary.clone(), "original-job")
+			.await
+			.unwrap(),
+		ordinary
+	);
 	let mut mismatched = json!({"job_id":"different-job","_hia_terminal":{
 		"receipt":{"job_id":"original-job"},"facts":[0,0,0,1,1,1],"confirmed":true,
 	}});
-	assert!(project_terminal_status(mismatched.clone(), "original-job").await.is_err());
+	assert!(project_terminal_status(mismatched.clone(), "original-job")
+		.await
+		.is_err());
 	mismatched["job_id"] = json!("original-job");
 	mismatched["_hia_terminal"]["facts"][0] = json!(false);
-	assert_eq!(project_terminal_status(mismatched, "original-job").await.unwrap_err().to_string(),
-		"HIA terminal job state unavailable");
+	assert_eq!(
+		project_terminal_status(mismatched, "original-job")
+			.await
+			.unwrap_err()
+			.to_string(),
+		"HIA terminal job state unavailable"
+	);
 }
 
 #[cfg(unix)]

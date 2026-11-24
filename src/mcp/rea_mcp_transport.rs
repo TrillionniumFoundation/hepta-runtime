@@ -268,7 +268,7 @@ type ServerMessage = RxJsonRpcMessage<RoleServer>;
 type PendingAdmission = Pin<Box<dyn Future<Output = ServerMessage> + Send>>;
 
 enum PreparedFrame {
-	Ready(ServerMessage),
+	Ready(Box<ServerMessage>),
 	Admission(PendingAdmission),
 }
 
@@ -384,9 +384,13 @@ where
 	) -> Option<ServerMessage> {
 		if self.pending_admission.is_none() {
 			let message = self.inner.receive().await;
-			let frame = self.frame.lock().unwrap_or_else(|error| error.into_inner()).take();
+			let frame = self
+				.frame
+				.lock()
+				.unwrap_or_else(|error| error.into_inner())
+				.take();
 			match prepare(message?, frame) {
-				PreparedFrame::Ready(message) => return Some(message),
+				PreparedFrame::Ready(message) => return Some(*message),
 				PreparedFrame::Admission(admission) => self.pending_admission = Some(admission),
 			}
 		}
@@ -479,7 +483,9 @@ fn prepare_frame(mut message: ServerMessage, frame: Option<CapturedLine>) -> Pre
 				super::hia_contract::TOOLS.contains(&call.params.name.as_ref())
 					&& super::hia_wire_candidate::selected()
 			}
-			ClientRequest::InitializeRequest(_) => super::hia_wire_candidate::negotiation_selected(),
+			ClientRequest::InitializeRequest(_) => {
+				super::hia_wire_candidate::negotiation_selected()
+			}
 			ClientRequest::ReadResourceRequest(call) => {
 				call.params.uri.starts_with("hia://")
 					&& super::hia_controller_release::resource_ingress_selected()
@@ -491,7 +497,7 @@ fn prepare_frame(mut message: ServerMessage, frame: Option<CapturedLine>) -> Pre
 		}
 	}
 	attach(&mut message, frame);
-	PreparedFrame::Ready(message)
+	PreparedFrame::Ready(Box::new(message))
 }
 
 #[cfg(target_os = "linux")]
@@ -512,7 +518,8 @@ async fn admit_frame(mut message: ServerMessage, frame: Option<CapturedLine>) ->
 					} else {
 						false
 					};
-					call.extensions.insert(super::hia_wire_candidate::Admitted(admitted));
+					call.extensions
+						.insert(super::hia_wire_candidate::Admitted(admitted));
 				}
 			}
 		}
@@ -525,7 +532,8 @@ async fn admit_frame(mut message: ServerMessage, frame: Option<CapturedLine>) ->
 				} else {
 					None
 				};
-				call.extensions.insert(super::hia_wire_candidate::LegacyChoice(choice));
+				call.extensions
+					.insert(super::hia_wire_candidate::LegacyChoice(choice));
 			}
 		}
 	}
@@ -534,7 +542,13 @@ async fn admit_frame(mut message: ServerMessage, frame: Option<CapturedLine>) ->
 			if let ClientRequest::ReadResourceRequest(call) = &mut request.request {
 				if call.params.uri.starts_with("hia://") {
 					let admitted = if let Some(CapturedLine::Bytes(raw)) = frame.as_ref() {
-						match super::hia_wire_candidate::observe_resource(raw, &call.params.uri, &request.id).await {
+						match super::hia_wire_candidate::observe_resource(
+							raw,
+							&call.params.uri,
+							&request.id,
+						)
+						.await
+						{
 							Ok(()) => true,
 							Err(error) => {
 								tracing::warn!(%error, "Native HIA resource wire admission refused");
@@ -544,7 +558,8 @@ async fn admit_frame(mut message: ServerMessage, frame: Option<CapturedLine>) ->
 					} else {
 						false
 					};
-					call.extensions.insert(super::hia_wire_candidate::ResourceWireAdmitted(admitted));
+					call.extensions
+						.insert(super::hia_wire_candidate::ResourceWireAdmitted(admitted));
 				}
 			}
 		}

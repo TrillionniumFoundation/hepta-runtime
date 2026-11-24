@@ -681,7 +681,9 @@ async fn losing_a_receive_poll_preserves_the_inflight_frame_and_order() {
 		let poll = std::future::poll_fn(|cx| Poll::Ready(receive.as_mut().poll(cx))).await;
 		assert!(poll.is_pending());
 	}
-	allow.send(()).expect("first admission must survive cancellation");
+	allow
+		.send(())
+		.expect("first admission must survive cancellation");
 	let first = transport.receive().await.expect("first decoded message");
 	assert_eq!(serde_json::to_value(first).unwrap()["id"], 980);
 	let second = transport.receive().await.expect("second decoded message");

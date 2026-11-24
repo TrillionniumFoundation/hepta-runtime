@@ -228,7 +228,9 @@ async fn observation_failure_keeps_original_operation_and_schema_without_transpo
 		.await
 		.err()
 		.unwrap();
-	let response = observation_unavailable(&prepared, operation.clone(), &failure).await.unwrap();
+	let response = observation_unavailable(&prepared, operation.clone(), &failure)
+		.await
+		.unwrap();
 	assert_eq!(response["operation"], operation);
 	assert_eq!(response["status"], "unknown");
 	assert_eq!(response["error"]["code"], "HIA_OBSERVATION_UNAVAILABLE");
@@ -240,7 +242,9 @@ async fn observation_failure_keeps_original_operation_and_schema_without_transpo
 		.contains("stage=admission cause=invalid_request"));
 	hia_contract::validate_output(&prepared.worker.tool, &response).unwrap();
 	let secret = anyhow::anyhow!("SSH stderr contains fixture-private-token");
-	let response = observation_unavailable(&prepared, operation.clone(), &secret).await.unwrap();
+	let response = observation_unavailable(&prepared, operation.clone(), &secret)
+		.await
+		.unwrap();
 	assert_eq!(response["operation"], operation);
 	assert!(response["error"]["message"]
 		.as_str()
@@ -430,10 +434,14 @@ async fn runtime_operation_is_bound_to_the_complete_original_process() {
 		"request_digest":super::super::runtime::jobs::request_digest(&request.params).unwrap()}});
 	let handle = operation(&request, &raw).unwrap();
 	assert_eq!(handle["request_sha256"], request.worker.request_sha256);
-	let accepted = pending(&request, handle.clone(), PendingReason::OwnerState(0)).await.unwrap();
+	let accepted = pending(&request, handle.clone(), PendingReason::OwnerState(0))
+		.await
+		.unwrap();
 	assert_eq!(accepted["status"], "accepted");
 	assert!(accepted.get("result").is_none());
-	let unknown = pending(&request, handle, PendingReason::OwnerState(1)).await.unwrap();
+	let unknown = pending(&request, handle, PendingReason::OwnerState(1))
+		.await
+		.unwrap();
 	assert_eq!(unknown["status"], "unknown");
 	assert_eq!(unknown["error"]["retry_action"], "observe_original");
 	let mut changed = raw;

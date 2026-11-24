@@ -257,7 +257,8 @@ impl SessionOwnerBinding {
 					if *current != previous {
 						continue;
 					}
-					let owner = candidate.ok_or_else(|| anyhow!("HIA authority admitted no owner"))?;
+					let owner =
+						candidate.ok_or_else(|| anyhow!("HIA authority admitted no owner"))?;
 					let scope = current.get_or_insert_with(|| OwnerScope {
 						owner: owner.into(),
 						authenticated: http,

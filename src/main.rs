@@ -77,7 +77,10 @@ async fn run(cli: Cli) -> Result<()> {
 					#[cfg(target_os = "linux")]
 					{
 						let config = mcp::runtime::config::runtime_config()?;
-						anyhow::ensure!(config.hia_worker.is_some(), "HIA controller release requires a configured HIA worker");
+						anyhow::ensure!(
+							config.hia_worker.is_some(),
+							"HIA controller release requires a configured HIA worker"
+						);
 						mcp::hia_controller_release::install(
 							&manifest,
 							hia_controller_sha256.as_deref().unwrap_or_default(),

@@ -11,7 +11,7 @@ use std::{
 	sync::OnceLock,
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{ensure, Context, Result};
 
 use super::{
 	hia_request_prepare::hia_job_key,

@@ -8,14 +8,14 @@
 //! Exact retries observe the original job. Even a first-call race uses native's
 //! no-relaunch entry path; a timeout or incomplete report cannot become success.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use super::hia_contract::{self, MAX_WORKER_BYTES, sha256};
-use super::runtime::config::{HostConfig, Platform, RuntimeConfig, runtime_config, valid_name};
+use super::hia_contract::{self, sha256, MAX_WORKER_BYTES};
+use super::runtime::config::{runtime_config, valid_name, HostConfig, Platform, RuntimeConfig};
 use super::runtime::jobs::ProcessStartParams;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -393,9 +393,13 @@ async fn prepare_native_request(
 				&capture.selected,
 				capture.same_host,
 				capture.explicit_identity,
-				[&profile.artifact_roots, &capture.host.allowed_read_path_prefixes,
-				 &capture.host.protected_path_prefixes],
-			).await?
+				[
+					&profile.artifact_roots,
+					&capture.host.allowed_read_path_prefixes,
+					&capture.host.protected_path_prefixes,
+				],
+			)
+			.await?
 		} else {
 			capture.allowed(&profile)
 		};
@@ -540,8 +544,7 @@ fn validate_result_bindings(
 				checks
 					.iter()
 					.filter(|check| check["claim"] == *claim)
-					.count()
-					!= 1
+					.count() != 1
 			}) {
 			bail!("HIA verification result changed its requested claims");
 		}
@@ -864,7 +867,9 @@ fn admission_failure(
 pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Result<Value> {
 	let config = runtime_config()?;
 	#[cfg(target_os = "linux")]
-	let result = if super::hia_request_prepare::selected() || super::hia_request_prepare::capture_policy_selected() {
+	let result = if super::hia_request_prepare::selected()
+		|| super::hia_request_prepare::capture_policy_selected()
+	{
 		prepare_native_request(config, tool, arguments.clone(), workdir).await
 	} else {
 		prepare_request(config, tool, arguments.clone(), workdir)
@@ -927,8 +932,12 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 			let succeeded = output.outcome() == crate::native::NativeJobOutcome::Succeeded;
 			let (stdout, _stderr) = output.into_streams();
 			if !succeeded {
-				return pending(&prepared, original_operation, PendingReason::WorkerTerminated)
-					.await;
+				return pending(
+					&prepared,
+					original_operation,
+					PendingReason::WorkerTerminated,
+				)
+				.await;
 			}
 			let report = admit_report(&prepared, &stdout, exit_code).await;
 			let report = match report {
@@ -952,8 +961,7 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 							Some("E_HIA_REQUEST_UNKNOWN" | "E_HIA_TERMINATION_UNKNOWN")
 						) =>
 				{
-					pending(&prepared, original_operation, PendingReason::RequestUnknown)
-						.await
+					pending(&prepared, original_operation, PendingReason::RequestUnknown).await
 				}
 				Ok(response) => Ok(response),
 				Err(_) => {
@@ -965,7 +973,12 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 			let flags = u8::from(raw["status"]["effect_outcome"] == "unknown")
 				| (u8::from(raw["status"]["outcome"] == "unknown") << 1)
 				| (u8::from(raw["job"]["launch_state"] == "unknown") << 2);
-			pending(&prepared, original_operation, PendingReason::OwnerState(flags)).await
+			pending(
+				&prepared,
+				original_operation,
+				PendingReason::OwnerState(flags),
+			)
+			.await
 		}
 		Err(error) => observation_unavailable(&prepared, original_operation, &error).await,
 	}
