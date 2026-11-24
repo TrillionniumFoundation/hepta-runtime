@@ -425,7 +425,8 @@ impl OctofsServer {
 	) -> Result<CallToolResult, ErrorData> {
 		self.ensure_session_workdir(context);
 		self.owner_binding
-			.resolve(context, self.search_owner.as_ref().as_deref())
+			.resolve_hia(context, self.search_owner.as_ref().as_deref())
+			.await
 			.map_err(|_| {
 				ErrorData::internal_error(
 					"HIA operator authority unavailable; dispatch refused",
@@ -4045,6 +4046,14 @@ impl ServerHandler for OctofsServer {
 		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResponse, ErrorData> {
 		use runtime::request_audit::AuditCompletion;
+		#[cfg(target_os = "linux")]
+		if super::hia_wire_candidate::selected()
+			&& hia_contract::TOOLS.contains(&request.name.as_ref())
+			&& !context.extensions.get::<super::hia_wire_candidate::Admitted>()
+				.is_some_and(|admission| admission.0)
+		{
+			return Err(ErrorData::invalid_params("HIA native wire admission refused", None));
+		}
 		let cancelled = context.ct.clone();
 		let router = Self::tool_router();
 		let enabled = runtime::config::maybe_runtime_config().is_some();
@@ -4229,6 +4238,13 @@ impl ServerHandler for OctofsServer {
 		context: RequestContext<RoleServer>,
 	) -> Result<ListToolsResult, ErrorData> {
 		let runtime_enabled = runtime::config::maybe_runtime_config().is_some();
+		#[cfg(target_os = "linux")]
+		let native = if runtime::config::maybe_runtime_config().is_some_and(|config| config.hia_worker.is_some()) {
+			super::hia_wire_candidate::catalog().map_err(|_| ErrorData::internal_error(
+				"Installed HIA tool catalog unavailable", None))?
+		} else {
+			None
+		};
 		let tools = Self::tool_router()
 			.list_all()
 			.into_iter()
@@ -4259,7 +4275,12 @@ impl ServerHandler for OctofsServer {
 			})
 			.map(|mut tool| {
 				if hia_contract::TOOLS.contains(&tool.name.as_ref()) {
-					return tool;
+					#[cfg(target_os = "linux")]
+					if let Some(native) = native {
+						return native.get(tool.name.as_ref()).cloned().ok_or_else(||
+							ErrorData::internal_error("Incomplete installed HIA tool catalog", None));
+					}
+					return Ok(tool);
 				}
 				// Frozen producer schemas are contracts, including nullable variants
 				// and schema-version metadata; they are not schemars generator noise.
@@ -4272,7 +4293,7 @@ impl ServerHandler for OctofsServer {
 						| "rea_export_evidence_bundle"
 						| "rea_import_evidence_bundle"
 				) {
-					return tool;
+					return Ok(tool);
 				}
 				let mut schema = tool.input_schema.as_ref().clone();
 				for value in schema.values_mut() {
@@ -4280,9 +4301,9 @@ impl ServerHandler for OctofsServer {
 				}
 				strip_generator_noise(&mut schema);
 				tool.input_schema = Arc::new(schema);
-				tool
+				Ok(tool)
 			})
-			.collect();
+			.collect::<Result<Vec<_>, ErrorData>>()?;
 		let result = ListToolsResult::with_all_items(tools);
 		if !supports_cache_hints(&context) {
 			return Ok(result);
@@ -4329,11 +4350,33 @@ impl ServerHandler for OctofsServer {
 		if request.uri.starts_with("hia://") {
 			let scope = self
 				.owner_binding
-				.resolve(&context, self.search_owner.as_ref().as_deref())
+				.resolve_hia(&context, self.search_owner.as_ref().as_deref())
+				.await
 				.map_err(|_| {
 					ErrorData::internal_error("HIA resource authority unavailable", None)
 				})?;
-			if !hia_contract::valid_uri(&request.uri) {
+			#[cfg(target_os = "linux")]
+			if super::hia_controller_release::resource_ingress_selected() {
+				let admitted = if let Some(parts) = context.extensions.get::<axum::http::request::Parts>() {
+					super::hia_wire_candidate::observe_http_resource(parts, &request.uri, &context.id)
+						.await.map_err(|error| {
+							tracing::warn!(%error, "Native HIA HTTP resource wire admission refused");
+						}).is_ok()
+				} else {
+					context.extensions.get::<super::hia_wire_candidate::ResourceWireAdmitted>()
+						.is_some_and(|admission| admission.0)
+				};
+				if !admitted {
+					return Err(ErrorData::invalid_params("HIA resource wire admission refused", None));
+				}
+			}
+			#[cfg(target_os = "linux")]
+			let uri_valid = super::hia_wire_candidate::valid_uri(&request.uri).await
+				.map_err(|_| ErrorData::internal_error("Native HIA URI policy unavailable", None))?
+				.unwrap_or_else(|| hia_contract::valid_uri(&request.uri));
+			#[cfg(not(target_os = "linux"))]
+			let uri_valid = hia_contract::valid_uri(&request.uri);
+			if !uri_valid {
 				return Err(ErrorData::invalid_params("Invalid HIA artifact URI", None));
 			}
 			let ticket = runtime::request_audit::begin_with_read(scope.owner(), "hia_read", None)

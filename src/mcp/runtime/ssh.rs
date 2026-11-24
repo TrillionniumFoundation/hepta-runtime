@@ -2,13 +2,13 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! SSH transport with original child custody and verified configured hosts.
-use anyhow::{anyhow, bail, Context, Result};
-use serde::de::DeserializeOwned;
+use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::path::{Component, Path};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
@@ -39,7 +39,9 @@ fn validate_observation_bytes(command: &str, input: &[u8]) -> Result<()> {
 		.checked_add(input.len())
 		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
 	{
-		bail!("observation_pool_payload_unsupported: queued command and stdin exceed64KiB; no fallback");
+		bail!(
+			"observation_pool_payload_unsupported: queued command and stdin exceed64KiB; no fallback"
+		);
 	}
 	Ok(())
 }
@@ -143,6 +145,10 @@ pub(super) enum JobObservation<'a> {
 		unit: &'a str,
 		request_digest: &'a str,
 		wait_seconds: u64,
+		snapshot_only: bool,
+		terminal_facts: bool,
+		witness_facts: bool,
+		lifecycle_facts: bool,
 	},
 	PythonRead {
 		job_id: &'a str,
@@ -284,7 +290,9 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 		.try_fold(0usize, |total, field| total.checked_add(field.len()))
 		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
 	{
-		bail!("observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback");
+		bail!(
+			"observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback"
+		);
 	}
 	let (script, input, timeout, system) = match value {
 		JobObservation::PythonStatus {
@@ -293,12 +301,44 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			unit,
 			request_digest,
 			wait_seconds,
-		} => (
-			Some(ObservationScript::Status),
-			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
-			Duration::from_secs(wait_seconds.min(30) + 10),
-			false,
-		),
+			snapshot_only,
+			terminal_facts,
+			witness_facts,
+			lifecycle_facts,
+		} => {
+			let wait = if snapshot_only {
+				0
+			} else {
+				wait_seconds.min(30)
+			};
+			let mut request = json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait});
+			if snapshot_only {
+				request["hia_status_snapshot"] = json!(true);
+			}
+			if terminal_facts {
+				request["hia_status_terminal_facts"] = json!(true);
+			}
+			if witness_facts {
+				request["hia_status_terminal_witness"] = json!(true);
+				#[cfg(target_os = "linux")]
+				if crate::mcp::hia_request_prepare::job_terminal_receipt_selected() {
+					request["hia_status_native_receipt"] = json!(true);
+				}
+			}
+			if lifecycle_facts {
+				request["hia_status_lifecycle_facts"] = json!(true);
+				#[cfg(target_os = "linux")]
+				if crate::mcp::hia_controller_release::lifecycle_owner_selected() {
+					request["hia_status_lifecycle_owner"] = json!(true);
+				}
+			}
+			(
+				Some(ObservationScript::Status),
+				request,
+				Duration::from_secs(wait + 10),
+				false,
+			)
+		}
 		JobObservation::PythonRead {
 			job_id,
 			job_dir,
@@ -656,7 +696,9 @@ pub fn build_exec_command(
 				command.push_str(&shell_quote(prefix));
 				command.push_str(" && pwd -P) || exit 125; ");
 				command.push_str("if [ \"$root_physical\" = / ]; then cwd_guard=1; else ");
-				command.push_str("case \"$cwd_physical\" in \"$root_physical\"|\"$root_physical\"/*) cwd_guard=1;; esac; fi; ");
+				command.push_str(
+					"case \"$cwd_physical\" in \"$root_physical\"|\"$root_physical\"/*) cwd_guard=1;; esac; fi; ",
+				);
 			}
 			command.push_str("[ \"$cwd_guard\" = 1 ] || exit 126; ");
 		}

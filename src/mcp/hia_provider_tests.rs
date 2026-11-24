@@ -228,7 +228,7 @@ async fn observation_failure_keeps_original_operation_and_schema_without_transpo
 		.await
 		.err()
 		.unwrap();
-	let response = observation_unavailable(&prepared, operation.clone(), &failure).unwrap();
+	let response = observation_unavailable(&prepared, operation.clone(), &failure).await.unwrap();
 	assert_eq!(response["operation"], operation);
 	assert_eq!(response["status"], "unknown");
 	assert_eq!(response["error"]["code"], "HIA_OBSERVATION_UNAVAILABLE");
@@ -240,7 +240,7 @@ async fn observation_failure_keeps_original_operation_and_schema_without_transpo
 		.contains("stage=admission cause=invalid_request"));
 	hia_contract::validate_output(&prepared.worker.tool, &response).unwrap();
 	let secret = anyhow::anyhow!("SSH stderr contains fixture-private-token");
-	let response = observation_unavailable(&prepared, operation.clone(), &secret).unwrap();
+	let response = observation_unavailable(&prepared, operation.clone(), &secret).await.unwrap();
 	assert_eq!(response["operation"], operation);
 	assert!(response["error"]["message"]
 		.as_str()
@@ -422,23 +422,52 @@ fn zero_exit_is_not_a_domain_result_and_every_report_identity_is_checked() {
 	assert!(validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err());
 }
 
-#[test]
-fn runtime_operation_is_bound_to_the_complete_original_process() {
+#[tokio::test]
+async fn runtime_operation_is_bound_to_the_complete_original_process() {
 	let request = prepared();
 	let raw = json!({"job":{"id":"job-1", "host":request.params.host,
 		"idempotency_key":request.params.idempotency_key,
 		"request_digest":super::super::runtime::jobs::request_digest(&request.params).unwrap()}});
 	let handle = operation(&request, &raw).unwrap();
 	assert_eq!(handle["request_sha256"], request.worker.request_sha256);
-	let accepted = pending(&request, handle.clone(), None).unwrap();
+	let accepted = pending(&request, handle.clone(), PendingReason::OwnerState(0)).await.unwrap();
 	assert_eq!(accepted["status"], "accepted");
 	assert!(accepted.get("result").is_none());
-	let unknown = pending(&request, handle, Some(("HIA_UNKNOWN", "Outcome unknown"))).unwrap();
+	let unknown = pending(&request, handle, PendingReason::OwnerState(1)).await.unwrap();
 	assert_eq!(unknown["status"], "unknown");
 	assert_eq!(unknown["error"]["retry_action"], "observe_original");
 	let mut changed = raw;
 	changed["job"]["request_digest"] = json!("e".repeat(64));
 	assert!(operation(&request, &changed).is_err());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn native_job_operation_frame_keeps_expected_and_observed_identity_separate() {
+	use crate::mcp::hia_request_prepare::job_operation_frame;
+	let request = prepared();
+	let binding = super::super::runtime::jobs::request_digest(&request.params).unwrap();
+	let key = request.params.idempotency_key.as_deref().unwrap();
+	let host = request.params.host.as_str();
+	let names = ["job-1", host, "wrong-host", key, "another-key"];
+	let pieces = [
+		binding.as_str(),
+		&"a".repeat(64),
+		&request.worker.request_sha256,
+	];
+	let frame = job_operation_frame(names, pieces).unwrap();
+	assert_eq!(&frame[..8], b"HIAJOP01");
+	for (field, name) in frame[8..48].chunks_exact(8).zip(names) {
+		assert_eq!(
+			u64::from_le_bytes(field.try_into().unwrap()),
+			name.len() as u64
+		);
+	}
+	assert_eq!(&frame[48..112], binding.as_bytes());
+	assert_eq!(&frame[112..176], pieces[1].as_bytes());
+	assert_eq!(&frame[176..240], request.worker.request_sha256.as_bytes());
+	assert_eq!(&frame[240..], names.concat().as_bytes());
+	assert!(job_operation_frame(names, ["short", pieces[1], pieces[2]]).is_err());
 }
 
 #[test]

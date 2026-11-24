@@ -42,6 +42,10 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 			unit: "fixed-unit",
 			request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			wait_seconds: wait,
+			snapshot_only: false,
+			terminal_facts: false,
+			witness_facts: false,
+			lifecycle_facts: false,
 		})
 		.unwrap();
 		assert_eq!(
@@ -59,6 +63,25 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 		assert_eq!(timeout, Duration::from_secs(wait.min(30) + 10));
 		assert!(!system);
 	}
+	let (_, input, timeout, system) = prepare_observation(JobObservation::PythonStatus {
+		job_id: "original-123",
+		job_dir: "/private/jobs/original-123",
+		unit: "fixed-unit",
+		request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		wait_seconds: 30,
+		snapshot_only: true,
+		terminal_facts: true,
+		witness_facts: false,
+		lifecycle_facts: true,
+	})
+	.unwrap();
+	let input = serde_json::from_slice::<Value>(&input).unwrap();
+	assert_eq!(input["hia_status_snapshot"], true);
+	assert_eq!(input["hia_status_terminal_facts"], true);
+	assert_eq!(input["hia_status_lifecycle_facts"], true);
+	assert_eq!(input["wait_seconds"], 0);
+	assert_eq!(timeout, Duration::from_secs(10));
+	assert!(!system);
 	let (command, input, timeout, system) = prepare_observation(JobObservation::PythonRead {
 		unit: "fixed-unit",
 		request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

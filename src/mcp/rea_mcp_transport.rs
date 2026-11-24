@@ -264,6 +264,13 @@ enum CapturedLine {
 }
 
 type FrameSlot = Arc<Mutex<Option<CapturedLine>>>;
+type ServerMessage = RxJsonRpcMessage<RoleServer>;
+type PendingAdmission = Pin<Box<dyn Future<Output = ServerMessage> + Send>>;
+
+enum PreparedFrame {
+	Ready(ServerMessage),
+	Admission(PendingAdmission),
+}
 
 struct CapturingReader<R> {
 	reader: BufReader<R>,
@@ -301,9 +308,9 @@ impl<R: AsyncRead + Unpin> AsyncRead for CapturingReader<R> {
 			Poll::Ready(Ok(available)) => available,
 		};
 		if available.is_empty() {
-			if !this.partial.is_empty() || this.over_budget {
-				this.finish();
-			}
+			// The bounded SDK discards an unterminated line at EOF.
+			this.partial.clear();
+			this.over_budget = false;
 			return Poll::Ready(Ok(()));
 		}
 		// Never hand the SDK a byte from the next frame. Its read_until can now
@@ -341,6 +348,7 @@ pub struct ReaMcpTransport<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
 		super::rea_structured_wire::StructuredWriter<W>,
 	>,
 	frame: FrameSlot,
+	pending_admission: Option<PendingAdmission>,
 }
 
 impl<R, W> ReaMcpTransport<R, W>
@@ -366,7 +374,27 @@ where
 				super::rea_structured_wire::StructuredWriter::new(write),
 			),
 			frame,
+			pending_admission: None,
 		}
+	}
+
+	async fn receive_with(
+		&mut self,
+		prepare: impl FnOnce(ServerMessage, Option<CapturedLine>) -> PreparedFrame + Send,
+	) -> Option<ServerMessage> {
+		if self.pending_admission.is_none() {
+			let message = self.inner.receive().await;
+			let frame = self.frame.lock().unwrap_or_else(|error| error.into_inner()).take();
+			match prepare(message?, frame) {
+				PreparedFrame::Ready(message) => return Some(message),
+				PreparedFrame::Admission(admission) => self.pending_admission = Some(admission),
+			}
+		}
+		// The SDK selects between receive and completion of outgoing sends.
+		// After decoding a frame, keep its admission alive across a losing poll.
+		let message = self.pending_admission.as_mut()?.await;
+		self.pending_admission = None;
+		Some(message)
 	}
 }
 
@@ -443,6 +471,88 @@ fn attach(message: &mut RxJsonRpcMessage<RoleServer>, frame: Option<CapturedLine
 	message.request.extensions_mut().insert(raw);
 }
 
+fn prepare_frame(mut message: ServerMessage, frame: Option<CapturedLine>) -> PreparedFrame {
+	#[cfg(target_os = "linux")]
+	if let JsonRpcMessage::Request(request) = &message {
+		let needs_admission = match &request.request {
+			ClientRequest::CallToolRequest(call) => {
+				super::hia_contract::TOOLS.contains(&call.params.name.as_ref())
+					&& super::hia_wire_candidate::selected()
+			}
+			ClientRequest::InitializeRequest(_) => super::hia_wire_candidate::negotiation_selected(),
+			ClientRequest::ReadResourceRequest(call) => {
+				call.params.uri.starts_with("hia://")
+					&& super::hia_controller_release::resource_ingress_selected()
+			}
+			_ => false,
+		};
+		if needs_admission {
+			return PreparedFrame::Admission(Box::pin(admit_frame(message, frame)));
+		}
+	}
+	attach(&mut message, frame);
+	PreparedFrame::Ready(message)
+}
+
+#[cfg(target_os = "linux")]
+async fn admit_frame(mut message: ServerMessage, frame: Option<CapturedLine>) -> ServerMessage {
+	if super::hia_wire_candidate::selected() {
+		if let JsonRpcMessage::Request(request) = &mut message {
+			let id = &request.id;
+			if let ClientRequest::CallToolRequest(call) = &mut request.request {
+				if super::hia_contract::TOOLS.contains(&call.params.name.as_ref()) {
+					let admitted = if let Some(CapturedLine::Bytes(raw)) = frame.as_ref() {
+						match super::hia_wire_candidate::observe(raw, &call.params, id).await {
+							Ok(()) => true,
+							Err(error) => {
+								tracing::warn!(%error, "Native HIA wire admission refused");
+								false
+							}
+						}
+					} else {
+						false
+					};
+					call.extensions.insert(super::hia_wire_candidate::Admitted(admitted));
+				}
+			}
+		}
+	}
+	if super::hia_wire_candidate::negotiation_selected() {
+		if let JsonRpcMessage::Request(request) = &mut message {
+			if let ClientRequest::InitializeRequest(call) = &mut request.request {
+				let choice = if let Some(CapturedLine::Bytes(raw)) = frame.as_ref() {
+					super::hia_wire_candidate::negotiate_legacy(raw).await.ok()
+				} else {
+					None
+				};
+				call.extensions.insert(super::hia_wire_candidate::LegacyChoice(choice));
+			}
+		}
+	}
+	if super::hia_controller_release::resource_ingress_selected() {
+		if let JsonRpcMessage::Request(request) = &mut message {
+			if let ClientRequest::ReadResourceRequest(call) = &mut request.request {
+				if call.params.uri.starts_with("hia://") {
+					let admitted = if let Some(CapturedLine::Bytes(raw)) = frame.as_ref() {
+						match super::hia_wire_candidate::observe_resource(raw, &call.params.uri, &request.id).await {
+							Ok(()) => true,
+							Err(error) => {
+								tracing::warn!(%error, "Native HIA resource wire admission refused");
+								false
+							}
+						}
+					} else {
+						false
+					};
+					call.extensions.insert(super::hia_wire_candidate::ResourceWireAdmitted(admitted));
+				}
+			}
+		}
+	}
+	attach(&mut message, frame);
+	message
+}
+
 impl<R, W> Transport<RoleServer> for ReaMcpTransport<R, W>
 where
 	R: AsyncRead + Send + Unpin,
@@ -455,15 +565,11 @@ where
 	) -> impl Future<Output = Result<(), Self::Error>> + Send + 'static {
 		self.inner.send(item)
 	}
-	async fn receive(&mut self) -> Option<RxJsonRpcMessage<RoleServer>> {
-		let message = self.inner.receive().await;
-		let frame = self.frame.lock().unwrap_or_else(|e| e.into_inner()).take();
-		message.map(|mut message| {
-			attach(&mut message, frame);
-			message
-		})
+	async fn receive(&mut self) -> Option<ServerMessage> {
+		self.receive_with(prepare_frame).await
 	}
 	async fn close(&mut self) -> Result<(), Self::Error> {
+		self.pending_admission = None;
 		self.frame.lock().unwrap_or_else(|e| e.into_inner()).take();
 		self.inner.close().await
 	}
