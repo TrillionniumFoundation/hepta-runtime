@@ -105,6 +105,12 @@ pub enum Commands {
 		/// Verify the actual reopened candidate actions against KEEP at both fee limits.
 		#[arg(long, value_names = ["MIN", "MAX"], num_args = 2, conflicts_with_all = ["fee_band", "uncertainty", "plan_q_bias"])]
 		verify_q_bias: Vec<f64>,
+		/// Retain a bounded candidate plan including the best original interior shift.
+		#[arg(long, value_names = ["MIN", "MAX", "RADIUS", "LIMIT"], num_args = 4, conflicts_with_all = ["fee_band", "uncertainty", "plan_q_bias", "verify_q_bias"])]
+		plan_q_bias_candidates: Vec<f64>,
+		/// Select by actual reopened actions, or KEEP, for every regenerated plan member.
+		#[arg(long, value_names = ["MIN", "MAX", "RADIUS", "LIMIT"], num_args = 4, conflicts_with_all = ["fee_band", "uncertainty", "plan_q_bias", "verify_q_bias", "plan_q_bias_candidates"])]
+		select_q_bias_candidates: Vec<f64>,
 	},
 	/// Internal pinned native transport for an existing weight worker job.
 	#[command(hide = true)]
