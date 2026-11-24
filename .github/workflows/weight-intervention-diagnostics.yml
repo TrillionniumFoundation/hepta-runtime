@@ -56,7 +56,9 @@ jobs:
               assert math.isclose(float(value), 0.7 if actions == "14" else 0.0, abs_tol=1e-12)
           PY
       - name: Verify fee and transition uncertainty through the compiled worker
-        run: python3 policy/test_policy_ranges.py "$RUNNER_TEMP/advantage-veto"
+        run: |
+          python3 policy/test_policy_ranges.py "$RUNNER_TEMP/advantage-veto"
+          python3 policy/test_q_bias_cells.py "$RUNNER_TEMP/advantage-veto"
 
   shipped-command:
     runs-on: ubuntu-24.04
@@ -69,3 +71,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582
       - run: cargo build --locked --bin hepta-runtime
       - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_policy_ranges.py ./target/debug/hepta-runtime weight-policy
+      - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_q_bias_cells.py ./target/debug/hepta-runtime weight-policy

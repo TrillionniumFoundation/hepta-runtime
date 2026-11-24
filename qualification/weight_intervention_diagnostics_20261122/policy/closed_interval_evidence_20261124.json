@@ -1,0 +1,190 @@
+{
+  "schema": "hepta.q-bias-closed-interval-validation.v1",
+  "recorded_utc": "2026-11-24T11:27:41.208237+00:00",
+  "baseline_source_commit": "f4e0582e16284f54451bb3a15cc959ad68fb7aac",
+  "fixture_role": "synthetic finite task supplied-law scalar-switch coverage",
+  "compiler": {
+    "version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "commit": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "host": "x86_64-unknown-linux-gnu",
+    "edition": "2021",
+    "flags": [
+      "-D",
+      "warnings",
+      "-O"
+    ],
+    "download_receipt": [
+      {
+        "component": "rustc",
+        "url": "https://static.rust-lang.org/dist/2026-04-16/rustc-1.95.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "8426a3d170a5879f5682f5fbdd024a1779b3951e7baba685af2d6dc32a6dfc15",
+        "bytes": 80351960
+      },
+      {
+        "component": "rust-std",
+        "url": "https://static.rust-lang.org/dist/2026-04-16/rust-std-1.95.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "047ea7098803d3500fa1072e9cee5392697e21525559e4458128a2bf874aa382",
+        "bytes": 29573972
+      },
+      {
+        "component": "rustfmt-preview",
+        "url": "https://static.rust-lang.org/dist/2026-04-16/rustfmt-1.95.0-x86_64-unknown-linux-gnu.tar.xz",
+        "sha256": "f1b2a7301513ffdd95ebf22ebbdd932e4d17fc806f748d93924740d0297b1396",
+        "bytes": 2164880
+      }
+    ]
+  },
+  "before_binary_sha256": "0c78ef63964f52be324000677e20ca1955300a830ff2e13665ecab4259259bc0",
+  "after_binary_sha256": "e2d5dfdaae4604a6a7bc0f008e09a7d402f812ff929ddc0607eb480ad996f22a",
+  "original_source_git_blobs": [
+    {
+      "path": "src/weight_policy/ambiguity.rs",
+      "sha": "483e6affb650db597776d15f61d52dc6ed9d6fd1"
+    },
+    {
+      "path": "src/weight_policy/ambiguity_tests.rs",
+      "sha": "b1b3ac1348d2b7fa847a0dba752eaf6206abea13"
+    },
+    {
+      "path": "src/weight_policy/fee_band.rs",
+      "sha": "02433a727c76e1c6d7910f7bd4f741458cb269cb"
+    },
+    {
+      "path": "src/weight_policy/fee_band_tests.rs",
+      "sha": "90a965da1e62405625ac552fba2d4f65f9c31ac8"
+    },
+    {
+      "path": "src/weight_policy/mod.rs",
+      "sha": "b7bc8a04800e470590439c4195c739ad73db70a8"
+    },
+    {
+      "path": "src/weight_policy/mod_tests.rs",
+      "sha": "e414402d620d2467765e043fbb3acfd22d44c784"
+    },
+    {
+      "path": "src/weight_policy/q_bias.rs",
+      "sha": "dbb134647b8ce25f3d9ab2d139bf57b2671139e9"
+    },
+    {
+      "path": "src/weight_policy/q_bias_tests.rs",
+      "sha": "9560c035f899ee0e24a04d17c04093aacd9ef5c0"
+    },
+    {
+      "path": "qualification/weight_intervention_diagnostics_20261122/policy/test_policy_ranges.py",
+      "sha": "e2a06952bf6984e696428af8684bb3a9252747d9"
+    },
+    {
+      "path": "qualification/weight_intervention_diagnostics_20261122/policy/uncertainty.md",
+      "sha": "f277b861f93cd9184ebf56b83d84fb8fea739605"
+    },
+    {
+      "path": ".github/workflows/weight-intervention-diagnostics.yml",
+      "sha": "778408149e0ed22f91b6d79193723b24a332f3ab"
+    },
+    {
+      "path": "rustfmt.toml",
+      "sha": "218e203215e949dd53a7fef74c0bc306914d9e39"
+    },
+    {
+      "path": "qualification/weight_intervention_diagnostics_20261122/policy/advantage_veto.rs",
+      "sha": "d0565227d5d3cc6de6e59af53cc53d9fa5402966"
+    }
+  ],
+  "revised_modules": {
+    "q_bias_tests.rs": "27aacb79bcc02b4abe322c3ee3f0cffe4575bc00fbcc616590a3566c55231b62",
+    "fee_band_tests.rs": "8709019d24334c3c214c8bc43f1fa65b111ba07bf8174782dc2fa513e85e0587",
+    "q_bias.rs": "bfbd54f83a11d03083335d78d24f0689df3b37593fb583b4e977f8d1b7756a56",
+    "mod_tests.rs": "2bebe3b108eaf43298895ed78b2311eb25014a89dcab7949a44a8048aa4c9b1f",
+    "fee_band.rs": "ceb810220d454fa442e2f673eb438dacdb0fcc4087a8e8774b21c40a9feb7516",
+    "ambiguity.rs": "05a05a93ab0feb475046c4f4ac91134745f9ebea1b7ac7583a875a06e8f56b6c",
+    "ambiguity_tests.rs": "c567d4a08aab5b2d53584c5e7971f4a32af10c0b3654506c4095211822e57525",
+    "mod.rs": "0e72d9a9202a41de14ea0bbefd853a2d9ab9b6669f522d91f96f3eb3d0f35f53"
+  },
+  "three_counterexamples_before": {
+    "positive_radius_endpoint": {
+      "output": "Q_BIAS_PLAN 0.00000000000000000e0 0.00000000000000000e0 0.00000000000000000e0 1 44",
+      "exact_feasible_shift": "1/8",
+      "exact_feasible_policy": "14",
+      "exact_feasible_endpoint_gains": [
+        "7/10",
+        "3/5"
+      ]
+    },
+    "negative_radius_endpoint": {
+      "output": "Q_BIAS_PLAN 0.00000000000000000e0 0.00000000000000000e0 0.00000000000000000e0 1 14",
+      "exact_feasible_shift": "-1/8",
+      "exact_feasible_policy": "04",
+      "exact_feasible_endpoint_gains": [
+        "9/10",
+        "1"
+      ]
+    },
+    "isolated_tie": {
+      "output": "Q_BIAS_PLAN 0.00000000000000000e0 0.00000000000000000e0 0.00000000000000000e0 2 400",
+      "exact_feasible_shift": "1/8",
+      "exact_feasible_policy": "100",
+      "exact_feasible_endpoint_gains": [
+        "7/10",
+        "3/5"
+      ]
+    }
+  },
+  "three_counterexamples_after": {
+    "positive_radius_endpoint": {
+      "output": "Q_BIAS_PLAN 1.25000000000000000e-1 7.00000000000000067e-1 6.00000000000000089e-1 1 14",
+      "exact_feasible_shift": "1/8",
+      "exact_feasible_policy": "14",
+      "exact_feasible_endpoint_gains": [
+        "7/10",
+        "3/5"
+      ]
+    },
+    "negative_radius_endpoint": {
+      "output": "Q_BIAS_PLAN -1.25000000000000000e-1 9.00000000000000022e-1 1.00000000000000000e0 1 04",
+      "exact_feasible_shift": "-1/8",
+      "exact_feasible_policy": "04",
+      "exact_feasible_endpoint_gains": [
+        "9/10",
+        "1"
+      ]
+    },
+    "isolated_tie": {
+      "output": "Q_BIAS_PLAN 1.25000000000000000e-1 7.00000000000000067e-1 6.00000000000000089e-1 2 100",
+      "exact_feasible_shift": "1/8",
+      "exact_feasible_policy": "100",
+      "exact_feasible_endpoint_gains": [
+        "7/10",
+        "3/5"
+      ]
+    }
+  },
+  "independent_grid_before": {
+    "seed": 20261124,
+    "cases": 256,
+    "strict_improvement_cases": 74,
+    "missed_optimal_values": 5,
+    "oracle": "exact_rational_dyadic_grid"
+  },
+  "independent_grid_after": {
+    "seed": 20261124,
+    "cases": 256,
+    "strict_improvement_cases": 74,
+    "missed_optimal_values": 0,
+    "oracle": "exact_rational_dyadic_grid"
+  },
+  "baseline_grid_expected_failure": "Traceback (most recent call last):\n  File \"/workspace/scratch/87d09924eef9/runtime_audit/source/qualification/weight_intervention_diagnostics_20261122/policy/test_q_bias_cells.py\", line 67, in <module>\n    assert misses == 0, f'{misses} closed-interval policy optima were missed'\n           ^^^^^^^^^^^\nAssertionError: 5 closed-interval policy optima were missed\n",
+  "rust_tests": {
+    "before_passed": 9,
+    "after_passed": 12,
+    "failed": 0,
+    "ignored": 0
+  },
+  "cli_range_controls": "PASS including existing KEEP/REJECT/reopened mismatch and three new counterexamples",
+  "format_and_whitespace": "PASS rustfmt check on changed Rust files; git diff --check",
+  "local_build_scope": "existing standalone entry imports the same production policy modules; full package build not performed locally",
+  "real_checkpoint_runs": 0,
+  "training_runs": 0,
+  "production_adoptions": 0,
+  "work_cost_measurement": "not measured; this is correctness validation, not a speed benchmark",
+  "numerical_scope": "stored F64 score-difference Switch; excludes physical serialized-model floating-point switching coverage"
+}
