@@ -292,3 +292,107 @@ fn new_elf_error_orders_preserve_unknown_members_without_partial_projection() {
 		}
 	}
 }
+
+fn retention_error_fixture() -> Value {
+	use sha2::{Digest, Sha256};
+	let raw =
+		include_bytes!("../../tests/fixtures/rea_retention_error_text_original_20261125.json");
+	assert_eq!(
+		Sha256::digest(raw)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>(),
+		"0d088fa25df3ef76a822523ce3dfe937e95db276a563d87bda381e673d9614fb"
+	);
+	serde_json::from_slice(raw).unwrap()
+}
+
+#[test]
+fn original_retention_input_failures_keep_opaque_text_order() {
+	let fixture = retention_error_fixture();
+	assert_eq!(fixture["qualified"], false);
+	let cases = fixture["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 9);
+	for case in cases {
+		let request: Value = serde_json::from_str(case["request_wire"].as_str().unwrap()).unwrap();
+		let response: Value =
+			serde_json::from_str(case["response_wire"].as_str().unwrap()).unwrap();
+		assert_eq!(request["id"], response["id"]);
+		assert_eq!(request["params"]["name"], "get_evidence_bundle");
+		assert_eq!(request["params"]["arguments"], case["arguments"]);
+		assert_eq!(response["result"], case["original_result"]);
+		assert_eq!(
+			response["result"]["content"][0]["text"],
+			case["original_text"]
+		);
+		// Preserve the original request's key order at the same MCP schema
+		// boundary; serde_json::Value's sorted map cannot recover that order.
+		let filter_keys: Vec<String> = if case["id"] == "unknown_filter_keys" {
+			vec!["zzz".to_owned(), "aaa".to_owned()]
+		} else {
+			Vec::new()
+		};
+		let result = match super::super::rea_mcp_input::bundle_ordered(
+			&case["arguments"],
+			None,
+			Some(&filter_keys),
+		) {
+			Err(failure) => failure.wire(),
+			Ok(()) => super::super::rea_evidence_session::EvidenceSession::default()
+				.get_bundle(case["arguments"].clone()),
+		};
+		let text = &result.content[0].as_text().unwrap().text;
+		assert_ne!(
+			*text,
+			json!({"error":original_failure(case)}).to_string(),
+			"must catch the previous sorted-key text"
+		);
+		assert_eq!(
+			text.as_bytes(),
+			case["original_text"].as_str().unwrap().as_bytes(),
+			"{}",
+			case["id"]
+		);
+		assert_eq!(result.is_error, Some(true));
+		assert!(result.structured_content.is_none());
+		assert_eq!(
+			serde_json::to_value(&result.content).unwrap(),
+			case["original_result"]["content"]
+		);
+		assert_eq!(
+			serde_json::to_value(&result.meta).unwrap(),
+			case["original_result"]["_meta"]
+		);
+	}
+}
+
+#[test]
+fn retention_input_unknown_members_preserve_complete_fallback() {
+	let fixture = retention_error_fixture();
+	for case in fixture["cases"].as_array().unwrap() {
+		for pointer in [
+			"",
+			"/remediation",
+			"/recovery",
+			"/details",
+			"/details/issues/0",
+		] {
+			let mut error = original_failure(case);
+			error
+				.pointer_mut(pointer)
+				.unwrap()
+				.as_object_mut()
+				.unwrap()
+				.insert("unobserved_diagnostic".to_owned(), json!({"z":1,"a":[2,3]}));
+			let expected = json!({"error":error.clone()}).to_string();
+			let result = Failure(error).wire();
+			assert_eq!(
+				result.content[0].as_text().unwrap().text,
+				expected,
+				"{}: {pointer}",
+				case["id"]
+			);
+			assert_eq!(result.is_error, Some(true));
+		}
+	}
+}

@@ -28,7 +28,7 @@ impl ElfEvidenceFailureOrder {
 			error.get("code")?.as_str()?,
 			details.get("operation")?.as_str()?,
 		) {
-			("invalid_request", "inspect_elf_notes") => Some(Self::Input),
+			("invalid_request", "inspect_elf_notes" | "get_evidence_bundle") => Some(Self::Input),
 			("unsupported_target", "inspect_analysis_view" | "inspect_elf_notes") => {
 				Some(Self::UnsupportedTarget)
 			}
