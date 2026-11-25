@@ -211,3 +211,84 @@ fn nonfamily_failures_and_native_budgets_keep_the_existing_complete_text() {
 		message
 	);
 }
+
+fn format_error_fixture() -> Value {
+	use sha2::{Digest, Sha256};
+	let raw =
+		include_bytes!("../../tests/fixtures/rea_elf_format_error_text_original_20261125.json");
+	assert_eq!(
+		Sha256::digest(raw)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>(),
+		"187bfa813b13fbcf9d8fe10c59737825272ac4e9d8d563395e29660e9139233f"
+	);
+	serde_json::from_slice(raw).unwrap()
+}
+
+#[test]
+fn original_elf_unsupported_and_names_budget_failures_keep_opaque_text_order() {
+	let reference = format_error_fixture();
+	assert_eq!(reference["qualified"], false);
+	let cases = reference["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 5);
+	for case in cases {
+		let request: Value = serde_json::from_str(case["request_wire"].as_str().unwrap()).unwrap();
+		let response: Value =
+			serde_json::from_str(case["response_wire"].as_str().unwrap()).unwrap();
+		assert_eq!(request["id"], response["id"]);
+		assert_eq!(request["params"]["name"], "inspect_elf_notes");
+		assert_eq!(request["params"]["arguments"], case["arguments"]);
+		assert_eq!(response["result"], case["original_result"]);
+		assert_eq!(
+			response["result"]["content"][0]["text"],
+			case["original_text"]
+		);
+		let failure = failure_from_public_constructor(case);
+		let old_text = json!({"error":failure.0.clone()}).to_string();
+		let result = failure.wire();
+		let text = &result.content[0].as_text().unwrap().text;
+		assert_ne!(*text, old_text, "must catch the previous sorted-key text");
+		assert_eq!(
+			text,
+			case["original_text"].as_str().unwrap(),
+			"{}",
+			case["id"]
+		);
+		assert_eq!(result.is_error, Some(true));
+		assert!(result.structured_content.is_none());
+		assert_eq!(
+			serde_json::to_value(&result.meta).unwrap(),
+			case["original_result"]["_meta"]
+		);
+	}
+}
+
+#[test]
+fn new_elf_error_orders_preserve_unknown_members_without_partial_projection() {
+	let reference = format_error_fixture();
+	for case in reference["cases"].as_array().unwrap() {
+		let original = original_failure(case);
+		let mut paths = vec!["", "/remediation", "/details"];
+		if original["code"] == "resource_constraint" {
+			paths.push("/details/reported_limits");
+		}
+		for pointer in paths {
+			let mut error = original.clone();
+			error
+				.pointer_mut(pointer)
+				.unwrap()
+				.as_object_mut()
+				.unwrap()
+				.insert("unobserved_diagnostic".to_owned(), json!({"z":1,"a":[2,3]}));
+			let expected = json!({"error":error.clone()}).to_string();
+			let result = Failure(error).wire();
+			assert_eq!(
+				result.content[0].as_text().unwrap().text,
+				expected,
+				"{}: {pointer}",
+				case["id"]
+			);
+		}
+	}
+}

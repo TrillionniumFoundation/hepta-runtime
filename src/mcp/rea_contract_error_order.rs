@@ -6,7 +6,8 @@
 //!
 //! The frozen npm analysisErrorProjection, ElfNotesProvider and ToolResultDelivery
 //! producers establish these orders. The original text and source hashes are
-//! retained in tests/fixtures/rea_elf_evidence_error_text.json. This is not an
+//! retained in tests/fixtures/rea_elf_evidence_error_text.json and the actual
+//! 20261125 ELF format error-text fixture. This is not an
 //! order for arbitrary Provider diagnostics, import failures or native extensions.
 
 use super::super::rea_response_encoding::{declared_keys, ObjectOrder, PathComponent};
@@ -15,8 +16,9 @@ use serde_json::{Map, Value};
 pub(super) enum ElfEvidenceFailureOrder {
 	Input,
 	ElfBudget,
+	SectionNamesBudget,
 	ResponseBudget,
-	UnsupportedView,
+	UnsupportedTarget,
 }
 
 impl ElfEvidenceFailureOrder {
@@ -27,11 +29,22 @@ impl ElfEvidenceFailureOrder {
 			details.get("operation")?.as_str()?,
 		) {
 			("invalid_request", "inspect_elf_notes") => Some(Self::Input),
-			("unsupported_target", "inspect_analysis_view") => Some(Self::UnsupportedView),
+			("unsupported_target", "inspect_analysis_view" | "inspect_elf_notes") => {
+				Some(Self::UnsupportedTarget)
+			}
 			("resource_constraint", "inspect_elf_notes")
 				if matches!(details.get("resource")?.as_str()?, "file-size" | "capacity") =>
 			{
 				Some(Self::ElfBudget)
+			}
+			("resource_constraint", "inspect_elf_notes")
+				if details.get("resource")?.as_str()? == "memory"
+					&& details
+						.get("reported_limits")?
+						.get("minimum_required_bytes")?
+						.is_string() =>
+			{
+				Some(Self::SectionNamesBudget)
 			}
 			("resource_constraint", "inspect_elf_notes" | "get_evidence_bundle")
 				if details.get("resource")?.as_str()? == "transport"
@@ -68,10 +81,10 @@ impl ObjectOrder for ElfEvidenceFailureOrder {
 			}
 			[Key("error"), Key("details")] => match self {
 				Self::Input => &["operation", "issues"],
-				Self::ElfBudget | Self::ResponseBudget => {
+				Self::ElfBudget | Self::SectionNamesBudget | Self::ResponseBudget => {
 					&["operation", "resource", "reason", "reported_limits"]
 				}
-				Self::UnsupportedView => &["operation", "path", "reason"],
+				Self::UnsupportedTarget => &["operation", "path", "reason"],
 			},
 			[Key("error"), Key("details"), Key("issues"), Index(_)]
 				if matches!(self, Self::Input) =>
@@ -84,6 +97,11 @@ impl ObjectOrder for ElfEvidenceFailureOrder {
 				if matches!(self, Self::ElfBudget) =>
 			{
 				&["max_file_bytes", "max_entries"]
+			}
+			[Key("error"), Key("details"), Key("reported_limits")]
+				if matches!(self, Self::SectionNamesBudget) =>
+			{
+				&["max_file_bytes", "minimum_required_bytes"]
 			}
 			[Key("error"), Key("details"), Key("reported_limits")]
 				if matches!(self, Self::ResponseBudget) =>
