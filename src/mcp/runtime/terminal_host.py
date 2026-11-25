@@ -24,6 +24,16 @@ import time
 
 MAX_RPC = 256 * 1024
 PAGE = 16 * 1024
+DARWIN_BOOT_PREFIX = 'darwin-boot-session-uuid-v1:'
+
+
+def darwin_boot_uuid(value):
+    if not isinstance(value, str) or not re.fullmatch(
+            r'[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}', value):
+        raise ValueError('Darwin boot session UUID is malformed')
+    if value == '00000000-0000-0000-0000-000000000000':
+        raise ValueError('Darwin boot session UUID is unavailable')
+    return value.lower()
 
 
 def atomic(path, value):
@@ -50,7 +60,30 @@ def load(path):
 def boot():
     if sys.platform == 'linux':
         return pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-    return subprocess.check_output(['/usr/sbin/sysctl', '-n', 'kern.boottime'], text=True, timeout=3).strip()
+    if sys.platform != 'darwin':
+        raise RuntimeError('terminal boot identity is unavailable on this platform')
+    # XNU initializes this read-only UUID at boot. kern.boottime is adjusted
+    # with wall-clock changes and cannot establish a boot-session identity.
+    raw = subprocess.check_output(
+        ['/usr/sbin/sysctl', '-n', 'kern.bootsessionuuid'], text=True, timeout=3)
+    return DARWIN_BOOT_PREFIX + darwin_boot_uuid(raw.removesuffix('\n'))
+
+
+def boot_identity_error(started):
+    recorded = started.get('boot')
+    if sys.platform == 'darwin':
+        # Legacy timeval/PID observations cannot authenticate a boot UUID.
+        if not isinstance(recorded, str) or not recorded.startswith(DARWIN_BOOT_PREFIX):
+            return 'boot_identity_unverifiable'
+        try:
+            recorded = DARWIN_BOOT_PREFIX + darwin_boot_uuid(recorded[len(DARWIN_BOOT_PREFIX):])
+        except ValueError:
+            return 'boot_identity_unverifiable'
+    try:
+        current = boot()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        return 'boot_identity_unavailable'
+    return None if recorded == current else 'target_reboot'
 
 
 def private_dir(path):
@@ -79,6 +112,11 @@ def recv_json(conn):
 
 
 def request_daemon(job, q):
+    if q.get('op') != 'status':
+        started = load(job / 'started.json')
+        reason = boot_identity_error(started) if started else 'boot_identity_unverifiable'
+        if reason:
+            raise RuntimeError('terminal operation refused: ' + reason)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
         conn.settimeout(8)
         conn.connect(str(socket_path(job)))
@@ -94,8 +132,9 @@ def status(job):
     started = load(job / 'started.json')
     if not started:
         return {'state': 'launch_unknown', 'output_complete': False, 'reason': 'no start acknowledgement; do not launch another identity'}
-    if started['boot'] != boot():
-        return {'state': 'lost', 'output_complete': False, 'reason': 'target_reboot', 'pid': started['pid']}
+    reason = boot_identity_error(started)
+    if reason:
+        return {'state': 'lost', 'output_complete': False, 'reason': reason, 'pid': started['pid']}
     try: return request_daemon(job, {'op': 'status'})
     except (OSError, ValueError, RuntimeError):
         final = load(job / 'exit.json')
@@ -118,7 +157,8 @@ def read_page(job, q):
         size, data = 0, b''
         if offset: raise ValueError('terminal cursor outside empty archive')
     end = min(limit, len(data))
-    finished = state['state'] != 'running'
+    # Unverifiable ownership is not proof that the archive stopped growing.
+    finished = state['state'] == 'exited'
     if not raw:
         while True:
             candidate = data[:end]
@@ -157,6 +197,7 @@ def start(job, q, source):
         if old:
             if old != request: raise ValueError('terminal identity is bound to a different request')
             return {'reused': True, 'status': status(job)}
+        boot()  # Do not launch an owner when this boot cannot be identified.
         # Persist intent before launch; a missing acknowledgement never means retry a new process.
         atomic(job / 'request.json', request)
         helper = job / 'owner.py'
@@ -187,6 +228,9 @@ def start(job, q, source):
 
 
 def daemon(job):
+    # Capture before opening the listener or forking, so a failed identity read
+    # cannot leave an unacknowledged shell. Store this exact observation below.
+    boot_identity = boot()
     req = load(job / 'request.json')
     os.umask(0o077)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -211,7 +255,7 @@ def daemon(job):
             os._exit(127)
     fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', req.get('rows', 24), req.get('cols', 120), 0, 0))
     os.set_blocking(master, False)
-    started = {'pid': pid, 'owner_pid': os.getpid(), 'boot': boot(), 'state': 'running',
+    started = {'pid': pid, 'owner_pid': os.getpid(), 'boot': boot_identity, 'state': 'running',
                'output_complete': False, 'created_unix_ms': int(time.time()*1000)}
     atomic(job / 'started.json', started)
     error, eof, exited, close_at = None, False, None, None
