@@ -653,6 +653,7 @@ fn check_response(prepared: &PreparedRequest, response: Value) -> Result<Value> 
 	Ok(response)
 }
 
+#[cfg(target_os = "linux")]
 async fn admit_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) -> Result<Value> {
 	if !super::hia_wire_candidate::terminal_selected() {
 		return validate_report(prepared, stdout, exit_code);
@@ -677,6 +678,11 @@ async fn admit_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32)
 	// The independent owner schema remains mandatory before publication.
 	hia_contract::validate_output(&request.tool, &response)?;
 	Ok(response)
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn admit_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) -> Result<Value> {
+	validate_report(prepared, stdout, exit_code)
 }
 
 fn operation(prepared: &PreparedRequest, raw: &Value) -> Result<Value> {
@@ -880,6 +886,7 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 		Ok(prepared) => prepared,
 		Err(error) => return admission_failure(tool, &arguments, config, &error.to_string()),
 	};
+	#[cfg(target_os = "linux")]
 	if super::hia_wire_candidate::schema_selected() {
 		if let Err(error) = super::hia_wire_candidate::observe_schema(
 			super::hia_wire_candidate::SchemaSide::Request,
@@ -940,6 +947,7 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 				.await;
 			}
 			let report = admit_report(&prepared, &stdout, exit_code).await;
+			#[cfg(target_os = "linux")]
 			let report = match report {
 				Ok(response) if super::hia_wire_candidate::schema_selected() => {
 					super::hia_wire_candidate::observe_schema(
