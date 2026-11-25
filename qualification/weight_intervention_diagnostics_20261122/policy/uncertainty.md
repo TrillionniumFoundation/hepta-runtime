@@ -31,3 +31,57 @@ The single output row is `Q_BIAS_PLAN shift gain_at_min_fee gain_at_max_fee open
 The scalar-switch thresholds above use the stored binary64 differences of the frozen scores. They are not a derivation of the exact switching points of a model's floating-point matrix multiplication and bias addition. `policy/test_q_bias_cells.py` checks coverage independently on 256 fixed dyadic-score graphs using direct six-action argmax on a complete grid and rational policy values. Run it with the same executable arguments as `test_policy_ranges.py`; both the standalone and shipped-command CI entries include it.
 
 After independently binding the source and candidate to their file digests, recompute the complete candidate action vector from the reopened weights. Run `hepta-runtime weight-policy --verify-q-bias MIN_FEE MAX_FEE` with the same graph, setting its three action fields to incumbent, reopened candidate and predicted candidate respectively. Use plain graph input without a score table. The output gives the status, both **realized** candidate gains, count of planner/reopened disagreements and the final action vector. VERIFIED requires strict positive realized gains at both endpoints. KEEP indicates identical behavior, and REJECT returns the original vector when a change lacks strict relative gain. When rounding changes a proposed action, the decision uses the reopened gain. A caller must check graph and file identities and bind candidate promotion or rollback to the returned decision.
+
+### Retaining candidates through physical reopening
+
+`--plan-q-bias-candidates MIN MAX RADIUS LIMIT` retains between zero and `LIMIT`
+profitable mathematical representatives, with an integer limit in 2..=64. The
+first is the legacy single-plan winner. The best profitable open-cell midpoint
+has a reserved second slot when it differs from that winner. Remaining slots
+use the same final-maximum gain tie band and scalar tie break. Distinct shifts
+are retained even when their predicted policies are identical. The planner's
+50-million state-by-shift work cap includes the complete mathematical search;
+the candidate limit bounds later physical evaluations, not that search.
+
+The header is `Q_BIAS_CANDIDATES_V1 count open_cells evaluated_shifts`. Each row
+is `Q_BIAS_CANDIDATE id INTERIOR|BOUNDARY shift gain_min gain_max actions`, with
+one-based IDs. KEEP is implicit candidate zero and requires no parameter edit.
+
+After materializing every member from the immutable original, reopen it and
+compute its complete legal action vector. Append this table to the **unchanged
+graph and frozen score input**:
+
+```text
+HEPTA_Q_REOPENED_V1
+2
+1.25000000000000000e-1 44
+1.87500000000000000e-1 14
+```
+
+Run `--select-q-bias-candidates MIN MAX RADIUS LIMIT` with the same parameters.
+The selector regenerates the plan and requires exactly one row per member, in
+the original order, with the identical binary64 shift. A row may contain
+`FAILED` instead of actions when that candidate could not be materialized or
+verified. Missing, extra, reordered, nonfinite or illegal results reject the
+entire input. Changing the law, scores, radius or fee parameters invalidates
+the caller's source-bound receipt even if some members happen to coincide.
+Before any reopened-policy evaluation, the regenerated search representatives
+and all declared candidate members together must fit the same 50-million
+state-by-shift cap. Explicit failed rows are conservatively charged as members.
+
+The final row is `Q_BIAS_SELECTED id shift realized_gain_min realized_gain_max
+predicted_action_mismatches actions`, or `Q_BIAS_KEEP 0 0 0 0 0 actions`.
+Selection uses the complete reopened policy's value at both fee endpoints;
+predicted gain never authorizes selection. It requires strict gain above
+1e-10, and applies the existing 1e-12 final-maximum tie band. If no evaluated
+member passes, the original policy wins. This is a best-member decision in
+the finite reopened pool, subject to the stated tie band. It is not a global
+optimum over all serialized floating-point parameters.
+
+These stdin commands neither reopen files nor own adoption. The admitted
+caller must bind the checkpoint, complete law, score input, parameters, binary
+and every materialized candidate to immutable receipts; it must restore exact
+original bytes on failures and only promote the verified selected candidate.
+The separate research example and evidence in
+[`REOPENED_CANDIDATES_20261124.md`](REOPENED_CANDIDATES_20261124.md) exercise that
+boundary without changing the durable production owner or any live model.

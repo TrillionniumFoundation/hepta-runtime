@@ -281,6 +281,8 @@ pub(crate) fn run(
 	uncertainty: &[f64],
 	plan_q_bias: &[f64],
 	verify_q_bias: &[f64],
+	plan_q_bias_candidates: &[f64],
+	select_q_bias_candidates: &[f64],
 ) -> Outcome<()> {
 	let mut input = String::new();
 	let n = io::stdin()
@@ -289,6 +291,20 @@ pub(crate) fn run(
 		.map_err(|e| e.to_string())?;
 	if n > MAX_INPUT_BYTES as usize {
 		return Err("input size cap".into());
+	}
+	if !plan_q_bias_candidates.is_empty() || !select_q_bias_candidates.is_empty() {
+		if !fee_band.is_empty()
+			|| !uncertainty.is_empty()
+			|| !plan_q_bias.is_empty()
+			|| !verify_q_bias.is_empty()
+		{
+			return Err("candidate mode must be used by itself".into());
+		}
+		return match (plan_q_bias_candidates, select_q_bias_candidates) {
+			(parameters, []) => q_bias::run_candidates(&input, parameters, false),
+			([], parameters) => q_bias::run_candidates(&input, parameters, true),
+			_ => Err("expected exactly one candidate mode".into()),
+		};
 	}
 	if !verify_q_bias.is_empty() {
 		return match (fee_band, uncertainty, plan_q_bias, verify_q_bias) {

@@ -306,16 +306,99 @@ async fn unchanged_concurrent_open_publishes_one_stable_session() {
 	let (_temp, scope) = environment();
 	let params = source(&scope, &fixture(65, 2));
 	let (a, b) = tokio::join!(open_at(&scope, &params), open_at(&scope, &params));
-	let a = a.unwrap();
-	let b = b.unwrap();
+	// Admission is bounded independently of the publisher's capture/fsync work.
+	// Reconcile only a precise BUSY after the competing open has fully returned;
+	// this is one explicit identical request, not a test or error retry loop.
+	let (a, b) = match (a, b) {
+		(Ok(a), Ok(b)) => (a, b),
+		(Err(error), Ok(b)) => {
+			assert_eq!(error.to_string(), MODEL_PUBLISHER_BUSY);
+			assert_eq!(b["reused"], false);
+			(open_at(&scope, &params).await.unwrap(), b)
+		}
+		(Ok(a), Err(error)) => {
+			assert_eq!(error.to_string(), MODEL_PUBLISHER_BUSY);
+			assert_eq!(a["reused"], false);
+			(a, open_at(&scope, &params).await.unwrap())
+		}
+		(Err(a), Err(b)) => panic!("neither concurrent open published: {a:#}; {b:#}"),
+	};
 	assert_eq!(id(&a), id(&b));
 	assert_ne!(a["reused"], b["reused"]);
+	assert!(matches!(
+		(a["reused"].as_bool(), b["reused"].as_bool()),
+		(Some(false), Some(true)) | (Some(true), Some(false))
+	));
+	assert_eq!(a["snapshot_sha256"], params.expected_sha256);
+	assert_eq!(b["snapshot_sha256"], params.expected_sha256);
+	let (directory, manifest) = load(&scope, id(&a)).await.unwrap();
+	index::verify_all(&directory, &manifest).await.unwrap();
+	verify_snapshot(&directory, &manifest).await.unwrap();
 	let entries: Vec<_> = std::fs::read_dir(store::root_path(&scope.state).unwrap())
 		.unwrap()
 		.map(|e| e.unwrap().file_name())
 		.collect();
 	assert_eq!(entries.len(), 1);
 	assert_eq!(entries[0].to_str().unwrap(), id(&a));
+}
+
+const MODEL_PUBLISHER_BUSY: &str = "model session publisher is busy; retry the same open request";
+
+async fn retained_store_pins(root: &Path) -> std::collections::BTreeMap<PathBuf, (u64, String)> {
+	let mut pins = std::collections::BTreeMap::new();
+	let mut directories = tokio::fs::read_dir(root).await.unwrap();
+	while let Some(directory) = directories.next_entry().await.unwrap() {
+		let path = directory.path();
+		store::require_directory(&path).await.unwrap();
+		pins.insert(
+			path.strip_prefix(root).unwrap().to_owned(),
+			(0, "directory".into()),
+		);
+		let mut files = tokio::fs::read_dir(&path).await.unwrap();
+		while let Some(file) = files.next_entry().await.unwrap() {
+			let name = file.path();
+			let bytes = store::read_private(&name, &path, MAX_INDEX_BYTES as u64)
+				.await
+				.unwrap();
+			pins.insert(
+				name.strip_prefix(root).unwrap().to_owned(),
+				(bytes.len() as u64, hash(&bytes)),
+			);
+		}
+	}
+	pins
+}
+
+#[tokio::test]
+async fn publisher_busy_preserves_store_then_identical_open_reconciles_after_release() {
+	let (_temp, scope) = environment();
+	let params = source(&scope, &fixture(2, 4));
+	let initial = open_at(&scope, &params).await.unwrap();
+	assert_eq!(initial["reused"], false);
+	let root = store::root_path(&scope.state).unwrap();
+	let before = retained_store_pins(&root).await;
+	let publisher = store::lock(&root).await.unwrap();
+	let probe = tokio::fs::File::open(&root).await.unwrap().into_std().await;
+	assert!(!exclusive_lock_available(&probe));
+	let started = std::time::Instant::now();
+	let error = open_at(&scope, &params).await.unwrap_err();
+	assert_eq!(error.to_string(), MODEL_PUBLISHER_BUSY);
+	assert!(started.elapsed() >= Duration::from_secs(10));
+	assert!(!exclusive_lock_available(&probe));
+	assert_eq!(retained_store_pins(&root).await, before);
+	assert_eq!(
+		hash(&tokio::fs::read(&params.path).await.unwrap()),
+		params.expected_sha256
+	);
+	drop(publisher);
+	assert!(exclusive_lock_available(&probe));
+	let restored = open_at(&scope, &params).await.unwrap();
+	assert_eq!(id(&restored), id(&initial));
+	assert_eq!(restored["reused"], true);
+	assert_eq!(restored["directory_parses_this_open"], 0);
+	assert_eq!(restored["full_source_hash_passes_this_open"], 1);
+	assert_eq!(restored["snapshot_sha256"], params.expected_sha256);
+	assert_eq!(retained_store_pins(&root).await, before);
 }
 
 #[tokio::test]

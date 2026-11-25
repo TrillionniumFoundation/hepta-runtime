@@ -219,7 +219,11 @@ async fn exhausted_restore_budget_is_reported_as_unverified_recovery() {
 		.unwrap();
 	// Simulate retained interrupted stages: candidate fits, its reverse does not.
 	for index in 0..127 {
-		tokio::fs::create_dir(root.join(format!(".pending-fixture-{index}")))
+		// Match real staging permissions so reconciliation reaches the quota check
+		// even under CI's permissive 022 umask.
+		tokio::fs::DirBuilder::new()
+			.mode(0o700)
+			.create(root.join(format!(".pending-fixture-{index}")))
 			.await
 			.unwrap();
 	}

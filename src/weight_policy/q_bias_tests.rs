@@ -88,3 +88,111 @@ fn includes_boundary_trials_in_the_work_budget_before_evaluation() {
 		.unwrap()
 		.contains("planner budget"));
 }
+
+#[test]
+fn preserves_an_interior_even_when_a_boundary_predicts_the_same_policy() {
+	let text = INPUT
+		.replace("0 3 0 0 0 0 1 0", "0 18 0 0 0 4 1 4")
+		.replace("0 -.125 3 9 7 8", "-1 0 -1 -1 .125 -1");
+	let search = search(&text, [1., 2.], 0.25).unwrap();
+	let candidates = search.candidates(2).unwrap();
+	assert_eq!(candidates.len(), 2);
+	assert_eq!(candidates[0].shift, 0.125);
+	assert!(!candidates[0].interior);
+	assert_eq!(candidates[1].shift, 0.1875);
+	assert!(candidates[1].interior);
+	assert_eq!(
+		search.actions(candidates[0].shift),
+		search.actions(candidates[1].shift)
+	);
+	for limit in [0, 1, 65, usize::MAX] {
+		assert!(search.candidates(limit).is_err());
+	}
+}
+
+#[test]
+fn repeated_gain_ties_do_not_drift_and_unprofitable_pools_are_empty() {
+	let trials = [
+		Trial {
+			shift: 0.5,
+			gains: [0.1, 0.1],
+			interior: false,
+		},
+		Trial {
+			shift: 0.25,
+			gains: [0.1 - 0.75e-12; 2],
+			interior: true,
+		},
+		Trial {
+			shift: 0.125,
+			gains: [0.1 - 1.5e-12; 2],
+			interior: false,
+		},
+	];
+	assert_eq!(best_trial(&trials), Some(1));
+	assert!(search(INPUT, [1., 10.], 0.25)
+		.unwrap()
+		.candidates(2)
+		.unwrap()
+		.is_empty());
+}
+
+#[test]
+fn rejects_partial_foreign_or_illegal_reopened_results() {
+	let search = search(INPUT, [1., 2.], 0.25).unwrap();
+	let trials = search.candidates(2).unwrap();
+	for text in [
+		"0",
+		"1 .1875 14",
+		"2 .1875 14",
+		"2 .1875 14 .25 99",
+		"2 .25 14 .1875 14",
+		"2 .1875 14 .25 14 extra",
+	] {
+		assert!(
+			select_reopened(&search, &trials, [1., 2.], text).is_err(),
+			"{text}"
+		);
+	}
+}
+
+#[test]
+fn reopened_trials_share_the_existing_search_budget() {
+	// 5,000 states and 9,999 genuine mathematical representatives fit the
+	// original 50M cap. Two physical trials would require 50,005,000 pairs.
+	let count = 5000;
+	let mut text = format!("HEPTA_DAG_V1 {count} 0\n");
+	for _ in 0..count - 2 {
+		text.push_str(&format!("0 18 0 0 0 4 4 4 1 1 {} .1 0 0\n", count - 1));
+	}
+	for _ in 0..2 {
+		text.push_str("1 16 0 .8 0 4 4 4 0 0 0\n");
+	}
+	text.push_str("HEPTA_Q_SCORES_V1\n");
+	for i in 0..count - 2 {
+		text.push_str(&format!("-1 0 -1 -1 {} -1\n", (i + 1) as f64 / 8192.));
+	}
+	text.push_str("0 0 0 0 1 0\n0 0 0 0 1 0\n");
+	let mut search = search(&text, [1., 2.], 1.).unwrap();
+	let candidates = search.candidates(2).unwrap();
+	assert_eq!(
+		(
+			search.graph.states.len(),
+			search.trials.len(),
+			candidates.len()
+		),
+		(5000, 9999, 2)
+	);
+	let rows = format!(
+		"2 {:.17e} FAILED {:.17e} FAILED",
+		candidates[0].shift, candidates[1].shift
+	);
+	assert!(select_reopened(&search, &candidates, [1., 2.], &rows)
+		.err()
+		.unwrap()
+		.contains("combined"));
+	// An exact 50M total is admitted. Remove one already computed trial from
+	// the accounting fixture; no actual forward or candidate policy is altered.
+	search.trials.pop();
+	assert!(select_reopened(&search, &candidates, [1., 2.], &rows).is_ok());
+}

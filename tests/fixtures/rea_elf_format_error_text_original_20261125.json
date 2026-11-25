@@ -1,0 +1,155 @@
+{
+  "schema": "hepta.rea.elf-format-error-text.original.v1",
+  "qualified": false,
+  "provenance": {
+    "reference_package": {
+      "authentication_scope": "all regular files in the published npm package; transitive dependencies remain trusted external inputs",
+      "catalog_sha256": "d7228cf5da32faf435f9d54a7b8fa84c1081734d7c7dad562f962f221ea8b1e7",
+      "file_count": 2398,
+      "files_sha256": "8f5a44ea76e5d93b27f8882d902e9449d7f41895e5428c213fe6ed3619592891",
+      "git_source_commit": "93b8b82db70279e40f484114cff9dc1958dc14ee",
+      "name": "rea-agents",
+      "package_root": "/tmp/hepta-rea-v2-20261125-87d09924/reference/install/node_modules/rea-agents",
+      "tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+      "version": "6.8.0"
+    },
+    "node": {
+      "bytes": 124902584,
+      "path": "/usr/bin/node",
+      "sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+    },
+    "reference_wire": {
+      "bytes": 5315106,
+      "path": "reference/wire.jsonl",
+      "sha256": "7a519f1aa7d0c9e8b7df30e3e5dc9c0039ce14e20e79b0b0a26a3ffc159175e0"
+    },
+    "qualification_sha256": "ca6cd18233a79c19cbe094de931c9f2b3e5fc1f4e75bb5dd6ac63b5f46c429e6",
+    "manifest": {
+      "bytes": 90905,
+      "path": "manifest.json",
+      "sha256": "bb572e949f25c5b37fedc89b6b5f088c62c5afc65fe8053c9bdf126aee558283"
+    }
+  },
+  "cases": [
+    {
+      "id": "elf64_little_names_codec_1_declared_overflow",
+      "arguments": {
+        "path": "/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_names_codec_1_declared_overflow.elf"
+      },
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"retryable\":false,\"remediation\":{\"action\":\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"memory\",\"reason\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"reported_limits\":{\"max_file_bytes\":67108864,\"minimum_required_bytes\":\"18446744073709551955\"}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"retryable\":false,\"remediation\":{\"action\":\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"memory\",\"reason\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"reported_limits\":{\"max_file_bytes\":67108864,\"minimum_required_bytes\":\"18446744073709551955\"}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      },
+      "request_wire": "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_elf_notes\",\"arguments\":{\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_names_codec_1_declared_overflow.elf\"}},\"id\":50}\n",
+      "response_wire": "{\"result\":{\"_meta\":{\"provenance\":{\"untrusted_content\":true,\"source\":\"analysis_target\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"error\\\":{\\\"code\\\":\\\"resource_constraint\\\",\\\"category\\\":\\\"resource_constraint\\\",\\\"message\\\":\\\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\\\",\\\"retryable\\\":false,\\\"remediation\\\":{\\\"action\\\":\\\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\\\"},\\\"details\\\":{\\\"operation\\\":\\\"inspect_elf_notes\\\",\\\"resource\\\":\\\"memory\\\",\\\"reason\\\":\\\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\\\",\\\"reported_limits\\\":{\\\"max_file_bytes\\\":67108864,\\\"minimum_required_bytes\\\":\\\"18446744073709551955\\\"}}}}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":50}\n"
+    },
+    {
+      "id": "elf64_little_names_codec_2_declared_overflow",
+      "arguments": {
+        "path": "/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_names_codec_2_declared_overflow.elf"
+      },
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"retryable\":false,\"remediation\":{\"action\":\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"memory\",\"reason\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"reported_limits\":{\"max_file_bytes\":67108864,\"minimum_required_bytes\":\"18446744073709551955\"}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"retryable\":false,\"remediation\":{\"action\":\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"memory\",\"reason\":\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\",\"reported_limits\":{\"max_file_bytes\":67108864,\"minimum_required_bytes\":\"18446744073709551955\"}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      },
+      "request_wire": "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_elf_notes\",\"arguments\":{\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_names_codec_2_declared_overflow.elf\"}},\"id\":53}\n",
+      "response_wire": "{\"result\":{\"_meta\":{\"provenance\":{\"untrusted_content\":true,\"source\":\"analysis_target\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"error\\\":{\\\"code\\\":\\\"resource_constraint\\\",\\\"category\\\":\\\"resource_constraint\\\",\\\"message\\\":\\\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\\\",\\\"retryable\\\":false,\\\"remediation\\\":{\\\"action\\\":\\\"The source and decoded ELF section names require 18446744073709551955 bytes, above this operation's 536870912-byte maximum; select an image with a smaller section-name table.\\\"},\\\"details\\\":{\\\"operation\\\":\\\"inspect_elf_notes\\\",\\\"resource\\\":\\\"memory\\\",\\\"reason\\\":\\\"ELF source and decoded section names require 18446744073709551955 bytes, above the selected max_file_bytes (67108864).\\\",\\\"reported_limits\\\":{\\\"max_file_bytes\\\":67108864,\\\"minimum_required_bytes\\\":\\\"18446744073709551955\\\"}}}}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":53}\n"
+    },
+    {
+      "id": "elf64_little_compressed_note",
+      "arguments": {
+        "path": "/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf"
+      },
+      "original_text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf: Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf\",\"reason\":\"Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\"}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf: Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf\",\"reason\":\"Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\"}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      },
+      "request_wire": "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_elf_notes\",\"arguments\":{\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf\"}},\"id\":62}\n",
+      "response_wire": "{\"result\":{\"_meta\":{\"provenance\":{\"untrusted_content\":true,\"source\":\"analysis_target\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"error\\\":{\\\"code\\\":\\\"unsupported_target\\\",\\\"category\\\":\\\"unsupported_target\\\",\\\"message\\\":\\\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf: Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\\\",\\\"retryable\\\":false,\\\"remediation\\\":{\\\"action\\\":\\\"Select a target supported by this operation or choose an operation supporting the reported target format.\\\"},\\\"details\\\":{\\\"operation\\\":\\\"inspect_elf_notes\\\",\\\"path\\\":\\\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_compressed_note.elf\\\",\\\"reason\\\":\\\"Compressed ELF note sections are unsupported; descriptor file offsets require uncompressed note storage.\\\"}}}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":62}\n"
+    },
+    {
+      "id": "elf64_little_extended_program_count",
+      "arguments": {
+        "path": "/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf"
+      },
+      "original_text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf: ELF extended numbering is unsupported.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf\",\"reason\":\"ELF extended numbering is unsupported.\"}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf: ELF extended numbering is unsupported.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf\",\"reason\":\"ELF extended numbering is unsupported.\"}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      },
+      "request_wire": "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_elf_notes\",\"arguments\":{\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf\"}},\"id\":65}\n",
+      "response_wire": "{\"result\":{\"_meta\":{\"provenance\":{\"untrusted_content\":true,\"source\":\"analysis_target\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"error\\\":{\\\"code\\\":\\\"unsupported_target\\\",\\\"category\\\":\\\"unsupported_target\\\",\\\"message\\\":\\\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf: ELF extended numbering is unsupported.\\\",\\\"retryable\\\":false,\\\"remediation\\\":{\\\"action\\\":\\\"Select a target supported by this operation or choose an operation supporting the reported target format.\\\"},\\\"details\\\":{\\\"operation\\\":\\\"inspect_elf_notes\\\",\\\"path\\\":\\\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_program_count.elf\\\",\\\"reason\\\":\\\"ELF extended numbering is unsupported.\\\"}}}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":65}\n"
+    },
+    {
+      "id": "elf64_little_extended_names_index",
+      "arguments": {
+        "path": "/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf"
+      },
+      "original_text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf: ELF extended numbering is unsupported.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf\",\"reason\":\"ELF extended numbering is unsupported.\"}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf: ELF extended numbering is unsupported.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf\",\"reason\":\"ELF extended numbering is unsupported.\"}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      },
+      "request_wire": "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_elf_notes\",\"arguments\":{\"path\":\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf\"}},\"id\":66}\n",
+      "response_wire": "{\"result\":{\"_meta\":{\"provenance\":{\"untrusted_content\":true,\"source\":\"analysis_target\"}},\"content\":[{\"type\":\"text\",\"text\":\"{\\\"error\\\":{\\\"code\\\":\\\"unsupported_target\\\",\\\"category\\\":\\\"unsupported_target\\\",\\\"message\\\":\\\"Unsupported target for inspect_elf_notes at /tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf: ELF extended numbering is unsupported.\\\",\\\"retryable\\\":false,\\\"remediation\\\":{\\\"action\\\":\\\"Select a target supported by this operation or choose an operation supporting the reported target format.\\\"},\\\"details\\\":{\\\"operation\\\":\\\"inspect_elf_notes\\\",\\\"path\\\":\\\"/tmp/hepta-rea-v2-20261125-87d09924/repo/docs/qualification/run/format-v2-preflight/workspace/elf64_little_extended_names_index.elf\\\",\\\"reason\\\":\\\"ELF extended numbering is unsupported.\\\"}}}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":66}\n"
+    }
+  ]
+}

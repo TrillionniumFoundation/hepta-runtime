@@ -59,6 +59,7 @@ jobs:
         run: |
           python3 policy/test_policy_ranges.py "$RUNNER_TEMP/advantage-veto"
           python3 policy/test_q_bias_cells.py "$RUNNER_TEMP/advantage-veto"
+          python3 policy/test_q_bias_reopened.py "$RUNNER_TEMP/advantage-veto"
 
   shipped-command:
     runs-on: ubuntu-24.04
@@ -69,6 +70,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582
+        with:
+          components: clippy
       - run: cargo build --locked --bin hepta-runtime
       - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_policy_ranges.py ./target/debug/hepta-runtime weight-policy
       - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_q_bias_cells.py ./target/debug/hepta-runtime weight-policy
+      - run: python3 qualification/weight_intervention_diagnostics_20261122/policy/test_q_bias_reopened.py ./target/debug/hepta-runtime weight-policy
+      - run: cargo clippy --locked --manifest-path qualification/weight_full_native_20261121/Cargo.toml --example q_bias_reopen -- -D warnings
