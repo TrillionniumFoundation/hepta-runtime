@@ -121,6 +121,12 @@ not weakened for anonymous stdio.
 
 Cooperating publishers use an exclusive cross-process directory flock. Quota
 scans occur only on open. New capacity is refused without evicting results.
+Waiting for that store lock is bounded to 10 seconds, independently of the
+300-second open deadline. A concurrent request can therefore return the explicit
+publisher-busy error while another request is still capturing or synchronizing
+its snapshot. Once that publisher has completed, retry the identical open to
+verify and reuse its committed session. A busy reply is not a success receipt
+and does not permit removal of the active publisher's files.
 Incomplete staging counts toward both quotas and is never a successful session.
 Ordinary failures remove only their own staging. A crash or timeout can leave
 staging for administrator reconciliation; automatic cleanup does not delete
