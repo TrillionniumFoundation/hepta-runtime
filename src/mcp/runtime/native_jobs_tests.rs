@@ -150,3 +150,29 @@ fn absent_native_profile_preserves_legacy_serialized_identity() {
 		.get("native_jobs")
 		.is_some());
 }
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn native_operations_refuse_before_transport_on_non_linux_controllers() {
+	let host: HostConfig = serde_json::from_value(json!({
+		"ssh_target":"fixture","remote_state_dir":"/state",
+		"native_jobs":configured_entries()
+	}))
+	.unwrap();
+	let request = bound();
+	for operation in [
+		NativeJobOperation::Submit(&request),
+		NativeJobOperation::Read(&request),
+		NativeJobOperation::Status(&request),
+		NativeJobOperation::Cancel(&request),
+	] {
+		let error = match prepare(&host, operation) {
+			Ok(_) => panic!("native transport admitted on a non-Linux controller"),
+			Err(error) => error,
+		};
+		assert_eq!(
+			error.to_string(),
+			"native job transport requires Linux; no fallback"
+		);
+	}
+}

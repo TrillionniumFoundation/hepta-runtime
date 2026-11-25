@@ -93,6 +93,19 @@ fn artifact_pin(_name: &str) -> Result<String> {
 	bail!("native job transport requires Linux; no Python fallback")
 }
 
+#[cfg(target_os = "linux")]
+fn require_native_transport() -> Result<()> {
+	ensure!(
+		crate::mcp::hia_controller_release::has_native_job_transport(),
+		"native job transport requires an admitted v26 controller; no fallback"
+	);
+	Ok(())
+}
+#[cfg(not(target_os = "linux"))]
+fn require_native_transport() -> Result<()> {
+	bail!("native job transport requires Linux; no fallback")
+}
+
 fn helper(name: &str) -> Result<(String, Arc<[u8]>)> {
 	let pin = artifact_pin(name)?;
 	let image = artifact(name, &pin)?;
@@ -116,10 +129,7 @@ pub(super) fn prepare(
 		.as_ref()
 		.context("native job profile was not configured")?;
 	entries.validate()?;
-	ensure!(
-		crate::mcp::hia_controller_release::has_native_job_transport(),
-		"native job transport requires an admitted v26 controller; no fallback"
-	);
+	require_native_transport()?;
 	// Admission covers the whole selected bundle. A broken unused role must not
 	// silently turn a supposedly complete native-only profile into a partial one.
 	for (role, pin) in entries.roles() {

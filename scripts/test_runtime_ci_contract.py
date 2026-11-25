@@ -35,7 +35,7 @@ class RuntimeCiContractTests(unittest.TestCase):
                 raise AssertionError(f"required CI lane missing: {job}")
             cls.lanes[job] = match.group(1)
 
-    def test_main_push_and_pull_request_trigger_ci(self):
+    def test_main_and_hia_branches_trigger_push_and_pull_request_ci(self):
         for event in ("push", "pull_request"):
             match = re.search(
                 rf"^  {event}:\n    branches:\n((?:      .*\n)+)",
@@ -44,6 +44,7 @@ class RuntimeCiContractTests(unittest.TestCase):
             )
             self.assertIsNotNone(match, event)
             self.assertIn("      - main\n", match.group(1), event)
+            self.assertIn("      - 'hia/**'\n", match.group(1), event)
         self.assertNotIn("continue-on-error: true", self.source)
 
     def test_head_is_checkout_bound_before_rust(self):
