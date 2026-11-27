@@ -74,11 +74,11 @@ fn system(
 			);
 		}
 		for i in 0..WIDTH {
-			for j in 0..=i {
-				h[i][j] += row.key[i] * row.key[j] / failed.len() as f64;
+			for (entry, key) in h[i][..=i].iter_mut().zip(&row.key[..=i]) {
+				*entry += row.key[i] * *key / failed.len() as f64;
 			}
-			for s in 0..SENDERS {
-				rhs[i][s] += row.key[i] * row.residual[s] / failed.len() as f64;
+			for (entry, residual) in rhs[i].iter_mut().zip(&row.residual) {
+				*entry += row.key[i] * *residual / failed.len() as f64;
 			}
 		}
 	}
@@ -94,9 +94,11 @@ fn system(
 		}
 	}
 	for i in 0..WIDTH {
-		h[i][i] += RIDGE;
-		for j in 0..i {
-			h[j][i] = h[i][j];
+		let (earlier, current_and_later) = h.split_at_mut(i);
+		let current = &mut current_and_later[0];
+		current[i] += RIDGE;
+		for (upper_row, lower_value) in earlier.iter_mut().zip(current.iter()) {
+			upper_row[i] = *lower_value;
 		}
 	}
 	if !h
@@ -122,8 +124,8 @@ fn solve(
 	for i in 0..WIDTH {
 		for j in 0..=i {
 			let mut value = h[i][j] + if i == j { multiplier } else { 0.0 };
-			for k in 0..j {
-				value -= l[i][k] * l[j][k];
+			for (left, right) in l[i][..j].iter().zip(&l[j][..j]) {
+				value -= *left * *right;
 			}
 			if i == j {
 				// The real ridge Hessian is positive definite. Unreliable F64 elimination abstains.
@@ -166,13 +168,14 @@ fn solve(
 pub(super) fn objective(failed: &[Observation], protected: &[Key], delta: &Matrix) -> f64 {
 	let mut value = RIDGE * norm(delta).powi(2);
 	for row in failed {
-		for s in 0..SENDERS {
+		for (s, residual) in row.residual.iter().enumerate() {
 			let predicted: f64 = (0..WIDTH).map(|i| row.key[i] * delta[i][s]).sum();
-			value += (predicted - row.residual[s]).powi(2) / failed.len() as f64;
+			value += (predicted - *residual).powi(2) / failed.len() as f64;
 		}
 	}
 	for key in protected {
-		for s in 0..SENDERS {
+		// Every fixed-width row has the same four sender columns, in this order.
+		for (s, _) in delta[0].iter().enumerate() {
 			let predicted: f64 = (0..WIDTH).map(|i| key[i] * delta[i][s]).sum();
 			value += PROTECT * predicted.powi(2) / protected.len() as f64;
 		}
