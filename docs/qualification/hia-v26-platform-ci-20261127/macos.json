@@ -1,0 +1,189 @@
+{
+  "schema": "hepta.runtime.platform-validation.v1",
+  "source_commit": "55b4422538019a02f750a49bd03ed3b89df3aa06",
+  "source_tree": "491bcf00734d652afa1c10ca47f00a0fa23e7919",
+  "public_parent": "d022649c64b48fb2a43263faf90103a9a8957b94",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "release": "25.6.0"
+  },
+  "recorded_utc": "2026-11-27T04:18:43.994575+00:00",
+  "checks": [
+    {
+      "name": "toolchain",
+      "argv": [
+        "cargo",
+        "--version"
+      ],
+      "returncode": 0,
+      "seconds": 0.0313107967376709,
+      "logs": {
+        "stdout": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/toolchain.stdout",
+          "bytes": 36,
+          "sha256": "c10ec31b8c6e6e2693cf65fc1971b41edbc3da1ae7db6f9f3f36c4823f8dcab5"
+        },
+        "stderr": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/toolchain.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "format",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "returncode": 0,
+      "seconds": 1.116123914718628,
+      "logs": {
+        "stdout": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/format.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/format.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "ci-contract",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts",
+        "-p",
+        "test_runtime_ci_contract.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "seconds": 0.04336094856262207,
+      "logs": {
+        "stdout": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/ci-contract.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/ci-contract.stderr",
+          "bytes": 745,
+          "sha256": "270ae6499e15f0e1b08875772c5a68daf3d3d012cf4355446530915e901f8e7c"
+        }
+      }
+    },
+    {
+      "name": "check-all-targets",
+      "argv": [
+        "cargo",
+        "check",
+        "--offline",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--jobs",
+        "2"
+      ],
+      "returncode": 0,
+      "seconds": 60.64607000350952,
+      "logs": {
+        "stdout": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/check-all-targets.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/check-all-targets.stderr",
+          "bytes": 18129,
+          "sha256": "962a059c9f659819f9c4bea58cd84b049edb6ad2520c276f1a233efad5c827a6"
+        }
+      }
+    },
+    {
+      "name": "native-jobs",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--all-features",
+        "--lib",
+        "native_jobs",
+        "--",
+        "--nocapture"
+      ],
+      "returncode": 0,
+      "seconds": 215.41022086143494,
+      "logs": {
+        "stdout": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/native-jobs.stdout",
+          "bytes": 926,
+          "sha256": "398a8485b0c44b0c96c4b9286837f21842efb25fe47ed65accdc68bc87197102"
+        },
+        "stderr": {
+          "path": "/Users/qianqi/work/hia-v26-platform-ci-20261127-589c-validation/native-jobs.stderr",
+          "bytes": 13894,
+          "sha256": "a59d839c08e383f7f10dff2fbf6e100014dd2d8d99d98e7eaeb8b1a7b29d73e6"
+        }
+      }
+    }
+  ],
+  "test_counts": {
+    "ci_contract": 6,
+    "native_jobs": 7
+  },
+  "source_clean_after": true,
+  "retained_job": [
+    {
+      "job_id": "1a21b3281cf-ffbe-4ec4",
+      "terminal": {
+        "at_unix_ms": 1795752906085,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a21b3281cf-ffbe-4ec4",
+        "launch_nonce": "63a7ebdfe8831254dc62a2bc7cda9d84",
+        "log_bytes": {
+          "stderr": {
+            "seen": 152,
+            "stored": 152
+          },
+          "stdout": {
+            "seen": 1711,
+            "stored": 1711
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      }
+    }
+  ],
+  "whole_runtime_replaced": false,
+  "production_activated": false,
+  "old_stack_removal_qualified": false
+}
