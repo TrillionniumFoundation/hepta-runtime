@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::mcp::{
+	runtime::effect_owner_fence::AdmissionPermit,
 	weight_config,
 	weight_guard::{Constraint, GuardedPatchParams, Objective},
 	weight_tensor::ExactElementEdit,
@@ -247,14 +248,41 @@ impl Write for BoundedRequest {
 pub(in crate::mcp) async fn run(
 	params: SessionWeightParams,
 	owner: &crate::mcp::runtime::caller_scope::OwnerScope,
+	owner_admission: AdmissionPermit,
+	deadline: tokio::time::Instant,
 ) -> Result<String> {
-	run_for_owner(params, owner.owner(), owner.authenticated()).await
+	run_for_owner(
+		params,
+		owner.owner(),
+		owner.authenticated(),
+		owner_admission,
+		deadline,
+	)
+	.await
 }
 
 async fn run_for_owner(
 	params: SessionWeightParams,
 	owner: &str,
 	credential_bound: bool,
+	owner_admission: AdmissionPermit,
+	deadline: tokio::time::Instant,
+) -> Result<String> {
+	// The MCP entry creates this cutoff before fence admission. Capacity waiting cannot
+	// restart it; after publication the retained owner task still completes compensation.
+	tokio::time::timeout_at(
+		deadline,
+		execute_for_owner(params, owner, credential_bound, owner_admission),
+	)
+	.await
+	.context("session weight response deadline exceeded; an admitted original owner task may still finish; recover only the prepared journal identity")?
+}
+
+async fn execute_for_owner(
+	params: SessionWeightParams,
+	owner: &str,
+	credential_bound: bool,
+	owner_admission: AdmissionPermit,
 ) -> Result<String> {
 	serde_json::to_writer(&mut BoundedRequest(0), &params)?;
 	let authority = tokio::time::timeout(
@@ -267,12 +295,16 @@ async fn run_for_owner(
 	let session_id = params.session_id.clone();
 	let result = match params.operation {
 		SessionWeightOperation::Prepare { request } => {
+			let _owner_admission = owner_admission;
 			transaction::prepare(*request, authority).await?
 		}
 		SessionWeightOperation::Roundtrip {
 			request,
 			expected_journal_id,
-		} => transaction::roundtrip(*request, expected_journal_id, authority).await?,
+		} => {
+			transaction::roundtrip(*request, expected_journal_id, authority, owner_admission)
+				.await?
+		}
 		SessionWeightOperation::Recover {
 			journal_id,
 			expected_candidate_sha256,
@@ -290,6 +322,7 @@ async fn run_for_owner(
 					},
 				},
 				authority,
+				owner_admission,
 			)
 			.await?
 		}

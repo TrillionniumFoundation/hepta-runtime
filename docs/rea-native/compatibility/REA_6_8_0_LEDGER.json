@@ -22,7 +22,7 @@
   "runtime": {
     "baseline_commit": "5cb31e9f48aa6bbd1ac91ef0db5c55344ac8d79d",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 37,
+    "interface_count": 38,
     "interfaces": [
       "rea_close_evidence_snapshot",
       "rea_compare_web_captures",
@@ -49,6 +49,7 @@
       "rea_model_session_open",
       "rea_model_session_query",
       "rea_model_session_read",
+      "rea_model_session_weight",
       "rea_read_asar_member",
       "rea_read_evidence_bundle",
       "rea_read_model",
@@ -559,6 +560,16 @@
         "bytes": 167519
       },
       {
+        "path": "docs/weight-runtime/ORIGINAL_INTENT_F32_RECOVERY_20261127.md",
+        "sha256": "6aeeb4d32643d562b1d77c453370e449537e9575fa257705be4cfa23d8582287",
+        "bytes": 9595
+      },
+      {
+        "path": "docs/weight-runtime/REA_SESSION_F32_RESEARCH_20261127.md",
+        "sha256": "7bca69bde61cf73ad96a98eb80a60e9ae5244bc0262659276bb488d9b7ade88a",
+        "bytes": 13245
+      },
+      {
         "path": "scripts/generate_apk_signature_fixtures.py",
         "sha256": "f1854eb05127309d7f98702b5305bd863e7e048280914aebeee3ba964e833194",
         "bytes": 11654
@@ -715,8 +726,8 @@
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "c97ae89b7094deb5fc23c2083508ed4a16a3afbb4c6140574269b355a0f1dd47",
-        "bytes": 3608
+        "sha256": "58eeeed6e82a8db75249f30b1aabd189ab9fb20ae14d05ed46c9be474f0b3ac5",
+        "bytes": 3746
       },
       {
         "path": "src/mcp/rea.rs",
@@ -1410,8 +1421,8 @@
       },
       {
         "path": "src/mcp/rea_model_session.rs",
-        "sha256": "b1b9d7dd3c64b2bffe2103c9d28c1eaf349a26527b7d457f11fd09fbc348e095",
-        "bytes": 27551
+        "sha256": "aaede50d3bbe61a06f3e2843e2f92604e98cde00a1b2b0d66b712d8e198ced9c",
+        "bytes": 27608
       },
       {
         "path": "src/mcp/rea_model_session_index.rs",
@@ -1427,6 +1438,21 @@
         "path": "src/mcp/rea_model_session_tests.rs",
         "sha256": "6a0e8f68fc267ac74d70af1ab512ea88ca7c759d234dd9782e221cdd527f9b38",
         "bytes": 34411
+      },
+      {
+        "path": "src/mcp/rea_model_session_weight.rs",
+        "sha256": "d488c2f13214566623f2bda60e41ae292d03a26eeb859c9441e6ea055d92b036",
+        "bytes": 12476
+      },
+      {
+        "path": "src/mcp/rea_model_session_weight_tests.rs",
+        "sha256": "8e5c255875a3f84723a607c14f209345c5ec67f42d6a1c508e862bac986bfc5a",
+        "bytes": 28073
+      },
+      {
+        "path": "src/mcp/rea_model_session_weight_transaction.rs",
+        "sha256": "2ac005f6d6a8c9d0b21d7773f8954ff978ed76a47ed3763d46b11061f83e255f",
+        "bytes": 11179
       },
       {
         "path": "src/mcp/rea_model_tests.rs",
@@ -1604,6 +1630,26 @@
         "bytes": 8967
       },
       {
+        "path": "src/mcp/runtime/config.rs",
+        "sha256": "75a95e0376eb2ebf92f4dbbc0f8d93cbe4aa53ae35c78aa144589d226bf9c7c6",
+        "bytes": 27112
+      },
+      {
+        "path": "src/mcp/runtime/effect_owner_fence.rs",
+        "sha256": "30115bd9eb36f8b42fdf6015471327f9b0d1903913df2f71e7b1b65e499fb52e",
+        "bytes": 24059
+      },
+      {
+        "path": "src/mcp/runtime/effect_owner_fence_acquisition_tests.rs",
+        "sha256": "4d294479590c8179fd241a9ecf7bd125345dc8768e11aa6dfcfa2ed383247b10",
+        "bytes": 8826
+      },
+      {
+        "path": "src/mcp/runtime/effect_owner_fence_tests.rs",
+        "sha256": "69996279a3b6158e4b8b121bdc9d2e6d3158aa946fa15d285b9812becafb055b",
+        "bytes": 37187
+      },
+      {
         "path": "src/mcp/runtime/jobs.rs",
         "sha256": "11a9ee285231c15b150bca5081ac028bc37021a755df93c54e8d4e71fd805393",
         "bytes": 178684
@@ -1615,13 +1661,133 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "38fa09779b82354e8925ae71576ddd7974f3c0f681e27531ac1ebed44848e7ed",
-        "bytes": 193940
+        "sha256": "3962169fa68785ed6643593823a579265633e9c1fc341c5ed07af35137382aaa",
+        "bytes": 196426
       },
       {
         "path": "src/mcp/server_tests.rs",
         "sha256": "3cba825b06f6501016c3836051c253c814daf37d262f716b2071dabe3aba7363",
         "bytes": 47472
+      },
+      {
+        "path": "src/mcp/weight_artifact.rs",
+        "sha256": "93fe5f0e48b5879b2b660b27cc9cf7fcfb17133859ab65481078539c5fcfa409",
+        "bytes": 24201
+      },
+      {
+        "path": "src/mcp/weight_artifact_cohort.rs",
+        "sha256": "c3e77e6ad546752ba77fa434ead75785d0cd1f44f19a82c3270fe15d53d779d2",
+        "bytes": 25360
+      },
+      {
+        "path": "src/mcp/weight_artifact_cohort_tests.rs",
+        "sha256": "d5ad4c0a2b7256cd78dc757da87194fc0b51b95ce384b7aac157dfe9e8f91cbd",
+        "bytes": 20174
+      },
+      {
+        "path": "src/mcp/weight_artifact_f32_recovery.rs",
+        "sha256": "d24d9f56d185dfdf41c6c582de51bb341b45d15f096ac98eaabeebebe83ad6ff",
+        "bytes": 3039
+      },
+      {
+        "path": "src/mcp/weight_artifact_f32_recovery_linux.rs",
+        "sha256": "6bec497d185350e44bebf067477cb9e1de4bc39691f014a0efb8b2d8366b6fdc",
+        "bytes": 12353
+      },
+      {
+        "path": "src/mcp/weight_artifact_f32_recovery_tests.rs",
+        "sha256": "6ceba26260a86ee518e8f0ec3dff36f65837eb873b485fad497e0fc63282f9f0",
+        "bytes": 14815
+      },
+      {
+        "path": "src/mcp/weight_artifact_positive_tests.rs",
+        "sha256": "19337e0d561be2c67c03b46590a812a0cdb28e7bae4eb5225dea90a61420c07e",
+        "bytes": 12276
+      },
+      {
+        "path": "src/mcp/weight_artifact_private_tests.rs",
+        "sha256": "37cefe779423dad465d236a16a7fbbde3f1f2824ff9f622f1d74c19ca6635a83",
+        "bytes": 11232
+      },
+      {
+        "path": "src/mcp/weight_artifact_recovery_tests.rs",
+        "sha256": "b47dbee60d53edff245a07f0d46af5759b5fd3b1e9b236e02a9d3215e365c487",
+        "bytes": 10122
+      },
+      {
+        "path": "src/mcp/weight_artifact_tests.rs",
+        "sha256": "832d5254d25806e0f9bbf1c1d36dead6b6334d8f20b4d3bcede6679625a36f9f",
+        "bytes": 7805
+      },
+      {
+        "path": "src/mcp/weight_config.rs",
+        "sha256": "13c2a3c98298ca270e73c8181c52107bbf6ac1a9ad34e2b9e725f8957177b9f5",
+        "bytes": 5687
+      },
+      {
+        "path": "src/mcp/weight_forward.rs",
+        "sha256": "5ef77a3506ec90ce2931cb80727df738b1b4f8ed5b7d4412a6a7ec9791021f60",
+        "bytes": 9808
+      },
+      {
+        "path": "src/mcp/weight_forward_tests.rs",
+        "sha256": "3142d647735ef6a21758aa998cce30fb26150d63dd6b14c83064b5f80b7c118c",
+        "bytes": 7502
+      },
+      {
+        "path": "src/mcp/weight_guard.rs",
+        "sha256": "1baafb23d2a343e67ea8756c8ddf98ffe58c773f815d8a542c65b35a0fd124df",
+        "bytes": 14496
+      },
+      {
+        "path": "src/mcp/weight_guard_f32_source.rs",
+        "sha256": "39f270ac34de97dc52e4fad0438f2bb1cb28918672cc9ed7d21f61e994031954",
+        "bytes": 7812
+      },
+      {
+        "path": "src/mcp/weight_guard_f32_source_tests.rs",
+        "sha256": "d36dc819a1cb9ad359e121ee165e4e317b563a19440f464026eabe3e09242d3e",
+        "bytes": 5070
+      },
+      {
+        "path": "src/mcp/weight_guard_journal.rs",
+        "sha256": "16bdbf3a0d800d8352cb1fdfb357506d6826f0db1ee2c3f30b3a138d4f0b6236",
+        "bytes": 35994
+      },
+      {
+        "path": "src/mcp/weight_guard_journal_tests.rs",
+        "sha256": "a1d80798c045fe85a57f61d28bf9ea0a3ad17a31e5182858f1de94179561410f",
+        "bytes": 20488
+      },
+      {
+        "path": "src/mcp/weight_guard_recovery_intent.rs",
+        "sha256": "01297748e9ae41a39b96ff014a4f818ea20d834af5e6b40fc954615b81ae6a11",
+        "bytes": 6581
+      },
+      {
+        "path": "src/mcp/weight_guard_tests.rs",
+        "sha256": "d6ac78cece9f100c1ce5e2d451743daff41342b50f6d835cacb8e5948a112ffb",
+        "bytes": 10396
+      },
+      {
+        "path": "src/mcp/weight_norm.rs",
+        "sha256": "db63a69fa37768d6d55eb600a4b4dc8a2f1e46471ab2db077da98d5d50119084",
+        "bytes": 7393
+      },
+      {
+        "path": "src/mcp/weight_norm_tests.rs",
+        "sha256": "ca09167591244fc16ae76b78e4165ed626d7b2774cfc9162ac2093407d0c11ed",
+        "bytes": 3020
+      },
+      {
+        "path": "src/mcp/weight_tensor.rs",
+        "sha256": "d52b0e0354e9bc064f37b9ac47b96a892a37650b44b60f980ddabff51d3333ae",
+        "bytes": 5588
+      },
+      {
+        "path": "src/mcp/weight_tensor_tests.rs",
+        "sha256": "89f2eb39d46ad03eeacbcd9d43b5250be6f49ce54695a0244d88ec45c644189c",
+        "bytes": 3835
       },
       {
         "path": "src/native_observation.rs",
@@ -2074,7 +2240,7 @@
         "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "15d4dd787e76217dec7abd8a3ac88206bf50fa4cb5e7393ca9ccf7a2a6a63dc3"
+    "source_manifest_sha256": "9165b7971899f80eef75f0126f13f0709633d8f8c9a3180df09a69d7d72df198"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2668,12 +2834,12 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "6b6ae3f99b66aada2d699ef9593a76f6863f160a07a7a217b38077adb78f42f4",
+  "mapping_sha256": "04e3a02cf3c5dc29e348a059674ad93ada1618fc7b57068e35b50497c5190cf1",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 37,
+    "native_interfaces": 38,
     "implementation_counts": {
       "absent": 187,
       "partial_operation": 23,

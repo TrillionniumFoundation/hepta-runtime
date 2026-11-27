@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::mcp::rea_model::session::weight::SessionAuthority;
+use crate::mcp::runtime::effect_owner_fence::AdmissionPermit;
 use crate::mcp::weight_guard::source_bound_f32::BiasBinding;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -34,25 +35,33 @@ mod linux;
 /// This explicit re-entry performs no parent or candidate forward and creates no new candidate.
 /// A response deadline retains the original owner task; it is not a process-crash guarantee.
 pub async fn run(params: RecoveryParams) -> Result<Value> {
-	run_scoped(params, None).await
+	run_scoped(params, None, None).await
 }
 
 pub(in crate::mcp) async fn run_for_session(
 	params: RecoveryParams,
 	authority: SessionAuthority,
+	owner_admission: AdmissionPermit,
 ) -> Result<Value> {
 	authority.revalidate().await?;
 	authority.check_bias_binding(&params.bias_binding)?;
-	run_scoped(params, Some(authority)).await
+	run_scoped(params, Some(authority), Some(owner_admission)).await
 }
 
-async fn run_scoped(params: RecoveryParams, authority: Option<SessionAuthority>) -> Result<Value> {
+async fn run_scoped(
+	params: RecoveryParams,
+	authority: Option<SessionAuthority>,
+	owner_admission: Option<AdmissionPermit>,
+) -> Result<Value> {
 	#[cfg(target_os = "linux")]
 	{
 		let config = crate::mcp::runtime::runtime_config()?;
 		let roots = config.controller_workspace_roots.clone();
 		let state = config.state_dir.clone();
-		let guards = super::owner_guards().await?;
+		let guards = match owner_admission {
+			Some(admission) => super::owner_guards_from_admission(admission).await?,
+			None => super::owner_guards().await?,
+		};
 		tokio::time::timeout(
 			std::time::Duration::from_secs(420),
 			super::retained_transaction(guards, async move {
@@ -67,7 +76,7 @@ async fn run_scoped(params: RecoveryParams, authority: Option<SessionAuthority>)
 	}
 	#[cfg(not(target_os = "linux"))]
 	{
-		let _ = (params, authority);
+		let _ = (params, authority, owner_admission);
 		bail!("source-bound original-intent recovery requires Linux");
 	}
 }

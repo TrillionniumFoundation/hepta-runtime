@@ -6,6 +6,7 @@
 use super::*;
 use crate::mcp::weight_guard::Objective;
 use crate::mcp::weight_tensor::{ExactElementEdit, PatchTensorParams};
+use std::os::unix::fs::PermissionsExt;
 
 async fn fixture(replacement: f32) -> (tempfile::TempDir, SourceBoundParams, Vec<u8>) {
 	let temp = tempfile::tempdir().unwrap();
@@ -113,6 +114,9 @@ async fn bound_f32_uses_existing_guard_for_real_candidate_and_failed_restore() {
 	for replacement in [0.0, 2.0] {
 		let (temp, params, original) = fixture(replacement).await;
 		let state = tempfile::tempdir().unwrap();
+		tokio::fs::set_permissions(state.path(), std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
 		let result = evaluate_with_roots(params.clone(), &[temp.path().into()], state.path())
 			.await
 			.unwrap();

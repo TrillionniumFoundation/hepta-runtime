@@ -653,6 +653,22 @@ pub(in crate::mcp) async fn owner_guards() -> Result<(
 	Ok((slot, owner))
 }
 
+/// A session entry already owns its fence. Reuse it without opening a second admission.
+/// The caller retains its original response deadline across this capacity wait.
+pub(in crate::mcp) async fn owner_guards_from_admission(
+	owner: super::super::runtime::effect_owner_fence::AdmissionPermit,
+) -> Result<(
+	OwnedSemaphorePermit,
+	super::super::runtime::effect_owner_fence::AdmissionPermit,
+)> {
+	let slot = WORKERS
+		.get_or_init(|| Arc::new(Semaphore::new(4)))
+		.clone()
+		.acquire_owned()
+		.await?;
+	Ok((slot, owner))
+}
+
 pub async fn patch(params: PatchParams) -> Result<String> {
 	let config = super::super::runtime::runtime_config()?;
 	let roots = config.controller_workspace_roots.clone();

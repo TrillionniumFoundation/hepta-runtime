@@ -2559,19 +2559,28 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = false
 		),
-		description = "Operate only on an existing REA model session under the server-resolved owner and exact current policy. Select one F32 matrix and its separate stored bias; no caller path, executable, state root or authority token. First f32_prepare authenticates actual source bytes and returns a deterministic original journal ID without a forward or write. Then one f32_roundtrip requires that exact prepared ID, enforces the existing exact F32 radius and fixed-row guard, reverses passing and failing candidates through the canonical owner and reopens the restored artifact for a fresh head request. After uncertainty, f32_recover uses the original session-bound intent and candidate commitment without opening the old source or replaying its forward. Authority is revalidated at publication boundaries; the existing owner task retains admission after caller cancellation. No automatic retry, background crash recovery, feature-provenance proof, full-model evaluation or production activation. Prepare and roundtrip need the current original workspace source; explicit recovery does not. At most 64 rows and 1 MiB request."
+		description = "Operate only on an existing REA model session under the server-resolved owner and exact current policy. All variants require native effect-owner admission. One 420-second response cutoff includes fence and capacity waiting; an admitted retained task may still finish after the caller times out. Select one F32 matrix and its separate stored bias; no caller path, executable, state root or authority token. First f32_prepare authenticates actual source bytes and returns a deterministic original journal ID without a forward or write. Then one f32_roundtrip requires that exact prepared ID, enforces the existing exact F32 radius and fixed-row guard, reverses passing and failing candidates through the canonical owner and reopens the restored artifact for a fresh head request. After uncertainty, f32_recover uses the original session-bound intent and candidate commitment without opening the old source or replaying its forward. Authority is revalidated at publication boundaries; the existing owner task retains admission after caller cancellation. No automatic retry, background crash recovery, feature-provenance proof, full-model evaluation or production activation. Prepare and roundtrip need the current original workspace source; explicit recovery does not. At most 64 rows and 1 MiB request."
 	)]
 	async fn rea_model_session_weight(
 		&self,
 		Parameters(params): Parameters<rea_model::session::weight::SessionWeightParams>,
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
+		let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(420);
 		let scope = self
 			.owner_binding
 			.resolve(&context, self.search_owner.as_ref().as_deref())
 			.map_err(|error| error.to_string())?;
-		// The session operation retains the existing owner fence through actual inverse publication.
-		rea_model::session::weight::run(params, &scope)
+		let owner_admission =
+			tokio::time::timeout_at(deadline, runtime::effect_owner_fence::admit_new_effect())
+				.await
+				.map_err(|_| {
+					"session weight effect admission exceeded its response deadline; no effect requested"
+				.to_string()
+				})?
+				.map_err(|error| error.to_string())?;
+		// One permit and the original cutoff cross capacity waiting and the retained inverse task.
+		rea_model::session::weight::run(params, &scope, owner_admission, deadline)
 			.await
 			.map_err(|error| error.to_string())
 	}

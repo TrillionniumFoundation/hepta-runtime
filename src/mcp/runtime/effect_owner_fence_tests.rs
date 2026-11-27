@@ -233,6 +233,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_evidence_session_resume",
 		"rea_retain_preview",
 		"rea_model_session_open",
+		"rea_model_session_weight",
 		"rea_static_start",
 		"rea_static_cancel",
 		"weight_artifact_patch",
@@ -401,7 +402,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 54);
+	assert_eq!(actual.difference(&retained).count(), 55);
 	let cohort = include_str!("../weight_artifact_cohort.rs");
 	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
 	assert_eq!(
@@ -440,6 +441,61 @@ fn compact_owner_body(source: &str, function: &str) -> String {
 		.chars()
 		.filter(|value| !value.is_ascii_whitespace())
 		.collect()
+}
+
+#[test]
+fn session_weight_moves_one_admission_and_one_cutoff_into_the_existing_owner() {
+	let server = compact_owner_body(include_str!("../server.rs"), "rea_model_session_weight(");
+	let deadline = server
+		.find("letdeadline=tokio::time::Instant::now()+std::time::Duration::from_secs(420);")
+		.unwrap();
+	let admission = server
+		.find("runtime::effect_owner_fence::admit_new_effect()")
+		.unwrap();
+	let dispatch = server
+		.find("rea_model::session::weight::run(params,&scope,owner_admission,deadline)")
+		.unwrap();
+	assert!(deadline < admission && admission < dispatch);
+	assert_eq!(
+		server
+			.matches("effect_owner_fence::admit_new_effect")
+			.count(),
+		1
+	);
+	assert!(server.contains("tokio::time::timeout_at(deadline,"));
+	let session = include_str!("../rea_model_session_weight.rs");
+	let bounded = compact_owner_body(session, "run_for_owner(");
+	assert!(bounded.contains("tokio::time::timeout_at(deadline,execute_for_owner(params,owner,credential_bound,owner_admission),)"));
+	let execute = compact_owner_body(session, "execute_for_owner(");
+	assert!(execute.contains(
+		"let_owner_admission=owner_admission;transaction::prepare(*request,authority).await?"
+	));
+	assert!(execute.contains(
+		"transaction::roundtrip(*request,expected_journal_id,authority,owner_admission)"
+	));
+	let transaction = compact_owner_body(
+		include_str!("../rea_model_session_weight_transaction.rs"),
+		"roundtrip(",
+	);
+	assert!(transaction.contains("owner_guards_from_admission(owner_admission).await?"));
+	assert!(transaction.contains(
+		"retained_transaction(guards,execute(params,expected_journal_id,authority,roots,state),)"
+	));
+	assert!(!transaction.contains("owner_guards().await"));
+	let recovery = include_str!("../weight_artifact_f32_recovery.rs");
+	assert!(compact_owner_body(recovery, "run_for_session(")
+		.contains("run_scoped(params,Some(authority),Some(owner_admission)).await"));
+	let recovery_owner = compact_owner_body(recovery, "run_scoped(");
+	assert!(recovery_owner
+		.contains("Some(admission)=>super::owner_guards_from_admission(admission).await?"));
+	assert!(recovery_owner.contains("super::retained_transaction(guards,asyncmove{"));
+	let capacity = compact_owner_body(
+		include_str!("../weight_artifact_cohort.rs"),
+		"owner_guards_from_admission(",
+	);
+	assert!(capacity.contains("WORKERS") && capacity.contains("acquire_owned()"));
+	assert!(capacity.contains("Ok((slot,owner))"));
+	assert!(!capacity.contains("admit_new_effect"));
 }
 
 #[test]

@@ -288,12 +288,18 @@ pub(super) async fn roundtrip(
 	input: F32GuardInput,
 	expected_journal_id: String,
 	authority: SessionAuthority,
+	owner_admission: runtime::effect_owner_fence::AdmissionPermit,
 ) -> Result<Value> {
 	let params = request(input, &authority)?;
 	let config = runtime::runtime_config()?;
 	let roots = config.controller_workspace_roots.clone();
 	let state = config.state_dir.clone();
-	let guards = weight_artifact::cohort::owner_guards().await?;
-	tokio::time::timeout(Duration::from_secs(420), weight_artifact::cohort::retained_transaction(guards, execute(params, expected_journal_id, authority, roots, state)))
-		.await.context("session F32 response deadline exceeded; the original owner task may finish; recover only the prepared journal identity")?
+	#[cfg(all(test, target_os = "linux"))]
+	super::tests::waiting_for_owner_capacity();
+	let guards = weight_artifact::cohort::owner_guards_from_admission(owner_admission).await?;
+	weight_artifact::cohort::retained_transaction(
+		guards,
+		execute(params, expected_journal_id, authority, roots, state),
+	)
+	.await
 }
