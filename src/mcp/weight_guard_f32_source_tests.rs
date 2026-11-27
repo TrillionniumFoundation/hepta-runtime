@@ -112,13 +112,10 @@ async fn complete_file_authentication_covers_unchanged_physical_parameters() {
 async fn bound_f32_uses_existing_guard_for_real_candidate_and_failed_restore() {
 	for replacement in [0.0, 2.0] {
 		let (temp, params, original) = fixture(replacement).await;
-		let result = evaluate_with_roots(
-			params.clone(),
-			&[temp.path().into()],
-			&temp.path().join("state"),
-		)
-		.await
-		.unwrap();
+		let state = tempfile::tempdir().unwrap();
+		let result = evaluate_with_roots(params.clone(), &[temp.path().into()], state.path())
+			.await
+			.unwrap();
 		assert_eq!(
 			result["bias_evidence"]["caller_bias_matches_stored_bits"],
 			true
@@ -141,7 +138,7 @@ async fn bound_f32_uses_existing_guard_for_real_candidate_and_failed_restore() {
 				result["guard"]["restoration"]["artifact_id"]
 					.as_str()
 					.unwrap(),
-				&temp.path().join("state"),
+				state.path(),
 			)
 			.await
 			.unwrap();
