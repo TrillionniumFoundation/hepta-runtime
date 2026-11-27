@@ -176,12 +176,25 @@ The first framework receipt records both F and D pins empty. The source F is
 now the actually published `5622dafbcfa10ad0c6f99214994ee7dcf71523e0`, with
 tree `3987d656b5baf0138abe2ad8500f798a72bd45f5` independently read from GitHub.
 Its source freeze does not establish successful execution of the new cold
-chain. D remains empty until the actual bound native executable distribution
-is published. The dedicated gate still reports **HOLD** and exits 1 before
-attempting either checkout; empty pins never select a default branch. The
-earlier receipt parsed the YAML, checked all fifteen shell blocks and actually
-exercised the original missing-pin refusal. No artifact identity has been
-invented to make the framework runnable prematurely.
+chain. The actual published D is now
+`10d5d035788cf61cad9db5cb83063d4d0e777fa7`, tree
+`c4f2d17e55d1aba5a76bd28d264382873a704843`. The original missing-pin gate is
+retained: invalid or empty pins never select a default branch. The earlier
+receipt records the original YAML/shell checks and missing-pin refusal.
+
+`bootstrap-distribution-F5622-D10d5-admission.json` is the actual strict reader
+result for these immutable F/D identities. Its observer and complete stdout
+and stderr are retained alongside it. At Runtime reader commit
+`625c44373732db7307e3f082bed18ef51958ac14`, the operation exited 0 in
+4.633325709 seconds after checking both clean independent Git checkouts,
+the complete 1,278-file, 246,533,134-byte native source closure, all 15 declared
+distribution files and their Git modes, and a second read after actual fresh
+staging. The manifest is 3,577 bytes with SHA-256
+`d1c78fa1aa7181b60dfa578ccbf9ec645045b4124ad0893a957fed5a9c648263`.
+The result is `BOOTSTRAP_DISTRIBUTION_ADMITTED`; both native-cold and whole-native
+qualification flags remain false. No bootstrap executable was run by this
+reader, and no historical or partial cold output is substituted for the
+following native execution gates.
 
 Cold keeps its original 180-second qualification and 3-second cleanup bounds.
 Ordinary native release explicitly keeps its original 1,800-second selected
