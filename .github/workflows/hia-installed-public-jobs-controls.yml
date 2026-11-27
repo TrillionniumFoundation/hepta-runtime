@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'codex/hia-installed-public-jobs-*'
+      - 'codex/hia-runtime-unified-*'
   pull_request:
     paths:
       - 'tests/hia_installed_public_jobs_integration.py'
@@ -29,6 +30,15 @@ jobs:
 
       - name: Refuse substituted identities, unsafe files, forged receipts and hidden execution
         run: python3 -I -B tests/test_hia_installed_public_jobs_integration.py -v
+
+      - name: Preserve common source, distribution and execution-chain reader controls
+        run: |
+          set -euo pipefail
+          python3 -I -B tests/test_hia_native_helper_mcp_integration.py -v
+          python3 -I -B tests/test_hia_native_language_coverage.py -v
+          python3 -I -B tests/test_hia_native_bootstrap_distribution.py -v
+          python3 -I -B tests/test_hia_native_execution_trace.py TraceReadbackTests -v
+          python3 -I -B tests/test_hia_native_execution_chain.py -v
 
       - name: Compile the independent external workload fixture
         run: |
