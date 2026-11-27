@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Pinned adapter to HIA Worker envelope and durable job identities.
@@ -435,10 +436,10 @@ pub(super) async fn job_lifecycle_owner(numbers: [u64; 4], fields: [&str; 13]) -
 		status.success() && output.len() == 32 && output.starts_with(b"HIAJOR01"),
 		Lifecycle
 	);
-	let facts = std::array::from_fn(|index| {
-		let at = 8 + index * 8;
-		u64::from_le_bytes(output[at..at + 8].try_into().unwrap())
-	});
+	let mut facts = [0; 3];
+	for (fact, bytes) in facts.iter_mut().zip(output[8..].chunks_exact(8)) {
+		*fact = u64::from_le_bytes(bytes.try_into().context(Lifecycle)?);
+	}
 	ensure!(
 		facts[0] <= 1 && facts[1] <= 1 && matches!(facts[2], 1 | 2),
 		Lifecycle

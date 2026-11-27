@@ -4049,15 +4049,27 @@ impl ServerHandler for OctofsServer {
 		#[cfg(target_os = "linux")]
 		if super::hia_wire_candidate::selected()
 			&& hia_contract::TOOLS.contains(&request.name.as_ref())
-			&& !context
-				.extensions
-				.get::<super::hia_wire_candidate::Admitted>()
-				.is_some_and(|admission| admission.0)
 		{
-			return Err(ErrorData::invalid_params(
-				"HIA native wire admission refused",
-				None,
-			));
+			let admitted =
+				if let Some(parts) = context.extensions.get::<axum::http::request::Parts>() {
+					super::hia_wire_candidate::observe_http_tool(parts, &request, &context.id)
+						.await
+						.map_err(|error| {
+							tracing::warn!(%error, "Native HIA HTTP tool wire admission refused");
+						})
+						.is_ok()
+				} else {
+					context
+						.extensions
+						.get::<super::hia_wire_candidate::Admitted>()
+						.is_some_and(|admission| admission.0)
+				};
+			if !admitted {
+				return Err(ErrorData::invalid_params(
+					"HIA native wire admission refused",
+					None,
+				));
+			}
 		}
 		let cancelled = context.ct.clone();
 		let router = Self::tool_router();
