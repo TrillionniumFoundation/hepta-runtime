@@ -74,6 +74,7 @@ pub mod weight;
 pub mod weight_affine;
 pub mod weight_artifact;
 pub mod weight_bellman;
+pub mod weight_binary_choice;
 pub mod weight_certificate;
 pub mod weight_config;
 pub mod weight_f16_proposal;

@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use hepta_runtime::mcp::{
 	runtime,
 	weight_artifact::{self, cohort::f16_research},
+	weight_binary_choice,
 	weight_guard::{f16::CoupledF16EvaluationParams, source_bound_f32},
 };
 use serde::Deserialize;
@@ -19,7 +20,10 @@ const MAX_INPUT_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum Request {
+enum ResearchOperation {
+	BinaryChoiceContrast {
+		params: Box<weight_binary_choice::BinaryChoiceParams>,
+	},
 	F16Research {
 		params: Box<CoupledF16EvaluationParams>,
 	},
@@ -114,26 +118,31 @@ async fn f32_roundtrip(params: source_bound_f32::SourceBoundParams) -> Result<Va
 
 async fn run(args: &[String]) -> Result<()> {
 	if args.len() != 3 {
-		bail!("usage: weight-source-bound-research ABSOLUTE_RUNTIME_CONFIG_JSON ABSOLUTE_REQUEST_JSON");
+		bail!(
+			"usage: weight-source-bound-research ABSOLUTE_RUNTIME_CONFIG_JSON ABSOLUTE_REQUEST_JSON"
+		);
 	}
 	let config: runtime::RuntimeConfig = serde_json::from_slice(&read_input(&args[1]).await?)
 		.context("invalid explicit Runtime configuration")?;
 	config.validate()?;
-	let request: Request = serde_json::from_slice(&read_input(&args[2]).await?)
+	let request: ResearchOperation = serde_json::from_slice(&read_input(&args[2]).await?)
 		.context("invalid bounded research request")?;
 	runtime::init_runtime(config)?;
 	let result = match request {
-		Request::F16Research { params } => serde_json::to_value(f16_research::run(*params).await?)?,
-		Request::F16NextRequest {
+		ResearchOperation::BinaryChoiceContrast { params } => {
+			serde_json::to_value(weight_binary_choice::evaluate(&params).await?)?
+		}
+		ResearchOperation::F16Research { params } => serde_json::to_value(f16_research::run(*params).await?)?,
+		ResearchOperation::F16NextRequest {
 			params,
 			artifact_id,
 		} => serde_json::to_value(f16_research::next_request(&params, &artifact_id).await?)?,
-		Request::F32Roundtrip { params } => f32_roundtrip(*params).await?,
-		Request::F32NextRequest {
+		ResearchOperation::F32Roundtrip { params } => f32_roundtrip(*params).await?,
+		ResearchOperation::F32NextRequest {
 			params,
 			artifact_id,
 		} => source_bound_f32::next_request(&params, &artifact_id).await?,
-		Request::F32Restore {
+		ResearchOperation::F32Restore {
 			params,
 			artifact_id,
 		} => {
