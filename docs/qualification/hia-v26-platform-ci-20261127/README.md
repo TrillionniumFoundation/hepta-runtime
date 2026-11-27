@@ -91,6 +91,36 @@ the old Hepta source pin, not qualification of the subsequent native source
 contract. Native admission and original-language-witness preparation have their
 own [scoped controls](../hia-native-common-readback-20261127/README.md).
 
+## Completed public candidate Rust validation
+
+[ci-terminal-rust-candidate.json](ci-terminal-rust-candidate.json) preserves
+the original GitHub job metadata and complete losslessly compressed logs for
+all three successful Rust jobs on public candidate
+`0ce79ce0e47225073fdc5394651df942eb6b98b1`. The prospective merge was
+`238ff1372f13eb32d08a488f56e879f184f71a06`, with main
+`d3d75c30719db966b004756f610007a7c723729e`. Each original log contains the
+checked-out source identity and the complete test summaries.
+
+| Lane | Job | All-features nextest | No-default-features nextest |
+| --- | --- | ---: | ---: |
+| Push exact source | 140312193080 | 2,651 passed; 44 skipped | 2,610 passed; 32 skipped |
+| PR prospective merge | 140312216327 | 2,651 passed; 44 skipped | 2,610 passed; 32 skipped |
+| PR exact source | 140312216113 | 2,651 passed; 44 skipped | 2,610 passed; 32 skipped |
+
+Every job reached terminal success, including both feature configurations'
+all-target checks and Clippy, retained safety/evidence checks, the release
+build, and its selected release integration gates. The two exact-source jobs
+also completed the shipped-binary parser/syscall-denial and independent ZIP
+writer gates. Existing skips remain skips. The push event's inapplicable
+prospective-merge lane is separately skipped and is not one of these three
+successful jobs.
+
+The compressed logs retain all original bytes; the receipt binds both original
+and compressed lengths and SHA-256 digests. These results qualify the stated
+public candidate's Rust checks. They do not test the subsequent native common
+admission/framework changes, admit a fresh native cold chain, or replace either
+retained common integration HOLD.
+
 ## Qualification boundary
 
 This branch integrates v25/v26 job lifecycle and controller work plus platform
