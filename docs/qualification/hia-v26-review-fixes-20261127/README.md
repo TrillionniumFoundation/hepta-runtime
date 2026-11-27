@@ -17,7 +17,25 @@ actual Rust 1.95 format and format-check exits of zero on Mac. The earlier
 that attempt never started rustfmt. No Linux behavior or Rust compilation
 result is inferred from formatting. The new sealed-descriptor regression must
 run in the next full Linux CI matrix. The live `6815ec9a911d6accd593e580c5ee18ffb13452f7`
-matrix is retained before that follow-up is published.
+matrix completed before that follow-up was published. Its three complete
+compressed logs and terminal job records are retained in [ci-6815](ci-6815/receipt.json).
+
+## Completed CI for the five earlier review fixes
+
+The exact `6815ec9a911d6accd593e580c5ee18ffb13452f7` source and prospective
+merge passed all three actual Rust lanes. Each ran 2,656 all-features tests
+and 2,614 no-default-features tests successfully, retaining 44 and 32 existing
+skips. The five added HTTP, decoder, capture and executable-custody Rust tests
+actually passed. Both Repository Hygiene jobs and the HIA helper contract job
+also passed. All selected release, JavaScript lifecycle, syscall-denial and ZIP
+checks completed successfully. The last exact-head job ended at
+`2026-11-27T08:23:08Z`.
+
+The unchanged old common workflow still failed its catalog-equality admission
+against the old hosted Hepta candidate; that failure is retained and is not
+counted as a pass. The native replacement workflow remains separate. This CI
+receipt qualifies only `6815ec9` and its observed prospective merge, not the
+later `spawn_blocking` fix or whole-native integration.
 
 Reassembling the existing REA projection produces identical bytes for this
 change: these two files do not alter its registered source records. The
