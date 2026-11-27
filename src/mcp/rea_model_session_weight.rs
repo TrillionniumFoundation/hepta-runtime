@@ -7,7 +7,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::Duration;
