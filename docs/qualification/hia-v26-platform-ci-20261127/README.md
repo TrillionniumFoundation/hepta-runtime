@@ -70,6 +70,27 @@ real owner/drain observation. That failure is retained, and the test was not
 weakened or skipped. The GitHub Ubuntu job must independently establish its
 complete consumer result.
 
+## Original common integration failures
+
+[common-55b-hold.json](common-55b-hold.json) retains the original integration
+report, stage outcomes, exact source pins, and artifact identity from run
+45939112683, job 140309065762. The hosted cold and language stages succeeded;
+integration refused the different Runtime and Hepta catalog bytes before
+opening any transport session. No catalog pin was changed to admit that run.
+
+[common-0ce-hold.json](common-0ce-hold.json) retains the original failure and
+process-owner outcomes from run 45940078307, job 140312129943. Hosted cold
+qualification exceeded its unchanged 180-second limit. Cleanup completed in
+77,729,038 ns with the leader reaped, ECHILD observed, and no remaining direct
+children. The independent hosted language stage succeeded, while integration
+correctly refused incomplete cold qualification. Both runs remain **HOLD**.
+
+The receipts identify the retained GitHub artifacts and original report hashes;
+the large archives are not duplicated in Git. They are historical evidence for
+the old Hepta source pin, not qualification of the subsequent native source
+contract. Native admission and original-language-witness preparation have their
+own [scoped controls](../hia-native-common-readback-20261127/README.md).
+
 ## Qualification boundary
 
 This branch integrates v25/v26 job lifecycle and controller work plus platform

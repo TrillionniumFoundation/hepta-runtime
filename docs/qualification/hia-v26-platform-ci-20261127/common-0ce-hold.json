@@ -1,0 +1,93 @@
+{
+  "schema": "hepta.runtime.common-candidate-failure.v1",
+  "run_id": 45940078307,
+  "job_id": 140312129943,
+  "artifact": {
+    "id": 15173141352,
+    "bytes": 55255006,
+    "sha256": "afcfacde626d6a8c7abeb9e4744b1c236adfeb6add28b09914e4705ebc97bfe8"
+  },
+  "raw_reports": [
+    {
+      "path": "hia-common-cold.json",
+      "bytes": 78542,
+      "sha256": "3aa3021f5f79c5144858cf5cd51fdcf3e9f49dcd57ea6efbbc7e7a8b8271653a"
+    },
+    {
+      "path": "hia-common-native/report.json",
+      "bytes": 3112,
+      "sha256": "c020e475477c59be075bc527edf9e0f3be0dcdd924235e73d924bb42c820c325"
+    },
+    {
+      "path": "hia-common-stage/stage-outcomes.json",
+      "bytes": 569,
+      "sha256": "aebea2dae159e7555a561c40f833151b17c938d28a4377f69c62a00574d67dce"
+    }
+  ],
+  "stage_outcomes": {
+    "cold_cleanup_seconds": 3,
+    "cold_failure_does_not_suppress_independent_provider_tests": true,
+    "cold_wall_seconds": 180,
+    "hepta_source": "7c20b6cfc792f0147b5418968f94734b8890fcca",
+    "original_stage_outcomes": {
+      "build": "success",
+      "cold": "failure",
+      "integration": "failure",
+      "language": "success",
+      "source_controls": "success"
+    },
+    "production_activated": false,
+    "runtime_source": "0ce79ce0e47225073fdc5394651df942eb6b98b1",
+    "schema": "hepta.runtime.common-candidate-stages.v1",
+    "status": "HOLD",
+    "whole_worker_native": false
+  },
+  "integration_error": {
+    "message": "unchanged-budget cold qualification is incomplete; native integration remains HOLD",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 644, in main\n    compiler, cold_bytes, report[\"cold_source_binding\"] = admit_cold_compiler(\n                                                          ~~~~~~~~~~~~~~~~~~~^\n        hepta, args.cold_report)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 213, in admit_cold_compiler\n    require(type(cold) is dict and cold.get(\"schema\") == \"hepta.hia.selfhost-cold-replay.v1\"\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            and cold.get(\"status\") == \"COLD_SELFHOST_REPLAY_PASS\"\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n            and all(value is True for value in cold[\"checks\"].values()),\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            \"unchanged-budget cold qualification is incomplete; native integration remains HOLD\")\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 39, in require\n    raise RuntimeError(message)\nRuntimeError: unchanged-budget cold qualification is incomplete; native integration remains HOLD\n",
+    "type": "RuntimeError"
+  },
+  "cold": {
+    "schema": "hepta.hia.selfhost-cold-replay.v1",
+    "status": "FAIL",
+    "profile": "selfhost-core-linux-x86_64-v64-native-composite-elaboration",
+    "returncode": -9,
+    "qualification_wall_limit_seconds": 180,
+    "cleanup_wall_limit_seconds": 3,
+    "wall_elapsed_ns": 180163591269,
+    "checks": {
+      "export_manifest_matches_qualification": false,
+      "isolated_python_without_site": false,
+      "nested_full_qualification_pass": false,
+      "nested_process_exit_zero": false,
+      "no_ancestor_git_identity": false,
+      "no_bytecode_cache_created": true,
+      "no_inherited_home_or_python_cache": true,
+      "no_inherited_seed_or_successor_images": true,
+      "origin_hashes_preserved": true,
+      "owned_process_tree_cleanup_confirmed": true,
+      "source_export_hashes_preserved": true
+    },
+    "generation_sha256": [],
+    "modified_generation_sha256": [],
+    "source_count": 637,
+    "process_owner": {
+      "status": "QUALIFICATION_TIMEOUT",
+      "returncode": -9,
+      "timed_out": true,
+      "cleanup": {
+        "attempted": true,
+        "complete": true,
+        "deadline_exceeded": false,
+        "elapsed_ns": 77729038,
+        "errors": [],
+        "leader_reaped": true,
+        "observed_echild": true,
+        "remaining_direct_children": [],
+        "started_ns": 1075071695613
+      },
+      "receipt_sha256": "c4fd026812ec5b365bf52210c830152e52681aa86499a12d3181637cc0d2f724",
+      "request_sha256": "472a89b942fcc1e1a676e37970a523dda249d04c00e0e3082aa80779d6b7e221"
+    }
+  }
+}
