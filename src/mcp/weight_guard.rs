@@ -289,6 +289,25 @@ pub(super) async fn evaluate_with_roots(
 	roots: &[PathBuf],
 	state: &Path,
 ) -> Result<Value> {
+	evaluate_admitted(params, roots, state, None).await
+}
+
+pub(super) async fn evaluate_session_with_roots(
+	params: GuardedPatchParams,
+	roots: &[PathBuf],
+	state: &Path,
+	authority: &super::rea_model::session::weight::SessionAuthority,
+) -> Result<Value> {
+	authority.authorize_guard(&params)?;
+	evaluate_admitted(params, roots, state, Some(authority)).await
+}
+
+async fn evaluate_admitted(
+	params: GuardedPatchParams,
+	roots: &[PathBuf],
+	state: &Path,
+	authority: Option<&super::rea_model::session::weight::SessionAuthority>,
+) -> Result<Value> {
 	let started = Instant::now();
 	if !params.minimum_gain.is_finite()
 		|| params.minimum_gain < 0.0
@@ -327,6 +346,9 @@ pub(super) async fn evaluate_with_roots(
 	let primary_before = score(&params.objective, &original)?;
 	// Validate labels and every constraint before publishing any candidate.
 	let original_violations = check_constraints(&params.constraints, &original, &original)?;
+	if let Some(authority) = authority {
+		authority.revalidate().await?;
+	}
 	let candidate = tokio::time::timeout(
 		Duration::from_secs(300),
 		super::weight_artifact::apply_with_roots(params.patch.clone(), roots, state, None, None),
@@ -337,6 +359,9 @@ pub(super) async fn evaluate_with_roots(
 		.as_str()
 		.ok_or_else(|| anyhow!("candidate artifact identity missing"))?;
 	let checked = async {
+		if let Some(authority) = authority {
+			authority.revalidate().await?;
+		}
 		let report = run_forward(
 			&params,
 			LinearSource::Artifact {

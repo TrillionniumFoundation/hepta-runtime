@@ -180,7 +180,7 @@ pub async fn evaluate(params: SourceBoundParams) -> Result<Value> {
 	.await
 }
 
-async fn next_request_with_state(
+pub(in crate::mcp) async fn next_request_with_state(
 	params: &SourceBoundParams,
 	artifact_id: &str,
 	state: &Path,

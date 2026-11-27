@@ -82,6 +82,51 @@
       ],
       "scope": "Current owner's native model-session inventory. Inventory remains fail-closed if any retained v1 directory is encountered, including legacy safetensors sessions; opening a new v2 session does not upgrade or remove old directories."
     },
+    "rea_model_session_weight": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "src/mcp/rea_model_session_weight.rs",
+        "src/mcp/rea_model_session_weight_transaction.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/config.rs",
+        "src/mcp/runtime/effect_owner_fence.rs",
+        "src/mcp/weight_artifact.rs",
+        "src/mcp/weight_artifact_cohort.rs",
+        "src/mcp/weight_artifact_f32_recovery.rs",
+        "src/mcp/weight_artifact_f32_recovery_linux.rs",
+        "src/mcp/weight_guard.rs",
+        "src/mcp/weight_guard_f32_source.rs",
+        "src/mcp/weight_guard_journal.rs",
+        "src/mcp/weight_guard_recovery_intent.rs",
+        "src/mcp/weight_config.rs",
+        "src/mcp/weight_forward.rs",
+        "src/mcp/weight_norm.rs",
+        "src/mcp/weight_tensor.rs",
+        "docs/weight-runtime/REA_SESSION_F32_RESEARCH_20261127.md",
+        "docs/weight-runtime/ORIGINAL_INTENT_F32_RECOVERY_20261127.md"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs",
+        "src/mcp/rea_model_session_weight_tests.rs",
+        "src/mcp/runtime/effect_owner_fence_tests.rs",
+        "src/mcp/runtime/effect_owner_fence_acquisition_tests.rs",
+        "src/mcp/weight_artifact_tests.rs",
+        "src/mcp/weight_artifact_positive_tests.rs",
+        "src/mcp/weight_artifact_private_tests.rs",
+        "src/mcp/weight_artifact_recovery_tests.rs",
+        "src/mcp/weight_artifact_cohort_tests.rs",
+        "src/mcp/weight_artifact_f32_recovery_tests.rs",
+        "src/mcp/weight_guard_tests.rs",
+        "src/mcp/weight_guard_journal_tests.rs",
+        "src/mcp/weight_guard_f32_source_tests.rs",
+        "src/mcp/weight_forward_tests.rs",
+        "src/mcp/weight_norm_tests.rs",
+        "src/mcp/weight_tensor_tests.rs"
+      ],
+      "scope": "Partial native research for one selected F32 matrix and its exact immutable stored F32 bias, using server-resolved REA session owner/current policy, complete source hashes, opaque admission authority and the existing artifact owner/journal. f32_prepare derives the bound intent identity without a forward or weight-artifact/guard-journal publication; f32_roundtrip applies the existing exact-radius fixed-row affine guard, retains admitted compensation after caller cancellation, and performs an independent restored-artifact head read; f32_recover uses the original bound intent and candidate commitment without requiring the old source or replaying its forward. All variants require native effect-owner admission; a shared 420-second response cutoff covers admission/capacity waiting, while already retained owner work may finish afterward. Authenticated same-owner cross-session recovery is distinct from process-local anonymous stdio authority. This source mapping does not establish live deployment, feature provenance, architecture semantics, full-model behavior, F16 or multi-tensor hidden editing, optimal NDU planning, autonomous crash recovery, production adoption, or upstream operation parity."
+    },
     "rea_inspect_archive": {
       "source_paths": [
         "src/mcp/rea_artifact_zip.rs",

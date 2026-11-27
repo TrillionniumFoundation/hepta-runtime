@@ -35,6 +35,9 @@ mod index;
 #[path = "rea_model_session_store.rs"]
 mod store;
 
+#[path = "rea_model_session_weight.rs"]
+pub mod weight;
+
 const SCHEMA: &str = "hepta.rea.model-session.v1";
 // This identity binds retained validation meaning as well as page structure.
 // v2 adds stable GGML block/row validation and removes the unknown-empty proof.

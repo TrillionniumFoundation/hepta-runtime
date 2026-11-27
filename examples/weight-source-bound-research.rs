@@ -7,8 +7,11 @@
 use anyhow::{anyhow, bail, Context, Result};
 use hepta_runtime::mcp::{
 	runtime,
-	weight_artifact::{self, cohort::f16_research},
-	weight_binary_choice,
+	weight_artifact::{
+		self,
+		cohort::{f16_research, f32_recovery},
+	},
+	weight_binary_choice, weight_exact_rank,
 	weight_guard::{f16::CoupledF16EvaluationParams, source_bound_f32},
 };
 use serde::Deserialize;
@@ -21,6 +24,12 @@ const MAX_INPUT_BYTES: u64 = 2 * 1024 * 1024;
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum ResearchOperation {
+	ExactF32ProtectionRank {
+		params: Box<weight_exact_rank::ExactRankParams>,
+	},
+	F32RecoverOriginalIntent {
+		params: Box<f32_recovery::RecoveryParams>,
+	},
 	BinaryChoiceContrast {
 		params: Box<weight_binary_choice::BinaryChoiceParams>,
 	},
@@ -129,6 +138,12 @@ async fn run(args: &[String]) -> Result<()> {
 		.context("invalid bounded research request")?;
 	runtime::init_runtime(config)?;
 	let result = match request {
+		ResearchOperation::ExactF32ProtectionRank { params } => {
+			weight_exact_rank::evaluate(*params)?
+		}
+		ResearchOperation::F32RecoverOriginalIntent { params } => {
+			f32_recovery::run(*params).await?
+		}
 		ResearchOperation::BinaryChoiceContrast { params } => {
 			serde_json::to_value(weight_binary_choice::evaluate(&params).await?)?
 		}
