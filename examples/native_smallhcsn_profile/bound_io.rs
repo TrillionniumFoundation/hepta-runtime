@@ -11,7 +11,16 @@ use std::{collections::BTreeMap, path::Path};
 use tokio::{fs::File, io::AsyncReadExt};
 
 pub(super) fn sha(bytes: &[u8]) -> String {
-	format!("{:x}", Sha256::digest(bytes))
+	let alphabet = b"0123456789abcdef";
+	Sha256::digest(bytes)
+		.iter()
+		.flat_map(|byte| {
+			[
+				char::from(alphabet[(*byte >> 4) as usize]),
+				char::from(alphabet[(*byte & 15) as usize]),
+			]
+		})
+		.collect()
 }
 pub(super) async fn capture(
 	path: &Path,
