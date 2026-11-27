@@ -1,5 +1,8 @@
-// Candidate stdio bridge: own and pin the native HIA admission image and let
-// the existing MCP transport retain identity, response and effect ownership.
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Pinned native HIA wire admission while MCP retains request and effect ownership.
+
 use std::{
 	env,
 	fs::{self, File, Permissions},
@@ -83,19 +86,29 @@ pub(super) fn admit_executable(path_key: &str, pin_key: &str) -> Result<File> {
 	Ok(sealed(c"hia-mcp-wire-executable", &contents, true)?)
 }
 
+fn frame_word(bytes: &[u8], at: usize) -> Result<u64> {
+	let end = at
+		.checked_add(8)
+		.context("HIA frame word offset overflow")?;
+	let word = bytes.get(at..end).context("truncated HIA frame word")?;
+	Ok(u64::from_le_bytes(
+		word.try_into().context("invalid HIA frame word extent")?,
+	))
+}
+
 struct WireObservation<'a> {
 	raw: &'a [u8],
 	descriptor: Vec<u8>,
 }
 
 impl<'a> WireObservation<'a> {
-	fn word(&self, at: usize) -> u64 {
-		u64::from_le_bytes(self.descriptor[at..at + 8].try_into().unwrap())
+	fn word(&self, at: usize) -> Result<u64> {
+		frame_word(&self.descriptor, at)
 	}
 
 	fn span(&self, at: usize) -> Option<&'a [u8]> {
-		let start = usize::try_from(self.word(at)).ok()?;
-		let size = usize::try_from(self.word(at + 8)).ok()?;
+		let start = usize::try_from(self.word(at).ok()?).ok()?;
+		let size = usize::try_from(self.word(at.checked_add(8)?).ok()?).ok()?;
 		self.raw.get(start..start.checked_add(size)?)
 	}
 
@@ -136,7 +149,7 @@ async fn observe_wire(raw: &[u8]) -> Result<WireObservation<'_>> {
 		descriptor: out.stdout,
 	};
 	ensure!(
-		wire.word(0) == 88 && &wire.descriptor[8..16] == b"HIAMCP01" && wire.word(88) == 0,
+		wire.word(0)? == 88 && &wire.descriptor[8..16] == b"HIAMCP01" && wire.word(88)? == 0,
 		"invalid HIA wire descriptor"
 	);
 	Ok(wire)
@@ -149,10 +162,10 @@ pub(super) async fn observe(
 ) -> Result<()> {
 	let wire = observe_wire(raw).await?;
 	ensure!(
-		wire.word(16) == 5,
+		wire.word(16)? == 5,
 		"HIA native wire did not select the tool route"
 	);
-	let ordinal = wire.word(64);
+	let ordinal = wire.word(64)?;
 	ensure!(
 		ordinal > 0
 			&& super::hia_contract::TOOLS.get((ordinal - 1) as usize) == Some(&call.name.as_ref()),
@@ -179,7 +192,7 @@ pub(super) struct ResourceWireAdmitted(pub(super) bool);
 pub(super) async fn observe_resource(raw: &[u8], uri: &str, request_id: &RequestId) -> Result<()> {
 	let wire = observe_wire(raw).await?;
 	ensure!(
-		wire.word(16) == 8 && wire.word(64) == 0,
+		wire.word(16)? == 8 && wire.word(64)? == 0,
 		"HIA native wire did not select the resource-read route"
 	);
 	wire.require_id(request_id)?;
@@ -238,9 +251,9 @@ impl HttpBody for CapturingBody {
 	}
 }
 
-/// Preserve the authenticated POST wire for the selected HIA resource route.
+/// Preserve authenticated POST bytes for selected HIA tool and resource routes.
 pub fn capture_hia_resource_http(request: Request) -> Request {
-	if !super::hia_controller_release::resource_ingress_selected()
+	if !(selected() || super::hia_controller_release::resource_ingress_selected())
 		|| request.method() != Method::POST
 	{
 		return request;
@@ -251,21 +264,36 @@ pub fn capture_hia_resource_http(request: Request) -> Request {
 	Request::from_parts(parts, Body::new(CapturingBody { body, wire }))
 }
 
+fn take_http_wire(parts: &Parts) -> Result<Vec<u8>> {
+	let captured = parts
+		.extensions
+		.get::<HttpRequestWire>()
+		.context("missing HTTP request capture")?;
+	captured
+		.0
+		.lock()
+		.ok()
+		.and_then(|mut state| state.take())
+		.context("HTTP request capture unavailable")
+}
+
+pub(super) async fn observe_http_tool(
+	parts: &Parts,
+	call: &CallToolRequestParams,
+	request_id: &RequestId,
+) -> Result<()> {
+	let raw = take_http_wire(parts)?;
+	observe(&raw, call, request_id).await?;
+	tracing::info!("Native HIA admitted the authenticated HTTP tool request");
+	Ok(())
+}
+
 pub(super) async fn observe_http_resource(
 	parts: &Parts,
 	uri: &str,
 	request_id: &RequestId,
 ) -> Result<()> {
-	let captured = parts
-		.extensions
-		.get::<HttpRequestWire>()
-		.context("missing HTTP request capture")?;
-	let raw = captured
-		.0
-		.lock()
-		.ok()
-		.and_then(|mut state| state.take())
-		.context("HTTP request capture unavailable")?;
+	let raw = take_http_wire(parts)?;
 	observe_resource(&raw, uri, request_id).await?;
 	tracing::info!("Native HIA admitted the authenticated HTTP resource URI");
 	Ok(())
@@ -324,7 +352,7 @@ fn render_hia_reply(id: &str, result: &str, limit: usize) -> Result<Vec<u8>> {
 		out.status.success() && out.stderr.is_empty() && out.stdout.len() >= 8,
 		"HIA reply writer refused"
 	);
-	let count = usize::try_from(u64::from_le_bytes(out.stdout[..8].try_into().unwrap()))?;
+	let count = usize::try_from(frame_word(&out.stdout, 0)?)?;
 	ensure!(
 		count <= limit
 			&& count > 2
@@ -387,7 +415,7 @@ pub(super) async fn admit_terminal(
 		out.status.success() && out.stderr.is_empty() && out.stdout.len() >= 8,
 		"HIA terminal report refused"
 	);
-	let size = usize::try_from(u64::from_le_bytes(out.stdout[..8].try_into().unwrap()))?;
+	let size = usize::try_from(frame_word(&out.stdout, 0)?)?;
 	ensure!(
 		size <= report.len() && size > 2 && out.stdout.len() - 8 == size,
 		"HIA terminal report invalid or not bound to the original response"
@@ -531,12 +559,12 @@ pub(super) async fn negotiate_legacy(raw: &[u8]) -> Result<rmcp::model::Protocol
 		out.status.success() && out.stdout.len() == 120 && out.stderr.is_empty(),
 		"HIA negotiation refused"
 	);
-	let word = |at: usize| u64::from_le_bytes(out.stdout[at..at + 8].try_into().unwrap());
+	let word = |at| frame_word(&out.stdout, at);
 	ensure!(
-		word(0) == 112 && &out.stdout[8..16] == b"HIAMCP01" && word(16) == 1 && word(96) == 1,
+		word(0)? == 112 && &out.stdout[8..16] == b"HIAMCP01" && word(16)? == 1 && word(96)? == 1,
 		"HIA did not admit legacy initialization"
 	);
-	let version = match word(112) {
+	let version = match word(112)? {
 		1 => ProtocolVersion::V_2024_11_05,
 		2 => ProtocolVersion::V_2025_03_26,
 		3 => ProtocolVersion::V_2025_06_18,
@@ -585,7 +613,7 @@ fn read_catalog() -> Result<std::collections::BTreeMap<String, rmcp::model::Tool
 		out.status.success() && out.stderr.is_empty() && out.stdout.len() >= 8,
 		"HIA catalog projection failed"
 	);
-	let count = usize::try_from(u64::from_le_bytes(out.stdout[..8].try_into().unwrap()))?;
+	let count = usize::try_from(frame_word(&out.stdout, 0)?)?;
 	ensure!(
 		count == out.stdout.len() - 8 && count <= WIRE_MAX,
 		"invalid HIA catalog size"
@@ -650,19 +678,23 @@ pub(super) async fn valid_uri(uri: &str) -> Result<Option<bool>> {
 		out.status.success() && out.stderr.is_empty() && out.stdout.len() >= 8,
 		"HIA URI classification failed"
 	);
-	let word = |at: usize| u64::from_le_bytes(out.stdout[at..at + 8].try_into().unwrap());
-	if word(0) == 0xfffffff0 && out.stdout.len() == 8 {
+	let word = |at| frame_word(&out.stdout, at);
+	if word(0)? == 0xfffffff0 && out.stdout.len() == 8 {
 		tracing::info!("Native HIA denied resource URI syntax");
 		return Ok(Some(false));
 	}
 	ensure!(
 		out.stdout.len() == 32
-			&& word(0) == 24
+			&& word(0)? == 24
 			&& &out.stdout[8..16] == b"HIAMURI1"
-			&& word(16) == uri.len() as u64
-			&& word(24).checked_add(16) == Some(word(16)),
+			&& word(16)? == uri.len() as u64
+			&& word(24)?.checked_add(16) == Some(word(16)?),
 		"invalid HIA resource URI descriptor"
 	);
 	tracing::info!("Native HIA admitted resource URI syntax");
 	Ok(Some(true))
 }
+
+#[cfg(test)]
+#[path = "hia_wire_candidate_tests.rs"]
+mod hia_wire_candidate_tests;

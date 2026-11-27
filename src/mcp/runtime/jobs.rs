@@ -3332,6 +3332,37 @@ def pin_workload_cwd():
         os.fchdir(_hepta_directory_pins[-1])
     return owner
 
+def pin_native_workload_executable(path):
+    # The administrator may select a venv symlink. Pin its resolved inode but
+    # keep the original path as argv[0], so Python retains its venv semantics.
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    selected = os.lstat(path)
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
+    source_fd = os.open(path, flags)
+    with os.fdopen(source_fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or not 64 <= before.st_size <= 64 << 20 or
+                before.st_mode & 0o022 or not before.st_mode & 0o111 or
+                not os.access(f"/proc/self/fd/{stream.fileno()}", os.X_OK, effective_ids=True)):
+            raise SystemExit("unsafe native workload executable; no workload submitted")
+        executable = stream.read((64 << 20) + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(path)
+        selected_after = os.lstat(path)
+        if (len(executable) != before.st_size or stamp(before) != stamp(after) or
+                stamp(after) != stamp(current) or stamp(selected) != stamp(selected_after) or
+                not executable.startswith(b"\x7fELF\x02\x01\x01")):
+            raise SystemExit("native workload executable changed; no workload submitted")
+        workload = private_sealed_file("hia-workload", executable, 0o500)
+        try:
+            entry_anchor = os.dup(stream.fileno())
+        except BaseException:
+            workload.close()
+            raise
+    return workload, entry_anchor
+
 def exec_native_job_owner():
     # The SSH/systemd bootstrap only binds bytes and descriptors. This exec
     # preserves the unit MainPID while HIA owns lock, fork, capture, deadline,
@@ -3343,24 +3374,10 @@ def exec_native_job_owner():
     if launch_backend == "detached" and req.get("nice"):
         os.nice(int(req["nice"]))
     owner_cwd = pin_workload_cwd()
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
-    source_fd = os.open(req["executable"], flags)
-    with os.fdopen(source_fd, "rb") as stream:
-        before = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(before.st_mode) or not 64 <= before.st_size <= 64 << 20 or
-                before.st_mode & 0o022):
-            raise SystemExit("unsafe native workload executable; no workload submitted")
-        executable = stream.read((64 << 20) + 1)
-        after = os.fstat(stream.fileno())
-        current = os.stat(req["executable"], follow_symlinks=False)
-        entry_anchor = os.dup(stream.fileno())
+    workload, entry_anchor = pin_native_workload_executable(req["executable"])
     def stamp(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    if (len(executable) != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(current) or
-            not executable.startswith(b"\x7fELF\x02\x01\x01")):
-        raise SystemExit("native workload executable changed; no workload submitted")
-    workload = private_sealed_file("hia-workload", executable, 0o500)
     payload = b""
     if req.get("stdin_path"):
         source_fd = private_open_job_file("stdin.bin")
@@ -6688,6 +6705,10 @@ mod inventory_digest_tests;
 #[cfg(test)]
 #[path = "jobs_pagination_tests.rs"]
 mod pagination_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_native_executable_tests.rs"]
+mod native_executable_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_output_durability_tests.rs"]
