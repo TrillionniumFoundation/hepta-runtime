@@ -44,7 +44,11 @@ flat limits do not impose a 1 MiB limit on the complete packed executable.
 The reader was corrected from that initial inference before any fresh native
 product was admitted. B3, retained flat generations, the 1,107-byte observer
 and source/tool manifest bounds are unchanged. Only the related positive and
-negative reader controls were rerun for this correction.
+negative reader controls were rerun for this correction. The
+[three-control receipt](packed-tool-capture-controls.json) binds their exact
+clean source commit, original logs, and four precise Hepta source references.
+All three passed, including a packed tool and installer larger than 1 MiB and
+rejection of a sparse tool extent greater than the native 64 MiB capture bound.
 
 ## Actual native observer compatibility smoke
 
