@@ -32,6 +32,8 @@ The five new Rust tests must run in the existing Linux CI matrix before this imp
 
 ## Retained baseline and remaining qualification
 
+The first new Linux matrix at `42cc6717430a4a14b526d5a4eba35c3bd943f0fb` found a real compile error in the added HTTP fixture: the locked SHA-256 output type does not implement `LowerHex`. `ci-42cc-compile-failure.json` and the complete compressed job log retain the original prospective-merge failure. The follow-up changes that one test expression to the existing `hex::encode` function. The failed job did not execute the new Rust tests; the next matrix must establish their result. No production gate or assertion is removed.
+
 The adjacent `hia-v26-platform-ci-20261127/ci-terminal-rust-candidate.json` and its three complete compressed job logs preserve the actual all-features and no-default-features success for the old `0ce79ce0e47225073fdc5394651df942eb6b98b1` candidate and its prospective merge. Those results do not qualify these new changes.
 
 The separate unpublished native-common integration preparation is not included here. The final current-source native cold build and bootstrap distribution pins are still pending. No common-native PASS, production activation, removal of the old stack, or whole-native delivery is claimed by this receipt.
