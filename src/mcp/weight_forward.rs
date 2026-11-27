@@ -15,8 +15,8 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_WEIGHTS: u64 = 1_048_576;
-const MAX_MACS: u64 = 16_777_216;
-const MAX_OUTPUT_VALUES: u64 = 16_384;
+pub(super) const MAX_MACS: u64 = 16_777_216;
+pub(super) const MAX_OUTPUT_VALUES: u64 = 16_384;
 
 #[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -123,7 +123,7 @@ async fn capture(
 	Ok((hex(&hash.finalize()), tensor))
 }
 
-fn check_inputs(
+pub(super) fn check_inputs(
 	inputs: &[Vec<f32>],
 	bias: Option<&[f32]>,
 	outputs: usize,
@@ -151,7 +151,7 @@ fn check_inputs(
 	Ok(macs)
 }
 
-fn calculate(
+pub(super) fn calculate(
 	weights: &[f32],
 	inputs: &[Vec<f32>],
 	bias: Option<&[f32]>,
