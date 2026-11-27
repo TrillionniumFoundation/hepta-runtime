@@ -5,6 +5,8 @@ on:
     branches:
       - 'codex/hia-native-helper-runtime-*'
       - 'codex/hia-three-loop-*'
+      - 'codex/hia-runtime-unified-*'
+      - 'codex/hia-native-final-integration-*'
   pull_request:
     paths:
       - 'src/mcp/hia_*'
@@ -18,15 +20,26 @@ on:
       - 'tests/test_hia_native_execution_trace.py'
       - 'tests/hia_native_execution_chain.py'
       - 'tests/test_hia_native_execution_chain.py'
+      - 'scripts/test_runtime_ci_contract.py'
       - '.github/workflows/hia-common-native-integration.yml'
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact 40-character Hepta source F commit'
+        required: true
+        type: string
+      distribution_sha:
+        description: 'Exact 40-character matching bootstrap distribution D commit'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 env:
-  # Exact published source and actual bootstrap distribution. Artifact custody
-  # does not qualify the separate native cold execution below.
+  # Automatic events retain the reviewed source/distribution tuple. Manual
+  # dispatch must supply both exact commits through the original pins gate.
+  # Artifact custody does not qualify the native cold execution below.
   HEPTA_SOURCE_SHA: '5622dafbcfa10ad0c6f99214994ee7dcf71523e0'
   HEPTA_BOOTSTRAP_DISTRIBUTION_SHA: '10d5d035788cf61cad9db5cb83063d4d0e777fa7'
   CARGO_INCREMENTAL: '0'
@@ -77,13 +90,23 @@ jobs:
 
       - name: Require both finalized native source and distribution commit pins
         id: pins
+        env:
+          HIA_TRIGGER_EVENT: ${{ github.event_name }}
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          REQUESTED_DISTRIBUTION_SHA: ${{ inputs.distribution_sha }}
         run: |
           set -euo pipefail
+          if [[ "$HIA_TRIGGER_EVENT" = workflow_dispatch ]]; then
+            HEPTA_SOURCE_SHA="$REQUESTED_SOURCE_SHA"
+            HEPTA_BOOTSTRAP_DISTRIBUTION_SHA="$REQUESTED_DISTRIBUTION_SHA"
+          fi
           if ! [[ "$HEPTA_SOURCE_SHA" =~ ^[0-9a-f]{40}$ && "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" =~ ^[0-9a-f]{40}$ ]] \
             || [[ "$HEPTA_SOURCE_SHA" = "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" ]]; then
             echo 'HOLD: final native source F and its published bootstrap distribution D are not both pinned.' >&2
             exit 1
           fi
+          printf 'HEPTA_SOURCE_SHA=%s\nHEPTA_BOOTSTRAP_DISTRIBUTION_SHA=%s\n' \
+            "$HEPTA_SOURCE_SHA" "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" >> "$GITHUB_ENV"
 
       - name: Checkout the frozen Hepta source F
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -297,6 +320,9 @@ jobs:
         if: always()
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          HIA_TRIGGER_EVENT: ${{ github.event_name }}
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          REQUESTED_DISTRIBUTION_SHA: ${{ inputs.distribution_sha }}
           RUNTIME_IDENTITY_OUTCOME: ${{ steps.runtime_identity.outcome }}
           PINS_OUTCOME: ${{ steps.pins.outcome }}
           SOURCES_OUTCOME: ${{ steps.sources.outcome }}
@@ -325,6 +351,9 @@ jobs:
                     "runtime_source": os.environ["RUNTIME_SOURCE_SHA"],
                     "hepta_source": os.environ["HEPTA_SOURCE_SHA"],
                     "bootstrap_distribution": os.environ["HEPTA_BOOTSTRAP_DISTRIBUTION_SHA"],
+                    "trigger_event": os.environ["HIA_TRIGGER_EVENT"],
+                    "requested_hepta_source": os.environ["REQUESTED_SOURCE_SHA"] or None,
+                    "requested_bootstrap_distribution": os.environ["REQUESTED_DISTRIBUTION_SHA"] or None,
                     "original_stage_outcomes": outcomes,
                     "cold_wall_seconds": 180, "cold_cleanup_seconds": 3,
                     "ordinary_release_wall_seconds": 1800,
