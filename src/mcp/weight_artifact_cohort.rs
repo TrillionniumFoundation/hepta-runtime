@@ -13,6 +13,8 @@ use super::*;
 pub mod f16_research;
 #[path = "weight_artifact_f32_recovery.rs"]
 pub mod f32_recovery;
+#[path = "weight_artifact_smallhcsn.rs"]
+pub(in crate::mcp) mod smallhcsn;
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -98,6 +100,8 @@ struct CohortManifest {
 	parent_artifact_id: Option<String>,
 	restored_source_sha256: Option<String>,
 	changed_bytes: u64,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	research_binding: Option<Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -107,6 +111,8 @@ struct Intent {
 	request_digest: String,
 	artifact_id: String,
 	manifest_sha256: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	research: Option<Value>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -436,14 +442,23 @@ async fn reset_stage(
 	write_record(stage, "manifest.json", manifest_bytes).await
 }
 
-async fn apply_with_roots(
+struct PreparedCohort {
+	source: tokio::fs::File,
+	before: std::fs::Metadata,
+	changes: Vec<ByteChange>,
+	manifest: CohortManifest,
+	manifest_bytes: Vec<u8>,
+}
+
+// This split retains the original descriptor, exact budgets and complete-byte transform.
+// Preparing a manifest never creates a store, journal, model artifact or evaluation.
+async fn prepare_with_roots(
 	mut params: PatchParams,
 	roots: &[PathBuf],
-	state: &Path,
 	parent: Option<String>,
 	restored_sha: Option<String>,
-	interrupt: Boundary,
-) -> Result<Value> {
+	research_binding: Option<Value>,
+) -> Result<PreparedCohort> {
 	if !cfg!(target_os = "linux") {
 		bail!("native cohort publication requires Linux");
 	}
@@ -515,17 +530,24 @@ async fn apply_with_roots(
 		parent_artifact_id: parent,
 		restored_source_sha256: restored_sha,
 		changed_bytes: changed,
+		research_binding,
 	};
 	manifest.artifact_id = manifest_id(&manifest)?;
 	let manifest_bytes = serde_json::to_vec(&manifest)?;
 	if manifest_bytes.len() as u64 > MAX_MANIFEST_BYTES {
 		bail!("cohort manifest exceeds the unchanged native 512 KiB cap");
 	}
-	let root = store_root(state).await?;
-	let _lock = lock_store(&root).await?;
-	unchanged(&before, &source.metadata().await?)?;
-	let journal = journal_directory(state, &manifest.request.request_id).await?;
-	let implementation = digest(
+	Ok(PreparedCohort {
+		source,
+		before,
+		changes,
+		manifest,
+		manifest_bytes,
+	})
+}
+
+fn cohort_implementation() -> String {
+	digest(
 		&[
 			include_bytes!("weight_artifact_cohort.rs").as_slice(),
 			include_bytes!("weight_artifact.rs").as_slice(),
@@ -533,17 +555,52 @@ async fn apply_with_roots(
 			include_bytes!("weight_norm.rs").as_slice(),
 		]
 		.concat(),
-	);
-	let intent = Intent {
+	)
+}
+
+fn original_intent(
+	manifest: &CohortManifest,
+	manifest_bytes: &[u8],
+	roots: &[PathBuf],
+	state: &Path,
+	research: Option<Value>,
+) -> Result<Intent> {
+	let implementation = cohort_implementation();
+	let mut identity = json!({"request":manifest.request,"roots":roots,"state":state,"implementation":implementation,"parent":manifest.parent_artifact_id,"restored_sha":manifest.restored_source_sha256});
+	if let Some(value) = &research {
+		identity
+			.as_object_mut()
+			.ok_or_else(|| anyhow!("cohort identity object required"))?
+			.insert("research".into(), value.clone());
+	}
+	Ok(Intent {
 		schema: "hepta.weight.cohort-intent.v1".into(),
-		request_digest: digest(&serde_json::to_vec(
-			&json!({"request":manifest.request,"roots":roots,"state":state,"implementation":implementation,"parent":manifest.parent_artifact_id,"restored_sha":manifest.restored_source_sha256}),
-		)?),
+		request_digest: digest(&serde_json::to_vec(&identity)?),
 		artifact_id: manifest.artifact_id.clone(),
-		manifest_sha256: digest(&manifest_bytes),
-	};
+		manifest_sha256: digest(manifest_bytes),
+		research,
+	})
+}
+
+// The caller must retain the original store lock for this complete publication. The
+// bound full-model transaction uses this same path while retaining it across compensation.
+async fn publish_prepared(
+	prepared: PreparedCohort,
+	root: &Path,
+	journal: &Path,
+	intent: Intent,
+	interrupt: Boundary,
+) -> Result<Value> {
+	let PreparedCohort {
+		mut source,
+		before,
+		changes,
+		manifest,
+		manifest_bytes,
+	} = prepared;
+	unchanged(&before, &source.metadata().await?)?;
 	let intent_bytes = serde_json::to_vec(&intent)?;
-	write_record(&journal, "intent.json", &intent_bytes).await?;
+	write_record(journal, "intent.json", &intent_bytes).await?;
 	boundary(Boundary::Intent, interrupt).await?;
 	let completed = tokio::fs::symlink_metadata(journal.join("outcome.json"))
 		.await
@@ -554,7 +611,7 @@ async fn apply_with_roots(
 		bail!("published cohort is missing; journal forbids replay of completed publication");
 	}
 	if reused {
-		let saved = read_cohort(&root, &manifest.artifact_id).await?;
+		let saved = read_cohort(root, &manifest.artifact_id).await?;
 		if serde_json::to_vec(&saved)? != manifest_bytes {
 			bail!("retained cohort differs from admitted intent");
 		}
@@ -565,7 +622,7 @@ async fn apply_with_roots(
 		reset_stage(
 			&stage,
 			&manifest_bytes,
-			&root,
+			root,
 			before.len() + MAX_MANIFEST_BYTES,
 		)
 		.await?;
@@ -584,30 +641,60 @@ async fn apply_with_roots(
 		tokio::fs::File::open(&stage).await?.sync_all().await?;
 		boundary(Boundary::Staged, interrupt).await?;
 		rename_exclusive(&stage, &destination).await?;
-		tokio::fs::File::open(&root).await?.sync_all().await?;
+		tokio::fs::File::open(root).await?.sync_all().await?;
 	}
-	tokio::fs::File::open(&root).await?.sync_all().await?;
+	tokio::fs::File::open(root).await?.sync_all().await?;
 	boundary(Boundary::Published, interrupt).await?;
-	let saved = read_cohort(&root, &manifest.artifact_id).await?;
+	let saved = read_cohort(root, &manifest.artifact_id).await?;
 	if serde_json::to_vec(&saved)? != manifest_bytes {
 		bail!("cohort post-publication readback disagrees");
 	}
 	let outcome = serde_json::to_vec(
 		&json!({"schema":"hepta.weight.cohort-outcome.v1","intent":intent,"target_sha256":saved.target_sha256,"all_members_verified":true}),
 	)?;
-	write_record(&journal, "outcome.json", &outcome).await?;
+	write_record(journal, "outcome.json", &outcome).await?;
 	boundary(Boundary::Completed, interrupt).await?;
 	unchanged(&before, &source.metadata().await?)?;
-	Ok(
-		json!({"schema":"hepta.weight.native-cohort-receipt.v1","artifact_id":saved.artifact_id,
-		"artifact_path":destination.join("model.safetensors"),"manifest_path":destination.join("manifest.json"),
+	Ok(cohort_receipt(&saved, root, journal, reused, completed))
+}
+
+fn cohort_receipt(
+	saved: &CohortManifest,
+	root: &Path,
+	journal: &Path,
+	reused: bool,
+	completed: bool,
+) -> Value {
+	json!({"schema":"hepta.weight.native-cohort-receipt.v1","artifact_id":saved.artifact_id,
+		"artifact_path":root.join(&saved.artifact_id).join("model.safetensors"),"manifest_path":root.join(&saved.artifact_id).join("manifest.json"),
 		"journal_path":journal,"source_sha256":saved.request.expected_sha256,"sha256":saved.target_sha256,
 		"changed_bytes":saved.changed_bytes,"members":saved.patches.len(),"global_budget":saved.global_budget,
 		"training_contract":saved.request.training,"training_owner_verification_required":true,
 		"optimizer_state_migrated":false,"all_members_verified":true,"reused":reused,
 		"recovered_publication":reused && !completed,"source_modified":false,
-		"incumbent_pointer_modified":false,"production_eligible":false,"behavior_evaluated":false}),
-	)
+		"incumbent_pointer_modified":false,"production_eligible":false,"behavior_evaluated":false})
+}
+
+async fn apply_with_roots(
+	params: PatchParams,
+	roots: &[PathBuf],
+	state: &Path,
+	parent: Option<String>,
+	restored_sha: Option<String>,
+	interrupt: Boundary,
+) -> Result<Value> {
+	let prepared = prepare_with_roots(params, roots, parent, restored_sha, None).await?;
+	let root = store_root(state).await?;
+	let _lock = lock_store(&root).await?;
+	let journal = journal_directory(state, &prepared.manifest.request.request_id).await?;
+	let intent = original_intent(
+		&prepared.manifest,
+		&prepared.manifest_bytes,
+		roots,
+		state,
+		None,
+	)?;
+	publish_prepared(prepared, &root, &journal, intent, interrupt).await
 }
 
 pub(super) async fn open_pinned(
@@ -684,6 +771,9 @@ pub async fn patch(params: PatchParams) -> Result<String> {
 async fn restore_with_state(params: RestoreCohortParams, state: &Path) -> Result<Value> {
 	let root = store_root(state).await?;
 	let saved = read_cohort(&root, &params.artifact_id).await?;
+	if saved.research_binding.is_some() {
+		bail!("session-bound cohort requires its original authenticated research recovery");
+	}
 	if saved.parent_artifact_id.is_some() {
 		bail!("a restored cohort cannot be restored again");
 	}

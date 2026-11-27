@@ -88,6 +88,9 @@ pub mod weight_norm;
 pub mod weight_ridge;
 pub mod weight_semantic;
 pub mod weight_semantic_certificate;
+pub mod weight_smallhcsn;
+pub mod weight_smallhcsn_ndu;
+pub mod weight_smallhcsn_proposal;
 pub mod weight_tensor;
 
 // Session working directory is now stored per-server-instance (see server.rs).

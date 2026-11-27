@@ -19,6 +19,8 @@ use crate::mcp::{
 	weight_tensor::ExactElementEdit,
 };
 
+#[path = "rea_model_session_smallhcsn.rs"]
+pub(in crate::mcp) mod smallhcsn;
 #[path = "rea_model_session_weight_transaction.rs"]
 mod transaction;
 
@@ -77,6 +79,16 @@ pub struct SessionWeightParams {
 	pub parent_sha256: String,
 	pub readout: ReadoutScope,
 	pub operation: SessionWeightOperation,
+}
+
+/// The original F32 shape remains byte-for-byte compatible. The hidden profile is
+/// a separate closed wire shape and cannot supply a readout scope or an authority.
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(untagged)]
+#[schemars(extend("type" = "object"))]
+pub enum SessionWeightRequest {
+	F32(SessionWeightParams),
+	SmallHcsn(smallhcsn::Params),
 }
 
 struct Lease {
@@ -246,19 +258,20 @@ impl Write for BoundedRequest {
 /// The MCP server supplies owner from its authenticated session context, never JSON.
 /// Research only: this route cannot choose an executable, publish a live pointer or adopt a model.
 pub(in crate::mcp) async fn run(
-	params: SessionWeightParams,
+	params: SessionWeightRequest,
 	owner: &crate::mcp::runtime::caller_scope::OwnerScope,
 	owner_admission: AdmissionPermit,
 	deadline: tokio::time::Instant,
 ) -> Result<String> {
-	run_for_owner(
-		params,
-		owner.owner(),
-		owner.authenticated(),
-		owner_admission,
-		deadline,
-	)
-	.await
+	match params {
+		SessionWeightRequest::F32(params) => run_for_owner(
+			params, owner.owner(), owner.authenticated(), owner_admission, deadline,
+		).await,
+		SessionWeightRequest::SmallHcsn(params) => tokio::time::timeout_at(
+			deadline,
+			smallhcsn::run(params, owner.owner(), owner.authenticated(), owner_admission),
+		).await.context("SmallHCSN response deadline exceeded; the admitted original owner task may still finish; recover only its prepared journal identity")?,
+	}
 }
 
 async fn run_for_owner(
