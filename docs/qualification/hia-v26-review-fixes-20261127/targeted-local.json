@@ -1,0 +1,231 @@
+{
+  "base_commit": "0ce79ce0e47225073fdc5394651df942eb6b98b1",
+  "cargo_lock": {
+    "bytes": 90202,
+    "sha256": "b868d2529f17dfb78ba390e078eb281a98d9850e4eaa12245739fec43ec97823"
+  },
+  "checks": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "-c",
+        "\nimport json,os,pathlib,shutil,stat,subprocess,sys,tempfile\nfrom unittest import mock\nq=json.load(sys.stdin)\nnamespace={}\nexec(q['private'],namespace)\nnamespace['stat']=stat\nexec(q['pin'],namespace)\npin=namespace['pin_native_workload_executable']\nwith tempfile.TemporaryDirectory(prefix='hia-native-executable-') as temporary:\n    root=pathlib.Path(temporary)\n    if q['case']=='venv':\n        venv=root/'venv'\n        subprocess.run([sys.executable,'-m','venv','--without-pip','--symlinks',str(venv)],\n                       check=True,capture_output=True,timeout=20)\n        selected=venv/'bin/python3'\n        assert selected.is_symlink()\n        workload,anchor=pin(str(selected))\n        try:\n            code=('import json,os,sys;print(json.dumps({'\n                  '\"executable\":sys.executable,\"prefix\":sys.prefix,\"base_prefix\":sys.base_prefix,'\n                  '\"argv\":sys.argv,\"entry_inode\":os.fstat(int(os.environ[\"HEPTA_RUNTIME_WORKER_ENTRY_FD\"])).st_ino}))')\n            arguments=[str(selected),'-B','-E','-s','-c',code,'original-argument']\n            environment=os.environ.copy()\n            environment['HEPTA_RUNTIME_WORKER_ENTRY_FD']=str(anchor)\n            result=subprocess.run(arguments,executable='/proc/self/fd/'+str(workload.fileno()),\n                                  pass_fds=(workload.fileno(),anchor),env=environment,\n                                  check=True,capture_output=True,timeout=10)\n            observed=json.loads(result.stdout)\n            assert result.stderr==b''\n            assert observed['executable']==str(selected)\n            assert observed['prefix']==str(venv) and observed['base_prefix']!=str(venv)\n            assert observed['argv']==['-c','original-argument']\n            assert observed['entry_inode']==os.stat(selected).st_ino==os.fstat(anchor).st_ino\n            print(json.dumps({'case':'venv','sealed_exec':True,'original_argv':True,\n                              'venv_prefix':True,'entry_inode_bound':True}))\n        finally:\n            workload.close()\n            os.close(anchor)\n    elif q['case']=='refusals':\n        original=pathlib.Path(sys.executable).resolve().read_bytes()\n        target=root/'target'\n        selected=root/'selected'\n        selected.symlink_to(target)\n        failures=[]\n        def reset():\n            target.write_bytes(original)\n            target.chmod(0o755)\n        def refused(name,path=selected):\n            try:\n                workload,anchor=pin(str(path))\n            except (OSError,SystemExit):\n                failures.append(name)\n                return\n            workload.close();os.close(anchor)\n            raise AssertionError('accepted unsafe executable: '+name)\n        reset()\n        for mode in (0o777,0o775,0o757,0o644):\n            target.chmod(mode)\n            refused('mode-'+oct(mode))\n        reset()\n        target.write_bytes(b'not-ELF'+b'\\0'*100)\n        refused('not-elf')\n        target.write_bytes(b'\\x7fELF\\x02\\x01\\x01'+b'\\0'*56)\n        refused('too-small')\n        with target.open('wb') as stream:stream.truncate((64<<20)+1)\n        refused('too-large')\n        refused('directory',root)\n        fifo=root/'fifo';os.mkfifo(fifo,0o700)\n        refused('fifo',fifo)\n        reset()\n        substitute=root/'substitute'\n        substitute.write_bytes(original);substitute.chmod(0o755)\n        real_fdopen=os.fdopen\n        class MutatingReader:\n            def __init__(self,stream,mutation):self.stream,self.mutation=stream,mutation\n            def __enter__(self):return self\n            def __exit__(self,*arguments):return self.stream.__exit__(*arguments)\n            def fileno(self):return self.stream.fileno()\n            def read(self,*arguments):\n                data=self.stream.read(*arguments)\n                self.mutation()\n                return data\n        def changed(name,mutation):\n            def opened(fd,*arguments,**keywords):\n                return MutatingReader(real_fdopen(fd,*arguments,**keywords),mutation)\n            with mock.patch.object(os,'fdopen',opened):refused(name)\n        def retarget():\n            selected.unlink();selected.symlink_to(substitute)\n        changed('symlink-retarget',retarget)\n        selected.unlink();selected.symlink_to(target)\n        reset()\n        changed('target-replaced',lambda:os.replace(substitute,target))\n        reset()\n        changed('fd-mode-changed',lambda:target.chmod(0o700))\n        reset()\n        def rewrite():\n            with target.open('r+b') as stream:\n                stream.seek(32);stream.write(b'changed')\n        changed('fd-bytes-changed',rewrite)\n        assert len(failures)==13,failures\n        print(json.dumps({'case':'refusals','refused':failures,'workloads_started':0}))\n    else:raise AssertionError('unknown fixture case')\n"
+      ],
+      "elapsed_ns": 243807080,
+      "expected_returncode": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "executable-venv.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 109,
+          "path": "executable-venv.stdout",
+          "sha256": "74617411db051fee7523b0e3613df88eb094bf42b39c18f1a7b0fec31d4afef4"
+        }
+      },
+      "name": "executable-venv",
+      "result": {
+        "case": "venv",
+        "entry_inode_bound": true,
+        "original_argv": true,
+        "sealed_exec": true,
+        "venv_prefix": true
+      },
+      "returncode": 0,
+      "stdin": {
+        "bytes": 7107,
+        "sha256": "cdb84613e763e5467fe6eefbdbac9f5adad41bcc01681f21767530809b9761cb"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "-c",
+        "\nimport json,os,pathlib,shutil,stat,subprocess,sys,tempfile\nfrom unittest import mock\nq=json.load(sys.stdin)\nnamespace={}\nexec(q['private'],namespace)\nnamespace['stat']=stat\nexec(q['pin'],namespace)\npin=namespace['pin_native_workload_executable']\nwith tempfile.TemporaryDirectory(prefix='hia-native-executable-') as temporary:\n    root=pathlib.Path(temporary)\n    if q['case']=='venv':\n        venv=root/'venv'\n        subprocess.run([sys.executable,'-m','venv','--without-pip','--symlinks',str(venv)],\n                       check=True,capture_output=True,timeout=20)\n        selected=venv/'bin/python3'\n        assert selected.is_symlink()\n        workload,anchor=pin(str(selected))\n        try:\n            code=('import json,os,sys;print(json.dumps({'\n                  '\"executable\":sys.executable,\"prefix\":sys.prefix,\"base_prefix\":sys.base_prefix,'\n                  '\"argv\":sys.argv,\"entry_inode\":os.fstat(int(os.environ[\"HEPTA_RUNTIME_WORKER_ENTRY_FD\"])).st_ino}))')\n            arguments=[str(selected),'-B','-E','-s','-c',code,'original-argument']\n            environment=os.environ.copy()\n            environment['HEPTA_RUNTIME_WORKER_ENTRY_FD']=str(anchor)\n            result=subprocess.run(arguments,executable='/proc/self/fd/'+str(workload.fileno()),\n                                  pass_fds=(workload.fileno(),anchor),env=environment,\n                                  check=True,capture_output=True,timeout=10)\n            observed=json.loads(result.stdout)\n            assert result.stderr==b''\n            assert observed['executable']==str(selected)\n            assert observed['prefix']==str(venv) and observed['base_prefix']!=str(venv)\n            assert observed['argv']==['-c','original-argument']\n            assert observed['entry_inode']==os.stat(selected).st_ino==os.fstat(anchor).st_ino\n            print(json.dumps({'case':'venv','sealed_exec':True,'original_argv':True,\n                              'venv_prefix':True,'entry_inode_bound':True}))\n        finally:\n            workload.close()\n            os.close(anchor)\n    elif q['case']=='refusals':\n        original=pathlib.Path(sys.executable).resolve().read_bytes()\n        target=root/'target'\n        selected=root/'selected'\n        selected.symlink_to(target)\n        failures=[]\n        def reset():\n            target.write_bytes(original)\n            target.chmod(0o755)\n        def refused(name,path=selected):\n            try:\n                workload,anchor=pin(str(path))\n            except (OSError,SystemExit):\n                failures.append(name)\n                return\n            workload.close();os.close(anchor)\n            raise AssertionError('accepted unsafe executable: '+name)\n        reset()\n        for mode in (0o777,0o775,0o757,0o644):\n            target.chmod(mode)\n            refused('mode-'+oct(mode))\n        reset()\n        target.write_bytes(b'not-ELF'+b'\\0'*100)\n        refused('not-elf')\n        target.write_bytes(b'\\x7fELF\\x02\\x01\\x01'+b'\\0'*56)\n        refused('too-small')\n        with target.open('wb') as stream:stream.truncate((64<<20)+1)\n        refused('too-large')\n        refused('directory',root)\n        fifo=root/'fifo';os.mkfifo(fifo,0o700)\n        refused('fifo',fifo)\n        reset()\n        substitute=root/'substitute'\n        substitute.write_bytes(original);substitute.chmod(0o755)\n        real_fdopen=os.fdopen\n        class MutatingReader:\n            def __init__(self,stream,mutation):self.stream,self.mutation=stream,mutation\n            def __enter__(self):return self\n            def __exit__(self,*arguments):return self.stream.__exit__(*arguments)\n            def fileno(self):return self.stream.fileno()\n            def read(self,*arguments):\n                data=self.stream.read(*arguments)\n                self.mutation()\n                return data\n        def changed(name,mutation):\n            def opened(fd,*arguments,**keywords):\n                return MutatingReader(real_fdopen(fd,*arguments,**keywords),mutation)\n            with mock.patch.object(os,'fdopen',opened):refused(name)\n        def retarget():\n            selected.unlink();selected.symlink_to(substitute)\n        changed('symlink-retarget',retarget)\n        selected.unlink();selected.symlink_to(target)\n        reset()\n        changed('target-replaced',lambda:os.replace(substitute,target))\n        reset()\n        changed('fd-mode-changed',lambda:target.chmod(0o700))\n        reset()\n        def rewrite():\n            with target.open('r+b') as stream:\n                stream.seek(32);stream.write(b'changed')\n        changed('fd-bytes-changed',rewrite)\n        assert len(failures)==13,failures\n        print(json.dumps({'case':'refusals','refused':failures,'workloads_started':0}))\n    else:raise AssertionError('unknown fixture case')\n"
+      ],
+      "elapsed_ns": 178259105,
+      "expected_returncode": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "executable-refusals.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 250,
+          "path": "executable-refusals.stdout",
+          "sha256": "22d1c0843b7734aeae273177a46adf2e3685a8027048b044dca856073c5ebf2b"
+        }
+      },
+      "name": "executable-refusals",
+      "result": {
+        "case": "refusals",
+        "refused": [
+          "mode-0o777",
+          "mode-0o775",
+          "mode-0o757",
+          "mode-0o644",
+          "not-elf",
+          "too-small",
+          "too-large",
+          "directory",
+          "fifo",
+          "symlink-retarget",
+          "target-replaced",
+          "fd-mode-changed",
+          "fd-bytes-changed"
+        ],
+        "workloads_started": 0
+      },
+      "returncode": 0,
+      "stdin": {
+        "bytes": 7111,
+        "sha256": "3c84c9f528afa1a1753faa8d12ec85a63291ee16935bfc8657ab4fe50ef30d5d"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping"
+      ],
+      "elapsed_ns": 135476088,
+      "expected_returncode": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "mapping.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 1329,
+          "path": "mapping.stdout",
+          "sha256": "29da3fd905c5efb998bd1c324431b63b3db13dd4f72f26e7d01c711ce41c1c33"
+        }
+      },
+      "name": "mapping",
+      "returncode": 0,
+      "stdin": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping",
+        "--require-parity"
+      ],
+      "elapsed_ns": 150356080,
+      "expected_returncode": 3,
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "strict-open.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 1329,
+          "path": "strict-open.stdout",
+          "sha256": "29da3fd905c5efb998bd1c324431b63b3db13dd4f72f26e7d01c711ce41c1c33"
+        }
+      },
+      "name": "strict-open",
+      "returncode": 3,
+      "stdin": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "tests/rea_compatibility_ledger_tests.py",
+        "-v"
+      ],
+      "elapsed_ns": 231557861,
+      "expected_returncode": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 4786,
+          "path": "ledger-tests.stderr",
+          "sha256": "2fee8bd7fb1826d807d4d4f6bd4ac5080ae4de0c377d4a94eb29c7f23d576633"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "ledger-tests.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "ledger-tests",
+      "returncode": 0,
+      "stdin": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "linux_http_rust_test_executed": false,
+  "observer": {
+    "bytes": 3805,
+    "path": "runtime-pr159-review-local-validate.py",
+    "sha256": "b0d82af1936801e767bbf9e29b49c3816a0b52997d131f6f021b7c4f851c9c65"
+  },
+  "passed": true,
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "python": "Python 3.13.5",
+  "recorded_utc": "2026-11-27T06:27:02.411577+00:00",
+  "rust_test_wrappers_executed": false,
+  "schema": "hepta.runtime.pr159-review-targeted-local.v1",
+  "scope": "Exact embedded Python fixture and production helper bytes executed; Rust wrappers and HTTP tests await Linux CI.",
+  "source_files": {
+    "src/main_http_tests.rs": {
+      "bytes": 12073,
+      "sha256": "feb7ead3a28b802b64f130d39806c06e47b5bd9ad0cea709e4a2165bbfe633a3"
+    },
+    "src/mcp/hia_controller_release.rs": {
+      "bytes": 16050,
+      "sha256": "4cdd185f8903e6a3cd7262c41fdf77d079b2fcdd88ece9fdb65bdb590bb15df0"
+    },
+    "src/mcp/hia_controller_release_tests.rs": {
+      "bytes": 6377,
+      "sha256": "18a0b862cd5d24f70abe2dda645685f71bd6944d9907080d8ffed6ab28b5c6a1"
+    },
+    "src/mcp/hia_request_prepare.rs": {
+      "bytes": 31601,
+      "sha256": "2a98b764bc0cccc7235c9df30b7625ba01648c88fb405f85f3ed4b1c42890d27"
+    },
+    "src/mcp/hia_wire_candidate.rs": {
+      "bytes": 21756,
+      "sha256": "99f8ea30083000eda0515e487552745da11243efad4d3cb100e9f0efebe99a17"
+    },
+    "src/mcp/hia_wire_candidate_tests.rs": {
+      "bytes": 1751,
+      "sha256": "03ce0a1fdafd2939e7e1559469a8e80febeff260c5ae3a542bb03a5b9aa9c787"
+    },
+    "src/mcp/runtime/jobs.rs": {
+      "bytes": 261395,
+      "sha256": "b90d2e7985dfa35bbc7b4e05ea19783daa22e2157aa67c089fbfbd543b1df659"
+    },
+    "src/mcp/runtime/jobs_native_executable_tests.rs": {
+      "bytes": 6406,
+      "sha256": "4dc1020117d08ab26d05f80a3936ce93e04e39caf0e9f4f1836cb482ffaeca79"
+    },
+    "src/mcp/server.rs": {
+      "bytes": 196380,
+      "sha256": "a6baf9c8e41ad37da7d5e046674b34c8389c45a9d9de0b56db8278aa896005bd"
+    }
+  },
+  "source_files_preserved": true,
+  "whole_native_delivery_qualified": false
+}

@@ -160,3 +160,202 @@ async fn http_middleware_requires_token_denies_origin_and_preserves_scope() -> a
 	tokio::time::timeout(std::time::Duration::from_secs(5), owner).await???;
 	Ok(())
 }
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+struct NativeWireFixture {
+	_directory: tempfile::TempDir,
+	token: std::path::PathBuf,
+	original: Vec<(&'static str, Option<std::ffi::OsString>)>,
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+impl NativeWireFixture {
+	fn new(raw: &str) -> anyhow::Result<Self> {
+		use sha2::{Digest, Sha256};
+		use std::os::unix::fs::PermissionsExt;
+		let directory = tempfile::tempdir()?;
+		let token = directory.path().join("auth.token");
+		private_token(&token, b"0123456789abcdef0123456789abcdef")?;
+		// This executable emits one fixed descriptor, not a parser. The original
+		// whitespace fixes its offsets, so reserializing the HTTP request fails.
+		let mut descriptor = vec![0_u8; 96];
+		for (offset, value) in [
+			(0, 88),
+			(16, 5),
+			(32, (raw.find("\"id\": 7").unwrap() + 6) as u64),
+			(40, 1),
+			(64, 1), // hia_describe is the first native tool ordinal.
+			(72, raw.rfind("{}").unwrap() as u64),
+			(80, 2),
+		] {
+			descriptor[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+		}
+		descriptor[8..16].copy_from_slice(b"HIAMCP01");
+		let mut image = vec![0_u8; 120];
+		image[..7].copy_from_slice(b"\x7fELF\x02\x01\x01");
+		for (offset, value) in [(16, 2_u16), (18, 62), (52, 64), (54, 56), (56, 1)] {
+			image[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+		}
+		for (offset, value) in [(20, 1_u32), (64, 1), (68, 5)] {
+			image[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+		}
+		for (offset, value) in [
+			(24, 0x400000_u64 + 120),
+			(32, 64),
+			(80, 0x400000),
+			(88, 0x400000),
+			(96, 252),
+			(104, 252),
+			(112, 4096),
+		] {
+			image[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+		}
+		image.extend_from_slice(&[0xb8, 1, 0, 0, 0, 0xbf, 1, 0, 0, 0, 0x48, 0xbe]);
+		image.extend_from_slice(&(0x400000_u64 + 156).to_le_bytes());
+		image.extend_from_slice(&[
+			0xba, 96, 0, 0, 0, 0x0f, 0x05, 0xb8, 60, 0, 0, 0, 0x31, 0xff, 0x0f, 0x05,
+		]);
+		image.extend_from_slice(&descriptor);
+		assert_eq!(image.len(), 252);
+		let executable = directory.path().join("wire-descriptor-fixture");
+		std::fs::write(&executable, &image)?;
+		std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o500))?;
+		let image_pin = Sha256::digest(&image)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>();
+		let settings = [
+			("HIA_LOCAL_MCP_WIRE_IMAGE", executable.into_os_string()),
+			(
+				"HIA_LOCAL_MCP_WIRE_SHA256",
+				std::ffi::OsString::from(image_pin),
+			),
+		];
+		let original = settings
+			.iter()
+			.map(|(key, _)| (*key, std::env::var_os(key)))
+			.collect();
+		for (key, value) in settings {
+			std::env::set_var(key, value);
+		}
+		Ok(Self {
+			_directory: directory,
+			token,
+			original,
+		})
+	}
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+impl Drop for NativeWireFixture {
+	fn drop(&mut self) {
+		for (key, value) in &self.original {
+			if let Some(value) = value {
+				std::env::set_var(key, value);
+			} else {
+				std::env::remove_var(key);
+			}
+		}
+	}
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+async fn post_native_http(
+	address: std::net::SocketAddr,
+	body: &str,
+	session: Option<&str>,
+) -> anyhow::Result<String> {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	let session_header = session.map_or_else(String::new, |id| format!("Mcp-Session-Id: {id}\r\n"));
+	let header = format!(
+		"POST /mcp HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\
+		X-Hepta-Runtime-Token: 0123456789abcdef0123456789abcdef\r\n\
+		Content-Type: application/json\r\nAccept: application/json, text/event-stream\r\n\
+		MCP-Protocol-Version: 2025-11-25\r\n{session_header}Content-Length: {}\r\n\r\n",
+		body.len()
+	);
+	let response = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+		let mut stream = tokio::net::TcpStream::connect(address).await?;
+		stream.write_all(header.as_bytes()).await?;
+		stream.write_all(body.as_bytes()).await?;
+		let mut response = String::new();
+		stream.read_to_string(&mut response).await?;
+		Ok::<_, std::io::Error>(response)
+	})
+	.await??;
+	Ok(response)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[tokio::test]
+async fn authenticated_http_hia_tools_admit_original_wire_and_reject_mismatches(
+) -> anyhow::Result<()> {
+	use rmcp::transport::streamable_http_server::{
+		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
+	};
+	let raw = "{\"jsonrpc\":\"2.0\", \"id\": 7,\"method\":\"tools/call\", \"params\":{\"name\":\"hia_describe\", \"arguments\":{}}}";
+	let fixture = NativeWireFixture::new(raw)?;
+	let cancel = tokio_util::sync::CancellationToken::new();
+	let service = StreamableHttpService::new(
+		|| Ok(hepta_runtime::mcp::server::OctofsServer::new()),
+		LocalSessionManager::default().into(),
+		StreamableHttpServerConfig::default().with_cancellation_token(cancel.child_token()),
+	);
+	let router = axum::Router::new().nest_service("/mcp", service).layer(
+		axum::middleware::from_fn_with_state(
+			load_http_auth(Some(&fixture.token))?,
+			super::require_http_auth,
+		),
+	);
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+	let address = listener.local_addr()?;
+	let stopped = cancel.clone();
+	let owner = tokio::spawn(async move {
+		axum::serve(listener, router)
+			.with_graceful_shutdown(stopped.cancelled_owned())
+			.await
+	});
+	let initialize = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"native-http-fixture","version":"1"}}}"#;
+	let response = post_native_http(address, initialize, None).await?;
+	assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+	let session = response
+		.lines()
+		.find_map(|line| {
+			let (name, value) = line.split_once(':')?;
+			name.eq_ignore_ascii_case("mcp-session-id")
+				.then(|| value.trim().to_owned())
+		})
+		.expect("the real stateful HTTP service returns a session");
+	let response = post_native_http(
+		address,
+		r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+		Some(&session),
+	)
+	.await?;
+	assert!(response.starts_with("HTTP/1.1 202 "), "{response}");
+	let admitted = post_native_http(address, raw, Some(&session)).await?;
+	// No Worker is installed in this fixture: reaching the ordinary visibility
+	// refusal proves the wire gate admitted the actual authenticated HTTP call.
+	assert!(
+		admitted.contains("tool not found in this runtime mode"),
+		"{admitted}"
+	);
+	assert!(
+		!admitted.contains("HIA native wire admission refused"),
+		"{admitted}"
+	);
+	for changed in [
+		raw.replace("hia_describe", "hia_verify"),
+		raw.replace("\"id\": 7", "\"id\": 71"),
+		raw.replace("\"arguments\":{}", "\"arguments\":{\"changed\":true}"),
+	] {
+		let refused = post_native_http(address, &changed, Some(&session)).await?;
+		assert!(
+			refused.contains("HIA native wire admission refused"),
+			"{refused}"
+		);
+	}
+	cancel.cancel();
+	tokio::time::timeout(std::time::Duration::from_secs(5), owner).await???;
+	Ok(())
+}

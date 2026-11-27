@@ -2,13 +2,39 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 
-//! Round trips start from the real JSON parser, including duplicate/index keys.
+//! Portable object-order checks and Linux parser round trips with duplicate/index keys.
 
 use super::*;
+#[cfg(target_os = "linux")]
 use crate::mcp::rea_evidence_file::parse_checkpoint_json;
 use serde_json::json;
+#[cfg(target_os = "linux")]
 use tokio_util::sync::CancellationToken;
 
+#[test]
+fn numeric_key_checkpoint_round_trip_is_platform_independent() {
+	let value = json!({"0":0,"2":2,"4294967294":3,"01":4,"4294967295":5});
+	let keys: Vec<String> = ["0", "2", "4294967294", "01", "4294967295"]
+		.into_iter()
+		.map(str::to_owned)
+		.collect();
+	let stored = StoredObjectOrder {
+		path: Vec::new(),
+		keys: keys.clone(),
+	};
+	let original = ObjectOrder::from_checkpoint_order(&value, vec![stored.clone()]).unwrap();
+	assert_eq!(original.keys(&[]), Some(keys));
+	let round_trip = original.checkpoint_order(&value, &mut 4096).unwrap();
+	let restored = ObjectOrder::from_checkpoint_order(&value, round_trip).unwrap();
+	assert_eq!(restored.keys(&[]), original.keys(&[]));
+	for (left, right) in [(0, 1), (2, 3)] {
+		let mut invalid = stored.clone();
+		invalid.keys.swap(left, right);
+		assert!(ObjectOrder::from_checkpoint_order(&value, vec![invalid]).is_err());
+	}
+}
+
+#[cfg(target_os = "linux")]
 #[test]
 fn physical_numeric_order_and_duplicate_replacement_round_trip() {
 	let bytes = br#"{"2":{"discarded":0},"1":1,"z":0,"2":{"b":2,"a":1},"01":3,"4294967295":4}"#;
@@ -32,6 +58,7 @@ fn physical_numeric_order_and_duplicate_replacement_round_trip() {
 	);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn schema_stripped_proto_does_not_invalidate_retained_order() {
 	let (mut value, order) = parse_checkpoint_json(
@@ -49,6 +76,7 @@ fn schema_stripped_proto_does_not_invalidate_retained_order() {
 	);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn every_actual_object_requires_one_complete_unambiguous_sidecar_entry() {
 	let (value, order) = parse_checkpoint_json(

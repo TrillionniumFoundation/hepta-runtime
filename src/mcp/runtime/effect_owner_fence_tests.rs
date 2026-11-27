@@ -447,7 +447,7 @@ fn hia_routes_retain_native_owner_admission_and_never_relaunch_an_existing_bindi
 	let server = include_str!("../server.rs");
 	let common = compact_owner_body(server, "dispatch_hia(");
 	let authority = common
-		.find(".owner_binding.resolve(")
+		.find(".owner_binding.resolve_hia(")
 		.expect("HIA caller authority missing");
 	let validation = common
 		.find("hia_contract::validate_input(")
@@ -510,7 +510,24 @@ fn hia_routes_retain_native_owner_admission_and_never_relaunch_an_existing_bindi
 		.find("launch_record_with_entry(")
 		.expect("physical dispatch missing");
 	assert!(admission < retained && retained < lookup && lookup < durable && durable < launch);
-	assert!(owner.contains("letretry=allow_reconcile_launch&&reconcile_retry_allowed(&existing);"));
+	assert!(owner.contains(
+		"let(retry,release_guard)=owned_reuse_status_policy(&existing,key,allow_reconcile_launch).await?;"
+	));
+	let reuse = compact_owner_body(jobs, "owned_reuse_status_policy(");
+	assert!(reuse.contains(
+		"hia::job_transition(allow_reconcile_launch,record.system_jobctl,record.execution_mode==ExecutionMode::Isolated,&record.launch_state,).await?;"
+	));
+	assert!(
+		reuse.contains("hia::JobTransition::ObserveLocked=>((false,false),\"observe_locked\"),")
+	);
+	assert!(
+		reuse.contains("hia::JobTransition::ObserveUnlocked=>((false,true),\"observe_unlocked\"),")
+	);
+	assert!(reuse.contains(
+		"hia::JobTransition::ReconcileKnownJob=>((true,false),\"reconcile_known_job\"),"
+	));
+	assert!(reuse.contains("returnOk(decision);"));
+	assert!(reuse.contains("letretry=allow_reconcile_launch&&reconcile_retry_allowed(record);"));
 	assert!(owner[launch..].contains("&start_guard,&owner_admission,"));
 }
 

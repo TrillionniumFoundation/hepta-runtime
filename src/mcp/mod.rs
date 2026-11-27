@@ -23,6 +23,8 @@ use std::sync::OnceLock;
 pub mod fs;
 mod hia_contract;
 pub mod hia_provider;
+#[cfg(target_os = "linux")]
+mod hia_request_prepare;
 pub mod rea;
 mod rea_analysis_view;
 mod rea_analysis_view_mcp_input;
@@ -40,6 +42,8 @@ mod rea_response_frame;
 mod rea_response_order;
 mod rea_structured_wire;
 pub use rea_response_frame::ReaFramedService;
+#[cfg(target_os = "linux")]
+mod hia_wire_candidate;
 pub mod rea_elf_notes;
 pub mod rea_evidence;
 mod rea_evidence_checkpoint;
@@ -54,6 +58,12 @@ mod rea_inline_order;
 pub mod rea_javascript;
 pub mod rea_javascript_graph;
 mod rea_mcp_input;
+#[cfg(target_os = "linux")]
+pub use hia_wire_candidate::capture_hia_resource_http;
+#[cfg(target_os = "linux")]
+pub mod hia_controller_release;
+#[cfg(target_os = "linux")]
+mod hia_job_receipt;
 mod rea_mcp_transport;
 pub use rea_mcp_transport::ReaMcpTransport;
 pub mod rea_model;

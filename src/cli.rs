@@ -50,6 +50,14 @@ pub enum Commands {
 		#[arg(long, value_name = "FILE")]
 		runtime_config: Option<PathBuf>,
 
+		/// Admit a complete pinned HIA controller release before serving any request.
+		#[arg(long, value_name = "FILE", requires_all = ["runtime_config", "hia_controller_sha256"])]
+		hia_controller_manifest: Option<PathBuf>,
+
+		/// Exact SHA-256 of the installed HIA controller manifest.
+		#[arg(long, value_name = "SHA256", requires = "hia_controller_manifest")]
+		hia_controller_sha256: Option<String>,
+
 		/// Privately retain same-read configuration identity after successful installation (Unix).
 		/// Does not expose policy digests through MCP or certify service readiness.
 		#[arg(long, requires = "runtime_config")]

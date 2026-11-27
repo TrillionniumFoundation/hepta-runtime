@@ -68,6 +68,10 @@ fn observation_command_copies(marker: &str) -> Vec<(String, Vec<u8>)> {
 		unit: "original-unit",
 		request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		wait_seconds: 0,
+		snapshot_only: false,
+		terminal_facts: false,
+		witness_facts: false,
+		lifecycle_facts: false,
 	})
 	.unwrap();
 	let (read, read_input, _, _) = prepare_observation(JobObservation::PythonRead {

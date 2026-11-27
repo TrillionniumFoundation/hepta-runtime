@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use super::hia_contract::{self, sha256, MAX_WORKER_BYTES};
-use super::runtime::config::{runtime_config, valid_name, Platform, RuntimeConfig};
+use super::runtime::config::{runtime_config, valid_name, HostConfig, Platform, RuntimeConfig};
 use super::runtime::jobs::ProcessStartParams;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -92,7 +92,9 @@ pub(super) fn validate_profile(config: &RuntimeConfig) -> Result<()> {
 				|| inside(path, &host.protected_path_prefixes)
 				|| Path::new(path).starts_with(&profile.state_root)
 			{
-				bail!("HIA native helpers require an exact digest and permitted installation path outside mutable state");
+				bail!(
+					"HIA native helpers require an exact digest and permitted installation path outside mutable state"
+				);
 			}
 		}
 		_ => bail!("HIA native helper manifest and digest must be configured together"),
@@ -203,14 +205,40 @@ fn canonical(value: &Value) -> Result<Vec<u8>> {
 	Ok(out)
 }
 
-fn normalize_capture_path(
-	arguments: &mut Value,
+struct CapturePath<'a> {
+	selected: String,
+	same_host: bool,
+	explicit_identity: bool,
+	host: &'a HostConfig,
+}
+
+impl CapturePath<'_> {
+	fn allowed(&self, profile: &HiaWorkerProfile) -> bool {
+		self.same_host
+			&& !self.explicit_identity
+			&& super::rea_provider::absolute_normal_path(&self.selected)
+			&& inside(&self.selected, &profile.artifact_roots)
+			&& inside(&self.selected, &self.host.allowed_read_path_prefixes)
+			&& !inside(&self.selected, &self.host.protected_path_prefixes)
+	}
+
+	fn apply(self, arguments: &mut Value, allowed: bool) -> Result<()> {
+		if !allowed {
+			bail!("HIA capture path is outside its fixed worker and artifact policy");
+		}
+		arguments["source"]["path"] = json!(self.selected);
+		Ok(())
+	}
+}
+
+fn resolve_capture_path<'a>(
+	arguments: &Value,
 	workdir: &Path,
 	profile: &HiaWorkerProfile,
-	config: &RuntimeConfig,
-) -> Result<()> {
+	config: &'a RuntimeConfig,
+) -> Result<Option<CapturePath<'a>>> {
 	if arguments["source"]["kind"] != "path" {
-		return Ok(());
+		return Ok(None);
 	}
 	let path = arguments["source"]["path"]
 		.as_str()
@@ -246,29 +274,23 @@ fn normalize_capture_path(
 	let (name, host) = config
 		.host_by_alias(&alias)
 		.context("HIA capture host is not configured")?;
-	if name != profile.host
-		|| user_explicit
-		|| port_explicit
-		|| !super::rea_provider::absolute_normal_path(&selected)
-		|| !inside(&selected, &profile.artifact_roots)
-		|| !inside(&selected, &host.allowed_read_path_prefixes)
-		|| inside(&selected, &host.protected_path_prefixes)
-	{
-		bail!("HIA capture path is outside its fixed worker and artifact policy");
-	}
-	arguments["source"]["path"] = json!(selected);
-	Ok(())
+	Ok(Some(CapturePath {
+		selected,
+		same_host: name == profile.host,
+		explicit_identity: user_explicit || port_explicit,
+		host,
+	}))
 }
 
-pub(super) fn prepare_request(
-	config: &RuntimeConfig,
+fn admit_request<'a>(
+	config: &'a RuntimeConfig,
 	tool: &str,
-	mut arguments: Value,
+	arguments: Value,
 	workdir: &Path,
-) -> Result<PreparedRequest> {
+) -> Result<AdmittedRequest<'a>> {
 	validate_profile(config)?;
 	hia_contract::validate_input(tool, &arguments)?;
-	let transport_arguments_sha256 = sha256(&canonical(&arguments)?);
+	let original = canonical(&arguments)?;
 	let profile = config
 		.hia_worker
 		.as_ref()
@@ -280,9 +302,52 @@ pub(super) fn prepare_request(
 	{
 		bail!("HIA catalog changed; discover the current contract before creating a request");
 	}
-	if tool == "hia_artifact" {
-		normalize_capture_path(&mut arguments, workdir, &profile, config)?;
+	let capture = if tool == "hia_artifact" {
+		resolve_capture_path(&arguments, workdir, &profile, config)?
+	} else {
+		None
+	};
+	Ok(AdmittedRequest {
+		original,
+		profile,
+		arguments,
+		capture,
+	})
+}
+
+struct AdmittedRequest<'a> {
+	original: Vec<u8>,
+	profile: HiaWorkerProfile,
+	arguments: Value,
+	capture: Option<CapturePath<'a>>,
+}
+
+pub(super) fn prepare_request(
+	config: &RuntimeConfig,
+	tool: &str,
+	arguments: Value,
+	workdir: &Path,
+) -> Result<PreparedRequest> {
+	let AdmittedRequest {
+		original,
+		profile,
+		mut arguments,
+		capture,
+	} = admit_request(config, tool, arguments, workdir)?;
+	if let Some(capture) = capture {
+		let allowed = capture.allowed(&profile);
+		capture.apply(&mut arguments, allowed)?;
 	}
+	prepare_reference(tool, original, profile, arguments)
+}
+
+fn prepare_reference(
+	tool: &str,
+	original: Vec<u8>,
+	profile: HiaWorkerProfile,
+	arguments: Value,
+) -> Result<PreparedRequest> {
+	let transport_arguments_sha256 = sha256(&original);
 	let profile_sha256 = sha256(&canonical(&serde_json::to_value(&profile)?)?);
 	let body = json!({
 		"schema":"hia-agent-worker-request-v1", "tool":tool, "arguments":arguments,
@@ -304,6 +369,86 @@ pub(super) fn prepare_request(
 		None => json!({"tool":tool,"readonly_request_sha256":request_sha256}),
 	};
 	let key = format!("hia-agent-{}", sha256(&canonical(&identity)?));
+	let mut stdin = String::from_utf8(canonical(&serde_json::to_value(&worker)?)?)?;
+	stdin.push('\n');
+	assemble_request(worker, profile, transport_arguments_sha256, key, stdin)
+}
+
+#[cfg(target_os = "linux")]
+async fn prepare_native_request(
+	config: &RuntimeConfig,
+	tool: &str,
+	arguments: Value,
+	workdir: &Path,
+) -> Result<PreparedRequest> {
+	let AdmittedRequest {
+		original,
+		profile,
+		mut arguments,
+		capture,
+	} = admit_request(config, tool, arguments, workdir)?;
+	if let Some(capture) = capture {
+		let allowed = if super::hia_request_prepare::capture_policy_selected() {
+			super::hia_request_prepare::admit_capture_path(
+				&capture.selected,
+				capture.same_host,
+				capture.explicit_identity,
+				[
+					&profile.artifact_roots,
+					&capture.host.allowed_read_path_prefixes,
+					&capture.host.protected_path_prefixes,
+				],
+			)
+			.await?
+		} else {
+			capture.allowed(&profile)
+		};
+		capture.apply(&mut arguments, allowed)?;
+	}
+	if !super::hia_request_prepare::selected() {
+		return prepare_reference(tool, original, profile, arguments);
+	}
+	let profile_wire = canonical(&serde_json::to_value(&profile)?)?;
+	let normalized = canonical(&arguments)?;
+	let tool_wire = serde_json::to_vec(tool)?;
+	let key_wire = match arguments.get("request_key").and_then(Value::as_str) {
+		Some(key) => serde_json::to_vec(key)?,
+		None => Vec::new(),
+	};
+	let encoded = super::hia_request_prepare::encode(
+		&profile.catalog_sha256,
+		[&original, &profile_wire, &normalized, &tool_wire, &key_wire],
+	)
+	.await?;
+	let worker = WorkerRequest {
+		schema: "hia-agent-worker-request-v1".into(),
+		tool: tool.into(),
+		arguments,
+		request_sha256: encoded.request_sha256,
+		profile_sha256: encoded.profile_sha256,
+		catalog_sha256: profile.catalog_sha256.clone(),
+	};
+	let prepared = assemble_request(
+		worker,
+		profile,
+		encoded.transport_arguments_sha256,
+		format!("hia-agent-{}", encoded.idempotency_digest),
+		encoded.stdin,
+	)?;
+	tracing::info!(%tool, "Native HIA Worker request prepared");
+	Ok(prepared)
+}
+
+fn assemble_request(
+	worker: WorkerRequest,
+	profile: HiaWorkerProfile,
+	transport_arguments_sha256: String,
+	key: String,
+	stdin: String,
+) -> Result<PreparedRequest> {
+	if stdin.len() > MAX_WORKER_BYTES {
+		bail!("HIA worker request exceeds 512 KiB");
+	}
 	let mut args = vec![
 		"-B".into(),
 		"-E".into(),
@@ -334,11 +479,6 @@ pub(super) fn prepare_request(
 		]);
 	}
 	args.push("--request-json-stdin".into());
-	let mut stdin = String::from_utf8(canonical(&serde_json::to_value(&worker)?)?)?;
-	stdin.push('\n');
-	if stdin.len() > MAX_WORKER_BYTES {
-		bail!("HIA worker request exceeds 512 KiB");
-	}
 	let params = ProcessStartParams {
 		host: profile.host.clone(),
 		executable: profile.python_executable.clone(),
@@ -498,14 +638,51 @@ fn validate_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) ->
 	) {
 		bail!("HIA worker report did not publish a terminal domain result");
 	}
-	hia_contract::validate_output(&request.tool, &report.response)?;
+	check_response(prepared, report.response)
+}
+
+fn check_response(prepared: &PreparedRequest, response: Value) -> Result<Value> {
+	let request = &prepared.worker;
+	hia_contract::validate_output(&request.tool, &response)?;
 	validate_result_bindings(
 		&request.tool,
 		&request.arguments,
-		&report.response,
+		&response,
 		&prepared.profile,
 	)?;
-	Ok(report.response)
+	Ok(response)
+}
+
+#[cfg(target_os = "linux")]
+async fn admit_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) -> Result<Value> {
+	if !super::hia_wire_candidate::terminal_selected() {
+		return validate_report(prepared, stdout, exit_code);
+	}
+	if stdout.len() > MAX_WORKER_BYTES {
+		bail!("HIA worker report exceeds its retention bound");
+	}
+	let request = &prepared.worker;
+	let profile = &prepared.profile;
+	let expected = json!({
+		"tool": request.tool,
+		"request_sha256": request.request_sha256,
+		"profile_sha256": request.profile_sha256,
+		"catalog_sha256": request.catalog_sha256,
+		"worker_sha256": profile.worker_sha256,
+		"backend_sha256": profile.backend_sha256,
+		"native_helpers_sha256": profile.native_helpers_sha256,
+		"arguments": request.arguments,
+	});
+	let response = super::hia_wire_candidate::admit_terminal(&expected, stdout, exit_code).await?;
+	// HIA has already matched the prepared arguments to any completed result.
+	// The independent owner schema remains mandatory before publication.
+	hia_contract::validate_output(&request.tool, &response)?;
+	Ok(response)
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn admit_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) -> Result<Value> {
+	validate_report(prepared, stdout, exit_code)
 }
 
 fn operation(prepared: &PreparedRequest, raw: &Value) -> Result<Value> {
@@ -526,11 +703,116 @@ fn operation(prepared: &PreparedRequest, raw: &Value) -> Result<Value> {
 		"request_sha256":prepared.worker.request_sha256,"report_artifact":null}))
 }
 
-fn pending(
+#[cfg(target_os = "linux")]
+async fn admit_operation(prepared: &PreparedRequest, raw: &Value) -> Result<Value> {
+	use super::hia_request_prepare as hia;
+	if !hia::job_operation_selected() {
+		return operation(prepared, raw);
+	}
+	let job = raw
+		.get("job")
+		.context("native owner omitted original job record")?;
+	let id = job["id"]
+		.as_str()
+		.context("native owner omitted original job identity")?;
+	let key = prepared
+		.params
+		.idempotency_key
+		.as_deref()
+		.context("HIA request lacked its durable job key")?;
+	let binding = super::runtime::jobs::owned_request_digest(&prepared.params).await?;
+	hia::job_operation(
+		[
+			id,
+			&prepared.params.host,
+			job["host"].as_str().unwrap_or_default(),
+			key,
+			job["idempotency_key"].as_str().unwrap_or_default(),
+		],
+		[
+			&binding,
+			job["request_digest"].as_str().unwrap_or_default(),
+			&prepared.worker.request_sha256,
+		],
+	)
+	.await
+}
+
+enum PendingReason<'a> {
+	OwnerState(u8),
+	OwnerBindingMismatch,
+	WorkerTerminated,
+	RequestUnknown,
+	ReportInvalid,
+	ObservationUnavailable(&'a str),
+}
+
+impl PendingReason<'_> {
+	#[cfg(target_os = "linux")]
+	fn observations(&self) -> (u64, u64, &str) {
+		match self {
+			Self::OwnerState(flags) => (0, u64::from(*flags), ""),
+			Self::OwnerBindingMismatch => (1, 0, ""),
+			Self::WorkerTerminated => (2, 0, ""),
+			Self::RequestUnknown => (3, 0, ""),
+			Self::ReportInvalid => (4, 0, ""),
+			Self::ObservationUnavailable(diagnostic) => (5, 0, diagnostic),
+		}
+	}
+
+	fn legacy_error(&self) -> Option<(&'static str, std::borrow::Cow<'static, str>)> {
+		let (code, message) = match self {
+			Self::OwnerState(0) => return None,
+			Self::OwnerState(_) => (
+				"HIA_OPERATION_UNKNOWN",
+				"The original job has no confirmed terminal outcome. Observe this same tool and request key; do not allocate a replacement.",
+			),
+			Self::OwnerBindingMismatch => (
+				"HIA_OWNER_BINDING_MISMATCH",
+				"Original native output binding changed; keep this request unchanged and observe it.",
+			),
+			Self::WorkerTerminated => (
+				"HIA_WORKER_TERMINATED",
+				"Original worker terminated without a successful bound domain report. Its operation remains available through process_status/read; do not relaunch it.",
+			),
+			Self::RequestUnknown => (
+				"HIA_REQUEST_UNKNOWN",
+				"The worker retained an uncertain durable intent or could not confirm native-child termination. Its original operation is preserved; do not repeat the effect with a new key.",
+			),
+			Self::ReportInvalid => (
+				"HIA_REPORT_INVALID",
+				"Original worker report is incomplete, mismatched or outside the declared schema. No domain success is admitted; retain and inspect this original job.",
+			),
+			Self::ObservationUnavailable(diagnostic) => {
+				return Some(("HIA_OBSERVATION_UNAVAILABLE", format!(
+					"Complete terminal output could not be authenticated. {diagnostic}. Observe this exact original request; a disconnected observation does not establish termination."
+				).into()));
+			}
+		};
+		Some((code, message.into()))
+	}
+}
+
+async fn pending(
 	prepared: &PreparedRequest,
 	operation: Value,
-	error: Option<(&str, &str)>,
+	reason: PendingReason<'_>,
 ) -> Result<Value> {
+	#[cfg(target_os = "linux")]
+	if super::hia_request_prepare::job_pending_selected() {
+		let (reason, unknown, diagnostic) = reason.observations();
+		let response = super::hia_request_prepare::job_pending(
+			reason,
+			unknown,
+			&operation,
+			&prepared.worker.request_sha256,
+			diagnostic,
+		)
+		.await?;
+		hia_contract::validate_output(&prepared.worker.tool, &response)?;
+		return Ok(response);
+	}
+	let error = reason.legacy_error();
 	let mut response = json!({"contract_version":hia_contract::CONTRACT_VERSION,
 		"request_id":format!("hia_{}",prepared.worker.request_sha256),
 		"status":if error.is_some() { "unknown" } else { "accepted" },"operation":operation});
@@ -542,7 +824,7 @@ fn pending(
 	Ok(response)
 }
 
-fn observation_unavailable(
+async fn observation_unavailable(
 	prepared: &PreparedRequest,
 	operation: Value,
 	error: &anyhow::Error,
@@ -557,14 +839,12 @@ fn observation_unavailable(
 		diagnostic = %diagnostic,
 		"Original HIA output observation failed"
 	);
-	let message = format!(
-		"Complete terminal output could not be authenticated. {diagnostic}. Observe this exact original request; a disconnected observation does not establish termination."
-	);
 	pending(
 		prepared,
 		operation,
-		Some(("HIA_OBSERVATION_UNAVAILABLE", &message)),
+		PendingReason::ObservationUnavailable(&diagnostic),
 	)
+	.await
 }
 
 fn admission_failure(
@@ -592,10 +872,41 @@ fn admission_failure(
 /// Existing bindings never enter an execution path, including after cancellation.
 pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Result<Value> {
 	let config = runtime_config()?;
-	let prepared = match prepare_request(config, tool, arguments.clone(), workdir) {
+	#[cfg(target_os = "linux")]
+	let result = if super::hia_request_prepare::selected()
+		|| super::hia_request_prepare::capture_policy_selected()
+	{
+		prepare_native_request(config, tool, arguments.clone(), workdir).await
+	} else {
+		prepare_request(config, tool, arguments.clone(), workdir)
+	};
+	#[cfg(not(target_os = "linux"))]
+	let result = prepare_request(config, tool, arguments.clone(), workdir);
+	let prepared = match result {
 		Ok(prepared) => prepared,
 		Err(error) => return admission_failure(tool, &arguments, config, &error.to_string()),
 	};
+	#[cfg(target_os = "linux")]
+	if super::hia_wire_candidate::schema_selected() {
+		if let Err(error) = super::hia_wire_candidate::observe_schema(
+			super::hia_wire_candidate::SchemaSide::Request,
+			tool,
+			&prepared.worker.catalog_sha256,
+			&prepared.worker.arguments,
+		)
+		.await
+		{
+			return admission_failure(tool, &arguments, config, &error.to_string());
+		}
+	}
+	#[cfg(target_os = "linux")]
+	if super::hia_request_prepare::job_operation_selected() {
+		super::hia_request_prepare::job_operation_image()?;
+	}
+	#[cfg(target_os = "linux")]
+	if super::hia_request_prepare::job_pending_selected() {
+		super::hia_request_prepare::job_pending_image()?;
+	}
 	let original = crate::native::observe_request(prepared.params.clone()).await?;
 	let raw = match original {
 		Some(raw) => raw,
@@ -608,36 +919,76 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 	};
 	let raw: Value =
 		serde_json::from_str(&raw).context("native owner returned an invalid observation")?;
+	#[cfg(target_os = "linux")]
+	let original_operation = admit_operation(&prepared, &raw).await?;
+	#[cfg(not(target_os = "linux"))]
 	let original_operation = operation(&prepared, &raw)?;
 	match crate::native::observe_terminal_output(&prepared.params, MAX_WORKER_BYTES).await {
 		Ok(Some(output)) => {
 			if !output.matches_request(&prepared.params)?
 				|| output.job_id() != original_operation["job_id"]
 			{
-				return pending(&prepared, original_operation, Some(("HIA_OWNER_BINDING_MISMATCH", "Original native output binding changed; keep this request unchanged and observe it.")));
+				return pending(
+					&prepared,
+					original_operation,
+					PendingReason::OwnerBindingMismatch,
+				)
+				.await;
 			}
 			let exit_code = output.exit_code();
 			let succeeded = output.outcome() == crate::native::NativeJobOutcome::Succeeded;
 			let (stdout, _stderr) = output.into_streams();
 			if !succeeded {
-				return pending(&prepared, original_operation, Some(("HIA_WORKER_TERMINATED", "Original worker terminated without a successful bound domain report. Its operation remains available through process_status/read; do not relaunch it.")));
+				return pending(
+					&prepared,
+					original_operation,
+					PendingReason::WorkerTerminated,
+				)
+				.await;
 			}
-			match validate_report(&prepared, &stdout, exit_code) {
-				Ok(response) if response["status"] == "rejected"
-					&& matches!(response["error"]["code"].as_str(), Some("E_HIA_REQUEST_UNKNOWN" | "E_HIA_TERMINATION_UNKNOWN")) => {
-					pending(&prepared, original_operation, Some(("HIA_REQUEST_UNKNOWN", "The worker retained an uncertain durable intent or could not confirm native-child termination. Its original operation is preserved; do not repeat the effect with a new key.")))
+			let report = admit_report(&prepared, &stdout, exit_code).await;
+			#[cfg(target_os = "linux")]
+			let report = match report {
+				Ok(response) if super::hia_wire_candidate::schema_selected() => {
+					super::hia_wire_candidate::observe_schema(
+						super::hia_wire_candidate::SchemaSide::Response,
+						tool,
+						&prepared.worker.catalog_sha256,
+						&response,
+					)
+					.await
+					.map(|()| response)
+				}
+				other => other,
+			};
+			match report {
+				Ok(response)
+					if response["status"] == "rejected"
+						&& matches!(
+							response["error"]["code"].as_str(),
+							Some("E_HIA_REQUEST_UNKNOWN" | "E_HIA_TERMINATION_UNKNOWN")
+						) =>
+				{
+					pending(&prepared, original_operation, PendingReason::RequestUnknown).await
 				}
 				Ok(response) => Ok(response),
-				Err(_) => pending(&prepared, original_operation, Some(("HIA_REPORT_INVALID", "Original worker report is incomplete, mismatched or outside the declared schema. No domain success is admitted; retain and inspect this original job."))),
+				Err(_) => {
+					pending(&prepared, original_operation, PendingReason::ReportInvalid).await
+				}
 			}
 		}
 		Ok(None) => {
-			let uncertain = raw["status"]["effect_outcome"] == "unknown"
-				|| raw["status"]["outcome"] == "unknown"
-				|| raw["job"]["launch_state"] == "unknown";
-			pending(&prepared, original_operation, uncertain.then_some(("HIA_OPERATION_UNKNOWN", "The original job has no confirmed terminal outcome. Observe this same tool and request key; do not allocate a replacement.")))
+			let flags = u8::from(raw["status"]["effect_outcome"] == "unknown")
+				| (u8::from(raw["status"]["outcome"] == "unknown") << 1)
+				| (u8::from(raw["job"]["launch_state"] == "unknown") << 2);
+			pending(
+				&prepared,
+				original_operation,
+				PendingReason::OwnerState(flags),
+			)
+			.await
 		}
-		Err(error) => observation_unavailable(&prepared, original_operation, &error),
+		Err(error) => observation_unavailable(&prepared, original_operation, &error).await,
 	}
 }
 

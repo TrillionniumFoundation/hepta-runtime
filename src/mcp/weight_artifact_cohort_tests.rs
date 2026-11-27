@@ -386,6 +386,8 @@ async fn cancelled_rpc_retains_both_owner_guard_and_store_lock_through_late_rena
 		)
 		.await
 		.unwrap();
+	// Admission uses a synchronous reader, so finish Tokio's pending file write first.
+	record.flush().await.unwrap();
 	drop(record);
 	let admission =
 		crate::mcp::runtime::effect_owner_fence::test_admission_from_root(&authority, "v4", &state)

@@ -53,6 +53,8 @@ async fn run(cli: Cli) -> Result<()> {
 			ssh_key,
 			ssh_timeout,
 			runtime_config,
+			hia_controller_manifest,
+			hia_controller_sha256,
 			runtime_private_config_receipt,
 			auth_token_file,
 			runtime_prewarm,
@@ -70,6 +72,25 @@ async fn run(cli: Cli) -> Result<()> {
 					let config = mcp::runtime::RuntimeConfig::load(config_path)?;
 					mcp::runtime::search_jobs::init_search_interpreters(&config)?;
 					mcp::runtime::init_runtime(config)?;
+				}
+				if let Some(manifest) = hia_controller_manifest {
+					#[cfg(target_os = "linux")]
+					{
+						let config = mcp::runtime::config::runtime_config()?;
+						anyhow::ensure!(
+							config.hia_worker.is_some(),
+							"HIA controller release requires a configured HIA worker"
+						);
+						mcp::hia_controller_release::install(
+							&manifest,
+							hia_controller_sha256.as_deref().unwrap_or_default(),
+						)?;
+					}
+					#[cfg(not(target_os = "linux"))]
+					{
+						let _ = (manifest, hia_controller_sha256);
+						anyhow::bail!("the HIA controller release requires Linux");
+					}
 				}
 				if runtime_prewarm || runtime_audit_group_commit {
 					mcp::runtime::prepare_durable_stores().await?;
@@ -279,17 +300,26 @@ async fn require_http_auth(
 	if request.headers().contains_key("origin") {
 		return axum::http::StatusCode::FORBIDDEN.into_response();
 	}
-	let valid = request
-		.headers()
-		.get("x-hepta-runtime-token")
-		.is_some_and(|value| {
-			let candidate: [u8; 32] = Sha256::digest(value.as_bytes()).into();
-			bool::from(candidate.ct_eq(&auth.token_hash))
-		});
+	let Some(supplied) = request.headers().get("x-hepta-runtime-token") else {
+		return axum::http::StatusCode::UNAUTHORIZED.into_response();
+	};
+	let supplied = supplied.as_bytes();
+	#[cfg(target_os = "linux")]
+	let native =
+		mcp::runtime::caller_scope::verify_selected_hia_http_token(&auth.token_hash, supplied)
+			.await;
+	#[cfg(not(target_os = "linux"))]
+	let native = None;
+	let valid = native.unwrap_or_else(|| {
+		let candidate: [u8; 32] = Sha256::digest(supplied).into();
+		bool::from(candidate.ct_eq(&auth.token_hash))
+	});
 	if !valid {
 		return axum::http::StatusCode::UNAUTHORIZED.into_response();
 	}
 	request.extensions_mut().insert(auth.scope.clone());
+	#[cfg(target_os = "linux")]
+	let request = mcp::capture_hia_resource_http(request);
 	next.run(request).await
 }
 
@@ -400,11 +430,12 @@ impl tracing::Subscriber for StderrSubscriber {
 	fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
 
 	fn event(&self, event: &tracing::Event<'_>) {
-		use std::fmt::Write;
+		use std::{fmt::Write as _, io::Write as _};
 		let mut msg = String::new();
 		let _ = write!(msg, "[{}] ", event.metadata().level());
 		event.record(&mut MessageVisitor(&mut msg));
-		eprintln!("{}", msg);
+		// Diagnostic sink failures must not interrupt an in-flight MCP request.
+		let _ = writeln!(std::io::stderr().lock(), "{msg}");
 	}
 
 	fn enter(&self, _span: &tracing::span::Id) {}
