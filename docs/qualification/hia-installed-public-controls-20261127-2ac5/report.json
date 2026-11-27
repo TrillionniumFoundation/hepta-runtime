@@ -1,0 +1,39 @@
+{
+  "schema": "hepta.runtime.installed-public-native-controls.v1",
+  "status": "CONTROLS_PASS_INSTALLED_GATE_OPEN",
+  "actual_installed_public_gate_qualified": false,
+  "cold_store_gate_qualified": false,
+  "command": [
+    "python3",
+    "-I",
+    "-B",
+    "tests/test_hia_installed_public_jobs_integration.py",
+    "-v"
+  ],
+  "exit_code": 0,
+  "reader_control_tests": 18,
+  "reader_log_sha256": "a7561c725810669df86d8c073cabd9be1cc03e1ad68b64acb188216951198acc",
+  "sources": {
+    "tests/hia_installed_public_jobs_integration.py": "bdbe61b7f7a5c427d0cef140582a9e6c04b857031909d3086d4fe6757301abec",
+    "tests/test_hia_installed_public_jobs_integration.py": "29515fddf2ec6c45f9f0b9b041c333bebfcb5bcd32e525b4e6cbaae7af894d68",
+    "tests/fixtures/hia_public_native_jobs.c": "78087558eddd76946adaafebe795f5544579a572f661025999e25d71ea92d51b"
+  },
+  "external_fixture": {
+    "scope": "external workload fixture only; no installed native gate claimed",
+    "exit_code": 17,
+    "stdout_bytes": 131109,
+    "stdout_sha256": "139dd57bc5e284eaf7629c924477b2ccd47fcfaffcc71916679a52c662449fd3",
+    "stderr_bytes": 8193,
+    "stderr_sha256": "cd827d31ca0197d1cb1a4438848a456776e7c8387f9a6c21c63cdaeadb30b2c6",
+    "wrong_argv0_exit": 94,
+    "missing_anchor_exit": 91,
+    "fixture_sha256": "57d752aed30a92106da314692d8cd23e4dee8c8cc960dd733db4a4fcb4780a2f"
+  },
+  "remaining_gate": "Run the actual pinned native installer with the completed same-source cold/Store products, then all public calls and live controls.",
+  "initial_reader_control_tests": 14,
+  "initial_reader_log_sha256": "582b30612a1c8390ff4aa0f4d09aa2e2964b06d95a27ca90f2fa515eaa1b8732",
+  "review_fixes": [
+    "Reject boolean/float/null terminal exit codes, stream cursors and counts, including independently re-bound witness digests.",
+    "Pair unfinished/resumed execution traces by original process and syscall; require successful empty-path descriptor execution and retain failed attempt counts."
+  ]
+}
