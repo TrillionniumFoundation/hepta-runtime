@@ -1,5 +1,58 @@
 # Native common readback preparation — 2026-11-27
 
+## Original execution tracing and current limits
+
+Commit `6e0fa4436a384088f871baf1237ea498dcbdb6a3` preserves the original
+`strace -D -f --seccomp-bpf -e trace=execve,execveat` topology for the native
+prebuild, cold replay, post-cold construction and ordinary release. The external
+observer records the exact invocation, empty PATH, entry and observer pins,
+actual waited exit status, complete streams and execution trace. The cold and
+post readers bind the trace entry PID to the native owner's parent PID, check
+the original complete owner flags and 180-second/3-second budgets, and require
+the observed stdout to equal the retained native result bytes. The language
+and MCP consumers require these observations. MCP also reads the release trace.
+No historical evidence is relabeled as execution of the current source.
+
+[The exact-source control receipt](trace-observer-controls/controls.json)
+retains all original stdout and stderr. The five trace-reader controls passed,
+as did the existing 39 source/cold/release controls, nine language controls, six
+Runtime CI contract controls, source mapping, and all 16 workflow shell blocks.
+The real non-HIA C fixture verifies the observer itself and cannot qualify HIA.
+In this local container its positive tracing control correctly failed: ptrace
+was denied, strace reported unavailable seccomp tracing, and the trace was
+empty even though the fixture returned zero. The observer retained HOLD. The
+failure and timeout controls also retain their actual terminal return codes.
+The public workflow requires the real positive tracing control after installing
+strace; it is neither skipped nor counted as passed by these local results.
+
+[The historical P3 comparison](historical-P3-comparison.json) binds the original
+1133-source post receipt, cold report, master receipt and started/terminal
+records by their exact byte counts and SHA-256 hashes. Its complete catalog
+matches the current F catalog byte-for-byte: 60 phases and 479,882 nodes,
+including all six fields of every phase row. Every plan, journal and archive
+digest in the historical master matches its own cold report. Its native nested
+time was 178.516043734 seconds, with 0.021369607 seconds of cleanup, under the
+same traced topology. This leaves only about 1.484 seconds of historical
+deadline margin; it is not qualification of F's 1278-source closure.
+
+The [phase timings](historical-P3-phase-profile.json) and
+[resource counter projection](historical-P3-resource-profile.json) are derived
+diagnostics. The original profile sampled CPU usage, pressure and cgroup
+quotas, but did not capture I/O pressure, swap, governor or CPU frequency.
+Those missing observations remain unknown. No resource configuration was
+changed while collecting the comparison.
+
+The old common job for Runtime `6815ec9a911d6accd593e580c5ee18ffb13452f7`
+still selected Hepta `7c20b6cfc792f0147b5418968f94734b8890fcca`. Its original
+[integration report](legacy-common-6815-hia-common-native-report.json) retains
+HOLD because the catalogs differed, before any transport session. Its
+[stage outcomes](legacy-common-6815-hia-common-stage-stage-outcomes.json) retain
+the old hosted cold/language results in that old source domain. Artifact
+`15177794061` from run `45953867298` was downloaded and independently hashed:
+64,063,876 bytes, SHA-256
+`c3060f4bef881519a7408dece79524ed011ea80eacde0647f92a601e556da516`.
+It does not qualify the separate current native cold workflow.
+
 The implementation in commit `fee1ffd56f8423f5e444ce82f3fe1867db57aab4`
 adds a separate native cold/source-bootstrap admission path, installs and
 verifies the formal native release package, and reads its actual

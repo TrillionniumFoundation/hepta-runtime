@@ -1,0 +1,57 @@
+{
+  "checks": {},
+  "cleanup_errors": [],
+  "client_sha256": "6c4ee53e052e8125cb925f42bc21be08eea44172eefaa8b1abb33fdfb5676a92",
+  "cold_source_binding": {
+    "compiler_sha256": "0e09ccca227d8f8ed7e7fa37111d2c44e1329517b19763bd9f280d00135591c8",
+    "nested_report_sha256": "b919373d44b741b138ec2bc468c1c392b5fc1357b1bf993280fbcbb2d8e8dc75",
+    "profile": "selfhost-core-linux-x86_64-v64-native-composite-elaboration",
+    "source_manifest_sha256": "11b53efd05532f7d4be4ea35d64bd2275f4a2bbd20908ee9b7f7b1d6f249c87a",
+    "support_contract_sha256": "bbf525603ca081c57edf2729a4efa0589351917f0c3217a28e2cfab7f7d06841"
+  },
+  "elapsed_ns": "1249067797",
+  "error": {
+    "message": "Runtime and Hepta do not share exactly the same catalog bytes",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 665, in main\n    require(pins[\"catalog_sha256\"] == digest(hepta / \"docs/HIA_AGENT_NATIVE_TOOL_CATALOG.json\")\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            == digest(runtime_source / \"src/mcp/hia_tool_catalog.json\"),\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n            \"Runtime and Hepta do not share exactly the same catalog bytes\")\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native_helper_mcp_integration.py\", line 39, in require\n    raise RuntimeError(message)\nRuntimeError: Runtime and Hepta do not share exactly the same catalog bytes\n",
+    "type": "RuntimeError"
+  },
+  "python": {
+    "executable": "/opt/hostedtoolcache/Python/3.14.10/x64/bin/python",
+    "version": "3.14.10 (main, Oct 26 2026, 14:19:15) [GCC 13.3.0]"
+  },
+  "python_source_imports": [
+    {
+      "files": 904,
+      "source_sha256": "3af9185c27e911af1f5d13b905c310595e08ad8954e887b1d315ad85eb29fe9b"
+    },
+    {
+      "files": 403,
+      "source_sha256": "a8f05857afdecb592892758f24f26cb58396e5533474f58f5929aace32909981"
+    }
+  ],
+  "runtime_binary_sha256": "c682cb7a430c90f86a97eeb10db2f8ce6caa013b2602aaec87d3ac245bbd5304",
+  "schema": "hepta.runtime.hia-native-helper-integration.v1",
+  "scope": {
+    "fresh_model_learning_test": false,
+    "native_helpers": [
+      "HEPTA_HIA_AGENT_IDENTITY_MANIFEST"
+    ],
+    "net_optimization_benefit_proved": false,
+    "production_deployed": false,
+    "transport": "actual_stdio_mcp_to_existing_owner_over_loopback_openssh",
+    "whole_worker_native": false,
+    "worker_json_and_journal": "hosted_python"
+  },
+  "sources": {
+    "hepta": {
+      "commit": "7c20b6cfc792f0147b5418968f94734b8890fcca",
+      "tree": "d76c851edfb51fd649aca26a799ed4874af54489"
+    },
+    "runtime": {
+      "commit": "6815ec9a911d6accd593e580c5ee18ffb13452f7",
+      "tree": "30d01adad8c43823c5837595a54f41afdcde781c"
+    }
+  },
+  "status": "HOLD",
+  "transport_sessions": []
+}

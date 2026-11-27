@@ -1,0 +1,257 @@
+{
+  "checks": [
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "tests/test_hia_native_execution_trace.py",
+        "-v"
+      ],
+      "elapsed_ns": 685605373,
+      "exit_code": 1,
+      "logs": {
+        "stderr": {
+          "bytes": 2589,
+          "path": "trace-controls.stderr",
+          "sha256": "d10a0b93a56daf80f1fe0b64259932cc9af849e88511973fb5377df5bc6e54af"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "trace-controls.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "trace-controls",
+      "tests_run": 7
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "tests/test_hia_native_helper_mcp_integration.py",
+        "-v"
+      ],
+      "elapsed_ns": 1531927183,
+      "exit_code": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 6825,
+          "path": "source-admission.stderr",
+          "sha256": "3ae2464ffef8fa43caee98ff66d85ab2942e3059eaca3c4df1caa20af86355fa"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "source-admission.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "source-admission",
+      "tests_run": 39
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "tests/test_hia_native_language_coverage.py",
+        "-v"
+      ],
+      "elapsed_ns": 361220342,
+      "exit_code": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 1699,
+          "path": "native-language.stderr",
+          "sha256": "56100b6600134f0ef42e88c20cfa6b7db3c6c910b79d576e074f4f44e2055b1b"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "native-language.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "native-language",
+      "tests_run": 9
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/test_runtime_ci_contract.py"
+      ],
+      "elapsed_ns": 266483002,
+      "exit_code": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 104,
+          "path": "runtime-ci-contract.stderr",
+          "sha256": "65378dcad145da2497120819bebfc3c46534dce9714ce064b3d809a56654aca2"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "runtime-ci-contract.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "runtime-ci-contract",
+      "tests_run": 6
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "scripts/rea_compatibility_ledger.py",
+        "check-mapping"
+      ],
+      "elapsed_ns": 302262224,
+      "exit_code": 0,
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "source-mapping.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 1329,
+          "path": "source-mapping.stdout",
+          "sha256": "29da3fd905c5efb998bd1c324431b63b3db13dd4f72f26e7d01c711ce41c1c33"
+        }
+      },
+      "name": "source-mapping",
+      "tests_run": null
+    }
+  ],
+  "limitation": "This container denies ptrace. The actual detached tracing positive control remains a mandatory public CI gate; it is not skipped or counted as passed.",
+  "qualification": {
+    "C_fixture_is_HIA": false,
+    "fresh_native_cold": false,
+    "whole_native": false
+  },
+  "schema": "hepta.runtime.native-execution-observer-controls.v1",
+  "source_commit": "6e0fa4436a384088f871baf1237ea498dcbdb6a3",
+  "source_files": {
+    ".github/workflows/hia-common-native-integration.yml": {
+      "bytes": 18796,
+      "sha256": "4d992d7a71054dfd1e2e4a0f83be7f875405b87ebf5e4fe58c4c1cd2b1330d87"
+    },
+    "tests/hia_native_execution_trace.py": {
+      "bytes": 15439,
+      "sha256": "55b287ac1cd41f8e3ad803db9c8b15e2c1351cf178926f79c46458940378b039"
+    },
+    "tests/hia_native_helper_mcp_integration.py": {
+      "bytes": 66370,
+      "sha256": "ab1368ef10392823d1f79b127949b7e762b12043193850e9625fb04b88c36907"
+    },
+    "tests/hia_native_language_coverage.py": {
+      "bytes": 18584,
+      "sha256": "4ef48e508ecac278b5b7f17fccea9f19c408c98ace40754228d52cf46be766bf"
+    },
+    "tests/test_hia_native_execution_trace.py": {
+      "bytes": 9975,
+      "sha256": "0438c223bdc6b6573186b61b7b7ad922523b411bec428ab3a1c2d20aacc6477f"
+    }
+  },
+  "source_tree": "47aa7341491de41f8d74fc07c5610bb537cbd639",
+  "started_at_utc": "2026-11-27T07:20:55.454790+00:00",
+  "status": "HOLD_LOCAL_PTRACE_UNAVAILABLE",
+  "workflow_shell_controls": [
+    {
+      "exit_code": 0,
+      "name": "Verify the exact Runtime source and prepare retained outcomes",
+      "script_sha256": "6894eea8fa9c2767e83d3d742db38d3f9382636e3692762089a1724d76ca5f8a",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Reject foreign cold sources, substituted bootstrap assets and cached imports",
+      "script_sha256": "46365bf1d00c2b64f768cfeaa91d37034c6ff0f94817f62a32ece6b9458753da",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Require both finalized native source and distribution commit pins",
+      "script_sha256": "745bf179096918e0d33cb7e6a920cddddbb45f7e3bb3f3393395fcd0d3f05a79",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Verify source identities and matching HIA catalogs",
+      "script_sha256": "3c2d3a8f08d96c3ea3d29a58dc9882c98cac0e62b9d016a542574419981d9282",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Admit native bootstrap assets and copy the exact frozen native source",
+      "script_sha256": "17718f7ed5063abdfddba3af5b6f4139a31d73e516b15fb2c763096830456e56",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Install external qualification prerequisites and real OpenSSH",
+      "script_sha256": "7b7a42c10525937a954b361b93752f0db02f160eedd01ec0dac5fe34bca2b464",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Verify actual detached execution tracing and retained failure receipts",
+      "script_sha256": "fdfda59fe527706a30d108d1d9fcbb73b5695ccc4e217036d6f41345374c25ba",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Install pinned Runtime toolchain",
+      "script_sha256": "07962b5f1e0f41ba502f9cb0616345990e5411dfd8a9f536a79a11ec18e1a410",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Build the exact Runtime candidate",
+      "script_sha256": "4fcb28074fd552770fe0e36f034165d85aefd4aa861390e02285a286f337cab7",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Construct all native qualification tools from the seven initial roots",
+      "script_sha256": "8d10d4da89fdedfe90b92ed367f96d7b4eb2338b8517306c0a1efc01b6d10905",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Actual sixty-phase native cold replay with unchanged 180 plus 3 budget",
+      "script_sha256": "c96b36fa7678f72998be8f95861334db4e91934aa99d98089577ae5a6e907c12",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Admit the actual cold report and construct the native release bootstrap",
+      "script_sha256": "ca9d46f9739e6a6a78941a41e042d8e84383ecdc86d6ebbc1caff9c45c7a8b11",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Build and publish the formal source-bound native release package",
+      "script_sha256": "9267149339de3920430eff4d9b4376e476a2c6b629dcf132447d2591da8caeb8",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Execute every original language witness with the admitted native B3 and M3",
+      "script_sha256": "b85ed9d63da0b9eee07a7815b6c0997a8e5f42cc3dfd2816417b63e1e852ef01",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Real stdio MCP, SSH worker, native image and consumer lifecycle",
+      "script_sha256": "91857013571a7ade57fd88fc5157f4f4eee483dacfaba2d3ca583177109d614a",
+      "stderr": ""
+    },
+    {
+      "exit_code": 0,
+      "name": "Preserve original stage outcomes",
+      "script_sha256": "311e9572dfc9c82f5884ca66d48b47678260a5c7ba87d17ce7372eb34b5231ca",
+      "stderr": ""
+    }
+  ]
+}
