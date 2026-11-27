@@ -22,6 +22,8 @@ The existing mapping check passed, strict parity remained refused with its expec
 
 `macos-validation.json` is the original Mac receipt. Rust 1.95 formatting and the subsequent formatting check passed. The first locked offline compilation check exited 101 because the `oxc_ecmascript` dependency was absent from the local cache. That failure and its log are retained. A subsequent check uses the same lockfile with dependency downloads enabled; `macos-online-observation.json` records its actual captured state when this receipt was prepared and does not claim a terminal compiler result.
 
+That same Mac check subsequently exited 0 after 1,295.606160709 seconds. `macos-terminal-validation.json` preserves the original receipt, including the earlier offline failure, all nine exact source pins, and the terminal result; `macos/check-all-targets-locked-online-terminal.stderr` preserves its complete log. Those source hashes independently match implementation commit `959c680f4280f42f48d34d26c921c0f7146b1bb0`. This is an all-target, all-feature macOS check for that source. It neither executes the Linux-only HTTP fixture nor qualifies the later fixture corrections or the complete Linux test matrix.
+
 The five new Rust tests must run in the existing Linux CI matrix before this implementation is accepted:
 
 - `authenticated_http_hia_tools_admit_original_wire_and_reject_mismatches`
