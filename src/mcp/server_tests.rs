@@ -163,7 +163,12 @@ async fn start_job(client: &RunningService<RoleClient, RecordingClient>) -> Stri
 		unreachable!("literal object argument")
 	};
 	let params = CallToolRequestParams::new("shell").with_arguments(arguments);
-	let result = client.call_tool(params).await.expect("call shell");
+	// A server-side handler panic must fail the test instead of waiting for the
+	// outer CI job deadline. Match the existing job-exit and delivery windows.
+	let result = tokio::time::timeout(Duration::from_secs(15), client.call_tool(params))
+		.await
+		.expect("shell response within 15s")
+		.expect("call shell");
 	result
 		.content
 		.iter()
@@ -303,10 +308,13 @@ async fn finished_job_is_replayed_to_a_late_legacy_subscription() {
 	wait_for_unsolicited(&unsolicited, &uri).await;
 	unsolicited.lock().await.clear();
 
-	client
-		.subscribe(SubscribeRequestParams::new(uri.clone()))
-		.await
-		.expect("legacy subscription succeeds");
+	tokio::time::timeout(
+		Duration::from_secs(15),
+		client.subscribe(SubscribeRequestParams::new(uri.clone())),
+	)
+	.await
+	.expect("legacy subscription response within 15s")
+	.expect("legacy subscription succeeds");
 	wait_for_unsolicited(&unsolicited, &uri).await;
 }
 
@@ -541,6 +549,44 @@ fn every_rea_handler_is_runtime_only() {
 		registered, runtime_only,
 		"every REA handler must be runtime-only, with no stale or duplicate entries",
 	);
+}
+
+/// Construct the actual macro-generated registry: inner parameter schemas alone
+/// do not catch an untagged request wrapper that violates MCP's root contract.
+#[test]
+fn registered_tool_schemas_have_object_roots_and_all_model_session_routes() {
+	let tools = OctofsServer::tool_router().list_all();
+	assert!(!tools.is_empty());
+	for tool in &tools {
+		assert_eq!(
+			tool.input_schema.get("type"),
+			Some(&json!("object")),
+			"{} must have an object input root",
+			tool.name
+		);
+	}
+	let mut session_tools: Vec<_> = tools
+		.iter()
+		.filter(|tool| tool.name.starts_with("rea_model_session_"))
+		.map(|tool| tool.name.as_ref())
+		.collect();
+	session_tools.sort_unstable();
+	assert_eq!(
+		session_tools,
+		[
+			"rea_model_session_list",
+			"rea_model_session_open",
+			"rea_model_session_query",
+			"rea_model_session_read",
+			"rea_model_session_weight",
+		]
+	);
+	let weight = tools
+		.iter()
+		.find(|tool| tool.name == "rea_model_session_weight")
+		.unwrap();
+	assert_eq!(weight.input_schema["anyOf"].as_array().unwrap().len(), 2);
+	assert!(weight.input_schema["$defs"].is_object());
 }
 
 /// The served tool list carries no generator noise and keeps every parameter.

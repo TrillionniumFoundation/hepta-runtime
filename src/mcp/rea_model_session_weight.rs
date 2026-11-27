@@ -85,6 +85,7 @@ pub struct SessionWeightParams {
 /// a separate closed wire shape and cannot supply a readout scope or an authority.
 #[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(untagged)]
+#[schemars(extend("type" = "object"))]
 pub enum SessionWeightRequest {
 	F32(SessionWeightParams),
 	SmallHcsn(smallhcsn::Params),

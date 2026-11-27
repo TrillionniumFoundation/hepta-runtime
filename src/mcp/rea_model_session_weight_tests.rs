@@ -845,6 +845,87 @@ fn typed_session_wire_has_no_caller_authority_or_paths() {
 		.contains("f32_prepare"));
 }
 
+#[test]
+fn session_request_schema_preserves_both_closed_object_branches() {
+	let schema = serde_json::to_value(schemars::schema_for!(SessionWeightRequest)).unwrap();
+	assert_eq!(schema["type"], "object");
+	let branches = schema["anyOf"].as_array().expect("untagged alternatives");
+	assert_eq!(branches.len(), 2);
+	for (branch, required) in branches.iter().zip([
+		["operation", "parent_sha256", "readout", "session_id"],
+		["operation", "parent_sha256", "profile", "session_id"],
+	]) {
+		let reference = branch["$ref"].as_str().expect("typed object reference");
+		let payload = schema
+			.pointer(reference.strip_prefix('#').expect("local schema reference"))
+			.expect("referenced branch remains in schema");
+		assert_eq!(payload["type"], "object");
+		assert_eq!(payload["additionalProperties"], false);
+		let mut actual: Vec<_> = payload["required"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|name| name.as_str().unwrap())
+			.collect();
+		actual.sort_unstable();
+		assert_eq!(actual, required);
+	}
+	let encoded = serde_json::to_string(&schema).unwrap();
+	for operation in [
+		"f32_prepare",
+		"f32_roundtrip",
+		"f32_recover",
+		"smallhcsn_compile",
+		"smallhcsn_plan",
+		"smallhcsn_prepare",
+		"smallhcsn_roundtrip",
+		"smallhcsn_recover",
+	] {
+		assert!(encoded.contains(operation), "missing {operation}");
+	}
+}
+
+#[test]
+fn session_request_wire_keeps_f32_and_fixed_profile_disjoint() {
+	let f32 = json!({"session_id":"rms1_test","parent_sha256":"0".repeat(64),
+		"readout":{"weight_tensor":"w","weight_payload_sha256":"0".repeat(64),"bias_tensor":"b","bias_payload_sha256":"1".repeat(64),"outputs":2,"columns":2},
+		"operation":{"kind":"f32_recover","journal_id":"wgj1_test","expected_candidate_sha256":"2".repeat(64),"candidate_artifact_id":null}});
+	let hidden = json!({"session_id":"rms1_test","parent_sha256":"0".repeat(64),
+		"profile":"smallhcsn_centered_sender_drive_and_bias40_v1",
+		"operation":{"kind":"smallhcsn_recover","journal_id":"3".repeat(64),"expected_candidate_sha256":"2".repeat(64)}});
+	for (wire, expects_f32) in [(&f32, true), (&hidden, false)] {
+		let decoded: SessionWeightRequest = serde_json::from_value(wire.clone()).unwrap();
+		assert_eq!(
+			matches!(&decoded, SessionWeightRequest::F32(_)),
+			expects_f32
+		);
+		assert_eq!(serde_json::to_value(decoded).unwrap(), *wire);
+		for field in [
+			"owner",
+			"path",
+			"state_dir",
+			"session_authority",
+			"executable",
+		] {
+			let mut forged = wire.clone();
+			forged[field] = json!("forged");
+			assert!(serde_json::from_value::<SessionWeightRequest>(forged).is_err());
+		}
+		let mut unknown_operation_field = wire.clone();
+		unknown_operation_field["operation"]["path"] = json!("forged");
+		assert!(serde_json::from_value::<SessionWeightRequest>(unknown_operation_field).is_err());
+		let mut swapped = wire.clone();
+		swapped["operation"] = (if expects_f32 { &hidden } else { &f32 })["operation"].clone();
+		assert!(serde_json::from_value::<SessionWeightRequest>(swapped).is_err());
+	}
+	let mut hybrid = f32;
+	hybrid["profile"] = hidden["profile"].clone();
+	assert!(serde_json::from_value::<SessionWeightRequest>(hybrid).is_err());
+	for non_object in [Value::Null, json!([]), json!("rms1_test")] {
+		assert!(serde_json::from_value::<SessionWeightRequest>(non_object).is_err());
+	}
+}
+
 #[tokio::test]
 async fn exact_source_planning_handles_f32_element_across_stream_boundary() {
 	let temp = tempfile::tempdir().unwrap();
