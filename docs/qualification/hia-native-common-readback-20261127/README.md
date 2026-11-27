@@ -60,6 +60,62 @@ first observer call because that Python environment did not expose
 3.13.5 and a separate fresh output directory; no seal requirement or native
 execution control was removed.
 
+## Complete original fixture component run
+
+The subsequent [component summary](native-language-component-summary.json)
+records a real execution of the entire current fixture inventory using the
+same historical initial compiler and a complete, isolated export of Hepta
+`f39c7a9cef00a1a0bf0c9ad585b54dd0a355e002`. Every exported file matched its
+immutable Git blob before execution; all source bytes were checked again
+afterward. Both component fixed-point chains were executed afresh with the
+native observer. Each of the six produced compiler images was 641,344 bytes,
+within the existing 1 MiB admission bound.
+
+| Original witnesses | Per compiler | Both compilers |
+| --- | ---: | ---: |
+| Positive programs and expected output | 238 | 476 |
+| Transactional refusals | 286 | 572 |
+| Checked shifts, arithmetic, casts and word-memory traps | 238 | 476 |
+| Total original cases | 762 | 1,524 |
+
+All 1,524 cases passed. The two actual fixed-point checks and the source
+unchanged check brought the component result to 1,527/1,527. All ten original
+semantic aggregate assertions passed with no skipped tests. The independent
+reference report retains all 1,183 scalar witnesses and the original negative
+and trap oracles. It preceded this execution; it does not replace the native
+cold gate's before-B0 reference obligation.
+
+The complete original [execution report](native-language-component-full.json.gz)
+and [independent reference report](native-language-component-reference.json.gz)
+are retained with lossless gzip compression, together with original
+[stdout](native-language-component.stdout.log) and
+[stderr](native-language-component.stderr.log). The summary binds compressed
+and original byte counts and SHA-256 digests. Each compiler's 11,619 raw
+evidence files was independently verified and archived by the existing
+`archive_completed_stage` implementation. The summary records both retained
+ZIP identities; the roughly 10 MB archives are not duplicated in Git.
+
+The run completed in 61.145 seconds. Its original native invocation limits
+were unchanged. A 512 MiB storage reserve was checked before every native
+invocation; the lowest observed free space was 2,953,695,232 bytes.
+
+Two earlier attempts remain failures. The
+[incomplete export report](native-language-component-incomplete-export.json)
+stopped at the complete source inventory check before any new invocation. The
+[disk exhaustion report](native-language-component-enospc.json.gz) and
+[original traceback](native-language-component-enospc.stderr.log) retain the
+later attempt's successful generations and 56 positive observations before
+ENOSPC interrupted the next output write. The successful attempt used a
+separate directory on the other filesystem with sufficient space; no failed
+attempt was relabeled or used to fill missing results.
+
+This is complete finite-fixture **component** compatibility, with an initial
+compiler derived from the historical builder. The original eleventh assertion
+requiring cold evidence was explicitly excluded from this component run and
+remains required in the actual native-cold runner. This result does not admit
+a fresh native cold report, qualify the final integrated source, or establish
+common MCP integration.
+
 ## Remaining qualification
 
 The common workflow still has its historical Hepta source pin and hosted cold
