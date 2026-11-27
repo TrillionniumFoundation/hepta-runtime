@@ -157,7 +157,13 @@ Nine new controls use synthetic Git F/D histories and explicitly non-executable
 fixtures. They cover exact staging, source/manifest binding, missing and extra
 assets, hidden byte drift, symlinks and hardlinks, unsafe paths, duplicate keys,
 both original extent boundaries, changes outside the distribution, wrong
-parentage and preservation of an existing report. All nine passed.
+parentage and preservation of an existing report. All nine passed. The
+[exact-source control receipt](bootstrap-distribution-controls.json) binds
+commit `18f40971fdcdd7a365db1b471128664a01bd81ba`, the original stdout/stderr,
+all fifteen workflow script digests and syntax outcomes, and the actual
+missing-pin refusal. The existing REA source mapping check also passed at that
+commit without another projection refresh; its 229 OPEN operations and zero
+qualified operations are unchanged.
 
 The common workflow now wires the actual native prebuild, sixty-phase cold,
 post-cold admission, formal release, original language fixtures and real MCP
