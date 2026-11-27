@@ -309,6 +309,22 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Stage source-bound weight research executables
+        run: |
+          python3 -B -m unittest discover -s scripts -p test_package_weight_research.py -v
+          python3 scripts/package_weight_research.py \
+            --output-dir "$RUNNER_TEMP/weight-source-bound-research"
+
+      - name: Retain source-bound weight research executables
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: weight-source-bound-research-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weight-source-bound-research/manifest.json
+            ${{ runner.temp }}/weight-source-bound-research/weight-source-bound-research.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
   runtime-merge-ci:
     name: Rust prospective-merge validation
     if: github.event_name == 'pull_request'
@@ -455,3 +471,4 @@ jobs:
             !${{ runner.temp }}/rea-javascript-cancellation/state/**
           if-no-files-found: warn
           retention-days: 14
+

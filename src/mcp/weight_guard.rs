@@ -437,6 +437,12 @@ pub async fn evaluate(params: GuardedPatchParams) -> Result<String> {
 	Ok(serde_json::to_string(&result)?)
 }
 
+#[path = "weight_guard_f16.rs"]
+pub mod f16;
+
+#[path = "weight_guard_f32_source.rs"]
+pub mod source_bound_f32;
+
 #[cfg(all(test, target_os = "linux"))]
 #[path = "weight_guard_tests.rs"]
 mod tests;
