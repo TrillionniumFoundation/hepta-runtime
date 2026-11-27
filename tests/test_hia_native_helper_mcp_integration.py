@@ -295,6 +295,22 @@ class NativeColdReadbackTests(unittest.TestCase):
         self.assertEqual(binding["post_cold_inputs_receipt_sha256"],
                          integration.digest(self.bootstrap / "cold-inputs.receipt"))
 
+    def test_packed_tool_can_exceed_one_flat_image_within_native_capture_bound(self):
+        self.tools["hia-source-build"] = b"x" * (1024 * 1024 + 1)
+        self.save_bootstrap()
+        compiler, _, binding = self.admit()
+        self.assertEqual(compiler, self.compiler)
+        self.assertEqual(binding["post_cold_tool_manifest_sha256"],
+                         integration.digest(self.bootstrap / "toolchain.manifest.hiasxm"))
+
+    def test_packed_tool_beyond_native_64_MiB_capture_bound_is_refused(self):
+        # A sparse extent exercises the pre-read bound without allocating a
+        # 64 MiB buffer or treating the non-executable fixture as a native tool.
+        with (self.bootstrap / "hia-source-build").open("r+b") as stream:
+            stream.truncate(64 * 1024 * 1024 + 1)
+        with self.assertRaisesRegex(RuntimeError, "file type or extent differs"):
+            self.admit()
+
     def test_native_and_hosted_domains_cannot_substitute_for_each_other(self):
         with self.assertRaisesRegex(RuntimeError, "cold qualification is incomplete"):
             integration.admit_cold_compiler(self.hepta, self.report_path)
@@ -464,6 +480,14 @@ class NativeReleaseReadbackTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "installer changed after post-cold admission"):
                 self.readback()
         run.assert_not_called()
+
+    def test_packed_installer_uses_the_native_capture_bound_during_readback(self):
+        (self.bootstrap / "hia-release").write_bytes(b"x" * (1024 * 1024 + 1))
+        self.binding["native_installer_sha256"] = integration.digest(self.bootstrap / "hia-release")
+        with mock.patch.object(integration.subprocess, "run", side_effect=self.native_response_fixture) as run:
+            _, record = self.readback()
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(record["native_installer_sha256"], self.binding["native_installer_sha256"])
 
     def test_failed_install_is_retained_and_never_retried_or_verified(self):
         failed = subprocess.CompletedProcess([], 14, b"partial original receipt", b"original refusal")

@@ -30,6 +30,13 @@ import time
 import traceback
 
 
+# Hepta's generate_hia_cold_build_entry.postverify captures each installed tool
+# with this bound; the post-cold entry reuses that same native capture path.
+# A packed source-builder ELF contains three separately bounded 1 MiB flats,
+# so the flat compiler bound is not a bound on the complete executable.
+NATIVE_INSTALLED_TOOL_CAPTURE_BYTES = 64 * 1024 * 1024
+
+
 def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False).encode("utf-8")
@@ -375,7 +382,7 @@ def admit_native_cold_compiler(hepta, cold_report, source_bootstrap):
     require(set(tool_rows) == expected_tools and len(tool_rows) == tool_count,
             "native post-cold installed tool inventory differs")
     for name, row in tool_rows.items():
-        raw = ordinary_bytes(source_bootstrap / name, 1024 * 1024)
+        raw = ordinary_bytes(source_bootstrap / name, NATIVE_INSTALLED_TOOL_CAPTURE_BYTES)
         require(len(raw) == row["bytes"] and sha256(raw).hexdigest() == row["sha256"],
                 "native post-cold installed tool differs from its receipt: " + name)
     inputs = ordinary_bytes(source_bootstrap / "cold-inputs.receipt", 120)
@@ -414,7 +421,7 @@ def native_release_identity(hepta, source_bootstrap, package, finalize_receipt, 
             and finalize["published"] is True and finalize["source_attested"] is True,
             "native release package lacks its exact complete source-attested publication receipt")
     installer = source_bootstrap / "hia-release"
-    require(sha256(ordinary_bytes(installer, 1024 * 1024)).hexdigest()
+    require(sha256(ordinary_bytes(installer, NATIVE_INSTALLED_TOOL_CAPTURE_BYTES)).hexdigest()
             == binding["native_installer_sha256"],
             "native release installer changed after post-cold admission")
     installed_root = output / "installed-release"

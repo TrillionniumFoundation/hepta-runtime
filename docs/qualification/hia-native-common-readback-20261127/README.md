@@ -34,6 +34,18 @@ symlinks, missing generations or phase evidence, failed package verification,
 wrong output, wrong trap signal, and missing modified-compiler refusals. Mocked
 native release subprocesses in these controls are not native execution proof.
 
+The installed-tool reader follows the public native capture bound of 64 MiB
+per packed executable. In Hepta's `generate_hia_cold_build_entry.py`,
+`postverify` state 715 calls `start_capture` with 67,108,864 bytes;
+`generate_hia_cold_source_bootstrap_entry.py` retains that capture path.
+The source-builder packer separately bounds each of its policy, compiler and
+packer flats to 1 MiB, then combines them with an ELF prefix. Those individual
+flat limits do not impose a 1 MiB limit on the complete packed executable.
+The reader was corrected from that initial inference before any fresh native
+product was admitted. B3, retained flat generations, the 1,107-byte observer
+and source/tool manifest bounds are unchanged. Only the related positive and
+negative reader controls were rerun for this correction.
+
 ## Actual native observer compatibility smoke
 
 [native-observer-component.json](native-observer-component.json) retains the
