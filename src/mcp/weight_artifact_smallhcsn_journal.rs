@@ -235,6 +235,17 @@ pub(super) async fn write(directory: &Path, name: &str, value: &Value, cap: u64)
 	write_record(directory, name, &bytes).await
 }
 
+/// The original cohort owner compares immutable bytes, including object field order.
+/// Preserve its typed Intent encoding; an intermediate Value can reorder outer fields.
+pub(super) async fn write_intent(directory: &Path, intent: &Intent) -> Result<()> {
+	let bytes = serde_json::to_vec(intent)?;
+	ensure!(
+		bytes.len() as u64 <= MAX_MANIFEST_BYTES,
+		"fixed SmallHCSN record byte budget exceeded"
+	);
+	write_record(directory, "intent.json", &bytes).await
+}
+
 pub(super) fn identity(
 	manifest: &CohortManifest,
 	research: &Value,

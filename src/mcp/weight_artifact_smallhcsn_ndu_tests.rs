@@ -227,14 +227,7 @@ async fn original_bound_reservation_is_not_refunded_when_inverse_recovery_has_no
 		Some(serde_json::to_value(&saved).unwrap()),
 	)
 	.unwrap();
-	journal::write(
-		&directory,
-		"intent.json",
-		&serde_json::to_value(&intent).unwrap(),
-		MAX_MANIFEST_BYTES,
-	)
-	.await
-	.unwrap();
+	journal::write_intent(&directory, &intent).await.unwrap();
 	journal::charge(&directory, &saved, journal::Phase::Parent)
 		.await
 		.unwrap();

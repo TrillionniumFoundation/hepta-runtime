@@ -208,6 +208,145 @@ async fn record_bytes(case: &Case, id: &str, name: &str) -> Vec<u8> {
 }
 
 #[tokio::test]
+async fn typed_initial_intent_matches_owner_bytes_and_rejects_conflicting_rewrites() {
+	for research in [None, Some(json!({"owner":"original-owner","cost":0.25}))] {
+		let directory = tempfile::tempdir().unwrap();
+		fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
+		let intent = Intent {
+			schema: "hepta.weight.cohort-intent.v1".into(),
+			request_digest: "1".repeat(64),
+			artifact_id: "cohort-test-original".into(),
+			manifest_sha256: "2".repeat(64),
+			research,
+		};
+		let typed = serde_json::to_vec(&intent).unwrap();
+		let via_value = serde_json::to_vec(&serde_json::to_value(&intent).unwrap()).unwrap();
+		assert_ne!(
+			typed, via_value,
+			"the old intermediate Value reordered the record"
+		);
+		assert_eq!(
+			serde_json::from_slice::<Intent>(&via_value).unwrap(),
+			intent
+		);
+		journal::write_intent(directory.path(), &intent)
+			.await
+			.unwrap();
+		assert_eq!(
+			fs::read(directory.path().join("intent.json"))
+				.await
+				.unwrap(),
+			typed
+		);
+		// The original publication path rechecks these exact typed bytes.
+		write_record(directory.path(), "intent.json", &typed)
+			.await
+			.unwrap();
+		journal::write_intent(directory.path(), &intent)
+			.await
+			.unwrap();
+		let mut changed = intent;
+		changed.request_digest = "3".repeat(64);
+		assert!(journal::write_intent(directory.path(), &changed)
+			.await
+			.is_err());
+		assert!(write_record(directory.path(), "intent.json", &via_value)
+			.await
+			.is_err());
+		assert_eq!(
+			fs::read(directory.path().join("intent.json"))
+				.await
+				.unwrap(),
+			typed
+		);
+	}
+}
+
+#[tokio::test]
+async fn legacy_value_encoded_unpublished_intent_keeps_bytes_and_spent_phase() {
+	let case = fixture(false).await;
+	let authority = authority(&case).await;
+	let deadline = model::Deadline::new(Duration::from_secs(60));
+	let prepared = preflight(
+		case.input.clone(),
+		&authority,
+		&case.roots,
+		&case.state,
+		&deadline,
+	)
+	.await
+	.unwrap();
+	let saved = journal::Saved::new(
+		&prepared,
+		&authority,
+		&case.roots,
+		&case.state,
+		journal::wall_clock_milliseconds().unwrap(),
+		clock::begin().await.unwrap(),
+	)
+	.unwrap();
+	let root = store_root(&case.state).await.unwrap();
+	let lock = lock_store(&root).await.unwrap();
+	let directory = journal_directory(&case.state, saved.id()).await.unwrap();
+	let intent = original_intent(
+		&saved.manifest,
+		&prepared.cohort.manifest_bytes,
+		&case.roots,
+		&case.state,
+		Some(serde_json::to_value(&saved).unwrap()),
+	)
+	.unwrap();
+	// Preserve the old encoder deliberately. Recovery must consume this original
+	// record, not repair/rewrite it or replay publication under a replacement key.
+	journal::write(
+		&directory,
+		"intent.json",
+		&serde_json::to_value(&intent).unwrap(),
+		MAX_MANIFEST_BYTES,
+	)
+	.await
+	.unwrap();
+	let original = record_bytes(&case, saved.id(), "intent.json").await;
+	assert_ne!(original, serde_json::to_vec(&intent).unwrap());
+	journal::charge(&directory, &saved, journal::Phase::Parent)
+		.await
+		.unwrap();
+	let charge = record_bytes(&case, saved.id(), "model-parent-charge.json").await;
+	drop(lock);
+	drop(prepared);
+	fs::remove_file(&case.path).await.unwrap();
+	let result = recover_case(&case, saved.id()).await;
+	assert_eq!(result["candidate_publication_absent_verified"], true);
+	assert_eq!(result["restored_bytes_verified"], false);
+	assert_eq!(result["full_model_executed"], false);
+	assert_eq!(result["original_source_path_opened"], false);
+	assert_eq!(result["attempt_ledger"]["reserved_phase_count"], 1);
+	assert_eq!(result["attempt_ledger"]["reserved_seconds"], 20);
+	assert_eq!(result["attempt_ledger"]["completed_model_evaluations"], 0);
+	assert_eq!(
+		result["attempt_ledger"]["phases"][0]["interrupted_cost_unknown"],
+		true
+	);
+	assert_eq!(
+		record_bytes(&case, saved.id(), "intent.json").await,
+		original
+	);
+	assert_eq!(
+		record_bytes(&case, saved.id(), "model-parent-charge.json").await,
+		charge
+	);
+	assert!(!journal::charged(&directory, journal::Phase::Candidate)
+		.await
+		.unwrap());
+	assert!(!journal::charged(&directory, journal::Phase::Restored)
+		.await
+		.unwrap());
+	assert!(!fs::try_exists(&case.path).await.unwrap());
+}
+
+#[tokio::test]
 async fn fixed_prepare_authenticates_semantics_without_artifact_journal_or_model() {
 	let case = fixture(false).await;
 	for name in ["weight-artifacts-v1", "weight-cohort-journal-v1"] {
@@ -426,14 +565,7 @@ async fn interrupted_clock(
 		Some(serde_json::to_value(&saved).unwrap()),
 	)
 	.unwrap();
-	journal::write(
-		&directory,
-		"intent.json",
-		&serde_json::to_value(&intent).unwrap(),
-		MAX_MANIFEST_BYTES,
-	)
-	.await
-	.unwrap();
+	journal::write_intent(&directory, &intent).await.unwrap();
 	journal::charge(&directory, &saved, journal::Phase::Parent)
 		.await
 		.unwrap();

@@ -387,13 +387,7 @@ pub(super) async fn roundtrip(
 		Some(research),
 	)?;
 	let directory = journal_directory(&state, &id).await?;
-	journal::write(
-		&directory,
-		"intent.json",
-		&serde_json::to_value(&intent)?,
-		MAX_MANIFEST_BYTES,
-	)
-	.await?;
+	journal::write_intent(&directory, &intent).await?;
 	let mut errors = Vec::new();
 	let parent = async {
 		authority.revalidate().await?;
