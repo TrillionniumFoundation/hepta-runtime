@@ -9,7 +9,7 @@ use super::{
 };
 use anyhow::{ensure, Context, Result};
 
-pub(super) struct Output {
+pub struct Output {
 	pub n: usize,
 	pub features: Vec<f32>,
 	pub heads: Vec<f32>,

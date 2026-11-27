@@ -4,19 +4,10 @@
 //! Isolated complete-model research evaluator. This example publishes no model.
 #[path = "native_smallhcsn_profile/bound_io.rs"]
 mod bound_io;
-#[path = "native_smallhcsn_profile/deadline.rs"]
-mod deadline;
-#[path = "native_smallhcsn_profile/matrix.rs"]
-mod matrix;
-#[path = "native_smallhcsn_profile/model.rs"]
-mod model;
-#[cfg(test)]
-#[path = "native_smallhcsn_profile/native_tests.rs"]
-mod native_tests;
-#[path = "native_smallhcsn_profile/physics.rs"]
-mod physics;
 
 use anyhow::{ensure, Context, Result};
+use hepta_runtime::mcp::weight_smallhcsn as profile_core;
+use hepta_runtime::mcp::weight_smallhcsn::Deadline;
 use serde_json::json;
 use std::{
 	path::Path,
@@ -27,7 +18,7 @@ use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 async fn run(args: &[String]) -> Result<()> {
 	ensure!(args.len()==8, "usage: weight-smallhcsn-research ABS_PROFILE_JSON PROFILE_SHA ABS_ARTIFACT ARTIFACT_SHA ABS_RAW_INPUT INPUT_SHA ABS_NEW_OUTPUT");
 	let started = Instant::now();
-	let deadline = deadline::Deadline::new(Duration::from_secs(60));
+	let deadline = Deadline::new(Duration::from_secs(60));
 	let profile = bound_io::capture(Path::new(&args[1]), &args[2], 262144, &deadline).await?;
 	let artifact = bound_io::capture(Path::new(&args[3]), &args[4], 131072, &deadline).await?;
 	let input = bound_io::capture(Path::new(&args[5]), &args[6], 65536, &deadline).await?;
@@ -37,7 +28,7 @@ async fn run(args: &[String]) -> Result<()> {
 	);
 	let bound = bound_io::bind(&profile, &artifact, &input)?;
 	let inputs = bound_io::inputs(&input)?;
-	let output = model::evaluate(&bound, &inputs, &deadline)?;
+	let output = profile_core::evaluate(&bound, &inputs, &deadline)?;
 	let raw = output.bytes();
 	// A second open verifies that the named source artifacts still have their admitted identities.
 	bound_io::capture(Path::new(&args[1]), &args[2], 262144, &deadline).await?;
@@ -77,9 +68,9 @@ async fn run(args: &[String]) -> Result<()> {
 		json!({"schema":"hepta.native-smallhcsn-research-result.v1",
         "profile_sha256":args[2],"source_before_sha256":args[4],"source_after_sha256":args[4],
         "input_sha256":args[6],"output_sha256":bound_io::sha(&raw),"output_bytes":raw.len(),
-        "canonical_sha256_declared":bound.canonical_sha256,
-        "source_checkpoint_sha256_declared":bound.source_checkpoint_sha256,
-        "profile_identifier":bound.profile_identifier,"source_declarations":bound.source_declarations,
+        "canonical_sha256_declared":bound.canonical_sha256(),
+        "source_checkpoint_sha256_declared":bound.source_checkpoint_sha256(),
+        "profile_identifier":bound.profile_identifier(),"source_declarations":bound.source_declarations(),
         "source_declarations_independently_proved_by_this_call":false,
         "full_model_executed":true,"cached_features_used_as_input":false,"queries":output.n,
         "ticks":6,"neurons":8,"max_physical_violations":output.diagnostics,

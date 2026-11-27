@@ -5,6 +5,7 @@
 //! A caller's target declaration is never evidence of task or NDU optimality.
 
 use anyhow::{ensure, Context, Result};
+use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -36,14 +37,14 @@ fn check_deadline(deadline: Instant) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetSourceKind {
 	CallerSpecified,
 	PinnedExternalReference,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TargetDeclaration {
 	pub kind: TargetSourceKind,
@@ -64,13 +65,15 @@ impl TargetDeclaration {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EditScope {
 	SenderDriveAndBias,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, schemars::JsonSchema,
+)]
 #[serde(tag = "tensor", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Coordinate {
 	Weight { row: usize, column: usize },
@@ -94,7 +97,7 @@ impl Coordinate {
 	}
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Edit {
 	pub coordinate: Coordinate,
@@ -102,7 +105,7 @@ pub struct Edit {
 	pub replacement_hex: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlanParams {
 	pub scope: EditScope,
@@ -132,6 +135,58 @@ pub struct AdmittedHidden {
 	pub weight: Vec<f64>,
 	pub bias: Vec<f64>,
 	pub evidence: Value,
+}
+
+/// Turn a native compiler's exact F32 edits into the existing typed plan. This pure
+/// helper grants no publication authority and repeats the original layout/radius checks.
+pub fn plan_from_edits(
+	parent: &[u8],
+	input_sha256: String,
+	edits: Vec<Edit>,
+	maximum_update_l2_norm: f64,
+	target_source: TargetDeclaration,
+	identity: cohort::Identity,
+	deadline: Instant,
+) -> Result<PlanParams> {
+	check_deadline(deadline)?;
+	ensure!(
+		(10..=131072).contains(&parent.len()) && (2..=40).contains(&edits.len()),
+		"bounded fixed-sender bytes and edits required"
+	);
+	let header_length = usize::try_from(u64::from_le_bytes(parent[..8].try_into()?))?;
+	ensure!(
+		(2..=65536).contains(&header_length) && 8 + header_length <= parent.len(),
+		"fixed sender header bounds"
+	);
+	let header_sha256 = digest(&parent[8..8 + header_length]);
+	let layout = layout::inspect(parent, &header_sha256)?;
+	let mut candidate = parent.to_vec();
+	for edit in &edits {
+		check_deadline(deadline)?;
+		let (name, index) = edit.coordinate.site()?;
+		let offset = layout.offset(name, index)?;
+		let before = layout::f32_word(&edit.expected_hex)?;
+		let after = layout::f32_word(&edit.replacement_hex)?;
+		ensure!(
+			candidate[offset..offset + 4] == before,
+			"native proposal old word differs from actual parent"
+		);
+		candidate[offset..offset + 4].copy_from_slice(&after);
+	}
+	let params = PlanParams {
+		scope: EditScope::SenderDriveAndBias,
+		parent_sha256: digest(parent),
+		candidate_sha256: digest(&candidate),
+		header_sha256,
+		input_sha256,
+		allowed_coordinates: edits.iter().map(|edit| edit.coordinate.clone()).collect(),
+		edits,
+		maximum_update_l2_norm,
+		target_source,
+		identity,
+	};
+	let _ = prepare_with_deadline(&params, parent, deadline)?;
+	Ok(params)
 }
 
 pub fn prepare(params: &PlanParams, parent: &[u8]) -> Result<PreparedPlan> {

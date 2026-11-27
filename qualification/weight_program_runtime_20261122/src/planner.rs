@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Exact Bellman recursion for a declared finite law, including verification and stopping.
 
+use super::digest;
 use anyhow::{bail, Result};
-use hepta_semantic_source_adapter_study::digest;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, VecDeque};
 

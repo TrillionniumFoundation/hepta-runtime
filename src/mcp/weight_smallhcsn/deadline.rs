@@ -5,13 +5,19 @@
 use anyhow::{Context, Result};
 use std::time::{Duration, Instant};
 
-pub(super) struct Deadline {
+pub struct Deadline {
 	end: Instant,
 }
 impl Deadline {
 	pub fn new(duration: Duration) -> Self {
 		Self {
 			end: Instant::now() + duration,
+		}
+	}
+	/// A phase cap cannot extend the existing whole-attempt cutoff.
+	pub fn capped(&self, duration: Duration) -> Self {
+		Self {
+			end: self.end.min(Instant::now() + duration),
 		}
 	}
 	pub fn remaining(&self) -> Result<Duration> {

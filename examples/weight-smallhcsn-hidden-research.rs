@@ -6,17 +6,11 @@
 
 #[path = "native_smallhcsn_profile/bound_io.rs"]
 mod bound_io;
-#[path = "native_smallhcsn_profile/deadline.rs"]
-mod deadline;
-#[path = "native_smallhcsn_profile/matrix.rs"]
-mod matrix;
-#[path = "native_smallhcsn_profile/model.rs"]
-mod model;
-#[path = "native_smallhcsn_profile/physics.rs"]
-mod physics;
 
 use anyhow::{ensure, Context, Result};
-use hepta_runtime::mcp::weight_hidden_scope::{self, drift, BIAS_NAME, WEIGHT_NAME};
+use hepta_runtime::mcp::weight_hidden_scope::{self, drift};
+use hepta_runtime::mcp::weight_smallhcsn as profile_core;
+use hepta_runtime::mcp::weight_smallhcsn::Deadline;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -56,7 +50,7 @@ enum HiddenOperation {
 async fn capture_inputs(
 	sources: &BoundInputs,
 	params: &weight_hidden_scope::PlanParams,
-	deadline: &deadline::Deadline,
+	deadline: &Deadline,
 ) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
 	let profile = bound_io::capture(
 		Path::new(&sources.profile_path),
@@ -82,7 +76,7 @@ async fn capture_inputs(
 	Ok((profile, parent, input))
 }
 
-async fn write_output(path: &str, raw: &[u8], deadline: &deadline::Deadline) -> Result<()> {
+async fn write_output(path: &str, raw: &[u8], deadline: &Deadline) -> Result<()> {
 	ensure!(
 		Path::new(path).is_absolute(),
 		"explicit absolute new output path required"
@@ -121,16 +115,16 @@ fn bind_parent(
 	parent: &[u8],
 	input: &[u8],
 	expected: &str,
-) -> Result<bound_io::BoundModel> {
+) -> Result<profile_core::BoundModel> {
 	let model = bound_io::bind(profile, parent, input)?;
 	ensure!(
-		model.canonical_sha256 == expected,
+		model.canonical_sha256() == expected,
 		"hidden scope requires the exact canonical parent commitment"
 	);
 	Ok(model)
 }
 
-async fn perform(operation: HiddenOperation, deadline: &deadline::Deadline) -> Result<Value> {
+async fn perform(operation: HiddenOperation, deadline: &Deadline) -> Result<Value> {
 	match operation {
 		HiddenOperation::CompileDrift { params } => drift::compile_with_deadline(
 			&params,
@@ -155,9 +149,9 @@ async fn perform(operation: HiddenOperation, deadline: &deadline::Deadline) -> R
 			deadline.check()?;
 			Ok(
 				json!({"schema":"hepta.native-smallhcsn-hidden-cohort-plan.v1",
-                "admission":plan.evidence(),"cohort_request":request,"queries":inputs.n,
-                "profile_sha256":sources.profile_sha256,"profile_identifier":bound.profile_identifier,
-                "source_declarations":bound.source_declarations,"target_truth_verified":false,
+                "admission":plan.evidence(),"cohort_request":request,"queries":inputs.queries(),
+                "profile_sha256":sources.profile_sha256,"profile_identifier":bound.profile_identifier(),
+                "source_declarations":bound.source_declarations(),"target_truth_verified":false,
                 "full_model_executed":false,"model_artifact_published":false,
                 "existing_cohort_owner_required":true,"production_eligible":false}),
 			)
@@ -169,7 +163,6 @@ async fn perform(operation: HiddenOperation, deadline: &deadline::Deadline) -> R
 			output_path,
 		} => {
 			let (profile, parent, input) = capture_inputs(&sources, &params, deadline).await?;
-			let mut bound = bind_parent(&profile, &parent, &input, &params.parent_sha256)?;
 			let inputs = bound_io::inputs(&input)?;
 			let plan = weight_hidden_scope::prepare_with_deadline(
 				&params,
@@ -183,12 +176,9 @@ async fn perform(operation: HiddenOperation, deadline: &deadline::Deadline) -> R
 				deadline,
 			)
 			.await?;
-			let admitted = plan.admit(&candidate)?;
-			// All other actual artifact bytes were compared against the complete parent.
-			// Only these two tensors are decoded anew from the admitted candidate bytes.
-			bound.tensors.insert(WEIGHT_NAME.into(), admitted.weight);
-			bound.tensors.insert(BIAS_NAME.into(), admitted.bias);
-			let result = model::evaluate(&bound, &inputs, deadline)?;
+			let (bound, admission) =
+				profile_core::bind_hidden_candidate(&profile, &parent, &candidate, &input, &plan)?;
+			let result = profile_core::evaluate(&bound, &inputs, deadline)?;
 			let output = result.bytes();
 			capture_inputs(&sources, &params, deadline).await?;
 			bound_io::capture(
@@ -201,13 +191,13 @@ async fn perform(operation: HiddenOperation, deadline: &deadline::Deadline) -> R
 			deadline.check()?;
 			write_output(&output_path, &output, deadline).await?;
 			Ok(json!({"schema":"hepta.native-smallhcsn-hidden-result.v1",
-                "admission":admitted.evidence,"profile_sha256":sources.profile_sha256,
+                "admission":admission,"profile_sha256":sources.profile_sha256,
                 "parent_before_sha256":params.parent_sha256,"parent_after_sha256":params.parent_sha256,
                 "candidate_before_sha256":params.candidate_sha256,"candidate_after_sha256":params.candidate_sha256,
                 "input_sha256":params.input_sha256,"output_sha256":bound_io::sha(&output),
                 "output_path":output_path,"output_bytes":output.len(),"queries":result.n,"ticks":6,
-                "profile_identifier":bound.profile_identifier,"source_declarations":bound.source_declarations,
-                "source_checkpoint_sha256_declared":bound.source_checkpoint_sha256,
+                "profile_identifier":bound.profile_identifier(),"source_declarations":bound.source_declarations(),
+                "source_checkpoint_sha256_declared":bound.source_checkpoint_sha256(),
                 "source_declarations_independently_proved_by_this_call":false,
                 "full_model_executed":true,"cached_features_used_as_input":false,
                 "max_physical_violations":result.diagnostics,"margin_mse_f64":result.mse,"correct":result.correct,
@@ -225,7 +215,7 @@ async fn run(args: &[String]) -> Result<()> {
 		"usage: weight-smallhcsn-hidden-research ABS_REQUEST_JSON REQUEST_SHA256"
 	);
 	let started = Instant::now();
-	let deadline = deadline::Deadline::new(Duration::from_secs(60));
+	let deadline = Deadline::new(Duration::from_secs(60));
 	let raw = bound_io::capture(Path::new(&args[1]), &args[2], 1048576, &deadline).await?;
 	let request: HiddenOperation =
 		serde_json::from_slice(&raw).context("bounded hidden request")?;
