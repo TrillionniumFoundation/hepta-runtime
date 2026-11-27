@@ -18,7 +18,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
-use super::config::{ExecutionMode, Platform};
+use super::config::{ExecutionMode, HostConfig, Platform};
+use super::native_jobs::AdmittedNativeJobs;
 use super::ssh::{run_jobctl, run_python_json};
 use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 
@@ -4919,6 +4920,7 @@ async fn poll_job_status<F, T>(
 	record: &JobRecord,
 	wait_seconds: u64,
 	operator_status: bool,
+	native_transport: Option<AdmittedNativeJobs>,
 	mut observe: F,
 ) -> Result<Value>
 where
@@ -4928,9 +4930,10 @@ where
 	#[cfg(target_os = "linux")]
 	use crate::mcp::hia_request_prepare as hia;
 	#[cfg(target_os = "linux")]
-	let native = hia::job_poll_selected(record.idempotency_key.as_deref());
+	let native =
+		native_transport.is_some() || hia::job_poll_selected(record.idempotency_key.as_deref());
 	#[cfg(not(target_os = "linux"))]
-	let _ = record;
+	let _ = (record, native_transport);
 	#[cfg(target_os = "linux")]
 	let window = if native {
 		hia::job_poll_window(wait_seconds).await?
@@ -4982,6 +4985,46 @@ where
 	}
 }
 
+fn operator_status_request(
+	record: &JobRecord,
+	wait_seconds: u64,
+	snapshot_only: bool,
+	terminal_facts: bool,
+	lifecycle_facts: bool,
+	witness_facts: bool,
+) -> Value {
+	let wait = if snapshot_only {
+		0
+	} else {
+		wait_seconds.min(30)
+	};
+	let mut request = json!({
+		"job_id": record.id, "job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest, "unit": record.unit, "wait_seconds": wait,
+	});
+	if snapshot_only {
+		request["hia_status_snapshot"] = json!(true);
+	}
+	if terminal_facts {
+		request["hia_status_terminal_facts"] = json!(true);
+	}
+	if witness_facts {
+		request["hia_status_terminal_witness"] = json!(true);
+		#[cfg(target_os = "linux")]
+		if crate::mcp::hia_request_prepare::job_terminal_receipt_selected() {
+			request["hia_status_native_receipt"] = json!(true);
+		}
+	}
+	if lifecycle_facts {
+		request["hia_status_lifecycle_facts"] = json!(true);
+		#[cfg(target_os = "linux")]
+		if crate::mcp::hia_controller_release::lifecycle_owner_selected() {
+			request["hia_status_lifecycle_owner"] = json!(true);
+		}
+	}
+	request
+}
+
 async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
@@ -4991,9 +5034,13 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	}
 	if record.system_jobctl {
 		let request = json!({"op":"status","job_id":record.id});
-		return poll_job_status(record, wait_seconds, false, || run_jobctl(host, &request)).await;
+		return poll_job_status(record, wait_seconds, false, None, || {
+			run_jobctl(host, &request)
+		})
+		.await;
 	}
-	let code = if host.native_jobs.is_some() {
+	let native_transport = super::native_jobs::admit(host)?;
+	let code = if native_transport.is_some() {
 		None
 	} else {
 		Some(bound_remote_code(STATUS_CODE)?)
@@ -5001,41 +5048,23 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	observe_operator_status(
 		record,
 		wait_seconds,
-		|snapshot_only, terminal_facts, lifecycle_facts| {
+		native_transport,
+		|snapshot_only, terminal_facts, lifecycle_facts, witness_facts| {
 			let code = &code;
 			async move {
+				let request = operator_status_request(
+					record,
+					wait_seconds,
+					snapshot_only,
+					terminal_facts,
+					lifecycle_facts,
+					witness_facts,
+				);
 				let wait = if snapshot_only {
 					0
 				} else {
 					wait_seconds.min(30)
 				};
-				let mut request = json!({
-					"job_id": record.id, "job_dir": record.remote_job_dir,
-					"request_digest": record.request_digest, "unit": record.unit, "wait_seconds": wait,
-				});
-				if snapshot_only {
-					request["hia_status_snapshot"] = json!(true);
-				}
-				if terminal_facts {
-					request["hia_status_terminal_facts"] = json!(true);
-				}
-				#[cfg(target_os = "linux")]
-				if terminal_facts
-					&& crate::mcp::hia_request_prepare::job_witness_selected(
-						record.idempotency_key.as_deref(),
-					) {
-					request["hia_status_terminal_witness"] = json!(true);
-					if crate::mcp::hia_request_prepare::job_terminal_receipt_selected() {
-						request["hia_status_native_receipt"] = json!(true);
-					}
-				}
-				if lifecycle_facts {
-					request["hia_status_lifecycle_facts"] = json!(true);
-					#[cfg(target_os = "linux")]
-					if crate::mcp::hia_controller_release::lifecycle_owner_selected() {
-						request["hia_status_lifecycle_owner"] = json!(true);
-					}
-				}
 				if host.native_jobs.is_some() {
 					super::ssh::run_native_job_json(
 						host,
@@ -5380,19 +5409,20 @@ async fn project_lifecycle_status(value: Value, job_id: &str) -> Result<Value> {
 async fn observe_operator_status<F, T>(
 	record: &JobRecord,
 	wait_seconds: u64,
+	native_transport: Option<AdmittedNativeJobs>,
 	observe: F,
 ) -> Result<Value>
 where
-	F: Fn(bool, bool, bool) -> T,
+	F: Fn(bool, bool, bool, bool) -> T,
 	T: Future<Output = Result<Value>>,
 {
 	#[cfg(target_os = "linux")]
 	{
 		use crate::mcp::hia_request_prepare as hia;
 		let key = record.idempotency_key.as_deref();
-		let terminal = hia::job_terminal_selected(key);
-		let lifecycle = hia::job_lifecycle_selected(key);
-		let witness = terminal && hia::job_witness_selected(key);
+		let terminal = native_transport.is_some() || hia::job_terminal_selected(key);
+		let lifecycle = native_transport.is_some() || hia::job_lifecycle_selected(key);
+		let witness = terminal && (native_transport.is_some() || hia::job_witness_selected(key));
 		if witness {
 			hia::job_witness_image()?;
 		}
@@ -5403,7 +5433,7 @@ where
 			hia::job_lifecycle_image()?;
 		}
 		let snapshot = |snapshot_only| {
-			let observation = observe(snapshot_only, terminal, lifecycle);
+			let observation = observe(snapshot_only, terminal, lifecycle, witness);
 			async move {
 				let mut value = observation.await?;
 				if terminal {
@@ -5417,14 +5447,17 @@ where
 			}
 		};
 		if terminal || lifecycle || hia::job_poll_selected(key) {
-			return poll_job_status(record, wait_seconds, true, || snapshot(true)).await;
+			return poll_job_status(record, wait_seconds, true, native_transport, || {
+				snapshot(true)
+			})
+			.await;
 		}
 		return snapshot(false).await;
 	}
 	#[cfg(not(target_os = "linux"))]
 	{
-		let _ = (record, wait_seconds);
-		observe(false, false, false).await
+		let _ = (record, wait_seconds, native_transport);
+		observe(false, false, false, false).await
 	}
 }
 
@@ -5437,7 +5470,7 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 	check_binding(record)?;
 	use super::ssh::{run_job_observation, JobObservation};
 	if record.system_jobctl {
-		return poll_job_status(record, wait_seconds, false, || {
+		return poll_job_status(record, wait_seconds, false, None, || {
 			run_job_observation(
 				&record.host,
 				JobObservation::SystemStatus { job_id: &record.id },
@@ -5445,6 +5478,8 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 		})
 		.await;
 	}
+	let host = runtime_config()?.host(&record.host)?;
+	let native_transport = super::native_jobs::admit(host)?;
 	let digest = record
 		.request_digest
 		.as_deref()
@@ -5452,7 +5487,8 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 	observe_operator_status(
 		record,
 		wait_seconds,
-		|snapshot_only, terminal_facts, lifecycle_facts| {
+		native_transport,
+		|snapshot_only, terminal_facts, lifecycle_facts, witness_facts| {
 			run_job_observation(
 				&record.host,
 				JobObservation::PythonStatus {
@@ -5463,13 +5499,7 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 					wait_seconds,
 					snapshot_only,
 					terminal_facts,
-					#[cfg(target_os = "linux")]
-					witness_facts: terminal_facts
-						&& crate::mcp::hia_request_prepare::job_witness_selected(
-							record.idempotency_key.as_deref(),
-						),
-					#[cfg(not(target_os = "linux"))]
-					witness_facts: false,
+					witness_facts,
 					lifecycle_facts,
 				},
 			)
@@ -5793,33 +5823,17 @@ fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
 		"reconcile_via":"process_status"})
 }
 
-async fn launch_record(
-	record: &mut JobRecord,
+fn launch_request(
+	host: &HostConfig,
+	record: &JobRecord,
 	params: &ProcessStartParams,
-	guard: &Option<OwnedStartGuard>,
-	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
-) -> Result<LaunchOutcome> {
-	launch_record_with_entry(record, params, guard, owner, || Ok(())).await
-}
-
-async fn launch_record_with_entry<F, G>(
-	record: &mut JobRecord,
-	params: &ProcessStartParams,
-	guard: &Option<OwnedStartGuard>,
-	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
-	enter: F,
-) -> Result<LaunchOutcome>
-where
-	F: FnOnce() -> Result<G> + Send + 'static,
-	G: Send + 'static,
-{
-	let config = runtime_config()?;
-	let host = config.host(&record.host)?;
+) -> Result<Value> {
 	if host.native_jobs.is_some() && record.system_jobctl {
 		bail!(
 			"native-only job profile does not admit legacy system jobctl submission; no fallback"
 		);
 	}
+	let native = super::native_jobs::admit(host)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -5851,7 +5865,9 @@ where
 			// new remote effect before the acknowledgement owner is admitted.
 			hia::launch_ack_image()?;
 		}
-		if !record.system_jobctl
+		if let Some(native) = native {
+			native.select_submission(&mut request)?;
+		} else if !record.system_jobctl
 			&& host.platform == Platform::Linux
 			&& record.execution_mode == ExecutionMode::Operator
 			&& hia::job_witness_selected(record.idempotency_key.as_deref())
@@ -5924,6 +5940,34 @@ where
 			}
 		}
 	}
+	#[cfg(not(target_os = "linux"))]
+	let _ = native;
+	Ok(request)
+}
+
+async fn launch_record(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+	guard: &Option<OwnedStartGuard>,
+	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
+) -> Result<LaunchOutcome> {
+	launch_record_with_entry(record, params, guard, owner, || Ok(())).await
+}
+
+async fn launch_record_with_entry<F, G>(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+	guard: &Option<OwnedStartGuard>,
+	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
+	enter: F,
+) -> Result<LaunchOutcome>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	let config = runtime_config()?;
+	let host = config.host(&record.host)?;
+	let request = launch_request(host, record, params)?;
 	let launch_result = if record.system_jobctl {
 		run_jobctl_with_entry(
 			host,
@@ -6709,6 +6753,10 @@ mod pagination_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_native_executable_tests.rs"]
 mod native_executable_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_native_profile_tests.rs"]
+mod native_profile_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_output_durability_tests.rs"]

@@ -18,6 +18,8 @@ Paths must be absolute and normalized, with the exact role basename; digests mus
 
 The v26 controller contains exactly 19 roles. The previous 14 roles retain their individual bounds. The native job transport exports the five lifecycle images and the three existing terminal encoder, writer and supervisor images. It requires an admitted v26 release and refuses a v25 release.
 
+The complete host profile selects START and STATUS for ordinary public process requests as well as HIA Worker requests. Selection does not depend on a reserved idempotency-key prefix or a Python Worker argument vector. Before selecting the native submission stages or status owners, Runtime admits the installed v26 release and all five exact host-role pins. A broken unused role refuses the request too. Submission flags request those admitted stages; they do not assert that any remote authority check or workload execution has already succeeded.
+
 ## Image custody and the remote entry
 
 Every operation admits all five configured pins against the selected controller release before preparing its target. The controller accessor checks the expected host digest against the manifest digest on every call. The first read verifies all four memfd seals, reads with `pread`, checks the content digest, and caches an immutable shared image. Concurrent reads share the same `Arc` and do not change the descriptor's cursor. Changing a pathname after release admission cannot replace these captured images.
@@ -50,5 +52,7 @@ Observation commands, headers and mutable control payloads keep the original 64 
 ## Qualification scope
 
 The native transport tests cover complete role selection, wrong or missing pins, exact role extents, sealed descriptor custody, path replacement, concurrent image sharing, descriptor cursor preservation, v25 refusal, exact 64-bit READ offsets, STATUS flags, and pool bounds. Existing direct/pool job regressions and actual public tool campaigns remain required.
+
+`jobs_native_profile_tests.rs` reproduces the missing-flag refusal for ordinary keys, then checks the admitted public path with present and absent keys, exact original metadata, absent/empty/nonempty stdin, every mismatched role, unsupported platform/system-jobctl profiles, and observation after execution is revoked. Its controller images are explicit synthetic fixtures, and its status callback stops before remote dispatch or terminal projection. This regression proves selection and framing only. It does not qualify a native workload launch, executable symlink handling, a fresh installation, or full shell compatibility.
 
 The HIA source release separately qualifies job-entry framing, the launcher against its original runner, READ/STATUS/CANCEL against their original observation implementations, and START including real systemd behavior. These component gates are not a substitute for a fresh Worker installation and an end-to-end v26 public-tool campaign.

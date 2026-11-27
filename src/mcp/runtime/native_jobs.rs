@@ -22,6 +22,29 @@ pub(super) struct PreparedNativeJob {
 	pub input: NativeJobInput,
 }
 
+/// Selection of the complete installed v26 bundle. Only exact host-role and
+/// sealed controller admission can create this token; public arguments cannot.
+#[derive(Clone, Copy)]
+pub(super) struct AdmittedNativeJobs {
+	_private: (),
+}
+
+#[cfg(target_os = "linux")]
+impl AdmittedNativeJobs {
+	pub(super) fn select_submission(&self, request: &mut Value) -> Result<()> {
+		let fields = request
+			.as_object_mut()
+			.context("native submission request must be an object")?;
+		// Request the admitted native stages; these are not claims that those
+		// stages have run. The unchanged request retains its original execution,
+		// host, resource and filesystem authority.
+		for flag in NATIVE_SUBMIT_FLAGS {
+			fields.insert(flag.into(), Value::Bool(true));
+		}
+		Ok(())
+	}
+}
+
 /// The immutable Store image is shared across queued requests. The original
 /// 64 KiB observation command/control budget is not enlarged by the image.
 pub(super) struct NativeJobInput {
@@ -116,22 +139,39 @@ fn helper(name: &str) -> Result<(String, Arc<[u8]>)> {
 	Ok((pin, image))
 }
 
-pub(super) fn prepare(
-	host: &HostConfig,
-	operation: NativeJobOperation<'_>,
-) -> Result<PreparedNativeJob> {
+pub(super) fn admit(host: &HostConfig) -> Result<Option<AdmittedNativeJobs>> {
+	let Some(entries) = host.native_jobs.as_ref() else {
+		return Ok(None);
+	};
 	ensure!(
 		host.platform == Platform::Linux,
 		"native job transport requires Linux; no fallback"
 	);
+	entries.validate()?;
+	require_native_transport()?;
+	// The installed release has already admitted and sealed every image. Match
+	// the whole host profile before selecting its owners; do not capture Store
+	// bytes here, outside the transport's original absolute deadline.
+	for (role, pin) in entries.roles() {
+		ensure!(
+			artifact_pin(role)? == pin.sha256,
+			"native job artifact {role} differs from the configured identity"
+		);
+	}
+	Ok(Some(AdmittedNativeJobs { _private: () }))
+}
+
+pub(super) fn prepare(
+	host: &HostConfig,
+	operation: NativeJobOperation<'_>,
+) -> Result<PreparedNativeJob> {
+	admit(host)?.context("native job profile was not configured")?;
 	let entries = host
 		.native_jobs
 		.as_ref()
 		.context("native job profile was not configured")?;
-	entries.validate()?;
-	require_native_transport()?;
-	// Admission covers the whole selected bundle. A broken unused role must not
-	// silently turn a supposedly complete native-only profile into a partial one.
+	// Capture and recheck the complete sealed bundle inside the unchanged
+	// transport deadline. A broken unused role cannot form a mixed profile.
 	for (role, pin) in entries.roles() {
 		artifact(role, &pin.sha256)?;
 	}
