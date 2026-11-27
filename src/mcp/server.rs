@@ -285,6 +285,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
+	"rea_model_session_weight",
 	"rea_model_session_list",
 	"rea_inspect_application",
 	"rea_inspect_apk_signature",
@@ -2548,6 +2549,31 @@ impl OctofsServer {
 		rea_model::session::read(params, scope.owner())
 			.await
 			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Run Session-Bound F32 Weight Research",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Operate only on an existing REA model session under the server-resolved owner and exact current policy. Select one F32 matrix and its separate stored bias; no caller path, executable, state root or authority token. First f32_prepare authenticates actual source bytes and returns a deterministic original journal ID without a forward or write. Then one f32_roundtrip requires that exact prepared ID, enforces the existing exact F32 radius and fixed-row guard, reverses passing and failing candidates through the canonical owner and reopens the restored artifact for a fresh head request. After uncertainty, f32_recover uses the original session-bound intent and candidate commitment without opening the old source or replaying its forward. Authority is revalidated at publication boundaries; the existing owner task retains admission after caller cancellation. No automatic retry, background crash recovery, feature-provenance proof, full-model evaluation or production activation. Prepare and roundtrip need the current original workspace source; explicit recovery does not. At most 64 rows and 1 MiB request."
+	)]
+	async fn rea_model_session_weight(
+		&self,
+		Parameters(params): Parameters<rea_model::session::weight::SessionWeightParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		// The session operation retains the existing owner fence through actual inverse publication.
+		rea_model::session::weight::run(params, &scope)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(

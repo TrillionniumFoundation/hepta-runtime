@@ -11,6 +11,8 @@ use super::*;
 
 #[path = "weight_artifact_f16_research.rs"]
 pub mod f16_research;
+#[path = "weight_artifact_f32_recovery.rs"]
+pub mod f32_recovery;
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -624,7 +626,7 @@ pub(super) async fn open_pinned(
 // The spawned transaction owns BOTH the concurrency permit and the effect
 // fence. Dropping/timing out the RPC join cannot drop either guard while an
 // uncancellable renameat2 worker can still execute. No abort handle is exposed.
-async fn retained_transaction<G, F, T>(guard: G, operation: F) -> Result<T>
+pub(in crate::mcp) async fn retained_transaction<G, F, T>(guard: G, operation: F) -> Result<T>
 where
 	G: Send + 'static,
 	F: std::future::Future<Output = Result<T>> + Send + 'static,
@@ -638,7 +640,7 @@ where
 	.context("cohort owner task failed; reconcile the same request")?
 }
 
-async fn owner_guards() -> Result<(
+pub(in crate::mcp) async fn owner_guards() -> Result<(
 	OwnedSemaphorePermit,
 	super::super::runtime::effect_owner_fence::AdmissionPermit,
 )> {

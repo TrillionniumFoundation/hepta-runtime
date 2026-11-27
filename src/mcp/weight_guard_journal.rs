@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Durable fixed-request guard receipts and explicit same-request reconciliation.
@@ -8,6 +9,7 @@ use anyhow::{bail, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+use super::rea_model::session::weight::SessionAuthority;
 use super::weight_guard::GuardedPatchParams;
 
 pub(super) async fn evaluate_with_roots(
@@ -25,6 +27,55 @@ pub(super) async fn evaluate_with_roots(
 		bail!("durable guarded weight requests require Linux");
 	}
 }
+
+/// Predict the original intent identity without creating an entry or running a model.
+pub(super) async fn session_identity_with_roots(
+	params: &GuardedPatchParams,
+	roots: &[PathBuf],
+	state: &Path,
+	authority: &SessionAuthority,
+) -> Result<String> {
+	authority.revalidate().await?;
+	authority.authorize_guard(params)?;
+	#[cfg(target_os = "linux")]
+	{
+		linux::session_identity(
+			params.clone(),
+			roots.to_vec(),
+			state.to_owned(),
+			authority.clone(),
+		)
+		.await
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (params, roots, state, authority);
+		bail!("session-bound guarded weight requests require Linux");
+	}
+}
+
+pub(super) async fn evaluate_session_with_roots(
+	params: GuardedPatchParams,
+	roots: &[PathBuf],
+	state: &Path,
+	authority: &SessionAuthority,
+) -> Result<Value> {
+	authority.revalidate().await?;
+	authority.authorize_guard(&params)?;
+	#[cfg(target_os = "linux")]
+	{
+		linux::evaluate_scoped(params, roots, state, Some(authority)).await
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (params, roots, state, authority);
+		bail!("session-bound guarded weight requests require Linux");
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[path = "weight_guard_recovery_intent.rs"]
+pub(super) mod recovery;
 
 #[cfg(target_os = "linux")]
 mod linux {
@@ -49,11 +100,11 @@ mod linux {
 	pub(super) const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 	pub(super) const MAX_ENTRIES: usize = 128;
 	const MAX_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
-	const MAX_RECORD_BYTES: usize = 1024 * 1024;
-	const MAX_CANDIDATE_BYTES: usize = 64 * 1024;
+	pub(super) const MAX_RECORD_BYTES: usize = 1024 * 1024;
+	pub(super) const MAX_CANDIDATE_BYTES: usize = 64 * 1024;
 	const MAX_FAILURE_BYTES: usize = 64 * 1024;
 	const MAX_MEMBERS: usize = 12;
-	const VERSION: &str = "hepta.guard.f32-linear.exact-l2.v2.journal.v1";
+	pub(super) const VERSION: &str = "hepta.guard.f32-linear.exact-l2.v2.journal.v1";
 	static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 	struct Bounded(Vec<u8>);
@@ -115,12 +166,25 @@ mod linux {
 		state_dir: &'a Path,
 		workspace_roots: &'a [PathBuf],
 		request: &'a GuardedPatchParams,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		session_authority: Option<&'a SessionAuthority>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		session_adapter_source_sha256: Option<BTreeMap<&'static str, String>>,
 	}
 
 	pub(super) fn canonical_request(
 		params: &GuardedPatchParams,
 		roots: &[PathBuf],
 		state: &Path,
+	) -> Result<Vec<u8>> {
+		canonical_request_scoped(params, roots, state, None)
+	}
+
+	fn canonical_request_scoped(
+		params: &GuardedPatchParams,
+		roots: &[PathBuf],
+		state: &Path,
+		authority: Option<&SessionAuthority>,
 	) -> Result<Vec<u8>> {
 		// Round-trip also rejects nonfinite numbers serialized as JSON null.
 		let mut request = Bounded(Vec::new());
@@ -139,17 +203,68 @@ mod linux {
 			state_dir: state,
 			workspace_roots: roots,
 			request: params,
+			session_authority: authority,
+			session_adapter_source_sha256: authority.map(|_| {
+				[
+					("session", include_bytes!("rea_model_session.rs").as_slice()),
+					(
+						"session_index",
+						include_bytes!("rea_model_session_index.rs").as_slice(),
+					),
+					(
+						"session_store",
+						include_bytes!("rea_model_session_store.rs").as_slice(),
+					),
+					(
+						"session_weight",
+						include_bytes!("rea_model_session_weight.rs").as_slice(),
+					),
+					(
+						"session_weight_transaction",
+						include_bytes!("rea_model_session_weight_transaction.rs").as_slice(),
+					),
+					(
+						"stored_bias",
+						include_bytes!("weight_guard_f32_source.rs").as_slice(),
+					),
+				]
+				.into_iter()
+				.map(|(name, bytes)| (name, digest(bytes)))
+				.collect()
+			}),
 		};
 		let mut encoded = Bounded(Vec::new());
 		serde_json::to_writer(&mut encoded, &intent)?;
 		Ok(encoded.0)
 	}
 
+	pub(super) async fn session_identity(
+		params: GuardedPatchParams,
+		roots: Vec<PathBuf>,
+		state: PathBuf,
+		authority: SessionAuthority,
+	) -> Result<String> {
+		tokio::task::spawn_blocking(move || {
+			if roots.is_empty() || roots.len() > 64 {
+				bail!("guard journal requires 1..=64 workspace roots");
+			}
+			let (state, _) = absolute_directory(&state, true)?;
+			let roots = roots
+				.iter()
+				.map(|root| absolute_directory(root, false).map(|item| item.0))
+				.collect::<Result<Vec<_>>>()?;
+			let bytes = canonical_request_scoped(&params, &roots, &state, Some(&authority))?;
+			Ok(format!("wgj1_{}", digest(&bytes)))
+		})
+		.await
+		.context("session original-intent identity task failed")?
+	}
+
 	fn cstr(value: &OsStr) -> Result<CString> {
 		Ok(CString::new(value.as_bytes())?)
 	}
 
-	fn open_at(dir: &File, name: &str, flags: i32, mode: u32) -> Result<File> {
+	pub(super) fn open_at(dir: &File, name: &str, flags: i32, mode: u32) -> Result<File> {
 		let name = CString::new(name)?;
 		let fd = unsafe {
 			libc::openat(
@@ -165,7 +280,7 @@ mod linux {
 		Ok(unsafe { File::from_raw_fd(fd) })
 	}
 
-	fn owned_directory(file: &File) -> Result<()> {
+	pub(super) fn owned_directory(file: &File) -> Result<()> {
 		let m = file.metadata()?;
 		if !m.is_dir() || m.uid() != unsafe { libc::geteuid() } || m.mode() & 0o777 != 0o700 {
 			bail!("guard journal directory must be owned mode 0700");
@@ -314,7 +429,7 @@ mod linux {
 		Ok(result)
 	}
 
-	fn read_optional(dir: &File, name: &str, max: usize) -> Result<Option<Vec<u8>>> {
+	pub(super) fn read_optional(dir: &File, name: &str, max: usize) -> Result<Option<Vec<u8>>> {
 		let mut file = match open_at(dir, name, libc::O_RDONLY, 0) {
 			Ok(file) => file,
 			Err(error)
@@ -402,6 +517,52 @@ mod linux {
 			};
 			journal.check_root()?;
 			Ok(journal)
+		}
+
+		/// Acquire the existing journal owner without creating a root or an intent.
+		/// The retained directory flock excludes any live original guard process.
+		pub(super) async fn open_existing(state: &Path) -> Result<Self> {
+			let state = state.to_owned();
+			let journal = tokio::task::spawn_blocking(move || {
+				let (state_path, state) = absolute_directory(&state, true)?;
+				let root = open_at(&state, ROOT_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+				owned_directory(&root)?;
+				Ok::<_, anyhow::Error>(Self {
+					state_path,
+					state,
+					root,
+				})
+			})
+			.await
+			.context("existing guard journal admission task failed")??;
+			let deadline = Instant::now() + Duration::from_secs(10);
+			loop {
+				if unsafe { libc::flock(journal.root.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }
+					== 0
+				{
+					break;
+				}
+				let error = std::io::Error::last_os_error();
+				if error.kind() != std::io::ErrorKind::WouldBlock {
+					return Err(error.into());
+				}
+				if Instant::now() >= deadline {
+					bail!(
+						"original guard journal is still owned by a live process; recovery refused"
+					);
+				}
+				tokio::time::sleep(Duration::from_millis(20)).await;
+			}
+			tokio::task::spawn_blocking(move || {
+				journal.check_root()?;
+				Ok::<_, anyhow::Error>(journal)
+			})
+			.await
+			.context("existing guard journal identity task failed")?
+		}
+
+		pub(super) fn root_descriptor(&self) -> &File {
+			&self.root
 		}
 
 		fn check_root(&self) -> Result<()> {
@@ -511,7 +672,7 @@ mod linux {
 			}
 		}
 
-		fn check_entry(&self, id: &str, dir: &File, intent: &[u8]) -> Result<()> {
+		pub(super) fn check_entry(&self, id: &str, dir: &File, intent: &[u8]) -> Result<()> {
 			self.check_root()?;
 			let current = open_at(&self.root, id, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 			owned_directory(&current)?;
@@ -749,6 +910,15 @@ mod linux {
 		roots: &[PathBuf],
 		state: &Path,
 	) -> Result<Value> {
+		evaluate_scoped(params, roots, state, None).await
+	}
+
+	pub(super) async fn evaluate_scoped(
+		params: GuardedPatchParams,
+		roots: &[PathBuf],
+		state: &Path,
+		authority: Option<&SessionAuthority>,
+	) -> Result<Value> {
 		let started = Instant::now();
 		if roots.is_empty() || roots.len() > 64 {
 			bail!("guard journal requires 1..=64 workspace roots");
@@ -758,11 +928,17 @@ mod linux {
 			.iter()
 			.map(|root| absolute_directory(root, false).map(|x| x.0))
 			.collect::<Result<Vec<_>>>()?;
-		let intent = canonical_request(&params, &roots, &state)?;
+		let intent = match authority {
+			Some(authority) => canonical_request_scoped(&params, &roots, &state, Some(authority))?,
+			None => canonical_request(&params, &roots, &state)?,
+		};
 		let intent_hash = digest(&intent);
 		let id = format!("wgj1_{intent_hash}");
 		let journal = Journal::open(&state).await?;
 		let (dir, new) = journal.entry(&id, &intent)?;
+		if authority.is_some() && !new {
+			bail!("session-bound guard intent {id} already exists; use original-intent recovery without replaying its forward");
+		}
 		let prior_completion = read_optional(&dir, "completion.json", MAX_RECORD_BYTES)?;
 		let prior = prior_completion
 			.as_ref()
@@ -787,8 +963,21 @@ mod linux {
 		};
 		failpoint("after_intent").await?;
 		let guard_start = Instant::now();
-		let evaluated =
-			super::super::weight_guard::evaluate_with_roots(params.clone(), &roots, &state).await;
+		let evaluated = match authority {
+			Some(authority) => {
+				super::super::weight_guard::evaluate_session_with_roots(
+					params.clone(),
+					&roots,
+					&state,
+					authority,
+				)
+				.await
+			}
+			None => {
+				super::super::weight_guard::evaluate_with_roots(params.clone(), &roots, &state)
+					.await
+			}
+		};
 		let guard_seconds = guard_start.elapsed().as_secs_f64();
 		let guard = match evaluated {
 			Ok(guard) => guard,
