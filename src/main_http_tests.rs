@@ -220,11 +220,15 @@ impl NativeWireFixture {
 		let executable = directory.path().join("wire-descriptor-fixture");
 		std::fs::write(&executable, &image)?;
 		std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o500))?;
+		let image_pin = Sha256::digest(&image)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>();
 		let settings = [
 			("HIA_LOCAL_MCP_WIRE_IMAGE", executable.into_os_string()),
 			(
 				"HIA_LOCAL_MCP_WIRE_SHA256",
-				std::ffi::OsString::from(hex::encode(Sha256::digest(&image))),
+				std::ffi::OsString::from(image_pin),
 			),
 		];
 		let original = settings
