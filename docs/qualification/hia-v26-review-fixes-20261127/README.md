@@ -1,5 +1,47 @@
 # PR 159 review fixes
 
+## Additional async input preparation review
+
+Review thread `PRRT_kwDOU4ANVc68rAw9` identified synchronous frame I/O inside
+the async native filter. The follow-up moves the complete sealed input
+construction and rewind into `tokio::task::spawn_blocking`, then awaits the
+prepared descriptor before spawning the native filter. The native execution
+timeout remains five seconds. The separate sibling regression
+`native_filter_input_is_rewound_and_immutable_after_blocking_preparation`
+reads the actual sealed descriptor from offset zero, preserves embedded NUL
+and non-UTF-8 bytes, and requires write or flush to refuse mutation.
+
+[The formatter receipt](async-frame-format.json) binds both exact files to
+actual Rust 1.95 format and format-check exits of zero on Mac. The earlier
+[formatter path failure](async-frame-format-initial-failure.json) is retained;
+that attempt never started rustfmt. No Linux behavior or Rust compilation
+result is inferred from formatting. The new sealed-descriptor regression must
+run in the next full Linux CI matrix. The live `6815ec9a911d6accd593e580c5ee18ffb13452f7`
+matrix completed before that follow-up was published. Its three complete
+compressed logs and terminal job records are retained in [ci-6815](ci-6815/receipt.json).
+
+## Completed CI for the five earlier review fixes
+
+The exact `6815ec9a911d6accd593e580c5ee18ffb13452f7` source and prospective
+merge passed all three actual Rust lanes. Each ran 2,656 all-features tests
+and 2,614 no-default-features tests successfully, retaining 44 and 32 existing
+skips. The five added HTTP, decoder, capture and executable-custody Rust tests
+actually passed. Both Repository Hygiene jobs and the HIA helper contract job
+also passed. All selected release, JavaScript lifecycle, syscall-denial and ZIP
+checks completed successfully. The last exact-head job ended at
+`2026-11-27T08:23:08Z`.
+
+The unchanged old common workflow still failed its catalog-equality admission
+against the old hosted Hepta candidate; that failure is retained and is not
+counted as a pass. The native replacement workflow remains separate. This CI
+receipt qualifies only `6815ec9` and its observed prospective merge, not the
+later `spawn_blocking` fix or whole-native integration.
+
+Reassembling the existing REA projection produces identical bytes for this
+change: these two files do not alter its registered source records. The
+mapping check passes with all 229 operations still OPEN and zero qualified;
+raw reference authenticity is not reverified.
+
 The implementation commit is `959c680f4280f42f48d34d26c921c0f7146b1bb0`, directly after the previously tested candidate `0ce79ce0e47225073fdc5394651df942eb6b98b1`. Its tree is `a0f762ee2b73721b6e9c0cbc05ef6d771fb932da`. This receipt fixes five review findings without changing the candidate's whole-native qualification status.
 
 ## Changes and boundaries
@@ -38,4 +80,4 @@ The first new Linux matrix at `42cc6717430a4a14b526d5a4eba35c3bd943f0fb` found a
 
 The adjacent `hia-v26-platform-ci-20261127/ci-terminal-rust-candidate.json` and its three complete compressed job logs preserve the actual all-features and no-default-features success for the old `0ce79ce0e47225073fdc5394651df942eb6b98b1` candidate and its prospective merge. Those results do not qualify these new changes.
 
-The separate unpublished native-common integration preparation is not included here. The final current-source native cold build and bootstrap distribution pins are still pending. No common-native PASS, production activation, removal of the old stack, or whole-native delivery is claimed by this receipt.
+The separate unpublished native-common integration preparation is not included here. The exact native source F and bootstrap distribution D have since been independently admitted as artifacts, while their separate native cold and common integration outcomes remain unqualified by this receipt. No common-native PASS, production activation, removal of the old stack, or whole-native delivery is claimed here.
