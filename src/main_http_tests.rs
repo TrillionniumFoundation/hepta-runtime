@@ -224,7 +224,7 @@ impl NativeWireFixture {
 			("HIA_LOCAL_MCP_WIRE_IMAGE", executable.into_os_string()),
 			(
 				"HIA_LOCAL_MCP_WIRE_SHA256",
-				std::ffi::OsString::from(format!("{:x}", Sha256::digest(&image))),
+				std::ffi::OsString::from(hex::encode(Sha256::digest(&image))),
 			),
 		];
 		let original = settings
