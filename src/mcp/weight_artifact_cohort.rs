@@ -8,6 +8,9 @@
 //! shared artifact quota remain in force. No production incumbent is owned here.
 
 use super::*;
+
+#[path = "weight_artifact_f16_research.rs"]
+pub mod f16_research;
 use std::collections::BTreeSet;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -621,10 +624,11 @@ pub(super) async fn open_pinned(
 // The spawned transaction owns BOTH the concurrency permit and the effect
 // fence. Dropping/timing out the RPC join cannot drop either guard while an
 // uncancellable renameat2 worker can still execute. No abort handle is exposed.
-async fn retained_transaction<G, F>(guard: G, operation: F) -> Result<Value>
+async fn retained_transaction<G, F, T>(guard: G, operation: F) -> Result<T>
 where
 	G: Send + 'static,
-	F: std::future::Future<Output = Result<Value>> + Send + 'static,
+	F: std::future::Future<Output = Result<T>> + Send + 'static,
+	T: Send + 'static,
 {
 	tokio::spawn(async move {
 		let _guard = guard;

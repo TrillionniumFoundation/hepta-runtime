@@ -112,6 +112,11 @@ pub struct F16Proposal {
 }
 
 impl F16Proposal {
+	/// Complete candidate commitment computed from the authenticated byte stream.
+	pub(crate) fn candidate_sha256(&self) -> &str {
+		&self.candidate_sha256
+	}
+
 	pub fn is_keep(&self) -> bool {
 		self.cohort.is_none()
 	}

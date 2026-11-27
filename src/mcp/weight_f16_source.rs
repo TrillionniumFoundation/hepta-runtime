@@ -77,9 +77,7 @@ fn checked_directory(report: &Value, size: u64, prefix: u64, version: &str) -> R
 		if !row["key"]
 			.as_str()
 			.is_some_and(|key| !key.is_empty() && key.len() <= 1024)
-			|| !row["value"]
-				.as_str()
-				.is_some_and(|value| value.len() <= 4096)
+			|| row["value"].as_str().is_none_or(|value| value.len() > 4096)
 		{
 			bail!("F16 source metadata exceeds the bounded profile");
 		}

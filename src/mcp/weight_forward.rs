@@ -94,7 +94,7 @@ fn matrix_extent(report: &Value, name: &str) -> Result<(usize, usize, u64, usize
 
 /// Tensor bytes are captured during the complete-file hash pass, so the
 /// computation cannot silently use a later independent read of different data.
-async fn capture(
+pub(super) async fn capture(
 	file: &mut tokio::fs::File,
 	size: u64,
 	offset: u64,

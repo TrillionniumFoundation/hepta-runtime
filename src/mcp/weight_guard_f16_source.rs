@@ -146,9 +146,7 @@ pub(super) async fn capture(
 		!row["key"]
 			.as_str()
 			.is_some_and(|key| !key.is_empty() && key.len() <= 1024)
-			|| !row["value"]
-				.as_str()
-				.is_some_and(|value| value.len() <= 4096)
+			|| row["value"].as_str().is_none_or(|value| value.len() > 4096)
 	}) {
 		bail!("coupled F16 directory differs from the bound proposal profile");
 	}

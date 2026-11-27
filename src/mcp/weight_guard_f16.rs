@@ -29,6 +29,9 @@ use super::{check_constraints, score, BoundedRequest, Constraint, Objective};
 #[path = "weight_guard_f16_source.rs"]
 mod source;
 
+#[path = "weight_guard_f16_reopen.rs"]
+pub mod reopen;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HeadSelection {
@@ -159,6 +162,23 @@ pub struct CoupledF16Evaluation {
 	live_activation: bool,
 	rollback_executed: bool,
 	production_eligible: bool,
+}
+
+impl CoupledF16Evaluation {
+	/// Owner admission remains a separate operation. This is only a typed request.
+	pub(crate) fn cohort_proposal(
+		&self,
+	) -> Option<&super::super::weight_artifact::cohort::PatchParams> {
+		self.proposal.cohort_proposal()
+	}
+
+	pub(crate) fn request_sha256(&self) -> &str {
+		&self.request_sha256
+	}
+
+	pub(crate) fn candidate_sha256(&self) -> &str {
+		self.proposal.candidate_sha256()
+	}
 }
 
 #[derive(Clone, Copy)]

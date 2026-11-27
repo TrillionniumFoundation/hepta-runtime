@@ -70,7 +70,7 @@ fn bounded_directory(entries: &serde_json::Map<String, Value>) -> Result<()> {
 				|| metadata.iter().any(|(key, value)| {
 					key.is_empty()
 						|| key.len() > MAX_NAME_BYTES
-						|| !value.as_str().is_some_and(|text| text.len() <= 4096)
+						|| value.as_str().is_none_or(|text| text.len() > 4096)
 				}) {
 				bail!("affine source metadata exceeds its profile");
 			}
