@@ -891,9 +891,20 @@ pub(super) async fn job_transition(
 	}
 }
 
+async fn prepare_filter_input(frame: &[u8]) -> Result<File> {
+	let frame = frame.to_vec();
+	let input = tokio::task::spawn_blocking(move || -> std::io::Result<File> {
+		let mut input = sealed(c"hia-worker-identity-frame", &frame, false)?;
+		input.seek(SeekFrom::Start(0))?;
+		Ok(input)
+	})
+	.await
+	.context("native HIA identity input preparation task failed")??;
+	Ok(input)
+}
+
 async fn run_filter(image: &File, frame: &[u8], cap: usize) -> Result<(ExitStatus, Vec<u8>)> {
-	let mut input = sealed(c"hia-worker-identity-frame", frame, false)?;
-	input.seek(SeekFrom::Start(0))?;
+	let input = prepare_filter_input(frame).await?;
 	let mut child = Command::new(format!("/proc/self/fd/{}", image.as_raw_fd()))
 		.env_clear()
 		.kill_on_drop(true)
@@ -953,3 +964,7 @@ fn frame_result(output: &[u8]) -> Result<EncodedRequest> {
 		stdin: std::str::from_utf8(stdin)?.into(),
 	})
 }
+
+#[cfg(test)]
+#[path = "hia_request_prepare_tests.rs"]
+mod tests;
