@@ -21,6 +21,10 @@ BINARIES = (
         "target/release/examples/weight-source-bound-research",
         "bin/weight-source-bound-research",
     ),
+    (
+        "target/release/examples/weight-smallhcsn-research",
+        "bin/weight-smallhcsn-research",
+    ),
 )
 
 
