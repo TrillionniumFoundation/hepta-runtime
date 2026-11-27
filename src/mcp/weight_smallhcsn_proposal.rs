@@ -239,7 +239,7 @@ pub fn compile_with_deadline(
 		.zip(candidate)
 		.filter(|(before, after)| before.to_bits() != after.to_bits())
 		.count();
-	let evidence = json!({
+	let mut evidence = json!({
 		"schema":"hepta.weight.shared-sender-proposal.v1",
 		"status":"PROPOSAL_COMPILED",
 		"request_sha256":weight_smallhcsn::sha(&serde_json::to_vec(params)?),
@@ -259,7 +259,10 @@ pub fn compile_with_deadline(
 		"regularized_width":10,"senders":4,"shared_coordinates":40,
 		"unregularized_key_rank_certified":false,
 		"solver":"fixed-size F64 Cholesky and at most 128 multiplier bisections",
-		"linear_solves":solution.linear_solves,"bisections":solution.bisections,
+		"linear_solves":solution.linear_solves
+	});
+	let evidence_tail = json!({
+		"bisections":solution.bisections,
 		"minimum_cholesky_pivot":solution.minimum_cholesky_pivot,
 		"multiplier":solution.multiplier,"surrogate_norm":solution.norm,
 		"kkt_max_abs":solution.kkt_max_abs,"kkt_tolerance":solution.kkt_tolerance,
@@ -278,5 +281,14 @@ pub fn compile_with_deadline(
 		"original_owner_full_plan_and_evaluation_required":true,
 		"production_eligible":false,"wall_seconds":started.elapsed().as_secs_f64()
 	});
+	evidence
+		.as_object_mut()
+		.context("shared sender proposal evidence object")?
+		.extend(
+			evidence_tail
+				.as_object()
+				.context("shared sender proposal evidence tail")?
+				.clone(),
+		);
 	Ok(Proposal { edits, evidence })
 }

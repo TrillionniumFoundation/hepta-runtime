@@ -203,7 +203,7 @@ async fn result(
 	let complete = evaluation::valid(&parent)
 		&& evaluation::valid(&candidate_model)
 		&& evaluation::valid(&restored);
-	let report = json!({
+	let mut report = json!({
 		"schema":"hepta.rea.smallhcsn-roundtrip.v1","journal_id":saved.id(),
 		"parent_sha256":saved.manifest.request.expected_sha256,
 		"bound_identity":saved.manifest.research_binding,
@@ -220,6 +220,8 @@ async fn result(
 		"finite_planner_invocations_this_request":if recovery {json!(0)} else {saved.preparation_computation["finite_planner_invocations"].clone()},
 		"fixed_data_quality_qualified":qualified,"session_authority_valid_after_effect":authority_valid,
 		"candidate_publication_absent_verified":no_publication,
+	});
+	let report_tail = json!({
 		"full_model_executed":ledger["completed_model_evaluations"].as_u64().is_some_and(|n|n>0),
 		"fixed_six_tick_model":true,"cached_features_used":false,
 		"attempt_ledger":ledger,"budget":saved.budget,"errors":errors,
@@ -240,6 +242,15 @@ async fn result(
 		"upstream_provenance_verified":false,"target_truth_verified":false,
 		"global_ndu_optimality_verified":false
 	});
+	report
+		.as_object_mut()
+		.context("fixed SmallHCSN result object")?
+		.extend(
+			report_tail
+				.as_object()
+				.context("fixed SmallHCSN result tail")?
+				.clone(),
+		);
 	ensure!(
 		serde_json::to_vec(&report)?.len() <= 48 * 1024,
 		"fixed result byte budget"
