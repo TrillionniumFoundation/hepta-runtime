@@ -1,0 +1,26 @@
+test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused (__main__.ActualExternalObserverControls.test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused) ... ERROR
+test_real_failure_and_observer_timeout_preserve_actual_terminal_receipts (__main__.ActualExternalObserverControls.test_real_failure_and_observer_timeout_preserve_actual_terminal_receipts) ... ok
+test_foreign_path_execution_and_descriptor_flag_spoof_are_refused (__main__.TraceReadbackTests.test_foreign_path_execution_and_descriptor_flag_spoof_are_refused) ... ok
+test_owner_pid_budget_flags_and_exact_extent_are_bound (__main__.TraceReadbackTests.test_owner_pid_budget_flags_and_exact_extent_are_bound) ... ok
+test_split_descriptor_call_and_actual_terminal_pids_are_bound (__main__.TraceReadbackTests.test_split_descriptor_call_and_actual_terminal_pids_are_bound) ... ok
+test_trace_symlink_and_duplicate_receipt_keys_are_refused (__main__.TraceReadbackTests.test_trace_symlink_and_duplicate_receipt_keys_are_refused) ... ok
+test_unmatched_resumes_truncation_and_missing_terminals_are_refused (__main__.TraceReadbackTests.test_unmatched_resumes_truncation_and_missing_terminals_are_refused) ... ok
+
+======================================================================
+ERROR: test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused (__main__.ActualExternalObserverControls.test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/589c0a6dd85b/runtime-v26-platform-ci-repo/tests/test_hia_native_execution_trace.py", line 162, in test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused
+    row = observer.observe([str(self.entry), str(result)], directory=output,
+        source="1" * 40, stage="cold", timeout=10, result=result)
+  File "/workspace/scratch/589c0a6dd85b/runtime-v26-platform-ci-repo/tests/hia_native_execution_trace.py", line 253, in observe
+    require(pin(directory / "stderr")["bytes"] == 0, "native entry or tracer wrote stderr")
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/589c0a6dd85b/runtime-v26-platform-ci-repo/tests/hia_native_execution_trace.py", line 32, in require
+    raise RuntimeError(message)
+RuntimeError: native entry or tracer wrote stderr
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.509s
+
+FAILED (errors=1)

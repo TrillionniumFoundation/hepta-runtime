@@ -1,0 +1,32 @@
+Traceback (most recent call last):
+  File "/workspace/scratch/589c0a6dd85b/runtime-native-language-all-fixtures-component.py", line 94, in <module>
+    report['counts'] = runner.run_fixtures(
+                       ~~~~~~~~~~~~~~~~~~~^
+        language, compiler_api, {'B3': b3, 'M3': predecessor}, observer, OUTPUT, report)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/589c0a6dd85b/runtime-v26-platform-ci-repo/tests/hia_native_language_coverage.py", line 115, in run_fixtures
+    image, build = compiler_api.compile_stage(case_directory, name + "-build", compiler,
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                               fixture["source"], flat_observer=observer)
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/589c0a6dd85b/runtime-native-language-component-source-f39-20261127-589c/tools/qualify_hia_selfhost.py", line 288, in compile_stage
+    result, output = invoke(directory, label, image, source, image_format=image_format,
+                     ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            workspace_fill=workspace_fill, compiler_function_offsets=compiler_function_offsets,
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            **observer_options)
+                            ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/589c0a6dd85b/runtime-native-language-component-source-f39-20261127-589c/tools/qualify_hia_selfhost.py", line 223, in invoke
+    result, output = observe_native(directory, label, path, image, source, capacity=capacity,
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        workspace_size=workspace_size, workspace_fill=workspace_fill,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        output_initial=output_initial, observe_trap_writes=observe_trap_writes)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/589c0a6dd85b/runtime-native-language-component-source-f39-20261127-589c/tools/hia_selfhost_native_observer.py", line 261, in invoke
+    output_path.write_bytes(output)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 642, in write_bytes
+    return f.write(view)
+           ~~~~~~~^^^^^^
+OSError: [Errno 28] No space left on device

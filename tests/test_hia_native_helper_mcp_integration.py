@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -33,7 +34,7 @@ class ColdSourceBindingTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.hepta = self.root / "selected-hepta"
         (self.hepta / "docs").mkdir(parents=True)
         (self.hepta / "tools").mkdir()
@@ -208,11 +209,326 @@ class ColdSourceBindingTests(unittest.TestCase):
             self.admit()
 
 
+class NativeColdReadbackTests(unittest.TestCase):
+    """Non-executable custody fixtures; no fixture claims native gate execution."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.hepta = self.root / "source"
+        (self.hepta / "docs").mkdir(parents=True)
+        (self.hepta / "examples").mkdir()
+        self.source = self.hepta / "examples/fixture.hepta"
+        self.source.write_bytes(b"non-executable fixture source\n")
+        self.contract_path = self.hepta / "docs/HIA_SELFHOST_CORE_SUPPORT.json"
+        checks = ["export_manifest_matches_qualification", "native_hia_toolchain_only",
+                  "nested_full_qualification_pass", "nested_process_exit_zero", "no_ancestor_git_identity",
+                  "no_bytecode_cache_created", "fresh_home_and_tmp", "no_inherited_target_or_successor_images",
+                  "origin_hashes_preserved", "owned_process_tree_cleanup_confirmed", "source_export_hashes_preserved",
+                  "all_independent_references_before_B0", "lossless_phase_archives_verified",
+                  "all_19_families_both_compilers"]
+        self.contract = {"schema": "hepta.hia.selfhost-core-support.v1", "profile": "native-reader-fixture",
+                         "source_identity": {"files": {"examples/fixture.hepta": integration.digest(self.source)}},
+                         "native_cold_qualification": {"schema": "hepta.hia.selfhost-cold-replay.v2",
+                                                       "checks": checks}}
+        self.sources = {**self.contract["source_identity"]["files"],
+                        "docs/HIA_SELFHOST_CORE_SUPPORT.json": written(self.contract_path, self.contract)}
+        self.git("init", "-q", "--template=", "--initial-branch=fixture")
+        self.git("add", ".")
+        self.git("-c", "user.name=HIA test fixture", "-c", "user.email=fixture@example.invalid",
+                 "-c", "commit.gpgsign=false", "commit", "-qm", "native reader fixture")
+        self.cold = self.root / "cold"
+        (self.cold / "qualification/base").mkdir(parents=True)
+        self.compiler = self.cold / "qualification/base/B3.flat"
+        self.compiler.write_bytes(b"non-executable fixture compiler")
+        self.compiler_sha = integration.digest(self.compiler)
+        self.report = {"schema": "hepta.hia.selfhost-cold-replay.v2", "status": "NATIVE_COLD_SELFHOST_REPLAY_PASS",
+                       "profile": self.contract["profile"], "returncode": 0,
+                       "source_manifest": dict(self.sources), "generation_sha256": [self.compiler_sha] * 3,
+                       "qualification_wall_limit_seconds": 180, "cleanup_wall_limit_seconds": 3,
+                       "checks": dict.fromkeys(checks, True)}
+        self.report_path = self.cold / "final-cold.json"
+        written(self.report_path, self.report)
+        self.bootstrap = self.root / "post-cold"
+        self.bootstrap.mkdir()
+        self.tools = {name: b"never executable: " + name.encode() for name in (
+            "hia-source-build", "hia-release-owner", "hia-subprocess", "hia-source-capture",
+            "hia-release-build", "hia-source-bootstrap", "hia-release")}
+        self.tools["cold-inputs.receipt"] = (b"HIASBIN1" + bytes.fromhex(self.compiler_sha)
+            + bytes.fromhex(integration.digest(self.report_path)) + b"HIAADC01"
+            + bytes.fromhex(self.compiler_sha) + struct.pack("<Q", len(self.sources)))
+        self.source_manifest = self.manifest({name: (self.hepta / name).read_bytes() for name in self.sources})
+        self.save_bootstrap()
+
+    def git(self, *arguments):
+        return subprocess.check_output(["git", "-C", str(self.hepta), *arguments], text=True).strip()
+
+    @staticmethod
+    def manifest(files):
+        raw = b"HIASXM01" + struct.pack("<3Q", len(files), 1, 0)
+        for name, value in sorted(files.items()):
+            encoded_name = name.encode("ascii")
+            raw += struct.pack("<2Q", len(encoded_name), len(value)) + sha256(value).digest() + encoded_name
+        return raw
+
+    def save_bootstrap(self):
+        for name, value in self.tools.items():
+            (self.bootstrap / name).write_bytes(value)
+        tools = self.manifest(self.tools)
+        (self.bootstrap / "source.manifest.hiasxm").write_bytes(self.source_manifest)
+        (self.bootstrap / "toolchain.manifest.hiasxm").write_bytes(tools)
+        (self.bootstrap / "build.receipt").write_bytes(b"HIASBOK1" + struct.pack(
+            "<7Q", 1, 1, len(self.sources), len(self.tools), len(self.source_manifest), len(tools), 0)
+            + sha256(self.source_manifest).digest() + sha256(tools).digest())
+
+    def admit(self):
+        return integration.admit_native_cold_compiler(self.hepta, self.report_path, self.bootstrap)
+
+    def test_native_reader_binds_exact_source_cold_B3_and_installer(self):
+        compiler, raw, binding = self.admit()
+        self.assertEqual(compiler, self.compiler)
+        self.assertEqual(raw, self.report_path.read_bytes())
+        self.assertEqual(binding["admission_domain"], "native-v2-post-cold-HIAADC01")
+        self.assertEqual(binding["compiler_sha256"], self.compiler_sha)
+        self.assertEqual(binding["native_installer_sha256"], integration.digest(self.bootstrap / "hia-release"))
+        self.assertEqual(binding["post_cold_inputs_receipt_sha256"],
+                         integration.digest(self.bootstrap / "cold-inputs.receipt"))
+
+    def test_packed_tool_can_exceed_one_flat_image_within_native_capture_bound(self):
+        self.tools["hia-source-build"] = b"x" * (1024 * 1024 + 1)
+        self.save_bootstrap()
+        compiler, _, binding = self.admit()
+        self.assertEqual(compiler, self.compiler)
+        self.assertEqual(binding["post_cold_tool_manifest_sha256"],
+                         integration.digest(self.bootstrap / "toolchain.manifest.hiasxm"))
+
+    def test_packed_tool_beyond_native_64_MiB_capture_bound_is_refused(self):
+        # A sparse extent exercises the pre-read bound without allocating a
+        # 64 MiB buffer or treating the non-executable fixture as a native tool.
+        with (self.bootstrap / "hia-source-build").open("r+b") as stream:
+            stream.truncate(64 * 1024 * 1024 + 1)
+        with self.assertRaisesRegex(RuntimeError, "file type or extent differs"):
+            self.admit()
+
+    def test_native_and_hosted_domains_cannot_substitute_for_each_other(self):
+        with self.assertRaisesRegex(RuntimeError, "cold qualification is incomplete"):
+            integration.admit_cold_compiler(self.hepta, self.report_path)
+        for field, value in (("schema", "hepta.hia.selfhost-cold-replay.v1"),
+                             ("status", "COLD_SELFHOST_REPLAY_PASS"), ("returncode", False),
+                             ("qualification_wall_limit_seconds", 181), ("cleanup_wall_limit_seconds", 4),
+                             ("checks", {})):
+            with self.subTest(field=field):
+                changed = {**self.report, field: value}
+                written(self.report_path, changed)
+                with self.assertRaisesRegex(RuntimeError, "native cold qualification is incomplete"):
+                    self.admit()
+        written(self.report_path, self.report)
+        for magic in (b"HIATBOK1", b"HIASBIK1"):
+            receipt = self.bootstrap / "build.receipt"
+            receipt.write_bytes(magic + receipt.read_bytes()[8:])
+            with self.assertRaisesRegex(RuntimeError, "public receipt is absent or belongs to another domain"):
+                self.admit()
+
+    def test_foreign_source_or_compiler_fails_before_native_tools_can_be_used(self):
+        self.source.write_bytes(b"foreign source")
+        with self.assertRaisesRegex(RuntimeError, "file differs from its source contract"):
+            self.admit()
+        self.source.write_bytes(b"non-executable fixture source\n")
+        self.compiler.write_bytes(b"foreign compiler")
+        with self.assertRaisesRegex(RuntimeError, "compiler differs from the retained cold fixed-point"):
+            self.admit()
+
+    def test_unchanged_cold_and_source_cannot_hide_a_substituted_installer(self):
+        (self.bootstrap / "hia-release").write_bytes(b"substituted installer")
+        with self.assertRaisesRegex(RuntimeError, "installed tool differs from its receipt: hia-release"):
+            self.admit()
+
+    def test_forged_tool_manifest_still_must_bind_original_cold_inputs(self):
+        original = self.tools["cold-inputs.receipt"]
+        for offset in (0, 8, 40, 72, 80, 112):
+            with self.subTest(offset=offset):
+                changed = bytearray(original)
+                changed[offset] ^= 1
+                self.tools["cold-inputs.receipt"] = bytes(changed)
+                self.save_bootstrap()
+                with self.assertRaisesRegex(RuntimeError, "does not bind this report, B3 and source count"):
+                    self.admit()
+
+    def test_forged_public_receipt_does_not_accept_another_source_inventory(self):
+        self.source_manifest = self.manifest({**{name: (self.hepta / name).read_bytes()
+                                                 for name in self.sources},
+                                              "foreign.hepta": b"unrelated"})
+        self.save_bootstrap()
+        with self.assertRaisesRegex(RuntimeError, "source manifest differs from the selected Git source"):
+            self.admit()
+
+    def test_manifest_binding_and_exact_tool_inventory_are_required(self):
+        path = self.bootstrap / "toolchain.manifest.hiasxm"
+        path.write_bytes(path.read_bytes() + b"trailing")
+        with self.assertRaisesRegex(RuntimeError, "does not bind its retained manifests"):
+            self.admit()
+        self.tools["foreign-tool"] = b"unadmitted"
+        self.save_bootstrap()
+        with self.assertRaisesRegex(RuntimeError, "installed tool inventory differs"):
+            self.admit()
+
+    def test_receipts_and_tools_cannot_be_rebound_through_links(self):
+        path = self.bootstrap / "hia-release"
+        outside = self.root / "same-installer"
+        outside.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(outside)
+        with self.assertRaisesRegex(RuntimeError, "symbolic links"):
+            self.admit()
+        path.unlink()
+        path.hardlink_to(outside)
+        with self.assertRaisesRegex(RuntimeError, "file type or extent"):
+            self.admit()
+
+    def test_manifest_refuses_truncation_duplicates_unsafe_paths_and_trailing_data(self):
+        single = self.manifest({"source.hepta": b"fixture"})
+        row = single[32:]
+        duplicate = b"HIASXM01" + struct.pack("<3Q", 2, 1, 0) + row + row
+        cases = [single[:-1], single + b"x", duplicate, self.manifest({"../source": b"x"}),
+                 self.manifest({"/source": b"x"}), self.manifest({"a/.git/source": b"x"})]
+        for raw in cases:
+            with self.subTest(raw=raw[:32]):
+                with self.assertRaisesRegex(RuntimeError, "native file manifest"):
+                    integration.native_file_manifest(raw)
+
+
+class NativeReleaseReadbackTests(unittest.TestCase):
+    """Mocked native command responses test orchestration, never qualification."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.hepta = self.root / "source"
+        source = self.hepta / "examples/hia_bootstrap/agent_identity.hepta"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"non-executable identity source fixture")
+        self.bootstrap = self.root / "bootstrap"
+        self.bootstrap.mkdir()
+        (self.bootstrap / "hia-release").write_bytes(b"never-executable installer fixture")
+        self.binding = {"native_installer_sha256": integration.digest(self.bootstrap / "hia-release"),
+                        "compiler_sha256": sha256(b"fixture B3").hexdigest()}
+        self.package = self.root / "store.hiapack"
+        self.package.write_bytes(b"non-executable package fixture; no native build claimed")
+        self.package_sha = integration.digest(self.package)
+        self.finalize = {"schema": "hepta.hia.release-finalize.v1", "sha256": self.package_sha,
+                         "bytes": self.package.stat().st_size, "files": 2,
+                         "published": True, "source_attested": True}
+        self.finalize_path = self.root / "finalize.json"
+        written(self.finalize_path, self.finalize)
+        self.output = self.root / "evidence"
+        self.output.mkdir()
+        self.image = b"non-executable helper fixture"
+        self.manifest = {"schema": "hepta.hia.agent-identity-native.v1",
+                         "image_path": "agent-identity.image.bin", "image_sha256": sha256(self.image).hexdigest(),
+                         "compiler_sha256": self.binding["compiler_sha256"], "source_sha256": integration.digest(source)}
+
+    def native_response_fixture(self, argv, **kwargs):
+        self.assertEqual(argv, [str(self.bootstrap / "hia-release"), argv[1],
+                               str(self.output / "installed-release"), self.package_sha])
+        self.assertEqual(kwargs["env"]["PATH"], "")
+        self.assertEqual(kwargs["input"], self.package.read_bytes())
+        self.assertEqual(kwargs["timeout"], 180)
+        if argv[1] == "install":
+            release = self.output / "installed-release" / self.package_sha
+            release.mkdir()
+            (release / "agent-identity.image.bin").write_bytes(self.image)
+            written(release / "agent-identity-manifest.json", self.manifest)
+        value = {"schema": "hepta.hia.release-install.v1", "sha256": self.package_sha,
+                 "files": 2, "bytes": self.package.stat().st_size, "published": argv[1] == "install"}
+        return subprocess.CompletedProcess(argv, 0, integration.encoded(value), b"")
+
+    def readback(self):
+        return integration.native_release_identity(self.hepta, self.bootstrap, self.package,
+                                                   self.finalize_path, self.output, self.binding)
+
+    def test_formal_package_is_installed_then_verified_with_empty_PATH(self):
+        # Three links are the documented native finalizer output, not a source
+        # input defect. All bytes still have to match the publication receipt.
+        for name in ("work-package", "authority-package"):
+            (self.root / name).hardlink_to(self.package)
+        with mock.patch.object(integration.subprocess, "run", side_effect=self.native_response_fixture) as run:
+            manifest, record = self.readback()
+        self.assertEqual([call.args[0][1] for call in run.call_args_list], ["install", "verify"])
+        self.assertEqual(manifest.name, "agent-identity-manifest.json")
+        self.assertEqual(record["package_sha256"], self.package_sha)
+        self.assertEqual(record["manifest"], self.manifest)
+        self.assertIs(record["whole_stack_rewritten_in_hia"], False)
+        self.assertIs(record["production_activated"], False)
+
+    def test_package_and_source_attestation_receipt_are_checked_before_execution(self):
+        for field, value in (("sha256", "f" * 64), ("bytes", self.finalize["bytes"] + 1),
+                             ("files", 0), ("files", True), ("published", False),
+                             ("source_attested", False), ("schema", "hepta.hia.release-install.v1")):
+            with self.subTest(field=field, value=value):
+                written(self.finalize_path, {**self.finalize, field: value})
+                with mock.patch.object(integration.subprocess, "run") as run:
+                    with self.assertRaisesRegex(RuntimeError, "source-attested publication receipt"):
+                        self.readback()
+                run.assert_not_called()
+                self.assertFalse((self.output / "installed-release").exists())
+
+    def test_installer_drift_after_cold_admission_prevents_execution(self):
+        (self.bootstrap / "hia-release").write_bytes(b"different fixture")
+        with mock.patch.object(integration.subprocess, "run") as run:
+            with self.assertRaisesRegex(RuntimeError, "installer changed after post-cold admission"):
+                self.readback()
+        run.assert_not_called()
+
+    def test_packed_installer_uses_the_native_capture_bound_during_readback(self):
+        (self.bootstrap / "hia-release").write_bytes(b"x" * (1024 * 1024 + 1))
+        self.binding["native_installer_sha256"] = integration.digest(self.bootstrap / "hia-release")
+        with mock.patch.object(integration.subprocess, "run", side_effect=self.native_response_fixture) as run:
+            _, record = self.readback()
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(record["native_installer_sha256"], self.binding["native_installer_sha256"])
+
+    def test_failed_install_is_retained_and_never_retried_or_verified(self):
+        failed = subprocess.CompletedProcess([], 14, b"partial original receipt", b"original refusal")
+        with mock.patch.object(integration.subprocess, "run", return_value=failed) as run:
+            with self.assertRaisesRegex(RuntimeError, "native release install did not complete"):
+                self.readback()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual((self.output / "release-install.stdout.json").read_bytes(), failed.stdout)
+        self.assertEqual((self.output / "release-install.stderr.log").read_bytes(), failed.stderr)
+
+    def test_foreign_helper_compiler_is_refused_after_installation_readback(self):
+        self.manifest["compiler_sha256"] = "a" * 64
+        with mock.patch.object(integration.subprocess, "run", side_effect=self.native_response_fixture) as run:
+            with self.assertRaisesRegex(RuntimeError, "helper differs from the selected source or admitted B3"):
+                self.readback()
+        self.assertEqual(run.call_count, 2)
+
+    def test_verify_must_return_its_exact_original_package_and_false_publication(self):
+        def changed(argv, **kwargs):
+            result = self.native_response_fixture(argv, **kwargs)
+            if argv[1] == "verify":
+                value = json.loads(result.stdout)
+                value["published"] = True
+                result.stdout = integration.encoded(value)
+            return result
+        with mock.patch.object(integration.subprocess, "run", side_effect=changed):
+            with self.assertRaisesRegex(RuntimeError, "native release verify receipt differs"):
+                self.readback()
+
+    def test_receipt_json_rejects_duplicate_keys_and_non_JSON_numbers(self):
+        for raw in (b'{"published":false,"published":true}', b'{"bytes":NaN}', b'{"bytes":Infinity}'):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(RuntimeError, "native JSON receipt"):
+                    integration.native_json(raw)
+
+
 class SourceImportBindingTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.repo = self.root / "source"
         package = self.repo / "tools"
         package.mkdir(parents=True)
