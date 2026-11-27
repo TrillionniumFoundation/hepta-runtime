@@ -12,6 +12,8 @@ on:
       - 'tests/test_hia_native_helper_mcp_integration.py'
       - 'tests/hia_native_language_coverage.py'
       - 'tests/test_hia_native_language_coverage.py'
+      - 'tests/hia_native_bootstrap_distribution.py'
+      - 'tests/test_hia_native_bootstrap_distribution.py'
       - '.github/workflows/hia-common-native-integration.yml'
   workflow_dispatch:
 
@@ -19,7 +21,10 @@ permissions:
   contents: read
 
 env:
-  HEPTA_SOURCE_SHA: '7c20b6cfc792f0147b5418968f94734b8890fcca'
+  # Deliberate HOLD until the final source and its actual native distribution
+  # are published and independently pinned. An empty value never selects HEAD.
+  HEPTA_SOURCE_SHA: ''
+  HEPTA_BOOTSTRAP_DISTRIBUTION_SHA: ''
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
@@ -29,7 +34,9 @@ jobs:
   common-native:
     name: Fixed candidate cold, language, MCP and native lease integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Aggregate observer budget includes the ordinary release owner's existing
+    # 1800-second deadline. Native cold remains exactly 180 seconds plus 3 cleanup.
+    timeout-minutes: 90
     steps:
       - name: Checkout exact Runtime candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,7 +44,42 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Checkout the frozen Hepta candidate
+      - name: Verify the exact Runtime source and prepare retained outcomes
+        id: runtime_identity
+        env:
+          RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hia-common-stage"
+          test "$(git rev-parse HEAD)" = "$RUNTIME_SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/runtime-commit.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/runtime-tree.txt"
+
+      - name: Install qualification Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.14'
+
+      - name: Reject foreign cold sources, substituted bootstrap assets and cached imports
+        id: source_controls
+        run: |
+          set -euo pipefail
+          python -I -B tests/test_hia_native_helper_mcp_integration.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/source-admission-tests.log"
+          python -I -B tests/test_hia_native_language_coverage.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-language-controls.log"
+          python -I -B tests/test_hia_native_bootstrap_distribution.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/bootstrap-distribution-controls.log"
+
+      - name: Require both finalized native source and distribution commit pins
+        id: pins
+        run: |
+          set -euo pipefail
+          if ! [[ "$HEPTA_SOURCE_SHA" =~ ^[0-9a-f]{40}$ && "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || [[ "$HEPTA_SOURCE_SHA" = "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" ]]; then
+            echo 'HOLD: final native source F and its published bootstrap distribution D are not both pinned.' >&2
+            exit 1
+          fi
+
+      - name: Checkout the frozen Hepta source F
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: TrillionniumFoundation/Hepta
@@ -45,28 +87,45 @@ jobs:
           path: hia-source
           persist-credentials: false
 
+      - name: Checkout the independently pinned native distribution D
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: ${{ env.HEPTA_BOOTSTRAP_DISTRIBUTION_SHA }}
+          path: hia-bootstrap-distribution
+          persist-credentials: false
+
       - name: Verify source identities and matching HIA catalogs
+        id: sources
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/hia-common-stage"
           test "$(git rev-parse HEAD)" = "$RUNTIME_SOURCE_SHA"
           test "$(git -C hia-source rev-parse HEAD)" = "$HEPTA_SOURCE_SHA"
+          test "$(git -C hia-bootstrap-distribution rev-parse HEAD)" = "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA"
           test -z "$(git status --porcelain --untracked-files=no)"
           test -z "$(git -C hia-source status --porcelain --untracked-files=no)"
           cmp src/mcp/hia_tool_catalog.json hia-source/docs/HIA_AGENT_NATIVE_TOOL_CATALOG.json
-          git rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/runtime-commit.txt"
-          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/runtime-tree.txt"
           git -C hia-source rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/hepta-commit.txt"
           git -C hia-source rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/hepta-tree.txt"
+          git -C hia-bootstrap-distribution rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/distribution-commit.txt"
 
-      - name: Install qualification Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.14'
+      - name: Admit native bootstrap assets and copy the exact frozen native source
+        id: distribution
+        run: |
+          set -euo pipefail
+          python -I -B tests/hia_native_bootstrap_distribution.py \
+            --hepta "$GITHUB_WORKSPACE/hia-source" \
+            --distribution "$GITHUB_WORKSPACE/hia-bootstrap-distribution" \
+            --expected-hepta-source "$HEPTA_SOURCE_SHA" \
+            --expected-distribution "$HEPTA_BOOTSTRAP_DISTRIBUTION_SHA" \
+            --output "$RUNNER_TEMP/hia-common-bootstrap" \
+            --report "$RUNNER_TEMP/hia-common-stage/bootstrap-distribution.json" \
+            > "$RUNNER_TEMP/hia-common-stage/bootstrap-distribution.stdout" \
+            2> "$RUNNER_TEMP/hia-common-stage/bootstrap-distribution.stderr"
 
-      - name: Install native prerequisites and real OpenSSH
+      - name: Install external qualification prerequisites and real OpenSSH
         id: dependencies
         run: |
           set -euo pipefail
@@ -83,13 +142,6 @@ jobs:
           /usr/bin/clang-20 --version > "$RUNNER_TEMP/hia-common-stage/clang.txt"
           /usr/bin/ld --version > "$RUNNER_TEMP/hia-common-stage/ld.txt"
 
-      - name: Reject foreign cold sources and cached or hidden import substitutions
-        id: source_controls
-        run: |
-          set -euo pipefail
-          python -I -B tests/test_hia_native_helper_mcp_integration.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/source-admission-tests.log"
-          python -I -B tests/test_hia_native_language_coverage.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-language-controls.log"
-
       - name: Install pinned Runtime toolchain
         run: |
           set -euo pipefail
@@ -105,25 +157,85 @@ jobs:
           cargo build --locked --all-features --bin hepta-runtime 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/runtime-build.log"
           sha256sum target/debug/hepta-runtime > "$RUNNER_TEMP/hia-common-stage/runtime-binary.sha256"
 
-      - name: Original source-only cold replay with unchanged 180-second budget
-        id: cold
-        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        working-directory: hia-source
+      - name: Construct all native qualification tools from the seven initial roots
+        id: prebuild
+        if: ${{ !cancelled() && steps.distribution.outcome == 'success' && steps.source_controls.outcome == 'success' }}
         run: |
           set -euo pipefail
-          python -B tools/replay_hia_selfhost_cold.py --output "$RUNNER_TEMP/hia-common-cold.json" 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/cold.log"
+          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+            "$RUNNER_TEMP/hia-common-bootstrap/hia-cold-build" \
+            --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
+            --bootstrap "$RUNNER_TEMP/hia-common-bootstrap/bootstrap" \
+            --output "$RUNNER_TEMP/hia-common-toolchain" \
+            > "$RUNNER_TEMP/hia-common-stage/prebuild.stdout" \
+            2> "$RUNNER_TEMP/hia-common-stage/prebuild.stderr"
 
-      - name: Language qualification from the same Hepta source
-        id: language
-        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        working-directory: hia-source
+      - name: Actual sixty-phase native cold replay with unchanged 180 plus 3 budget
+        id: cold
+        if: ${{ !cancelled() && steps.prebuild.outcome == 'success' }}
         run: |
           set -euo pipefail
-          python -B tests/test_hia_selfhost_language_coverage.py --output "$RUNNER_TEMP/hia-common-language.json" 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/language.log"
+          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+            "$RUNNER_TEMP/hia-common-toolchain/hia-cold" \
+            --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
+            --output "$RUNNER_TEMP/hia-common-cold" \
+            --toolchain "$RUNNER_TEMP/hia-common-toolchain" \
+            --bundle "$RUNNER_TEMP/hia-common-toolchain/cold-bundle.hiadat" \
+            > "$RUNNER_TEMP/hia-common-stage/cold.stdout" \
+            2> "$RUNNER_TEMP/hia-common-stage/cold.stderr"
+
+      - name: Admit the actual cold report and construct the native release bootstrap
+        id: post
+        if: ${{ !cancelled() && steps.cold.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+            "$RUNNER_TEMP/hia-common-toolchain/hia-source-bootstrap" \
+            --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
+            --cold "$RUNNER_TEMP/hia-common-cold" \
+            --bootstrap "$RUNNER_TEMP/hia-common-bootstrap/bootstrap" \
+            --output "$RUNNER_TEMP/hia-common-post" \
+            > "$RUNNER_TEMP/hia-common-stage/post.stdout" \
+            2> "$RUNNER_TEMP/hia-common-stage/post.stderr"
+
+      - name: Build and publish the formal source-bound native release package
+        id: release
+        if: ${{ !cancelled() && steps.post.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/hia-common-release"
+          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+            "$RUNNER_TEMP/hia-common-post/hia-release-build" \
+            --output "$RUNNER_TEMP/hia-common-release/release" \
+            --compiler "$RUNNER_TEMP/hia-common-cold/qualification/base/B3.flat" \
+            --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
+            --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
+            --timeout-seconds 1800 \
+            > "$RUNNER_TEMP/hia-common-stage/release.stdout.json" \
+            2> "$RUNNER_TEMP/hia-common-stage/release.stderr"
+
+      - name: Execute every original language witness with the admitted native B3 and M3
+        id: language
+        if: ${{ !cancelled() && steps.post.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        env:
+          RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          env -i PATH="$PATH" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" HOME="$HOME" LANG=C LC_ALL=C TZ=UTC \
+            python -I -B tests/hia_native_language_coverage.py \
+            --hepta "$GITHUB_WORKSPACE/hia-source" \
+            --runtime-source "$GITHUB_WORKSPACE" \
+            --expected-hepta-source "$HEPTA_SOURCE_SHA" \
+            --expected-runtime-source "$RUNTIME_SOURCE_SHA" \
+            --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
+            --native-source-bootstrap "$RUNNER_TEMP/hia-common-post" \
+            --output "$RUNNER_TEMP/hia-common-language.json" \
+            > "$RUNNER_TEMP/hia-common-stage/language.stdout" \
+            2> "$RUNNER_TEMP/hia-common-stage/language.stderr"
 
       - name: Real stdio MCP, SSH worker, native image and consumer lifecycle
         id: integration
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.dependencies.outcome == 'success' && steps.source_controls.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.dependencies.outcome == 'success' && steps.source_controls.outcome == 'success' && steps.release.outcome == 'success' }}
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -134,7 +246,10 @@ jobs:
             --hepta "$GITHUB_WORKSPACE/hia-source" \
             --expected-runtime-source "$RUNTIME_SOURCE_SHA" \
             --expected-hepta-source "$HEPTA_SOURCE_SHA" \
-            --cold-report "$RUNNER_TEMP/hia-common-cold.json" \
+            --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
+            --native-source-bootstrap "$RUNNER_TEMP/hia-common-post" \
+            --native-release-package "$RUNNER_TEMP/hia-common-release/release/store.hiapack" \
+            --native-release-receipt "$RUNNER_TEMP/hia-common-stage/release.stdout.json" \
             --output "$RUNNER_TEMP/hia-common-native" \
             --allow-disposable-sshd 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/integration.log"
 
@@ -142,8 +257,16 @@ jobs:
         if: always()
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUNTIME_IDENTITY_OUTCOME: ${{ steps.runtime_identity.outcome }}
+          PINS_OUTCOME: ${{ steps.pins.outcome }}
+          SOURCES_OUTCOME: ${{ steps.sources.outcome }}
+          DISTRIBUTION_OUTCOME: ${{ steps.distribution.outcome }}
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
+          PREBUILD_OUTCOME: ${{ steps.prebuild.outcome }}
           COLD_OUTCOME: ${{ steps.cold.outcome }}
+          POST_OUTCOME: ${{ steps.post.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
           LANGUAGE_OUTCOME: ${{ steps.language.outcome }}
           INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
           SOURCE_CONTROLS_OUTCOME: ${{ steps.source_controls.outcome }}
@@ -154,14 +277,19 @@ jobs:
           path = Path(os.environ["RUNNER_TEMP"]) / "hia-common-stage"
           path.mkdir(exist_ok=True)
           outcomes = {name.lower(): os.environ[name + "_OUTCOME"] for name in
-                      ("BUILD", "COLD", "LANGUAGE", "INTEGRATION", "SOURCE_CONTROLS")}
-          report = {"schema": "hepta.runtime.common-candidate-stages.v1",
+                      ("RUNTIME_IDENTITY", "PINS", "SOURCES", "DISTRIBUTION", "DEPENDENCIES", "BUILD",
+                       "PREBUILD", "COLD", "POST", "RELEASE", "LANGUAGE", "INTEGRATION", "SOURCE_CONTROLS")}
+          report = {"schema": "hepta.runtime.common-native-candidate-stages.v2",
                     "status": "PASS" if all(value == "success" for value in outcomes.values()) else "HOLD",
                     "runtime_source": os.environ["RUNTIME_SOURCE_SHA"],
-                    "hepta_source": os.environ["HEPTA_SOURCE_SHA"], "original_stage_outcomes": outcomes,
+                    "hepta_source": os.environ["HEPTA_SOURCE_SHA"],
+                    "bootstrap_distribution": os.environ["HEPTA_BOOTSTRAP_DISTRIBUTION_SHA"],
+                    "original_stage_outcomes": outcomes,
                     "cold_wall_seconds": 180, "cold_cleanup_seconds": 3,
+                    "ordinary_release_wall_seconds": 1800,
                     "production_activated": False, "whole_worker_native": False,
-                    "cold_failure_does_not_suppress_independent_provider_tests": True}
+                    "original_language_witnesses_require_actual_native_cold_B3_M3": True,
+                    "source_controls_precede_cold_and_publication": True}
           (path / "stage-outcomes.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
           PY
 
@@ -172,8 +300,10 @@ jobs:
           name: hia-common-native-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/hia-common-stage/
-            ${{ runner.temp }}/hia-common-cold.json
-            ${{ runner.temp }}/hia-common-cold.cold/
+            ${{ runner.temp }}/hia-common-toolchain/
+            ${{ runner.temp }}/hia-common-cold/
+            ${{ runner.temp }}/hia-common-post/
+            ${{ runner.temp }}/hia-common-release/
             ${{ runner.temp }}/hia-common-language.json
             ${{ runner.temp }}/hia-common-language.assertions.json
             ${{ runner.temp }}/hia-common-language.evidence/

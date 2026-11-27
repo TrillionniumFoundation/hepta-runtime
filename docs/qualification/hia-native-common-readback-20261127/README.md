@@ -132,12 +132,54 @@ remains required in the actual native-cold runner. This result does not admit
 a fresh native cold report, qualify the final integrated source, or establish
 common MCP integration.
 
-## Remaining qualification
+## Pinned native bootstrap distribution
 
-The common workflow still has its historical Hepta source pin and hosted cold
-entry pending the final source freeze and pinned seven-root acquisition. This
-commit only adds early catalog equality and the new admission controls there.
-It is not a completed native workflow conversion.
+`tests/hia_native_bootstrap_distribution.py` reads
+`native/bootstrap/linux-x86_64/manifest.json` from a separately pinned Hepta
+distribution commit D. Its schema is
+`hepta.hia.native-bootstrap-distribution.v1`. D must be a direct child of the
+frozen source F, with every Git entry outside that added directory unchanged.
+The manifest binds F's complete commit/tree identity, its native authority,
+binary source and recipe inventories, both entry sources, eight executable
+files and the original construction evidence. All declared bytes and Git
+executable modes must match; missing, undeclared, substituted, symlinked or
+hardlinked artifacts are refused.
+
+The seven fixed initial roots retain their native 64 MiB capture bounds. The
+current `hia-cold-build` entry retains its separate 1 MiB bound. The reader
+copies those actual bytes to fresh mode-0500 files and copies exactly the
+frozen authority/contract source closure to a separate mode-0400 source tree.
+It compiles no source and constructs no seed. Its positive custody result does
+not establish that those programs ran; the following native prebuild must
+independently rebuild and compare the seven roots.
+
+Nine new controls use synthetic Git F/D histories and explicitly non-executable
+fixtures. They cover exact staging, source/manifest binding, missing and extra
+assets, hidden byte drift, symlinks and hardlinks, unsafe paths, duplicate keys,
+both original extent boundaries, changes outside the distribution, wrong
+parentage and preservation of an existing report. All nine passed.
+
+The common workflow now wires the actual native prebuild, sixty-phase cold,
+post-cold admission, formal release, original language fixtures and real MCP
+integration. Native construction uses an empty PATH. External language
+references run without inherited HIA helper selectors. The release package's
+native install and verify outputs supply the identity helper; the old hosted
+cold/helper construction is not used by this workflow path.
+
+Both F and D pins are deliberately empty until the real final source and its
+verified distribution are published. A dedicated gate reports **HOLD** and
+exits 1 before attempting either checkout; empty pins never select a default
+branch. Local validation parsed the YAML, checked all fifteen shell blocks and
+actually exercised that missing-pin refusal. No source or artifact identity
+has been invented to make the framework runnable prematurely.
+
+Cold keeps its original 180-second qualification and 3-second cleanup bounds.
+Ordinary native release explicitly keeps its original 1,800-second selected
+deadline. The 90-minute aggregate CI job allows the added native construction
+stages, release, external fixtures and evidence retention; it does not change
+any native cold budget.
+
+## Remaining qualification
 
 A fresh native prebuild, unchanged-budget cold replay, source bootstrap,
 formal release, complete original language fixtures against the admitted B3/M3,
