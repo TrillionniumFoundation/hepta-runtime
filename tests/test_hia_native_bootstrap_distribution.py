@@ -94,6 +94,26 @@ class NativeBootstrapDistributionTests(unittest.TestCase):
     def admit(self):
         return distribution.admit_distribution(self.source, self.published, self.source_sha, self.distribution_sha)
 
+    def test_staged_bytes_are_read_back_from_F_D_not_a_forged_admission_report(self):
+        staging = self.root / "staged"
+        expected = distribution.stage_distribution(self.source, self.published, self.source_sha, self.distribution_sha, staging)
+        actual, _ = distribution.admit_staged_distribution(self.source, self.published, self.source_sha, self.distribution_sha, staging)
+        self.assertEqual(actual, expected)
+        for target in (staging / distribution.ENTRY, staging / "bootstrap" / distribution.ROOT_NAMES[0],
+                       staging / "source" / self.names[0]):
+            original = target.read_bytes()
+            target.chmod(0o600)
+            target.write_bytes(b"self-reported replacement with a different source identity")
+            target.chmod(0o400 if target.is_relative_to(staging / "source") else 0o500)
+            with self.subTest(path=target), self.assertRaisesRegex(RuntimeError, "staged native"):
+                distribution.admit_staged_distribution(self.source, self.published, self.source_sha, self.distribution_sha, staging)
+            target.chmod(0o600)
+            target.write_bytes(original)
+            target.chmod(0o400 if target.is_relative_to(staging / "source") else 0o500)
+        (staging / "untrusted-admission.json").write_text('{"status":"BOOTSTRAP_DISTRIBUTION_ADMITTED"}')
+        with self.assertRaisesRegex(RuntimeError, "undeclared paths"):
+            distribution.admit_staged_distribution(self.source, self.published, self.source_sha, self.distribution_sha, staging)
+
     def test_exact_pinned_distribution_stages_all_roots_entry_and_only_native_sources(self):
         output = self.root / "staged"
         binding = distribution.stage_distribution(self.source, self.published,

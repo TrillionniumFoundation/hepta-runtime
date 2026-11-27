@@ -46,13 +46,17 @@ def ordinary_stream(path):
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1,
             "native execution evidence must be an ordinary single-link file")
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(descriptor, "rb") as stream:
-        require(identity(os.fstat(stream.fileno())) == identity(before),
-                "native execution evidence changed while opening")
-        yield stream
-        require(identity(os.fstat(stream.fileno())) == identity(before)
-                == identity(path.stat(follow_symlinks=False)),
-                "native execution evidence changed while reading")
+    try:
+        # fdopen can raise from a Python audit hook before taking ownership.
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            require(identity(os.fstat(descriptor)) == identity(before),
+                    "native execution evidence changed while opening")
+            yield stream
+            require(identity(os.fstat(descriptor)) == identity(before)
+                    == identity(path.stat(follow_symlinks=False)),
+                    "native execution evidence changed while reading")
+    finally:
+        os.close(descriptor)
 
 
 def pin(path):
@@ -144,12 +148,16 @@ def trace_summary(path, entry, *, expected_pid=None, required_pids=()):
             "terminal_processes": len(terminated)}
 
 
-def admit_execution(directory, *, source, stage, expected_result=None, owner_receipt=None):
+def admit_execution(directory, *, source, stage, expected_argv, expected_entry,
+                    expected_result=None, owner_receipt=None):
     directory = Path(directory).absolute()
     receipt = read_json(directory / "observation.json")
     argv = receipt.get("argv")
-    require(type(argv) is list and bool(argv) and all(type(item) is str for item in argv)
-            and Path(argv[0]).is_absolute(), "native execution receipt has invalid argv")
+    require(type(expected_argv) is list and bool(expected_argv)
+            and all(type(item) is str for item in expected_argv) and Path(expected_argv[0]).is_absolute()
+            and type(expected_entry) is dict and set(expected_entry) == {"bytes", "sha256"},
+            "native execution admission requires independently selected argv and entry identity")
+    require(argv == expected_argv, "native execution receipt argv differs from its trusted invocation")
     require(receipt.get("schema") == SCHEMA and receipt.get("status") == "OBSERVED_NATIVE_EXECUTION_PASS"
             and receipt.get("source_commit") == source and receipt.get("stage") == stage
             and receipt.get("trace_argv") == command(argv, directory)
@@ -162,7 +170,8 @@ def admit_execution(directory, *, source, stage, expected_result=None, owner_rec
             and receipt.get("observer") == pin(__file__)
             and receipt.get("whole_stack_native") is False,
             "native execution receipt is incomplete or belongs to another source/topology")
-    require(receipt.get("entry") == pin(argv[0]), "native entry changed after its observed execution")
+    require(receipt.get("entry") == expected_entry == pin(expected_argv[0]),
+            "native entry differs from its independently admitted tool identity")
     for name in ("stdout", "stderr"):
         require(receipt.get(name) == pin(directory / name), "native execution stream changed: " + name)
     require(receipt["stderr"]["bytes"] == 0, "native execution wrote stderr or tracer diagnostics")
@@ -188,7 +197,7 @@ def admit_execution(directory, *, source, stage, expected_result=None, owner_rec
                 and words[19] <= words[23] <= words[20],
                 "native owner does not bind the observed successful entry process")
         required_pids.extend((words[2], words[8]))
-    parsed = trace_summary(directory / "execution.trace", argv[0],
+    parsed = trace_summary(directory / "execution.trace", expected_argv[0],
                            expected_pid=receipt["pid"], required_pids=required_pids)
     require(receipt.get("trace") == parsed
             and receipt.get("trace_raw") == {key: parsed[key] for key in ("bytes", "sha256")}
@@ -201,7 +210,7 @@ def admit_execution(directory, *, source, stage, expected_result=None, owner_rec
                 "native execution is not bound to the retained result bytes")
     return {"observation": pin(directory / "observation.json"), "trace": parsed,
             "entry": receipt["entry"], "stdout": receipt["stdout"], "source_commit": source,
-            "stage": stage, "whole_stack_native": False}
+            "stage": stage, "argv": expected_argv, "whole_stack_native": False}
 
 
 def observe(argv, *, directory, source, stage, timeout, result=None):

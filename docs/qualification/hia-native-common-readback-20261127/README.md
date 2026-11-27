@@ -255,6 +255,50 @@ deadline. The 90-minute aggregate CI job allows the added native construction
 stages, release, external fixtures and evidence retention; it does not change
 any native cold budget.
 
+## Trusted native execution chain
+
+`hia_native_execution_chain.py` selects the initial entry from the actual,
+independently verified F/D distribution. It reads back the exact staged source,
+seven roots and entry; it does not accept a claimed admission JSON as authority.
+The native `HIATBOK1` prebuild receipt binds both source and tool manifests and
+every physical stage journal. The source-pinned binary recipe selects the full
+installed set, modes and capture limits. On actual F5622 this is seven stages
+and 45 installed outputs, with all seven initial roots and the public entry
+reconstructed at their admitted byte identities.
+
+The prebuild manifest selects `hia-cold` and `hia-source-bootstrap`. The latter's
+`HIASBOK1` receipt, manifests and stage journal select the eight post-cold
+products, including `hia-release-build`. Every stage must match an independently
+selected complete argv, entry path and executable digest before its observation
+is accepted. Both language qualification and MCP integration consume the
+prebuild observation as part of this chain. The release invocation retains its
+original 1,800-second argument.
+
+The external observer's source pin binds its recorded actual `Popen` input.
+The original `strace -D -f --seccomp-bpf -e trace=execve,execveat` topology is
+unchanged; complete trace readback independently checks the real entry path and
+PID, empty-path descriptor execution and actual terminal processes. No expanded
+string capture is added to the original timed workload. Both bounded file
+readers and streaming trace readers now close their original descriptor even
+when a real Python audit hook rejects `fdopen` before it takes ownership.
+
+The [control receipt](trusted-execution-chain/receipt.json) retains the actual
+1,278-source F5622/D10d5 staged readback and the original control output. Seven
+trace reader controls, six construction controls, ten distribution controls,
+39 source/cold/release controls, nine language controls and the six existing CI
+contract controls passed. All 16 workflow shell blocks passed syntax checking;
+the unchanged REA mapping check passed. Initial fixture and invocation failures
+are retained with their corrections.
+
+Three real compiled C fixture controls were also attempted locally. The actual
+failure/timeout preservation control passed. Two positive tracing controls,
+including execution of a substituted valid ELF, stopped at the container's
+`PTRACE_TRACEME`/`PTRACE_ATTACH` denial. Their original observations, stdout,
+stderr and empty trace files remain HOLD. These controls exercise the observer,
+never HIA execution qualification; the public Linux job must actually pass all
+three before it begins the native prebuild. No native cold, release or common
+MCP success is inferred from the local reader results.
+
 ## Remaining qualification
 
 A fresh native prebuild, unchanged-budget cold replay, source bootstrap,

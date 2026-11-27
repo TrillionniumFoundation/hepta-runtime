@@ -200,6 +200,38 @@ def stage_distribution(hepta, distribution, expected_source, expected_distributi
                                  "entry": str(output / ENTRY)}}
 
 
+def admit_staged_distribution(hepta, distribution, expected_source, expected_distribution, output):
+    """Re-admit actual staged bytes from F/D, never from a self-reported receipt."""
+    binding, sources = admit_distribution(hepta, distribution, expected_source, expected_distribution)
+    output = Path(output).absolute()
+    custody.require(not any(path.is_symlink() for path in (output, *output.parents)) and output.is_dir(),
+                    "native bootstrap staging must remain an ordinary directory")
+    expected = {ENTRY, *("bootstrap/" + name for name in ROOT_NAMES),
+                *("source/" + name for name in sources)}
+    actual_files, actual_directories = set(), set()
+    for path in output.rglob("*"):
+        custody.require(not path.is_symlink(), "native bootstrap staging contains a symbolic link")
+        relative = path.relative_to(output).as_posix()
+        (actual_directories if path.is_dir() else actual_files).add(relative)
+    directories = {parent.as_posix() for name in expected for parent in Path(name).parents
+                   if parent != Path(".")}
+    custody.require(actual_files == expected and actual_directories == directories,
+                    "native bootstrap staging has missing or undeclared paths")
+    for name, row in binding["executables"].items():
+        path = output / ENTRY if name == ENTRY else output / "bootstrap" / name
+        raw = custody.ordinary_bytes(path, MIB if name == ENTRY else 64 * MIB)
+        custody.require(len(raw) == row["bytes"] and sha256(raw).hexdigest() == row["sha256"]
+                        and path.stat().st_mode & 0o7777 == 0o500,
+                        "staged native executable differs from its admitted distribution: " + name)
+    for name, pin in sources.items():
+        path = output / "source" / name
+        raw = custody.ordinary_bytes(path, 64 * MIB, allow_empty=True)
+        custody.require(sha256(raw).hexdigest() == pin and path.stat().st_mode & 0o7777 == 0o400,
+                        "staged native source differs from its frozen source: " + name)
+    return {**binding, "staged": {"source": str(output / "source"), "bootstrap": str(output / "bootstrap"),
+                                 "entry": str(output / ENTRY)}}, sources
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hepta", required=True, type=Path)

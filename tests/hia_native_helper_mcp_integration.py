@@ -271,12 +271,15 @@ def ordinary_bytes(path, maximum, *, single_link=True, allow_empty=False):
             and (0 if allow_empty else 1) <= before.st_size <= maximum,
             "native receipt file type or extent differs from its bounded contract")
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(descriptor, "rb") as stream:
-        opened = os.fstat(stream.fileno())
-        require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino),
-                "native receipt file changed while opening")
-        raw = stream.read(maximum + 1)
-        after = os.fstat(stream.fileno())
+    try:
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            opened = os.fstat(descriptor)
+            require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino),
+                    "native receipt file changed while opening")
+            raw = stream.read(maximum + 1)
+            after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
     identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
                               value.st_size, value.st_mtime_ns, value.st_ctime_ns)
     require(len(raw) == before.st_size and identity(before) == identity(after)
@@ -413,18 +416,21 @@ def native_execution_observer():
     return observer
 
 
-def admit_native_execution_observations(source, cold_report, source_bootstrap,
-                                       cold_execution, post_execution):
-    """Require original traced cold/post executions before using their products."""
-    require(cold_execution is not None and post_execution is not None,
-            "native qualification requires retained cold and post execution observations")
-    observer = native_execution_observer()
-    return {
-        "cold": observer.admit_execution(cold_execution, source=source, stage="cold",
-            expected_result=cold_report, owner_receipt=cold_report.parent / "process-owner.receipt"),
-        "post": observer.admit_execution(post_execution, source=source, stage="post",
-            expected_result=source_bootstrap / "build.receipt",
-            owner_receipt=source_bootstrap / "process-owner.receipt")}
+def admit_native_execution_observations(hepta, args, *, include_release=False):
+    """Require the trusted distribution→prebuild→cold/post→release chain."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "selected_runtime_native_execution_chain", Path(__file__).with_name("hia_native_execution_chain.py"))
+    chain = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(chain)
+    return chain.admit_chain(hepta=hepta, source=args.expected_hepta_source,
+        distribution=args.bootstrap_distribution, distribution_commit=args.expected_bootstrap_distribution,
+        staging=args.native_bootstrap, toolchain=args.native_toolchain, prebuild_execution=args.prebuild_execution,
+        cold_report=args.cold_report, cold_execution=args.cold_execution,
+        post=args.native_source_bootstrap, post_execution=args.post_execution,
+        release_execution=args.release_execution if include_release else None,
+        release_package=args.native_release_package if include_release else None,
+        release_receipt=args.native_release_receipt if include_release else None)
 
 
 def native_release_identity(hepta, source_bootstrap, package, finalize_receipt, output, binding):
@@ -797,6 +803,11 @@ def main(argv=None):
     parser.add_argument("--expected-hepta-source", required=True)
     parser.add_argument("--cold-report", type=Path, required=True)
     parser.add_argument("--native-source-bootstrap", type=Path)
+    parser.add_argument("--bootstrap-distribution", type=Path)
+    parser.add_argument("--expected-bootstrap-distribution")
+    parser.add_argument("--native-bootstrap", type=Path)
+    parser.add_argument("--native-toolchain", type=Path)
+    parser.add_argument("--prebuild-execution", type=Path)
     parser.add_argument("--cold-execution", type=Path)
     parser.add_argument("--post-execution", type=Path)
     parser.add_argument("--release-execution", type=Path)
@@ -805,7 +816,9 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--allow-disposable-sshd", action="store_true")
     args = parser.parse_args(argv)
-    native_arguments = (args.native_source_bootstrap, args.native_release_package, args.native_release_receipt)
+    native_arguments = (args.native_source_bootstrap, args.native_release_package, args.native_release_receipt,
+        args.bootstrap_distribution, args.expected_bootstrap_distribution, args.native_bootstrap,
+        args.native_toolchain, args.prebuild_execution, args.cold_execution, args.post_execution, args.release_execution)
     require(all(native_arguments) or not any(native_arguments),
             "native integration requires its complete post-cold, package and publication inputs")
     require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True,
@@ -894,15 +907,7 @@ def main(argv=None):
         if args.native_source_bootstrap is not None:
             compiler, cold_bytes, report["cold_source_binding"] = admit_native_cold_compiler(
                 hepta, args.cold_report, args.native_source_bootstrap)
-            report["native_execution_observations"] = admit_native_execution_observations(
-                args.expected_hepta_source, args.cold_report, args.native_source_bootstrap,
-                args.cold_execution, args.post_execution)
-            require(args.release_execution is not None and args.native_release_receipt is not None
-                    and args.native_release_receipt.absolute()
-                    == (args.release_execution / "stdout").absolute(),
-                    "native release requires its retained original execution observation")
-            report["native_execution_observations"]["release"] = native_execution_observer().admit_execution(
-                args.release_execution, source=args.expected_hepta_source, stage="release")
+            report["native_execution_observations"] = admit_native_execution_observations(hepta, args, include_release=True)
             manifest, report["native_build"] = native_release_identity(
                 hepta, args.native_source_bootstrap, args.native_release_package,
                 args.native_release_receipt, output, report["cold_source_binding"])

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import struct
+import sys
 import tempfile
 import unittest
 
@@ -69,7 +70,7 @@ class TraceReadbackTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "duplicate"):
             observer.read_json(self.path)
 
-    def test_owner_pid_budget_flags_and_exact_extent_are_bound(self):
+    def observation_fixture(self):
         self.entry.write_bytes(b"non-executable custody fixture")
         directory = self.root / "observation"
         directory.mkdir()
@@ -89,18 +90,84 @@ class TraceReadbackTests(unittest.TestCase):
                "stdout": observer.pin(directory / "stdout"), "stderr": observer.pin(directory / "stderr"),
                "trace_raw": observer.pin(trace), "trace": observer.trace_summary(trace, self.entry)}
         (directory / "observation.json").write_text(json.dumps(row))
+        return directory, row
+
+    def test_owner_pid_budget_flags_and_exact_extent_are_bound(self):
+        directory, row = self.observation_fixture()
         owner = self.root / "owner"
         words = [int.from_bytes(b"HIACOR01", "little"), 0, 102, 101, 1000, 180000001000,
                  180, 3000000000, 103, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 2000,
                  3000002000, 0, 1, 3000, 0, 4096, 16384, 65536, 1, 0, 0, 0]
         owner.write_bytes(struct.pack("<32Q", *words))
-        observer.admit_execution(directory, source="1" * 40, stage="cold", owner_receipt=owner)
+        expected = {"expected_argv": row["argv"], "expected_entry": row["entry"]}
+        observer.admit_execution(directory, source="1" * 40, stage="cold", owner_receipt=owner, **expected)
         for index, value in [(3, 999), (6, 181), (5, 180000001001), (12, 0), (18, 1)]:
             changed = words.copy()
             changed[index] = value
             owner.write_bytes(struct.pack("<32Q", *changed))
             with self.subTest(index=index), self.assertRaisesRegex(RuntimeError, "native owner"):
-                observer.admit_execution(directory, source="1" * 40, stage="cold", owner_receipt=owner)
+                observer.admit_execution(directory, source="1" * 40, stage="cold", owner_receipt=owner, **expected)
+
+    def test_self_reported_entry_and_full_argv_cannot_replace_trusted_inputs(self):
+        directory, row = self.observation_fixture()
+        original = json.loads(json.dumps(row))
+        expected = {"expected_argv": [str(self.entry)], "expected_entry": observer.pin(self.entry)}
+        observer.admit_execution(directory, source="1" * 40, stage="cold", **expected)
+        foreign = self.root / "foreign-entry"
+        foreign.write_bytes(self.entry.read_bytes())
+        for argv in ([str(foreign)], [str(self.entry), "--source", "/foreign/source"],
+                     [str(self.entry), "--timeout-seconds", "181"]):
+            row = {**original, "argv": argv, "trace_argv": observer.command(argv, directory)}
+            (directory / "observation.json").write_text(json.dumps(row))
+            with self.subTest(argv=argv), self.assertRaisesRegex(RuntimeError, "trusted invocation"):
+                observer.admit_execution(directory, source="1" * 40, stage="cold", **expected)
+        self.entry.write_bytes(b"different purported ELF at the same selected path")
+        row = {**original, "entry": observer.pin(self.entry)}
+        (directory / "observation.json").write_text(json.dumps(row))
+        with self.assertRaisesRegex(RuntimeError, "independently admitted tool"):
+            observer.admit_execution(directory, source="1" * 40, stage="cold", **expected)
+
+    def test_real_audit_rejection_cannot_leak_an_open_evidence_descriptor(self):
+        source = Path(observer.__file__).absolute()
+        helper = source.with_name("hia_native_helper_mcp_integration.py")
+        self.path.write_bytes(b"audit descriptor fixture")
+        code = r'''
+import errno, importlib.util, os, sys
+loaded = []
+for index, path in enumerate(sys.argv[1:3]):
+    spec = importlib.util.spec_from_file_location("audit_control_" + str(index), path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    loaded.append(module)
+blocked = []
+def audit(event, args):
+    if event == "open" and type(args[0]) is int:
+        blocked.append(args[0])
+        raise PermissionError("real audit fdopen refusal")
+sys.addaudithook(audit)
+for index, module in enumerate(loaded):
+    try:
+        if index == 0:
+            module.pin(sys.argv[3])
+        else:
+            module.ordinary_bytes(sys.argv[3], 1024)
+    except PermissionError as error:
+        assert str(error) == "real audit fdopen refusal"
+    else:
+        raise AssertionError("audit hook did not reject fdopen")
+    assert len(blocked) == index + 1
+    try:
+        os.fstat(blocked[-1])
+    except OSError as error:
+        assert error.errno == errno.EBADF
+    else:
+        raise AssertionError("evidence descriptor leaked after audit refusal")
+print("two real fdopen audit refusals closed both original descriptors")
+'''
+        result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(source), str(helper), str(self.path)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("closed both original descriptors", result.stdout)
 
 
 class ActualExternalObserverControls(unittest.TestCase):
@@ -159,23 +226,40 @@ int main(int argc, char **argv) {
 
     def test_real_detached_trace_is_admitted_then_source_result_and_log_tampering_refused(self):
         output, result = self.root / "success", self.root / "result"
+        expected = {"expected_argv": [str(self.entry), str(result)], "expected_entry": observer.pin(self.entry)}
         row = observer.observe([str(self.entry), str(result)], directory=output,
             source="1" * 40, stage="cold", timeout=10, result=result)
         self.assertEqual(row["returncode"], 0)
-        admitted = observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result)
+        admitted = observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result, **expected)
         self.assertFalse(admitted["whole_stack_native"])
         self.assertEqual(admitted["trace"]["execveat"], 1)
         with self.assertRaisesRegex(RuntimeError, "another source"):
-            observer.admit_execution(output, source="2" * 40, stage="cold", expected_result=result)
+            observer.admit_execution(output, source="2" * 40, stage="cold", expected_result=result, **expected)
+        changed = {**expected, "expected_argv": [str(self.entry), str(result), "--foreign-source"]}
+        with self.assertRaisesRegex(RuntimeError, "trusted invocation"):
+            observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result, **changed)
         raw = result.read_bytes()
         result.write_bytes(b"substituted result")
         with self.assertRaisesRegex(RuntimeError, "result bytes"):
-            observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result)
+            observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result, **expected)
         result.write_bytes(raw)
         trace = output / "execution.trace"
         trace.write_bytes(trace.read_bytes() + b'999 execve("/bin/sh", [], 0x0) = 0\n')
         with self.assertRaisesRegex(RuntimeError, "foreign path"):
-            observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result)
+            observer.admit_execution(output, source="1" * 40, stage="cold", expected_result=result, **expected)
+
+    def test_real_valid_elf_substitution_is_refused_by_independent_entry_identity(self):
+        entry, output, result = self.root / "substituted-entry", self.root / "substituted-execution", self.root / "substituted-result"
+        expected = observer.pin(self.entry)
+        entry.write_bytes(self.entry.read_bytes() + b"different valid ELF custody control\n")
+        entry.chmod(0o700)
+        argv = [str(entry), str(result)]
+        row = observer.observe(argv, directory=output, source="1" * 40, stage="prebuild", timeout=10, result=result)
+        self.assertEqual(row["returncode"], 0)
+        self.assertGreater(row["trace"]["execveat"], 0)
+        with self.assertRaisesRegex(RuntimeError, "independently admitted tool"):
+            observer.admit_execution(output, source="1" * 40, stage="prebuild", expected_argv=argv,
+                                     expected_entry=expected, expected_result=result)
 
     def test_real_failure_and_observer_timeout_preserve_actual_terminal_receipts(self):
         for name, argument, timeout, expected in [
