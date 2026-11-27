@@ -167,15 +167,13 @@ async fn positive_candidate_uses_actual_published_bytes_and_is_restored() {
 			.unwrap()
 			.prediction_bits_sha256()
 	);
-	assert!(
-		next_request_with_state(
-			&params,
-			value["publication"]["artifact_id"].as_str().unwrap(),
-			&temp.path().join("state"),
-		)
-		.await
-		.is_err()
-	);
+	assert!(next_request_with_state(
+		&params,
+		value["publication"]["artifact_id"].as_str().unwrap(),
+		&temp.path().join("state"),
+	)
+	.await
+	.is_err());
 }
 
 #[tokio::test]
