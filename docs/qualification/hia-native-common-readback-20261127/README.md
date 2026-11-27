@@ -172,12 +172,16 @@ references run without inherited HIA helper selectors. The release package's
 native install and verify outputs supply the identity helper; the old hosted
 cold/helper construction is not used by this workflow path.
 
-Both F and D pins are deliberately empty until the real final source and its
-verified distribution are published. A dedicated gate reports **HOLD** and
-exits 1 before attempting either checkout; empty pins never select a default
-branch. Local validation parsed the YAML, checked all fifteen shell blocks and
-actually exercised that missing-pin refusal. No source or artifact identity
-has been invented to make the framework runnable prematurely.
+The first framework receipt records both F and D pins empty. The source F is
+now the actually published `5622dafbcfa10ad0c6f99214994ee7dcf71523e0`, with
+tree `3987d656b5baf0138abe2ad8500f798a72bd45f5` independently read from GitHub.
+Its source freeze does not establish successful execution of the new cold
+chain. D remains empty until the actual bound native executable distribution
+is published. The dedicated gate still reports **HOLD** and exits 1 before
+attempting either checkout; empty pins never select a default branch. The
+earlier receipt parsed the YAML, checked all fifteen shell blocks and actually
+exercised the original missing-pin refusal. No artifact identity has been
+invented to make the framework runnable prematurely.
 
 Cold keeps its original 180-second qualification and 3-second cleanup bounds.
 Ordinary native release explicitly keeps its original 1,800-second selected
