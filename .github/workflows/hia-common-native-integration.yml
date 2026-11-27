@@ -10,6 +10,8 @@ on:
       - 'src/mcp/hia_*'
       - 'tests/hia_native_helper_mcp_integration.py'
       - 'tests/test_hia_native_helper_mcp_integration.py'
+      - 'tests/hia_native_language_coverage.py'
+      - 'tests/test_hia_native_language_coverage.py'
       - '.github/workflows/hia-common-native-integration.yml'
   workflow_dispatch:
 
@@ -43,7 +45,7 @@ jobs:
           path: hia-source
           persist-credentials: false
 
-      - name: Preserve candidate source identities
+      - name: Verify source identities and matching HIA catalogs
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -53,6 +55,7 @@ jobs:
           test "$(git -C hia-source rev-parse HEAD)" = "$HEPTA_SOURCE_SHA"
           test -z "$(git status --porcelain --untracked-files=no)"
           test -z "$(git -C hia-source status --porcelain --untracked-files=no)"
+          cmp src/mcp/hia_tool_catalog.json hia-source/docs/HIA_AGENT_NATIVE_TOOL_CATALOG.json
           git rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/runtime-commit.txt"
           git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/runtime-tree.txt"
           git -C hia-source rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/hepta-commit.txt"
@@ -85,6 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           python -I -B tests/test_hia_native_helper_mcp_integration.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/source-admission-tests.log"
+          python -I -B tests/test_hia_native_language_coverage.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-language-controls.log"
 
       - name: Install pinned Runtime toolchain
         run: |
