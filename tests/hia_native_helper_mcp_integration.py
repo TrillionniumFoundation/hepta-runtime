@@ -403,6 +403,30 @@ def admit_native_cold_compiler(hepta, cold_report, source_bootstrap):
     return compiler, cold_bytes, binding
 
 
+def native_execution_observer():
+    """Load this Runtime's independently inventoried external trace reader."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "selected_runtime_native_execution_trace", Path(__file__).with_name("hia_native_execution_trace.py"))
+    observer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(observer)
+    return observer
+
+
+def admit_native_execution_observations(source, cold_report, source_bootstrap,
+                                       cold_execution, post_execution):
+    """Require original traced cold/post executions before using their products."""
+    require(cold_execution is not None and post_execution is not None,
+            "native qualification requires retained cold and post execution observations")
+    observer = native_execution_observer()
+    return {
+        "cold": observer.admit_execution(cold_execution, source=source, stage="cold",
+            expected_result=cold_report, owner_receipt=cold_report.parent / "process-owner.receipt"),
+        "post": observer.admit_execution(post_execution, source=source, stage="post",
+            expected_result=source_bootstrap / "build.receipt",
+            owner_receipt=source_bootstrap / "process-owner.receipt")}
+
+
 def native_release_identity(hepta, source_bootstrap, package, finalize_receipt, output, binding):
     """Install and independently verify the formal source-bound native package."""
     # The finalizer intentionally retains three links to its published package.
@@ -773,6 +797,9 @@ def main(argv=None):
     parser.add_argument("--expected-hepta-source", required=True)
     parser.add_argument("--cold-report", type=Path, required=True)
     parser.add_argument("--native-source-bootstrap", type=Path)
+    parser.add_argument("--cold-execution", type=Path)
+    parser.add_argument("--post-execution", type=Path)
+    parser.add_argument("--release-execution", type=Path)
     parser.add_argument("--native-release-package", type=Path)
     parser.add_argument("--native-release-receipt", type=Path)
     parser.add_argument("--output", type=Path, required=True)
@@ -867,6 +894,15 @@ def main(argv=None):
         if args.native_source_bootstrap is not None:
             compiler, cold_bytes, report["cold_source_binding"] = admit_native_cold_compiler(
                 hepta, args.cold_report, args.native_source_bootstrap)
+            report["native_execution_observations"] = admit_native_execution_observations(
+                args.expected_hepta_source, args.cold_report, args.native_source_bootstrap,
+                args.cold_execution, args.post_execution)
+            require(args.release_execution is not None and args.native_release_receipt is not None
+                    and args.native_release_receipt.absolute()
+                    == (args.release_execution / "stdout").absolute(),
+                    "native release requires its retained original execution observation")
+            report["native_execution_observations"]["release"] = native_execution_observer().admit_execution(
+                args.release_execution, source=args.expected_hepta_source, stage="release")
             manifest, report["native_build"] = native_release_identity(
                 hepta, args.native_source_bootstrap, args.native_release_package,
                 args.native_release_receipt, output, report["cold_source_binding"])

@@ -202,6 +202,8 @@ def main(argv=None):
     parser.add_argument("--expected-runtime-source", required=True)
     parser.add_argument("--cold-report", type=Path, required=True)
     parser.add_argument("--native-source-bootstrap", type=Path, required=True)
+    parser.add_argument("--cold-execution", type=Path, required=True)
+    parser.add_argument("--post-execution", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     custody.require(sys.platform == "linux" and os.uname().machine == "x86_64",
@@ -226,6 +228,9 @@ def main(argv=None):
             [hepta, runtime], directory / "import-cache")
         _, _, binding = custody.admit_native_cold_compiler(hepta, args.cold_report, args.native_source_bootstrap)
         report["cold_source_binding"] = binding
+        report["native_execution_observations"] = custody.admit_native_execution_observations(
+            args.expected_hepta_source, args.cold_report, args.native_source_bootstrap,
+            args.cold_execution, args.post_execution)
         compilers, observer, report["cold_generations"] = cold_successors(args.cold_report, binding)
         report["cold_phase_evidence"] = phase_evidence(args.cold_report)
         report["profile"] = binding["profile"]
@@ -250,6 +255,10 @@ def main(argv=None):
         report["counts"] = run_fixtures(language, compiler_api, compilers, observer, directory, report)
         _, _, following = custody.admit_native_cold_compiler(hepta, args.cold_report, args.native_source_bootstrap)
         custody.require(following == binding, "native language source/cold/bootstrap inputs changed during execution")
+        custody.require(custody.admit_native_execution_observations(
+            args.expected_hepta_source, args.cold_report, args.native_source_bootstrap,
+            args.cold_execution, args.post_execution) == report["native_execution_observations"],
+            "native execution observations changed during language qualification")
         custody.require([custody.source_import_inventory(root) for root in (hepta, runtime)]
                         == report["python_source_imports"], "native language observer source changed during execution")
         report["checks"]["source_closure_unchanged"] = True

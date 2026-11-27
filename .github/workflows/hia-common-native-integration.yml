@@ -14,6 +14,8 @@ on:
       - 'tests/test_hia_native_language_coverage.py'
       - 'tests/hia_native_bootstrap_distribution.py'
       - 'tests/test_hia_native_bootstrap_distribution.py'
+      - 'tests/hia_native_execution_trace.py'
+      - 'tests/test_hia_native_execution_trace.py'
       - '.github/workflows/hia-common-native-integration.yml'
   workflow_dispatch:
 
@@ -68,6 +70,7 @@ jobs:
           python -I -B tests/test_hia_native_helper_mcp_integration.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/source-admission-tests.log"
           python -I -B tests/test_hia_native_language_coverage.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-language-controls.log"
           python -I -B tests/test_hia_native_bootstrap_distribution.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/bootstrap-distribution-controls.log"
+          python -I -B tests/test_hia_native_execution_trace.py TraceReadbackTests -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-trace-reader-controls.log"
 
       - name: Require both finalized native source and distribution commit pins
         id: pins
@@ -142,6 +145,14 @@ jobs:
           /usr/bin/clang-20 --version > "$RUNNER_TEMP/hia-common-stage/clang.txt"
           /usr/bin/ld --version > "$RUNNER_TEMP/hia-common-stage/ld.txt"
 
+      - name: Verify actual detached execution tracing and retained failure receipts
+        id: execution_controls
+        env:
+          HIA_NATIVE_EXECUTION_CONTROL_EVIDENCE: ${{ runner.temp }}/hia-common-stage/native-execution-control-evidence
+        run: |
+          set -euo pipefail
+          python -I -B tests/test_hia_native_execution_trace.py ActualExternalObserverControls -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/native-execution-controls.log"
+
       - name: Install pinned Runtime toolchain
         run: |
           set -euo pipefail
@@ -159,10 +170,13 @@ jobs:
 
       - name: Construct all native qualification tools from the seven initial roots
         id: prebuild
-        if: ${{ !cancelled() && steps.distribution.outcome == 'success' && steps.source_controls.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.distribution.outcome == 'success' && steps.source_controls.outcome == 'success' && steps.execution_controls.outcome == 'success' }}
         run: |
           set -euo pipefail
-          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+          python -I -B tests/hia_native_execution_trace.py \
+            --output "$RUNNER_TEMP/hia-common-stage/prebuild-execution" \
+            --source-commit "$HEPTA_SOURCE_SHA" --stage prebuild \
+            --result "$RUNNER_TEMP/hia-common-toolchain/build.receipt" -- \
             "$RUNNER_TEMP/hia-common-bootstrap/hia-cold-build" \
             --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
             --bootstrap "$RUNNER_TEMP/hia-common-bootstrap/bootstrap" \
@@ -175,7 +189,10 @@ jobs:
         if: ${{ !cancelled() && steps.prebuild.outcome == 'success' }}
         run: |
           set -euo pipefail
-          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+          python -I -B tests/hia_native_execution_trace.py \
+            --output "$RUNNER_TEMP/hia-common-stage/cold-execution" \
+            --source-commit "$HEPTA_SOURCE_SHA" --stage cold \
+            --result "$RUNNER_TEMP/hia-common-cold/final-cold.json" -- \
             "$RUNNER_TEMP/hia-common-toolchain/hia-cold" \
             --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
             --output "$RUNNER_TEMP/hia-common-cold" \
@@ -189,7 +206,10 @@ jobs:
         if: ${{ !cancelled() && steps.cold.outcome == 'success' }}
         run: |
           set -euo pipefail
-          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+          python -I -B tests/hia_native_execution_trace.py \
+            --output "$RUNNER_TEMP/hia-common-stage/post-execution" \
+            --source-commit "$HEPTA_SOURCE_SHA" --stage post \
+            --result "$RUNNER_TEMP/hia-common-post/build.receipt" -- \
             "$RUNNER_TEMP/hia-common-toolchain/hia-source-bootstrap" \
             --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
             --cold "$RUNNER_TEMP/hia-common-cold" \
@@ -204,14 +224,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir "$RUNNER_TEMP/hia-common-release"
-          env -i PATH= LANG=C LC_ALL=C TZ=UTC \
+          python -I -B tests/hia_native_execution_trace.py \
+            --output "$RUNNER_TEMP/hia-common-stage/release-execution" \
+            --source-commit "$HEPTA_SOURCE_SHA" --stage release -- \
             "$RUNNER_TEMP/hia-common-post/hia-release-build" \
             --output "$RUNNER_TEMP/hia-common-release/release" \
             --compiler "$RUNNER_TEMP/hia-common-cold/qualification/base/B3.flat" \
             --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
             --source "$RUNNER_TEMP/hia-common-bootstrap/source" \
             --timeout-seconds 1800 \
-            > "$RUNNER_TEMP/hia-common-stage/release.stdout.json" \
+            > "$RUNNER_TEMP/hia-common-stage/release-observer.stdout" \
             2> "$RUNNER_TEMP/hia-common-stage/release.stderr"
 
       - name: Execute every original language witness with the admitted native B3 and M3
@@ -229,6 +251,8 @@ jobs:
             --expected-runtime-source "$RUNTIME_SOURCE_SHA" \
             --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
             --native-source-bootstrap "$RUNNER_TEMP/hia-common-post" \
+            --cold-execution "$RUNNER_TEMP/hia-common-stage/cold-execution" \
+            --post-execution "$RUNNER_TEMP/hia-common-stage/post-execution" \
             --output "$RUNNER_TEMP/hia-common-language.json" \
             > "$RUNNER_TEMP/hia-common-stage/language.stdout" \
             2> "$RUNNER_TEMP/hia-common-stage/language.stderr"
@@ -248,8 +272,11 @@ jobs:
             --expected-hepta-source "$HEPTA_SOURCE_SHA" \
             --cold-report "$RUNNER_TEMP/hia-common-cold/final-cold.json" \
             --native-source-bootstrap "$RUNNER_TEMP/hia-common-post" \
+            --cold-execution "$RUNNER_TEMP/hia-common-stage/cold-execution" \
+            --post-execution "$RUNNER_TEMP/hia-common-stage/post-execution" \
             --native-release-package "$RUNNER_TEMP/hia-common-release/release/store.hiapack" \
-            --native-release-receipt "$RUNNER_TEMP/hia-common-stage/release.stdout.json" \
+            --release-execution "$RUNNER_TEMP/hia-common-stage/release-execution" \
+            --native-release-receipt "$RUNNER_TEMP/hia-common-stage/release-execution/stdout" \
             --output "$RUNNER_TEMP/hia-common-native" \
             --allow-disposable-sshd 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/integration.log"
 
@@ -270,6 +297,7 @@ jobs:
           LANGUAGE_OUTCOME: ${{ steps.language.outcome }}
           INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
           SOURCE_CONTROLS_OUTCOME: ${{ steps.source_controls.outcome }}
+          EXECUTION_CONTROLS_OUTCOME: ${{ steps.execution_controls.outcome }}
         run: |
           python -B - <<'PY'
           import json, os
@@ -278,7 +306,7 @@ jobs:
           path.mkdir(exist_ok=True)
           outcomes = {name.lower(): os.environ[name + "_OUTCOME"] for name in
                       ("RUNTIME_IDENTITY", "PINS", "SOURCES", "DISTRIBUTION", "DEPENDENCIES", "BUILD",
-                       "PREBUILD", "COLD", "POST", "RELEASE", "LANGUAGE", "INTEGRATION", "SOURCE_CONTROLS")}
+                       "PREBUILD", "COLD", "POST", "RELEASE", "LANGUAGE", "INTEGRATION", "SOURCE_CONTROLS", "EXECUTION_CONTROLS")}
           report = {"schema": "hepta.runtime.common-native-candidate-stages.v2",
                     "status": "PASS" if all(value == "success" for value in outcomes.values()) else "HOLD",
                     "runtime_source": os.environ["RUNTIME_SOURCE_SHA"],
@@ -287,6 +315,8 @@ jobs:
                     "original_stage_outcomes": outcomes,
                     "cold_wall_seconds": 180, "cold_cleanup_seconds": 3,
                     "ordinary_release_wall_seconds": 1800,
+                    "native_execution_trace": "strace -D -f --seccomp-bpf -e trace=execve,execveat",
+                    "cold_and_post_trace_readback_required": True,
                     "production_activated": False, "whole_worker_native": False,
                     "original_language_witnesses_require_actual_native_cold_B3_M3": True,
                     "source_controls_precede_cold_and_publication": True}
