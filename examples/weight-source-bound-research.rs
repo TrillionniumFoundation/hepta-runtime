@@ -132,7 +132,9 @@ async fn run(args: &[String]) -> Result<()> {
 		ResearchOperation::BinaryChoiceContrast { params } => {
 			serde_json::to_value(weight_binary_choice::evaluate(&params).await?)?
 		}
-		ResearchOperation::F16Research { params } => serde_json::to_value(f16_research::run(*params).await?)?,
+		ResearchOperation::F16Research { params } => {
+			serde_json::to_value(f16_research::run(*params).await?)?
+		}
 		ResearchOperation::F16NextRequest {
 			params,
 			artifact_id,
