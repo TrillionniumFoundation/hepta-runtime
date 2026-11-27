@@ -5,9 +5,9 @@
 
 use super::*;
 use crate::mcp::weight_f16_proposal::{F16ProposalParams, Member, ReadSetRole, TensorBinding};
+use crate::mcp::weight_guard::f16::{FeatureBatch, FeatureOrigin, HeadSelection};
 use crate::mcp::weight_guard::{Constraint, Objective};
 use crate::mcp::weight_tensor::ExactElementEdit;
-use f16::{FeatureBatch, FeatureOrigin, HeadSelection};
 
 fn hex(bytes: &[u8]) -> String {
 	bytes.iter().map(|value| format!("{value:02x}")).collect()
@@ -167,13 +167,15 @@ async fn positive_candidate_uses_actual_published_bytes_and_is_restored() {
 			.unwrap()
 			.prediction_bits_sha256()
 	);
-	assert!(next_request_with_state(
-		&params,
-		value["publication"]["artifact_id"].as_str().unwrap(),
-		&temp.path().join("state"),
-	)
-	.await
-	.is_err());
+	assert!(
+		next_request_with_state(
+			&params,
+			value["publication"]["artifact_id"].as_str().unwrap(),
+			&temp.path().join("state"),
+		)
+		.await
+		.is_err()
+	);
 }
 
 #[tokio::test]
