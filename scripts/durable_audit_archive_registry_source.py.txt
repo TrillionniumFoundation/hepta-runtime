@@ -1,0 +1,236 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 96 or read64(s, 0) != REQUEST:
+        return INVALID
+    operation = read64(s, 8)
+    token = read64(s, 48)
+    argument = read64(s, 56)
+    if operation > 6 or zero_bytes(s, 64, 32) == 0:
+        return INVALID
+    if operation != 1 and zero_bytes(s, 16, 32) == 0:
+        return INVALID
+    if operation == 1:
+        if token != 0 or argument != 0:
+            return INVALID
+    else:
+        if operation == 2:
+            if token == 0 or argument > 1:
+                return INVALID
+        else:
+            if argument != 0 or operation == 0 and token != 0 or operation == 6 and token != 0:
+                return INVALID
+            if operation == 3 or operation == 4:
+                if token == 0:
+                    return INVALID
+    if length(o) < 112 or length(w) < 128 or length(w) % 64 != 0:
+        return CAPACITY
+    if operation == 0:
+        if zero_bytes(w, 0, length(w)) == 0:
+            return INVALID
+        put(w, 0, STATE)
+        return reply(w, o, 0, 0, 0, 0, 0)
+    if valid_state(w) == 0:
+        return INVALID
+    if operation == 1:
+        if get(w, 24) == 1:
+            return reply(w, o, 2, 0, 0, 0, 0)
+        if get(w, 32) != 0:
+            return reply(w, o, 1, 0, 0, 0, 0)
+        prune(w)
+        found = find_key(s, w)
+        if found != 0:
+            references = get(w, found + 40)
+            if references > MAX_REFS:
+                return FATAL
+            put(w, found + 40, references + 1)
+            put(w, 32, get(w, found))
+            put(w, 40, 0)
+            return reply(w, o, 0, get(w, found), 0, 0, 0)
+        count = get(w, 8)
+        if count == (length(w) - 128) // 64:
+            if length(w) > MAXWORD - 64:
+                return CAPACITY
+            return reply(w, o, 7, 0, 0, 0, length(w) + 64)
+        if get(w, 16) == MAXWORD:
+            return FATAL
+        serial = get(w, 16) + 1
+        at = 128 + count * 64
+        put(w, at, serial)
+        copy_bytes(w, s, at + 8, 16, 32)
+        put(w, at + 40, 1)
+        put(w, 8, count + 1)
+        put(w, 16, serial)
+        put(w, 32, serial)
+        put(w, 40, 1)
+        return reply(w, o, 0, serial, 1, 0, 0)
+    if operation == 6:
+        pending = get(w, 32)
+        destroyed = 0
+        if pending != 0:
+            found = find_token(w, pending)
+            references = get(w, found + 40) - 1
+            put(w, found + 40, references)
+            if references == 0:
+                destroyed = 1
+        put(w, 32, 0)
+        put(w, 40, 0)
+        put(w, 24, 1)
+        return reply(w, o, 0, pending, 0, destroyed, 0)
+    if operation == 5 and token == 0:
+        return reply(w, o, 0, 0, 0, 0, 0)
+    found = find_token(w, token)
+    if found == 0:
+        return reply(w, o, 3, token, 0, 0, 0)
+    references = get(w, found + 40)
+    if operation == 5:
+        return reply(w, o, 0, token, 0, 0, 0)
+    if operation == 2:
+        if token != get(w, 32) or references == 0:
+            return INVALID
+        destroyed = 0
+        if argument == 0:
+            put(w, found + 40, references - 1)
+            if references == 1:
+                destroyed = 1
+        put(w, 32, 0)
+        put(w, 40, 0)
+        return reply(w, o, 0, token, 0, destroyed, 0)
+    reserved = 0
+    if token == get(w, 32):
+        reserved = 1
+    if references <= reserved:
+        return reply(w, o, 3, token, 0, 0, 0)
+    if operation == 3:
+        if references > MAX_REFS:
+            return FATAL
+        put(w, found + 40, references + 1)
+        return reply(w, o, 0, token, 0, 0, 0)
+    if operation == 4:
+        put(w, found + 40, references - 1)
+        destroyed = 0
+        if references == 1:
+            destroyed = 1
+        return reply(w, o, 0, token, 0, destroyed, 0)
+    return INVALID
+
+def zero_bytes(s:readbuf, start:u64, size:u64) -> u64:
+    index = 0
+    while index < size:
+        if byte(s, start + index) != 0:
+            return 0
+        index = index + 1
+    return 1
+
+def clear_bytes(w:mutbuf, start:u64, size:u64) -> u64:
+    index = 0
+    while index < size:
+        store(w, start + index, 0)
+        index = index + 1
+    return 0
+
+def copy_bytes(w:mutbuf, s:readbuf, target:u64, start:u64, size:u64) -> u64:
+    index = 0
+    while index < size:
+        store(w, target + index, byte(s, start + index))
+        index = index + 1
+    return 0
+
+def move_bytes(w:mutbuf, target:u64, start:u64, size:u64) -> u64:
+    index = 0
+    while index < size:
+        value = byte(w, start + index)
+        store(w, target + index, value)
+        index = index + 1
+    return 0
+
+def find_token(w:mutbuf, token:u64) -> u64:
+    index = 0
+    while index < get(w, 8):
+        at = 128 + index * 64
+        if get(w, at) == token:
+            return at
+        index = index + 1
+    return 0
+
+def find_key(s:readbuf, w:mutbuf) -> u64:
+    index = 0
+    while index < get(w, 8):
+        at = 128 + index * 64
+        equal = 1
+        key = 0
+        while key < 4:
+            if read64(s, 16 + key * 8) != get(w, at + 8 + key * 8):
+                equal = 0
+            key = key + 1
+        if equal == 1:
+            return at
+        index = index + 1
+    return 0
+
+def prune(w:mutbuf) -> u64:
+    count = get(w, 8)
+    selected = 0
+    index = 0
+    while index < count:
+        at = 128 + index * 64
+        if get(w, at + 40) != 0:
+            if selected != index:
+                move_bytes(w, 128 + selected * 64, at, 64)
+            selected = selected + 1
+        index = index + 1
+    clear_bytes(w, 128 + selected * 64, (count - selected) * 64)
+    put(w, 8, selected)
+    return 0
+
+def valid_state(w:mutbuf) -> u64:
+    if get(w, 0) != STATE or get(w, 24) > 1 or get(w, 40) > 1 or zero_bytes(w, 48, 80) == 0:
+        return 0
+    count = get(w, 8)
+    if count > (length(w) - 128) // 64:
+        return 0
+    pending = get(w, 32)
+    if pending == 0 and get(w, 40) != 0 or pending != 0 and get(w, 24) != 0:
+        return 0
+    prior = 0
+    found_pending = 0
+    index = 0
+    while index < count:
+        at = 128 + index * 64
+        serial = get(w, at)
+        references = get(w, at + 40)
+        if serial <= prior or serial > get(w, 16) or references > MAX_REFS + 1 or zero_bytes(w, at + 48, 16) == 0:
+            return 0
+        prior = serial
+        if serial == pending:
+            if references == 0:
+                return 0
+            found_pending = 1
+        index = index + 1
+    if pending != 0 and found_pending == 0:
+        return 0
+    if zero_bytes(w, 128 + count * 64, length(w) - 128 - count * 64) == 0:
+        return 0
+    return 1
+
+def reply(w:mutbuf, o:mutbuf, status:u64, token:u64, created:u64, destroyed:u64, required:u64) -> u32:
+    clear_bytes(o, 0, 112)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, token)
+    at = find_token(w, token)
+    if at != 0:
+        put(o, 24, get(w, at + 40))
+    put(o, 32, created)
+    put(o, 40, destroyed)
+    put(o, 48, required)
+    live = 0
+    index = 0
+    while index < get(w, 8):
+        if get(w, 128 + index * 64 + 40) != 0:
+            live = live + 1
+        index = index + 1
+    put(o, 56, live)
+    put(o, 64, get(w, 8))
+    put(o, 72, get(w, 32))
+    put(o, 80, get(w, 24))
+    put(o, 88, get(w, 16))
+    return 112

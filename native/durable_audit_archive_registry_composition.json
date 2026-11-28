@@ -1,0 +1,79 @@
+{
+  "actual_sources": {
+    "native/durable_audit_record_io.hepta": {
+      "bytes": 98637,
+      "sha256": "0e7e9dcb4f77b2f31ce64c85e3bd765995c79d0e6b8bb7c6da17ed0fc05bfbdf"
+    },
+    "scripts/author_durable_audit_archive_registry.py": {
+      "bytes": 2855,
+      "sha256": "de912f4e4f820f9089535b1c7a3217c5fb0d7d7ef2dbbe1ae94d2edc9d2d51c6"
+    },
+    "scripts/author_durable_common.py": {
+      "bytes": 6909,
+      "sha256": "9f6f6f8268bf33dec5df5a645ef51e2afe209d8b5db901360419021fb6b59a01"
+    },
+    "scripts/durable_audit_archive_registry_source.py.txt": {
+      "bytes": 7246,
+      "sha256": "8cdf711c9ed6578760f94eead4ab07e2529e19356a7c494f3fbda19129ee2e83"
+    },
+    "src/mcp/runtime/request_archive_store.rs": {
+      "bytes": 39570,
+      "sha256": "efecc499d8032f06230e5048dfe2daf65d74560ab171aed707c187653e511c48"
+    },
+    "src/mcp/runtime/request_audit.rs": {
+      "bytes": 68414,
+      "sha256": "b5189f2923153ffa83d0b45a7cdf89873b0f17ebbe6ec1b174c05bab291d73da"
+    }
+  },
+  "authored_functions": 10,
+  "authored_sha256": "e9af6dc06a3d59bb9df428ec1ff93f701ce8d6e14a5e32c3ac704c988491b437",
+  "domain": "Same-runtime global Weak<Inner> registry keyed by actual root/legacy device+inode; reservations span actual open/load/fence; reference drops retire the exact physical owner and dead weak entries are pruned only on later open",
+  "functions": {
+    "clear_bytes": "f2",
+    "copy_bytes": "f3",
+    "entry": "f0",
+    "find_key": "f6",
+    "find_token": "f5",
+    "get": "f10",
+    "move_bytes": "f4",
+    "prune": "f7",
+    "put": "f11",
+    "read64": "f12",
+    "reply": "f9",
+    "valid_state": "f8",
+    "zero_bytes": "f1"
+  },
+  "imported_exact_functions": [
+    {
+      "complete_functions": {
+        "f23": "96a6aede4f4584068e874350fdec26cf182d579b8ccf64bd31b589bc4d7fb8ef",
+        "f24": "2e3242dbb6458e8cc087cff3a437044bf33ac020b38cb089eef1b135aeb985e9",
+        "f25": "5e81cfb5bced402829a4c1778ddb98176830b10f7d897dbd3cd1c14bb635957b"
+      },
+      "path": "native/durable_audit_record_io.hepta",
+      "relocation": {
+        "f23": "f10",
+        "f24": "f11",
+        "f25": "f12"
+      },
+      "sha256": "0e7e9dcb4f77b2f31ce64c85e3bd765995c79d0e6b8bb7c6da17ed0fc05bfbdf"
+    }
+  ],
+  "module": "durable_audit_archive_registry",
+  "output_bytes": 112,
+  "production_routing_qualified": false,
+  "public_archive_qualified": false,
+  "requires_mechanical_binding": [
+    "actual directory identity acquisition before registry lock",
+    "one global instance across sessions",
+    "exclusive open gate across layout child",
+    "atomic reference operations and exact final owner retirement",
+    "actual allocator growth and sticky poison"
+  ],
+  "schema": "hepta.runtime.durable-source-composition.v1",
+  "source_bytes": 40258,
+  "source_sha256": "89331d5949760264057442c414278438eddb2b6dfb9fe93e9d219b6be2c41819",
+  "total_blocks": 172,
+  "total_functions": 13,
+  "workspace_bytes": "128+64*N; grow zeroed storage when requested, no application entry cap"
+}
