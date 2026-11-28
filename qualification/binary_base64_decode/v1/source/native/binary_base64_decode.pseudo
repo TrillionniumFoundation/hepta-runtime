@@ -1,0 +1,512 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<24 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3549757090987987528 or load(s,8)!=4 or load(s,16)!=0:
+        return 4294967295
+    size=length(s)-24
+    if utf8(s,24,size)==0:
+        return 4294967295
+    code=0
+    number=0
+    at=0
+    while at<size:
+        if byte(s,24+at)>=128:
+            code=7
+        at=at+1
+    if code==0:
+        scanned=base64_scan(s,o,0)
+        code=scanned>>32
+        number=scanned&4294967295
+    if code!=0:
+        return emit_error(o,code,number)
+    if length(o)<64+number:
+        return 4294967294
+    fill_range(o,0,64,0)
+    put(o,0,3544386040927240776)
+    put(o,56,number)
+    base64_scan(s,o,1)
+    return 64+number
+
+def alphabet(value:u64) -> u64:
+    if value>=65 and value<=90:
+        return value-65
+    if value>=97 and value<=122:
+        return value-71
+    if value>=48 and value<=57:
+        return value+4
+    if value==43:
+        return 62
+    if value==47:
+        return 63
+    return 64
+
+def base64_scan(s:readbuf,o:mutbuf,emit:u64) -> u64:
+    size=length(s)-24
+    if size!=0:
+        if byte(s,24)==61:
+            return 4294967296
+    quad=0
+    left=0
+    pads=0
+    padding=0
+    produced=0
+    characters=0
+    at=0
+    while at<size:
+        value=byte(s,24+at)
+        if value==61:
+            padding=1
+            if quad>=2:
+                pads=pads+1
+                if quad+pads>=4:
+                    if at+1<size:
+                        return 8589934592
+                    return produced
+        else:
+            value=alphabet(value)
+            if value>=64:
+                return 12884901888
+            if padding!=0:
+                return 17179869184
+            pads=0
+            characters=characters+1
+            if quad==0:
+                quad=1
+                left=value
+            else:
+                if quad==1:
+                    if emit!=0:
+                        store(o,64+produced,(left<<2)|(value>>4))
+                    produced=produced+1
+                    left=value&15
+                    quad=2
+                else:
+                    if quad==2:
+                        if emit!=0:
+                            store(o,64+produced,(left<<4)|(value>>2))
+                        produced=produced+1
+                        left=value&3
+                        quad=3
+                    else:
+                        if emit!=0:
+                            store(o,64+produced,(left<<6)|value)
+                        produced=produced+1
+                        left=0
+                        quad=0
+        at=at+1
+    if quad==1:
+        return 21474836480+characters
+    if quad!=0:
+        return 25769803776
+    return produced
+
+def decimal_power(value:u64) -> u64:
+    if value>=1000000000:
+        return 1000000000
+    if value>=100000000:
+        return 100000000
+    if value>=10000000:
+        return 10000000
+    if value>=1000000:
+        return 1000000
+    if value>=100000:
+        return 100000
+    if value>=10000:
+        return 10000
+    if value>=1000:
+        return 1000
+    if value>=100:
+        return 100
+    if value>=10:
+        return 10
+    return 1
+
+def next_power(value:u64) -> u64:
+    if value==1000000000:
+        return 100000000
+    if value==100000000:
+        return 10000000
+    if value==10000000:
+        return 1000000
+    if value==1000000:
+        return 100000
+    if value==100000:
+        return 10000
+    if value==10000:
+        return 1000
+    if value==1000:
+        return 100
+    if value==100:
+        return 10
+    if value==10:
+        return 1
+    return 0
+
+def decimal_size(value:u64) -> u64:
+    power=decimal_power(value)
+    count=0
+    while power!=0:
+        count=count+1
+        power=next_power(power)
+    return count
+
+def append_decimal(o:mutbuf,at:u64,value:u64) -> u64:
+    power=decimal_power(value)
+    while power!=0:
+        digit=0
+        while value>=power:
+            value=value-power
+            digit=digit+1
+        store(o,at,48+digit)
+        at=at+1
+        power=next_power(power)
+    return at
+
+def emit_error(o:mutbuf,code:u64,number:u64) -> u32:
+    size=0
+    if code==1:
+        size=27
+    if code==2:
+        size=25
+    if code==3:
+        size=27
+    if code==4:
+        size=33
+    if code==5:
+        size=58+decimal_size(number)+39
+    if code==6:
+        size=17
+    if code==7:
+        size=52
+    if size==0:
+        return 4294967295
+    if length(o)<64+size:
+        return 4294967294
+    fill_range(o,0,64,0)
+    put(o,0,3544386040927240776)
+    put(o,8,3)
+    klass=15
+    if code==7:
+        klass=1
+    put(o,24,klass)
+    put(o,40,size)
+    put(o,56,size)
+    if code==1:
+        literal_leading(o,64)
+    if code==2:
+        literal_excess(o,64)
+    if code==3:
+        literal_alphabet(o,64)
+    if code==4:
+        literal_discontinuous(o,64)
+    if code==5:
+        end=literal_length_prefix(o,64)
+        end=append_decimal(o,end,number)
+        literal_length_suffix(o,end)
+    if code==6:
+        literal_padding(o,64)
+    if code==7:
+        literal_ascii(o,64)
+    return 64+size
+
+def literal_leading(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,76)
+    store(w,at+1,101)
+    store(w,at+2,97)
+    store(w,at+3,100)
+    store(w,at+4,105)
+    store(w,at+5,110)
+    store(w,at+6,103)
+    store(w,at+7,32)
+    store(w,at+8,112)
+    store(w,at+9,97)
+    store(w,at+10,100)
+    store(w,at+11,100)
+    store(w,at+12,105)
+    store(w,at+13,110)
+    store(w,at+14,103)
+    store(w,at+15,32)
+    store(w,at+16,110)
+    store(w,at+17,111)
+    store(w,at+18,116)
+    store(w,at+19,32)
+    store(w,at+20,97)
+    store(w,at+21,108)
+    store(w,at+22,108)
+    store(w,at+23,111)
+    store(w,at+24,119)
+    store(w,at+25,101)
+    store(w,at+26,100)
+    return at+27
+
+def literal_excess(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,69)
+    store(w,at+1,120)
+    store(w,at+2,99)
+    store(w,at+3,101)
+    store(w,at+4,115)
+    store(w,at+5,115)
+    store(w,at+6,32)
+    store(w,at+7,100)
+    store(w,at+8,97)
+    store(w,at+9,116)
+    store(w,at+10,97)
+    store(w,at+11,32)
+    store(w,at+12,97)
+    store(w,at+13,102)
+    store(w,at+14,116)
+    store(w,at+15,101)
+    store(w,at+16,114)
+    store(w,at+17,32)
+    store(w,at+18,112)
+    store(w,at+19,97)
+    store(w,at+20,100)
+    store(w,at+21,100)
+    store(w,at+22,105)
+    store(w,at+23,110)
+    store(w,at+24,103)
+    return at+25
+
+def literal_alphabet(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,79)
+    store(w,at+1,110)
+    store(w,at+2,108)
+    store(w,at+3,121)
+    store(w,at+4,32)
+    store(w,at+5,98)
+    store(w,at+6,97)
+    store(w,at+7,115)
+    store(w,at+8,101)
+    store(w,at+9,54)
+    store(w,at+10,52)
+    store(w,at+11,32)
+    store(w,at+12,100)
+    store(w,at+13,97)
+    store(w,at+14,116)
+    store(w,at+15,97)
+    store(w,at+16,32)
+    store(w,at+17,105)
+    store(w,at+18,115)
+    store(w,at+19,32)
+    store(w,at+20,97)
+    store(w,at+21,108)
+    store(w,at+22,108)
+    store(w,at+23,111)
+    store(w,at+24,119)
+    store(w,at+25,101)
+    store(w,at+26,100)
+    return at+27
+
+def literal_discontinuous(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,68)
+    store(w,at+1,105)
+    store(w,at+2,115)
+    store(w,at+3,99)
+    store(w,at+4,111)
+    store(w,at+5,110)
+    store(w,at+6,116)
+    store(w,at+7,105)
+    store(w,at+8,110)
+    store(w,at+9,117)
+    store(w,at+10,111)
+    store(w,at+11,117)
+    store(w,at+12,115)
+    store(w,at+13,32)
+    store(w,at+14,112)
+    store(w,at+15,97)
+    store(w,at+16,100)
+    store(w,at+17,100)
+    store(w,at+18,105)
+    store(w,at+19,110)
+    store(w,at+20,103)
+    store(w,at+21,32)
+    store(w,at+22,110)
+    store(w,at+23,111)
+    store(w,at+24,116)
+    store(w,at+25,32)
+    store(w,at+26,97)
+    store(w,at+27,108)
+    store(w,at+28,108)
+    store(w,at+29,111)
+    store(w,at+30,119)
+    store(w,at+31,101)
+    store(w,at+32,100)
+    return at+33
+
+def literal_length_prefix(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,73)
+    store(w,at+1,110)
+    store(w,at+2,118)
+    store(w,at+3,97)
+    store(w,at+4,108)
+    store(w,at+5,105)
+    store(w,at+6,100)
+    store(w,at+7,32)
+    store(w,at+8,98)
+    store(w,at+9,97)
+    store(w,at+10,115)
+    store(w,at+11,101)
+    store(w,at+12,54)
+    store(w,at+13,52)
+    store(w,at+14,45)
+    store(w,at+15,101)
+    store(w,at+16,110)
+    store(w,at+17,99)
+    store(w,at+18,111)
+    store(w,at+19,100)
+    store(w,at+20,101)
+    store(w,at+21,100)
+    store(w,at+22,32)
+    store(w,at+23,115)
+    store(w,at+24,116)
+    store(w,at+25,114)
+    store(w,at+26,105)
+    store(w,at+27,110)
+    store(w,at+28,103)
+    store(w,at+29,58)
+    store(w,at+30,32)
+    store(w,at+31,110)
+    store(w,at+32,117)
+    store(w,at+33,109)
+    store(w,at+34,98)
+    store(w,at+35,101)
+    store(w,at+36,114)
+    store(w,at+37,32)
+    store(w,at+38,111)
+    store(w,at+39,102)
+    store(w,at+40,32)
+    store(w,at+41,100)
+    store(w,at+42,97)
+    store(w,at+43,116)
+    store(w,at+44,97)
+    store(w,at+45,32)
+    store(w,at+46,99)
+    store(w,at+47,104)
+    store(w,at+48,97)
+    store(w,at+49,114)
+    store(w,at+50,97)
+    store(w,at+51,99)
+    store(w,at+52,116)
+    store(w,at+53,101)
+    store(w,at+54,114)
+    store(w,at+55,115)
+    store(w,at+56,32)
+    store(w,at+57,40)
+    return at+58
+
+def literal_length_suffix(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,41)
+    store(w,at+1,32)
+    store(w,at+2,99)
+    store(w,at+3,97)
+    store(w,at+4,110)
+    store(w,at+5,110)
+    store(w,at+6,111)
+    store(w,at+7,116)
+    store(w,at+8,32)
+    store(w,at+9,98)
+    store(w,at+10,101)
+    store(w,at+11,32)
+    store(w,at+12,49)
+    store(w,at+13,32)
+    store(w,at+14,109)
+    store(w,at+15,111)
+    store(w,at+16,114)
+    store(w,at+17,101)
+    store(w,at+18,32)
+    store(w,at+19,116)
+    store(w,at+20,104)
+    store(w,at+21,97)
+    store(w,at+22,110)
+    store(w,at+23,32)
+    store(w,at+24,97)
+    store(w,at+25,32)
+    store(w,at+26,109)
+    store(w,at+27,117)
+    store(w,at+28,108)
+    store(w,at+29,116)
+    store(w,at+30,105)
+    store(w,at+31,112)
+    store(w,at+32,108)
+    store(w,at+33,101)
+    store(w,at+34,32)
+    store(w,at+35,111)
+    store(w,at+36,102)
+    store(w,at+37,32)
+    store(w,at+38,52)
+    return at+39
+
+def literal_padding(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,73)
+    store(w,at+1,110)
+    store(w,at+2,99)
+    store(w,at+3,111)
+    store(w,at+4,114)
+    store(w,at+5,114)
+    store(w,at+6,101)
+    store(w,at+7,99)
+    store(w,at+8,116)
+    store(w,at+9,32)
+    store(w,at+10,112)
+    store(w,at+11,97)
+    store(w,at+12,100)
+    store(w,at+13,100)
+    store(w,at+14,105)
+    store(w,at+15,110)
+    store(w,at+16,103)
+    return at+17
+
+def literal_ascii(w:mutbuf,at:u64) -> u64:
+    store(w,at+0,115)
+    store(w,at+1,116)
+    store(w,at+2,114)
+    store(w,at+3,105)
+    store(w,at+4,110)
+    store(w,at+5,103)
+    store(w,at+6,32)
+    store(w,at+7,97)
+    store(w,at+8,114)
+    store(w,at+9,103)
+    store(w,at+10,117)
+    store(w,at+11,109)
+    store(w,at+12,101)
+    store(w,at+13,110)
+    store(w,at+14,116)
+    store(w,at+15,32)
+    store(w,at+16,115)
+    store(w,at+17,104)
+    store(w,at+18,111)
+    store(w,at+19,117)
+    store(w,at+20,108)
+    store(w,at+21,100)
+    store(w,at+22,32)
+    store(w,at+23,99)
+    store(w,at+24,111)
+    store(w,at+25,110)
+    store(w,at+26,116)
+    store(w,at+27,97)
+    store(w,at+28,105)
+    store(w,at+29,110)
+    store(w,at+30,32)
+    store(w,at+31,111)
+    store(w,at+32,110)
+    store(w,at+33,108)
+    store(w,at+34,121)
+    store(w,at+35,32)
+    store(w,at+36,65)
+    store(w,at+37,83)
+    store(w,at+38,67)
+    store(w,at+39,73)
+    store(w,at+40,73)
+    store(w,at+41,32)
+    store(w,at+42,99)
+    store(w,at+43,104)
+    store(w,at+44,97)
+    store(w,at+45,114)
+    store(w,at+46,97)
+    store(w,at+47,99)
+    store(w,at+48,116)
+    store(w,at+49,101)
+    store(w,at+50,114)
+    store(w,at+51,115)
+    return at+52

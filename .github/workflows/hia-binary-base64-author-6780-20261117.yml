@@ -1,0 +1,49 @@
+name: Author exact HIA strict Base64 decoding
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-base64-author-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  source-author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_base64_decode/v1/author
+      BINARY_MANIFEST: 9a836965dc3e57c405b3557f858bf885a68e075aa9fcf111d5091f13594680f9
+    steps:
+      - name: Checkout frozen source author
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_base64_decode/v1/author
+          persist-credentials: false
+      - name: Checkout exact HIA source tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source heads
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Author exact HIA without compiling or executing a native module
+        run: |
+          python3 -I -B "$BINARY_SOURCE/authoring/freeze_driver.py" \
+            --source "$BINARY_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/binary-base64-decode-authored" --manifest-sha256 "$BINARY_MANIFEST"
+      - name: Preserve all generated sources and process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-base64-decode-author-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-base64-decode-authored
+          if-no-files-found: error
+          retention-days: 14

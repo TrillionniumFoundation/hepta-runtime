@@ -1,0 +1,51 @@
+name: Independently read complete private entropy archive
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-entropy-private-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ENTROPY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/private_archive_reader
+      ENTROPY_MANIFEST: 4c957672a48f1f87637bc64105438849a98666aa408f813d2c035112192cf46e
+    steps:
+      - name: Checkout complete frozen uploaded-archive readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_entropy/v1/private_archive_reader
+          persist-credentials: false
+      - name: Verify exact reader head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Fully restore and read original uploaded private archive
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/archive_reader.py" run \
+            --input "$RUNNER_TEMP/binary-entropy-private-independent-input" \
+            --capture "$RUNNER_TEMP/binary-entropy-private-independent-proof" \
+            --source-manifest-sha256 "$ENTROPY_MANIFEST"
+      - name: Preserve complete independent proof
+        if: always()
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/archive_reader.py" export \
+            --input "$RUNNER_TEMP/binary-entropy-private-independent-input" \
+            --capture "$RUNNER_TEMP/binary-entropy-private-independent-proof" \
+            --source-manifest-sha256 "$ENTROPY_MANIFEST" \
+            --output "$RUNNER_TEMP/binary-entropy-private-independent-export"
+      - name: Upload independent complete private proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-entropy-private-independent-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-entropy-private-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

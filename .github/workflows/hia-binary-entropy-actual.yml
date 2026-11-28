@@ -1,0 +1,47 @@
+name: Qualify actual process-lifetime HIA entropy and UUID4
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-entropy-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ENTROPY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/source
+      ENTROPY_MANIFEST: 82bac38232219630b133255655f95e8914e1a28a17a7f0edc7dfb26c7af688e3
+    steps:
+      - name: Checkout all frozen source domain and readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_entropy/v1/source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Admit retained build and execute each original and HIA input once
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/binary-entropy-actual" --source-manifest-sha256 "$ENTROPY_MANIFEST"
+      - name: Preserve all completed or failed bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/binary-entropy-actual" --output "$RUNNER_TEMP/binary-entropy-actual-export" \
+            --source-manifest-sha256 "$ENTROPY_MANIFEST"
+      - name: Upload complete actual and pure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-entropy-actual-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-entropy-actual-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

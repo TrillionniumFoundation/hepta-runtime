@@ -1,0 +1,31 @@
+{
+  "schema": "hepta.runtime.binary-entropy.pure-reader-correction.v1",
+  "before": {
+    "git_blob": "2e9cf92c6ac346c5541a6f5358cf31536f87664f",
+    "sha256": "6c32fe4b8dc571af6d647b4a549e56ab47f965cf39dc6e62e973d70a4fa3265c",
+    "bytes": 16787
+  },
+  "after": {
+    "key": "entropyReadCaptureFixed",
+    "git_blob": "29bb7671fb2a127f11846649eca3bc2eb9727252",
+    "bytes": 17085,
+    "sha256": "63fb77e8413732b1f5d68b97a9ff24065551999bdf1270894b7db27510470c10"
+  },
+  "replacements": [
+    {
+      "before": "def faults(case,caps,filters):\n    for cap in caps:",
+      "after": "def faults(case,caps,filters,index,next_fd):\n    for position,cap in enumerate(caps):"
+    },
+    {
+      "before": "if matched:require(value==-matched[-1],\"actual kernel response matches installed seccomp fault\")",
+      "after": "if case[\"kind\"]==\"cache-closed\"and index==1 and position==0:\n            require(op==3 and a==next_fd and value==-9 and cap[\"payload_hex\"]==\"\",\n                \"actual deliberately closed cached descriptor returns EBADF\")\n        elif matched:require(value==-matched[-1],\"actual kernel response matches installed seccomp fault\")"
+    },
+    {
+      "before": "faults(case,actual[\"capabilities\"],b[\"filters\"])",
+      "after": "faults(case,actual[\"capabilities\"],b[\"filters\"],index,right[\"start\"][\"next_fd\"])"
+    }
+  ],
+  "reason": "A deliberately closed cached descriptor has a real unfiltered EBADF fstat before HIA forgets it. Require exactly the first cached stat in that frozen case and call; do not permit any other unexplained error.",
+  "production_hia_native_and_inputs_unchanged": true,
+  "new_application_executions": 0
+}

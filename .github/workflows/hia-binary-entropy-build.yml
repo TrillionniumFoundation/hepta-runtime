@@ -1,0 +1,58 @@
+name: Build process-lifetime HIA entropy and UUID4 boundary
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-entropy-build-fixed-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/native_build
+      BINARY_MANIFEST: a594c84bafa2dbc7069dc151cdff5199106c94a3f0b58681c9124aae5ca5dda5
+    steps:
+      - name: Checkout fully frozen native source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_entropy/v1/native_build
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete source heads
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Compile and completely read fixed HIA graph with zero applications
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/build_gate.py" build \
+            --work "$RUNNER_TEMP/binary-entropy-build" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain all completed or failed build bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/build_gate.py" export \
+            --work "$RUNNER_TEMP/binary-entropy-build" --output "$RUNNER_TEMP/binary-entropy-build-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload complete build and guarded reader evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-entropy-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-entropy-build-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
