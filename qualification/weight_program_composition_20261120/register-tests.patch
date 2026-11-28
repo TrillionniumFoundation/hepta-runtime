@@ -1,0 +1,14 @@
+--- a/src/mcp/mod.rs
++++ b/src/mcp/mod.rs
+@@ -85,6 +85,11 @@
+ pub mod weight_semantic_certificate;
+ pub mod weight_tensor;
+ 
++// Isolated research tests; no production route or owner is registered.
++#[cfg(test)]
++#[path = "../../qualification/weight_program_composition_20261120/composition.rs"]
++mod weight_program_composition;
++
+ // Session working directory is now stored per-server-instance (see server.rs).
+ // This module only provides helper functions for the session root directory.
+ 
