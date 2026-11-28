@@ -1,0 +1,364 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if valid_request(s) == 0:
+        return INVALID
+    if length(o) < 128 or length(w) < 1048576:
+        return CAPACITY
+    if length(s) > length(w) - 524288:
+        return CAPACITY
+    if get(w, 232) == 0:
+        if zeros(w, 0, length(w)) == 0:
+            return INVALID
+        put(w, 232, STATE)
+        put(w, 16, length(s))
+        put(w, 24, read64(s, 8))
+        put(w, 32, length(o))
+        put(w, 40, length(w))
+        copy_range(w, s, 524288, 0, length(s))
+        fixed_names(w, get(w, 24))
+        if get(w, 24) == 2:
+            put(w, 0, 10)
+        else:
+            put(w, 0, 20)
+    else:
+        if get(w, 232) != STATE or get(w, 16) != length(s) or get(w, 32) != length(o) or get(w, 40) != length(w):
+            return INVALID
+        if get(w, 224) != 1 or equal_inputs(s, w, 524288) == 0 or ack_valid(w) == 0:
+            return INVALID
+        put(w, 224, 0)
+    while True:
+        phase = get(w, 0)
+        result = INVALID
+        if phase >= 10 and phase <= 12:
+            result = prior(w)
+        if phase >= 20 and phase <= 32:
+            result = preparing(w)
+        if phase >= 40 and phase <= 47:
+            result = publishing(w)
+        if phase >= 900 and phase <= 950:
+            result = finishing(o, w)
+        if result != 0:
+            return result
+        if get(w, 0) == phase:
+            return INVALID
+    return INVALID
+
+def valid_request(s:readbuf) -> u64:
+    if length(s) < 160:
+        return 0
+    if read64(s, 0) != REQUEST or read64(s, 8) < 1 or read64(s, 8) > 3 or read64(s, 16) != length(s) - 32 or read64(s, 24) != 0:
+        return 0
+    kind = choose(read64(s, 8) == 3, 2, 3)
+    if read64(s, 32) != RECORD_RESPONSE or read64(s, 40) != 0 or read64(s, 48) != kind or read64(s, 56) != length(s) - 32:
+        return 0
+    if read64(s, 64) > 4294967295 or read64(s, 104) > 1:
+        return 0
+    if kind == 2 and read64(s, 104) != 1:
+        return 0
+    if read64(s, 104) == 0 and (read64(s, 112) != 0 or read64(s, 120) != 0):
+        return 0
+    count = read64(s, 128)
+    if (length(s) - 160) % 16 != 0 or count != (length(s) - 160) // 16:
+        return 0
+    if read64(s, 136) != 0 or read64(s, 144) != 0 or read64(s, 152) != 0:
+        return 0
+    return 1
+
+def prior(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 10:
+        put(w, 1536, METADATA_REQUEST)
+        put(w, 1544, 1)
+        put(w, 1552, 0)
+        put(w, 1560, 0)
+        return action(w, 100, 0, 1536, 32, 270336, 4384, 11)
+    if phase == 11:
+        if get(w, 1536) != METADATA_REQUEST or get(w, 1544) != 1 or get(w, 1552) != 0 or get(w, 1560) != 0:
+            return INVALID
+        if error != 0:
+            bad(w, 1, error)
+        else:
+            if value < 160 or get(w, 270336) != METADATA_RESPONSE or get(w, 270368) != 1 or get(w, 270376) != value or zeros(w, 270480, 16) == 0:
+                return INVALID
+            if get(w, 270344) > 1 or get(w, 270352) > 4095 or get(w, 270384) > 1 or get(w, 270392) > 1:
+                return INVALID
+            if get(w, 270344) != 0:
+                if value != 160 or get(w, 270360) < 1 or get(w, 270360) > 30:
+                    return INVALID
+                put(w, 112, get(w, 270344))
+                put(w, 120, get(w, 270360))
+                bad(w, 1, get(w, 270352))
+            else:
+                if get(w, 270352) != 0 or get(w, 270360) != 0:
+                    return INVALID
+                if get(w, 270384) == 0:
+                    if value != 160:
+                        return INVALID
+                    bad(w, 2, 0)
+                else:
+                    if value < 288 or checked_old(w, value) == 0:
+                        return INVALID
+                    put(w, 0, 12)
+    if phase == 12:
+        old = 270496
+        current = 524320
+        old_count = get(w, old + 96)
+        count = get(w, current + 96)
+        if get(w, old + 32) != 12 or equal(w, old + 40, current + 40, 32) == 0:
+            bad(w, 3, 0)
+        else:
+            if get(w, old + 72) == 1 and (get(w, current + 72) != 1 or equal(w, old + 80, current + 80, 16) == 0):
+                bad(w, 3, 0)
+            else:
+                if old_count > count or count > old_count + 1 or equal(w, old + 128, current + 128, old_count * 16) == 0:
+                    bad(w, 3, 0)
+                else:
+                    put(w, 0, 20)
+    return 0
+
+def checked_old(w:mutbuf, size:u64) -> u64:
+    at = 270496
+    if get(w, at) != RECORD_RESPONSE or get(w, at + 8) != 0 or get(w, at + 16) != 3 or get(w, at + 24) != size - 160:
+        return 0
+    if get(w, at + 32) > 4294967295 or get(w, at + 72) > 1 or zeros(w, at + 104, 24) == 0:
+        return 0
+    count = get(w, at + 96)
+    if count > 256 or size != 288 + count * 16:
+        return 0
+    if get(w, at + 72) == 0 and (get(w, at + 80) != 0 or get(w, at + 88) != 0):
+        return 0
+    return 1
+
+def preparing(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 20:
+        count = get(w, 136)
+        if count == 32:
+            temporary_name(w)
+            put(w, 0, 30)
+        else:
+            return action(w, 12, 0, 512 + count, 32 - count, 0, 0, 21)
+    if phase == 21:
+        if error == 4:
+            put(w, 0, 20)
+        else:
+            if error != 0 or value == 0:
+                bad(w, 4, error)
+            else:
+                put(w, 136, get(w, 136) + value)
+                put(w, 0, 20)
+    if phase == 30:
+        return action(w, 1, 1, 1024, get(w, 104), OPEN_FLAGS, 384, 31)
+    if phase == 31:
+        if error != 0:
+            bad(w, 5, error)
+        else:
+            put(w, 80, 1)
+            put(w, 88, 1)
+            put(w, 0, 32)
+    if phase == 32:
+        serialize(w)
+        if get(w, 64) > 65536:
+            bad(w, 6, 0)
+        else:
+            put(w, 72, 0)
+            put(w, 0, 40)
+    return 0
+
+def publishing(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 40:
+        if get(w, 72) == get(w, 64):
+            return action(w, 11, 1, 0, 0, 0, 0, 43)
+        return action(w, 13, 1, 278528 + get(w, 72), get(w, 64) - get(w, 72), 0, 0, 41)
+    if phase == 41:
+        if error == 4:
+            put(w, 0, 40)
+        else:
+            if error != 0:
+                bad(w, 7, error)
+            else:
+                if value == 0:
+                    bad(w, 8, 0)
+                else:
+                    put(w, 72, get(w, 72) + value)
+                    put(w, 0, 40)
+    if phase == 43:
+        if error != 0:
+            bad(w, 9, error)
+        else:
+            if get(w, 24) == 2:
+                return action(w, 15, 0, 1024, get(w, 104), 1152, 30, 46)
+            return action(w, 14, 0, 1024, get(w, 104), 1152, choose(get(w, 24) == 3, 32, 30), 44)
+    if phase == 44:
+        if error != 0:
+            bad(w, 10, error)
+        else:
+            return action(w, 10, 0, 1024, get(w, 104), 0, 0, 45)
+    if phase == 45:
+        if error != 0:
+            bad(w, 11, error)
+        else:
+            return action(w, 11, 0, 0, 0, 0, 0, 47)
+    if phase == 46:
+        if error != 0:
+            bad(w, 12, error)
+        else:
+            return action(w, 11, 0, 0, 0, 0, 0, 47)
+    if phase == 47:
+        if error != 0:
+            bad(w, 13, error)
+        else:
+            put(w, 0, 900)
+    return 0
+
+def finishing(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 900:
+        if get(w, 48) != 0 and get(w, 88) == 1 and get(w, 144) == 0:
+            put(w, 144, 1)
+            return action(w, 10, 0, 1024, get(w, 104), 0, 0, 901)
+        put(w, 0, 910)
+    if phase == 901:
+        put(w, 0, 910)
+    if phase == 910:
+        if get(w, 80) == 1:
+            return action(w, 7, 1, 0, 0, 0, 0, 911)
+        put(w, 0, 950)
+    if phase == 911:
+        put(w, 80, 0)
+        put(w, 0, 950)
+    if phase == 950:
+        fill_range(o, 0, 128, 0)
+        put(o, 0, RESPONSE)
+        put(o, 8, get(w, 48))
+        put(o, 16, get(w, 56))
+        put(o, 24, get(w, 96))
+        put(o, 32, get(w, 24))
+        put(o, 40, 128)
+        put(o, 48, get(w, 64))
+        put(o, 56, get(w, 88))
+        put(o, 64, get(w, 112))
+        put(o, 72, get(w, 120))
+        put(o, 80, get(w, 144))
+        put(o, 88, get(w, 104))
+        put(w, 0, 999)
+        return 128
+    return 0
+
+def temporary_name(w:mutbuf) -> u64:
+    prefix = choose(get(w, 24) == 3, 20, 18)
+    i = 0
+    while i < 32:
+        value = byte(w, 512 + i)
+        store(w, 1024 + prefix + i * 2, hex_digit(value >> 4))
+        store(w, 1025 + prefix + i * 2, hex_digit(value & 15))
+        i = i + 1
+    store(w, 1024 + prefix + 64, 46)
+    store(w, 1025 + prefix + 64, 116)
+    store(w, 1026 + prefix + 64, 109)
+    store(w, 1027 + prefix + 64, 112)
+    store(w, 1028 + prefix + 64, 0)
+    put(w, 104, prefix + 68)
+    return 0
+
+def hex_digit(value:u64) -> u64:
+    return choose(value < 10, value + 48, value + 87)
+
+def serialize(w:mutbuf) -> u64:
+    put(w, 64, 0)
+    literal(w, 0)
+    decimal(w, get(w, 524352))
+    literal(w, 1)
+    identity(w, 524360)
+    literal(w, 2)
+    identity(w, 524376)
+    literal(w, 3)
+    if get(w, 524392) == 0:
+        literal(w, 4)
+    else:
+        identity(w, 524400)
+    literal(w, 5)
+    count = get(w, 524416)
+    i = 0
+    while i < count:
+        if i != 0:
+            emit(w, 44)
+        identity(w, 524448 + i * 16)
+        if get(w, 64) > 65536:
+            return 0
+        i = i + 1
+    literal(w, 6)
+    return 0
+
+def identity(w:mutbuf, at:u64) -> u64:
+    emit(w, 91)
+    decimal(w, get(w, at))
+    emit(w, 44)
+    decimal(w, get(w, at + 8))
+    emit(w, 93)
+    return 0
+
+def decimal(w:mutbuf, value:u64) -> u64:
+    if value == 0:
+        emit(w, 48)
+        return 0
+    count = 0
+    while value != 0:
+        store(w, 344128 + count, 48 + value % 10)
+        value = value // 10
+        count = count + 1
+    while count > 0:
+        count = count - 1
+        emit(w, byte(w, 344128 + count))
+    return 0
+
+def emit(w:mutbuf, value:u64) -> u64:
+    at = get(w, 64)
+    if at < 65537:
+        store(w, 278528 + at, value)
+        put(w, 64, at + 1)
+    return 0
+
+def bad(w:mutbuf, point:u64, error:u64) -> u64:
+    put(w, 48, 1)
+    put(w, 56, error)
+    put(w, 96, point)
+    put(w, 0, 900)
+    return 0
+
+def action(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, capacity:u64, phase:u64) -> u64:
+    sequence = get(w, 8)
+    if sequence == MAXWORD:
+        return INVALID
+    fill_range(w, 256, 96, 0)
+    put(w, 256, ACTION)
+    put(w, 264, sequence + 1)
+    put(w, 272, kind)
+    put(w, 280, slot)
+    put(w, 288, span)
+    put(w, 296, count)
+    put(w, 304, argument)
+    put(w, 312, capacity)
+    copy_range(w, w, 384, 256, 64)
+    put(w, 8, sequence + 1)
+    put(w, 224, 1)
+    put(w, 0, phase)
+    return YIELD
+
+def ack_valid(w:mutbuf) -> u64:
+    if get(w, 256) != ACTION or equal(w, 256, 384, 64) == 0 or get(w, 320) != get(w, 8) or get(w, 344) != 0 or get(w, 336) > 4095:
+        return 0
+    value = get(w, 328)
+    error = get(w, 336)
+    kind = get(w, 272)
+    if kind == 12 or kind == 13:
+        return choose(error == 0 and value <= get(w, 296) or error != 0 and value == 0, 1, 0)
+    if kind == 100:
+        return choose(error == 0 and value <= get(w, 312) or error != 0 and value == 0, 1, 0)
+    return choose(value == 0, 1, 0)
