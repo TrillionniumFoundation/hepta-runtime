@@ -1,0 +1,27 @@
+def host_header(s:readbuf,w:mutbuf,host:u64) -> u64:
+    prior=retained_file_host_header(s,w,host)
+    if prior!=0:
+        return prior
+    pin=physical_field(s,host,21)
+    if present(s,pin):
+        put(w,24448,key(s,host))
+        put(w,24456,keylen(s,host))
+        if number(s,field(s,host,5))!=0:
+            return 106
+        path=physical_field(s,pin,1)
+        digest=physical_field(s,pin,2)
+        if native_path(s,w,path,16)==False or valid_sha(s,digest)==False:
+            return 107
+    return 0
+
+def render_error(s:readbuf,w:mutbuf,o:mutbuf,code:u64) -> u64:
+    if code!=106 and code!=107:
+        return retained_file_render_error(s,w,o,code)
+    put(w,120,32)
+    if code==106:
+        native_literal(w,o,17)
+    else:
+        native_literal(w,o,18)
+    native_host(s,w,o)
+    native_literal(w,o,7)
+    return get(w,120)

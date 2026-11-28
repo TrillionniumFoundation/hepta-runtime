@@ -1,0 +1,7 @@
+# Installed native file authority
+
+The unchanged original 20,231 native calls and fifteen installed configuration controls pass. The new named-only field independently passes 121 typed, 78 semantic/digest and 39 actual installed operation-12 cases: 316 native calls, zero differences. No original Rust product function, fixture, deadline or assertion is weakened. The new field is distinct from the five native job roles and does not grant implicit permissions.
+
+The original first positional-array error and the independent reference error-priority difference are retained, together with all native inputs, compiled images, exact original/extended Rust source, original 100-package lock, actual reference binaries, commands and raw results. Incremental compiler caches are excluded. The complete physical CAS has 1,438 files and SHA256 7ca3fb97feab02f148bc8b552dba5f791cf6bcb954e1036c81cb0a743e961cc4; every member was checked on desktop and independently read back on Mac. File modes and symlink descriptions are recorded. The failed brace-glob archive transfer is preserved; the already-completed archive was subsequently transferred by explicit filenames without rerunning product gates.
+
+These results qualify configuration only. SSH, remote file behavior, public file tools, all 136 handlers and final service cutover remain separate unfinished work. The unqualified v2 gateway and SSH policy source in the working directory are excluded from this commit.

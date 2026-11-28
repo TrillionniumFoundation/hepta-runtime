@@ -1,0 +1,63 @@
+def query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)>=24:
+        if load(s,0)==REQUEST and load(s,8)==12:
+            return native_files(s,o,w)
+    return retained_query(s,o,w)
+
+def native_files(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<24:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=12 or load(s,16)!=length(s)-24:
+        return INVALID
+    name_size=length(s)-24
+    if valid_utf8(s,24,name_size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return original_result(s,o,w,1,0,0)
+    host=transport_named_host(s,w,name_size)
+    if host==0:
+        return original_result(s,o,w,2,24,name_size)
+    base=region(w,2)+24
+    pin=host+1216
+    kind=get(w,base+pin)
+    if kind!=0 and kind!=110:
+        return INVALID
+    count=0
+    required=96+name_size
+    if kind==110:
+        count=1
+        parts=get(w,base+pin+16)
+        extra=24+get(w,base+parts+40)+get(w,base+parts+104)
+        if extra>=LIMIT-required:
+            return growth(o,3,0)
+        required=required+extra
+    if required>=LIMIT:
+        return growth(o,3,0)
+    if length(o)<required:
+        return growth(o,2,required)
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,required-32)
+    put(o,32,FILES)
+    put(o,40,1)
+    put(o,48,1)
+    put(o,56,count)
+    put(o,64,name_size)
+    put(o,72,count)
+    put(o,80,0)
+    put(o,88,0)
+    copy_range(o,s,96,24,name_size)
+    at=96+name_size
+    if count==1:
+        parts=get(w,base+pin+16)
+        put(o,at,1)
+        put(o,at+8,get(w,base+parts+40))
+        put(o,at+16,get(w,base+parts+104))
+        at=transport_string(o,w,at+24,base,parts)
+        at=transport_string(o,w,at,base,parts+64)
+    if at!=required:
+        return INVALID
+    return required
