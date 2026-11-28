@@ -1,0 +1,152 @@
+def query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)>=24:
+        if load(s,0)==REQUEST and load(s,8)==10:
+            return transport(s,o,w)
+    return retained_query(s,o,w)
+
+def transport(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<24:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=10 or load(s,16)!=length(s)-24:
+        return INVALID
+    name_size=length(s)-24
+    if valid_utf8(s,24,name_size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return original_result(s,o,w,1,0,0)
+    host=transport_named_host(s,w,name_size)
+    if host==0:
+        return original_result(s,o,w,2,24,name_size)
+    required=transport_size(s,w,host)
+    if required>=LIMIT:
+        return growth(o,3,0)
+    if length(o)<required:
+        return growth(o,2,required)
+    return transport_emit(s,o,w,host,required)
+
+def transport_size(s:readbuf,w:mutbuf,host:u64) -> u64:
+    base=region(w,2)+24
+    required=160
+    size=length(s)-24
+    if size>=LIMIT-required:
+        return LIMIT
+    required=required+size
+    field=3
+    while field<=5:
+        size=get(w,base+host+field*64+40)
+        if size>=LIMIT-required:
+            return LIMIT
+        required=required+size
+        field=field+2
+    field=11
+    while field<18:
+        size=transport_list_size(w,base,host+field*64)
+        if size>=LIMIT-required:
+            return LIMIT
+        required=required+size
+        field=field+1
+    return required
+
+def transport_flags(w:mutbuf,base:u64,host:u64) -> u64:
+    field=6
+    bit=1
+    flags=0
+    while field<11:
+        value=get(w,base+host+field*64+24)
+        if value>1:
+            return LIMIT
+        if value!=0:
+            flags=flags+bit
+        bit=bit*2
+        field=field+1
+    return flags
+
+def transport_emit(s:readbuf,o:mutbuf,w:mutbuf,host:u64,required:u64) -> u64:
+    base=region(w,2)+24
+    if get(w,base+host+280)>1 or get(w,base+host+152)>1:
+        return INVALID
+    flags=transport_flags(w,base,host)
+    if flags>=LIMIT:
+        return INVALID
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,required-32)
+    put(o,32,TRANSPORT)
+    put(o,40,1)
+    put(o,48,1)
+    put(o,56,length(s)-24)
+    put(o,64,get(w,base+host+232))
+    put(o,72,get(w,base+host+360))
+    put(o,80,get(w,base+host+280))
+    put(o,88,get(w,base+host+152))
+    put(o,96,flags)
+    field=11
+    while field<18:
+        put(o,104+(field-11)*8,transport_list_count(w,base,host+field*64))
+        field=field+1
+    copy_range(o,s,160,24,length(s)-24)
+    at=160+length(s)-24
+    at=transport_string(o,w,at,base,host+192)
+    at=transport_string(o,w,at,base,host+320)
+    field=11
+    while field<18:
+        at=transport_list_emit(o,w,at,base,host+field*64)
+        field=field+1
+    if at!=required:
+        return INVALID
+    return required
+
+def transport_string(o:mutbuf,w:mutbuf,at:u64,base:u64,field:u64) -> u64:
+    start=get(w,base+field+32)
+    size=get(w,base+field+40)
+    copy_range(o,w,at,base+start,size)
+    return at+size
+
+def transport_named_host(s:readbuf,w:mutbuf,name_size:u64) -> u64:
+    base=region(w,2)+24
+    root=get(w,region(w,2)+40)
+    fields=get(w,base+root+16)
+    node=get(w,base+fields+144)
+    while node!=0:
+        name=get(w,base+node+48)
+        size=get(w,base+node+56)
+        if equal(s,24,name_size,w,base+name,size):
+            return get(w,base+node+16)
+        node=get(w,base+node+8)
+    return 0
+
+def transport_list_size(w:mutbuf,base:u64,field:u64) -> u64:
+    node=get(w,base+field+16)
+    extent=0
+    while node!=0:
+        size=get(w,base+node+40)
+        if extent>=LIMIT-8:
+            return LIMIT
+        extent=extent+8
+        if size>=LIMIT-extent:
+            return LIMIT
+        extent=extent+size
+        node=get(w,base+node+8)
+    return extent
+
+def transport_list_count(w:mutbuf,base:u64,field:u64) -> u64:
+    node=get(w,base+field+16)
+    count=0
+    while node!=0:
+        count=count+1
+        node=get(w,base+node+8)
+    return count
+
+def transport_list_emit(o:mutbuf,w:mutbuf,at:u64,base:u64,field:u64) -> u64:
+    node=get(w,base+field+16)
+    while node!=0:
+        start=get(w,base+node+32)
+        size=get(w,base+node+40)
+        put(o,at,size)
+        copy_range(o,w,at+8,base+start,size)
+        at=at+8+size
+        node=get(w,base+node+8)
+    return at

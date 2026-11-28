@@ -1,0 +1,84 @@
+def query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)>=24:
+        if load(s,0)==REQUEST and load(s,8)==11:
+            return native_jobs(s,o,w)
+    return retained_query(s,o,w)
+
+def legacy_host_fields(w:mutbuf,at:u64) -> u64:
+    return get(w,at)+64
+
+def native_jobs(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<24:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=11 or load(s,16)!=length(s)-24:
+        return INVALID
+    name_size=length(s)-24
+    if valid_utf8(s,24,name_size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return original_result(s,o,w,1,0,0)
+    host=transport_named_host(s,w,name_size)
+    if host==0:
+        return original_result(s,o,w,2,24,name_size)
+    base=region(w,2)+24
+    kind=get(w,base+host-64)
+    if kind!=0 and kind!=109:
+        return INVALID
+    count=0
+    required=96+name_size
+    if kind==109:
+        count=5
+        required=native_jobs_size(w,base,host-64,required)
+    if required>=LIMIT:
+        return growth(o,3,0)
+    if length(o)<required:
+        return growth(o,2,required)
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,required-32)
+    put(o,32,JOBS)
+    put(o,40,1)
+    put(o,48,1)
+    put(o,56,count//5)
+    put(o,64,name_size)
+    put(o,72,count)
+    put(o,80,0)
+    put(o,88,0)
+    copy_range(o,s,96,24,name_size)
+    at=96+name_size
+    if count==5:
+        at=native_jobs_emit(o,w,at,base,host-64)
+    if at!=required:
+        return INVALID
+    return required
+
+def native_jobs_size(w:mutbuf,base:u64,jobs:u64,required:u64) -> u64:
+    fields=get(w,base+jobs+16)
+    role=0
+    while role<5:
+        pin=fields+role*64
+        if get(w,base+pin)!=110:
+            return LIMIT
+        parts=get(w,base+pin+16)
+        size=get(w,base+parts+40)+get(w,base+parts+104)+24
+        if size>=LIMIT-required:
+            return LIMIT
+        required=required+size
+        role=role+1
+    return required
+
+def native_jobs_emit(o:mutbuf,w:mutbuf,at:u64,base:u64,jobs:u64) -> u64:
+    fields=get(w,base+jobs+16)
+    role=0
+    while role<5:
+        parts=get(w,base+fields+role*64+16)
+        put(o,at,role+1)
+        put(o,at+8,get(w,base+parts+40))
+        put(o,at+16,get(w,base+parts+104))
+        at=transport_string(o,w,at+24,base,parts)
+        at=transport_string(o,w,at,base,parts+64)
+        role=role+1
+    return at
