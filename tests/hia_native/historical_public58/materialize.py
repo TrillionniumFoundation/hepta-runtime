@@ -70,6 +70,8 @@ def reference_authority(source):
         "the complete workdir qualification source authority changed")
     inventory = value["native_inventory_authority"]
     inventory_raw = capture(inventory["path"])
+    inventory_raw = current_native_inventory_predecessor(source, inventory_raw,
+        {key: inventory[key] for key in ("bytes", "sha256", "git_blob")})
     reference_require(pin(inventory_raw) == {key: inventory[key] for key in ("bytes", "sha256", "git_blob")},
         "the complete historical native inventory authority changed")
     components = json.loads(inventory_raw)["native_components"]
@@ -279,7 +281,203 @@ def verify_metadata_reference_domains(root, metadata):
     return {"original_production_metadata_paths": 71, "additional_restored_metadata_paths": 2,
             "complete_reference_and_metadata_paths": 199}
 
+
+# The integrated current source and the retained historical domain have independent
+# fixed identities. Projection is permitted only after the entire current domain
+# has been captured; it is never used as a substitute for a physical input.
+CURRENT_SOURCE_TRANSITION = PREFIX / "CURRENT_SOURCE_TRANSITION.json"
+CURRENT_SOURCE_TRANSITION_PIN = {'bytes': 68066, 'sha256': '7dc0a20b5e8d063f6013b44c6e2ea58203cd024b530e71b30c126dd337a605eb', 'git_blob': 'fc0c64aeaa2c62dbbabde40ce12de7650f5eb8b0'}
+MATERIALIZER_PATH = PREFIX / "materialize.py"
+_LOADED_MATERIALIZER_BYTES = Path(__file__).read_bytes()
+
+def _transition_identity(path):
+    value = path.lstat()
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
+        value.st_uid, value.st_gid, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+
+def _transition_capture(source):
+    source = Path(source)
+    reference_require(source.is_absolute() and source.resolve(strict=True) == source
+        and stat.S_ISDIR(source.lstat().st_mode), "current transition requires an explicit physical root")
+    captured, directories = {}, {}
+    def directory(path):
+        identity = _transition_identity(path)
+        reference_require(stat.S_ISDIR(identity[2]) and not stat.S_ISLNK(identity[2]),
+            "current transition source parent is not a physical directory")
+        name = path.relative_to(source).as_posix()
+        reference_require(name not in directories or directories[name] == identity,
+            "current transition source directory changed during capture: " + name)
+        directories[name] = identity
+    directory(source)
+    def capture(name):
+        name = Path(name).as_posix()
+        relative = Path(name)
+        reference_require(not relative.is_absolute() and ".." not in relative.parts,
+            "current transition source path is unsafe")
+        if name in captured:
+            return captured[name]["raw"]
+        path = source / relative
+        for parent in reversed(path.parents):
+            if parent == source or parent.is_relative_to(source):
+                directory(parent)
+        before = _transition_identity(path)
+        reference_require(stat.S_ISREG(before[2]) and not stat.S_ISLNK(before[2]),
+            "current transition source is not a regular file: " + name)
+        raw = read(source, name)
+        reference_require(_transition_identity(path) == before,
+            "current transition source changed during capture: " + name)
+        captured[name] = {"raw": raw, "identity": before}
+        return raw
+    return capture, captured, directories
+
+def _transition_terminal(source, captured, directories, native_names=None):
+    def verify_directories():
+        for name, expected in directories.items():
+            reference_require(_transition_identity(source / name) == expected,
+                "current transition directory changed at terminal readback: " + name)
+    verify_directories()
+    for name, value in captured.items():
+        reference_require(_transition_identity(source / name) == value["identity"]
+            and read(source, name) == value["raw"]
+            and _transition_identity(source / name) == value["identity"],
+            "current transition source changed at terminal readback: " + name)
+    verify_directories()
+    if native_names is not None:
+        actual = {path.relative_to(source).as_posix()
+            for path in (source / "native").rglob("*.hepta")}
+        reference_require(actual == native_names,
+            "current transition complete native roster changed at terminal readback")
+
+def _transition_profile(capture):
+    raw = capture(CURRENT_SOURCE_TRANSITION)
+    reference_require(pin(raw) == CURRENT_SOURCE_TRANSITION_PIN,
+        "fixed integrated source transition authority changed")
+    value = json.loads(raw)
+    reference_require(value["schema"] == "hepta.historical-public58.integrated-source-transition.v1",
+        "integrated source transition schema changed")
+    reference_require(capture(MATERIALIZER_PATH) == _LOADED_MATERIALIZER_BYTES,
+        "current transition captured materializer differs from the loaded reader")
+    for name, identity in value["retained_profiles"].items():
+        reference_require(pin(capture(name)) == identity,
+            "retained historical authority changed during source transition: " + name)
+    return value
+
+def _transition_inverse(raw, relation, name):
+    reference_require(pin(raw) == relation["current"],
+        "current transition physical preimage changed: " + name)
+    previous = 0
+    for operation in relation["inverse"]:
+        start, end = operation["start"], operation["end"]
+        reference_require(type(start) is int and type(end) is int
+            and previous <= start <= end <= len(raw),
+            "current transition inverse range changed: " + name)
+        reference_require(raw[start:end] == operation["current"].encode("utf-8"),
+            "current transition inverse bytes changed: " + name)
+        previous = end
+    result = raw
+    for operation in reversed(relation["inverse"]):
+        result = (result[:operation["start"]] + operation["predecessor"].encode("utf-8")
+            + result[operation["end"]:])
+    reference_require(pin(result) == relation["predecessor"],
+        "current transition full predecessor identity changed: " + name)
+    return result
+
+def current_source_transition(source):
+    capture, captured, directories = _transition_capture(source)
+    value = _transition_profile(capture)
+    profile = json.loads(capture(PREFIX / "PROFILE.json"))
+    reference = json.loads(capture(REFERENCE_PROFILE))
+    transitions = value["transitions"]
+    migration = reference["native_inventory_authority"]["path"]
+    reference_require(set(transitions) == {migration, ".github/workflows/hia-runtime-native.yml",
+        ".github/workflows/hia-runtime-original-shard.yml"},
+        "integrated source transition restore scope changed")
+    predecessors = {}
+    for name, relation in transitions.items():
+        expected = ({key: reference["native_inventory_authority"][key]
+                     for key in ("bytes", "sha256", "git_blob")}
+                    if name == migration else profile["current_workflow_files"][name])
+        reference_require(relation["predecessor"] == expected,
+            "integrated source transition changed a retained predecessor: " + name)
+        predecessors[name] = _transition_inverse(capture(name), relation, name)
+    native_names = {path.relative_to(source).as_posix()
+        for path in (source / "native").rglob("*.hepta")}
+    reference_require(native_names == set(value["current_native_files"]) and len(native_names) == 235,
+        "current transition complete native roster changed")
+    for name, identity in value["current_native_files"].items():
+        raw = capture(name)
+        reference_require(pin(raw) == {key: identity[key] for key in ("bytes", "sha256", "git_blob")},
+            "current transition complete native source changed: " + name)
+        mode = "100755" if captured[name]["identity"][2] & 0o111 else "100644"
+        reference_require(mode == identity["git_mode"],
+            "current transition native source execution mode changed: " + name)
+    for name, identity in value["current_auxiliary_files"].items():
+        reference_require(pin(capture(name)) == identity,
+            "current transition auxiliary source changed: " + name)
+    bound = {**profile["current_graph_files"], **profile["current_authority_profile_files"],
+        **profile["current_workflow_files"]}
+    reference_require(len(bound) == 554, "retained complete current source domain changed")
+    for name, identity in bound.items():
+        raw = predecessors[name] if name in predecessors else capture(name)
+        reference_require(pin(raw) == identity,
+            "current transition retained source differs: " + name)
+    extras = set(value["additional_current_only_files"])
+    reference_require(extras == {"native/multi_read_call_plan.hepta", "native/multi_read_params.hepta",
+        "native/native_read_bootstrap.hepta", "native/public_file_info_walk.hepta",
+        "native/public_multi_read_result.hepta"}
+        and not extras.intersection(set(bound) | set(profile["restore"])
+            | set(profile["remove_current_public_only"]) | set(reference["excluded_current_only_files"])),
+        "integrated current-only source exclusion scope changed")
+    original_native = {row["source"] for row in json.loads(predecessors[migration])["native_components"]}
+    projected = (native_names - set(profile["remove_current_public_only"])
+        - set(reference["excluded_current_only_files"]) - extras)
+    projected.update(name for name in profile["restore"] if name.startswith("native/") and name.endswith(".hepta"))
+    reference_require(projected == original_native and len(projected) == 195,
+        "integrated source transition does not restore the complete original native roster")
+    _transition_terminal(source, captured, directories, native_names)
+    return {"profile": value, "predecessors": predecessors, "captured": captured,
+        "directories": directories, "native_names": native_names}
+
+def current_native_inventory_predecessor(source, raw, expected):
+    if pin(raw) == expected:
+        return raw
+    transition = current_source_transition(source)
+    name = "native/migration.json"
+    reference_require(transition["captured"][name]["raw"] == raw,
+        "physical native inventory differs from its admitted current source")
+    restored = transition["predecessors"][name]
+    reference_require(pin(restored) == expected, "historical native inventory predecessor differs")
+    _transition_terminal(source, transition["captured"], transition["directories"], transition["native_names"])
+    return restored
+
+def _transition_report(value):
+    return {"authority": CURRENT_SOURCE_TRANSITION_PIN, "current_native_source_paths": 235,
+        "historical_native_source_paths": 195,
+        "current_physical_inputs": {name: relation["current"] for name, relation in value["transitions"].items()},
+        "historical_output_files": {name: relation["predecessor"] for name, relation in value["transitions"].items()},
+        "restored_paths": sorted(value["transitions"]),
+        "additional_excluded_current_only_paths": sorted(value["additional_current_only_files"]),
+        "current_source_unchanged": True, "native_or_rust_execution_qualified": False}
+
+def verify_source_transition_output(root, receipt):
+    capture, captured, directories = _transition_capture(root)
+    value = _transition_profile(capture)
+    reference_require(receipt["integrated_source_transition"] == _transition_report(value),
+        "materialized source transition receipt differs from the fixed authority")
+    for name, relation in value["transitions"].items():
+        reference_require(pin(capture(name)) == relation["predecessor"],
+            "materialized source transition predecessor differs: " + name)
+    for name in value["additional_current_only_files"]:
+        reference_require(not (root / name).exists() and not (root / name).is_symlink(),
+            "integrated current-only source remains in historical output: " + name)
+    _transition_terminal(root, captured, directories)
+    for name in value["additional_current_only_files"]:
+        reference_require(not (root / name).exists() and not (root / name).is_symlink(),
+            "integrated current-only source appeared at terminal readback: " + name)
+    return value
+
 def check(source):
+    transition=current_source_transition(source)
     raw=read(source,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(raw)
     assert profile["schema"]=="hepta.historical-public58.source-profile.v8"
     assert profile["historical_images"]==58 and profile["current_default_images"]==126
@@ -299,7 +497,9 @@ def check(source):
     assert {key:profile["restore"][workflow][key] for key in ("bytes","sha256")}==body["files"][workflow]
     bound={**profile["current_graph_files"],**profile["current_authority_profile_files"],
         **profile["current_workflow_files"]}
-    for name,expected in bound.items():assert pin(read(source,name))==expected,name
+    for name,expected in bound.items():
+        raw=transition["predecessors"][name] if name in transition["predecessors"] else read(source,name)
+        assert pin(raw)==expected,name
     assert len(profile["historical_authority_restore"])==7
     for name,expected in profile["historical_authority_restore"].items():assert profile["restore"][name]==expected
     assert SHA(read(source,"native/runtime_mcp_sources.json"))==profile["current_default_graph_binding_sha256"]
@@ -315,7 +515,8 @@ def check(source):
     check_current_references(source,profile,reference,required)
     metadata=metadata_reference_authority(source)
     check_current_metadata_references(source,profile,reference,metadata)
-    return profile,SHA(raw)
+    _transition_terminal(source,transition["captured"],transition["directories"],transition["native_names"])
+    return profile,SHA(read(source,(PREFIX/"PROFILE.json").as_posix()))
 def selected(source):
     paths={}
     for name in DIRECTORIES:
@@ -345,12 +546,13 @@ def verify_materialized(root):
     assert receipt["metadata_reference_domains"]==verify_metadata_reference_domains(root,metadata)
     assert receipt["metadata_reference_restored_paths"]==sorted(metadata["restore"])
     assert receipt["native_reference_inventory"]==verify_native_reference_inventory(root,reference)
+    integrated=verify_source_transition_output(root,receipt)
     assert receipt["additional_excluded_current_only_paths"]==sorted(reference["excluded_current_only_files"])
     assert receipt["output_source"]==str(root.resolve(strict=True))
     assert receipt["profile_sha256"]==SHA(profile_raw)
     assert receipt["historical_public_images"]==58 and receipt["current_default_images"]==126
     assert receipt["historical_graph_restored_paths"]==sorted(profile["restore"])
-    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"]))
+    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(integrated["transitions"]))
     assert receipt["excluded_current_only_paths"]==profile["remove_current_public_only"]
     assert {name:pin(path.read_bytes()) for name,path in selected(root).items()}==receipt["files"]
     for name,identity in profile["restore"].items():assert pin(read(root,name))==identity,name
@@ -365,6 +567,7 @@ def main():
     p.add_argument("--source",type=Path,required=True);p.add_argument("--output",type=Path)
     p.add_argument("--check-only",action="store_true");a=p.parse_args()
     source=a.source.resolve(strict=True);profile,profile_sha=check(source)
+    transition=current_source_transition(source)
     reference,required=reference_authority(source)
     metadata=metadata_reference_authority(source)
     if a.check_only:
@@ -398,6 +601,14 @@ def main():
         assert pin(read(output,name))==metadata["current_inputs"][name],name
         raw=read(source/METADATA_REFERENCE_SOURCE,name);destination=output/name
         destination.write_bytes(raw);expected[name]=identity
+    for name,raw in transition["predecessors"].items():
+        relation=transition["profile"]["transitions"][name]
+        assert pin(read(output,name))==relation["current"],name
+        (output/name).write_bytes(raw);expected[name]=relation["predecessor"]
+    for name in transition["profile"]["additional_current_only_files"]:
+        assert pin(read(output,name))==pin(transition["captured"][name]["raw"]),name
+        (output/name).unlink();del expected[name]
+    _transition_terminal(source,transition["captured"],transition["directories"],transition["native_names"])
     reference_domains=verify_reference_domains(output,reference,required)
     metadata_domains=verify_metadata_reference_domains(output,metadata)
     native_reference_inventory=verify_native_reference_inventory(output,reference)
@@ -413,7 +624,8 @@ def main():
     assert len(members)==1 and len(ast.literal_eval(members[0].value))==58
     receipt=dict(schema="hepta.historical-public58.materialized-source.v3",status="SOURCE_PROFILE_MATERIALIZED",
         input_source=str(source),output_source=str(output),profile_sha256=profile_sha,
-        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])),
+        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(transition["predecessors"])),
+        integrated_source_transition=_transition_report(transition["profile"]),
         historical_graph_restored_paths=sorted(profile["restore"]),
         original_reference_restored_paths=sorted(reference["restore"]),
         reference_profile=REFERENCE_PROFILE_PIN,original_reference_domains=reference_domains,

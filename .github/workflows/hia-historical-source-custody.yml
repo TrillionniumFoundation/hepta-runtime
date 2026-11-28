@@ -7,6 +7,7 @@ on:
       - 'tests/hia_native/historical_public58/**'
       - 'tests/hia_native/test_historical_public_source_custody.py'
       - 'tests/hia_native/test_historical_metadata_source_custody.py'
+      - 'tests/hia_native/test_integrated_source_transition.py'
       - 'vendor/**'
       - 'native/**'
       - 'scripts/**'
@@ -19,6 +20,7 @@ on:
       - 'tests/hia_native/historical_public58/**'
       - 'tests/hia_native/test_historical_public_source_custody.py'
       - 'tests/hia_native/test_historical_metadata_source_custody.py'
+      - 'tests/hia_native/test_integrated_source_transition.py'
       - 'vendor/**'
       - 'native/**'
       - 'scripts/**'
@@ -51,3 +53,5 @@ jobs:
         run: |
           python3 -I -B tests/hia_native/test_historical_public_source_custody.py -v
           python3 -I -B tests/hia_native/test_historical_metadata_source_custody.py -v
+      - name: Check the complete integrated source transition
+        run: python3 -I -B tests/hia_native/test_integrated_source_transition.py -v
