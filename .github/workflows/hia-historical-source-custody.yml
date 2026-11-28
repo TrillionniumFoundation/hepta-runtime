@@ -46,6 +46,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             native
+            asm
             scripts
             src
             tests
@@ -54,12 +55,20 @@ jobs:
             vendor
             runtime_support
             qualification
-      - name: Check complete current source projection and original workflow inverses
-        run: python3 -I -B tests/hia_native/test_historical_current_projection.py -v
+      - name: Check writer source closure and refusal controls
+        run: python3 -I -B tests/hia_native/test_historical_writer_projection.py -v
+      - name: Restore the exact retained read source in an independent directory
+        run: |
+          python3 -I -B tests/hia_native/historical_public58/writer_projection.py \
+            --source "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/hia-retained-read" \
+            --project-read
+      - name: Check complete retained source projection and original workflow inverses
+        run: python3 -I -B "$RUNNER_TEMP/hia-retained-read/tests/hia_native/test_historical_current_projection.py" -v
       - name: Restore the exact original reference inputs in an independent source directory
         run: |
-          python3 -I -B tests/hia_native/historical_public58/current_projection.py \
-            --source "$GITHUB_WORKSPACE" \
+          python3 -I -B "$RUNNER_TEMP/hia-retained-read/tests/hia_native/historical_public58/current_projection.py" \
+            --source "$RUNNER_TEMP/hia-retained-read" \
             --output "$RUNNER_TEMP/hia-current-profile" \
             --project-only
       - name: Check fixed authorities, independent roots and terminal drift

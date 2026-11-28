@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -56,6 +57,112 @@ class MigrationTargetTests(unittest.TestCase):
 
     def check(self):
         return inspect_target(self.root, target_root=self.target)
+
+    def independent_history(self):
+        self.history = Path(self.tmp.name) / "independent-historical"
+        self.history.mkdir()
+        shutil.copytree(self.root / "src", self.history / "src")
+        for name in ("Cargo.lock", "Cargo.toml"):
+            shutil.copyfile(self.root / name, self.history / name)
+        self.history_git("init", "-q", "--template=")
+        self.history_git("add", "--", ".")
+        self.history_git("commit", "-qm", "Exact original comparison fixture")
+        commit = self.history_git("rev-parse", "HEAD").decode().strip()
+        tree = self.history_git("rev-parse", "HEAD^{tree}").decode().strip()
+        self.inventory["runtime_base_commit"] = commit
+        self.inventory["runtime_base_tree"] = tree
+        self.snapshot["historical_comparison_base"] = commit
+        self.write_snapshot()
+        shutil.rmtree(self.root / "src")
+        shutil.copytree(self.target / "src", self.root / "src")
+
+    def history_git(self, *arguments):
+        process = subprocess.run(
+            ["git", "-C", str(self.history), "-c", "user.name=HIA source fixture",
+             "-c", "user.email=hia-source-fixture@invalid",
+             "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+             *arguments], capture_output=True, check=True)
+        return process.stdout
+
+    def check_independent_history(self):
+        return inspect_target(self.root, target_root=self.target,
+                              historical_root=self.history)
+
+    def test_current_candidate_can_advance_without_changing_historical_authority(self):
+        self.independent_history()
+        value = self.check_independent_history()
+        self.assertTrue(value["historical_checkout_verified"])
+        self.assertTrue(value["target_checkout_verified"])
+        self.assertEqual((value["historical_handler_count"], value["target_handler_count"]), (1, 2))
+        self.assertEqual(value["target_handlers_missing_from_historical_inventory"], ["weight_bellman_plan"])
+        self.assertEqual(value["source_drift"]["changed"], ["src/mcp/server.rs"])
+        self.assertEqual(value["candidate_source_drift"],
+                         {"target_only": [], "candidate_only": [], "changed": []})
+        self.assertEqual(value["candidate_source_file_count"], value["target_source_file_count"])
+        self.assertEqual(value["native_production_handler_count"], 0)
+        for key in ("target_behavior_qualified", "production_activated",
+                    "whole_runtime_replaced", "old_stack_removal_qualified"):
+            self.assertIs(value[key], False)
+
+    def test_current_candidate_without_independent_history_still_fails_old_authority(self):
+        self.independent_history()
+        with self.assertRaisesRegex(ValueError, "historical handler inventory"):
+            self.check()
+
+    def test_historical_commit_identity_is_required_even_for_identical_tree(self):
+        self.independent_history()
+        self.history_git("commit", "--allow-empty", "-qm", "Same tree is a different commit")
+        with self.assertRaisesRegex(ValueError, "historical checkout commit"):
+            self.check_independent_history()
+
+    def test_historical_tree_identity_cannot_be_resealed_independently(self):
+        self.independent_history()
+        self.inventory["runtime_base_tree"] = "0" * 40
+        self.write_snapshot()
+        with self.assertRaisesRegex(ValueError, "historical checkout tree"):
+            self.check_independent_history()
+
+    def test_pinned_historical_head_does_not_authorize_changed_source_or_dependencies(self):
+        self.independent_history()
+        for name in ("src/mcp/server.rs", "Cargo.toml", "Cargo.lock"):
+            with self.subTest(path=name):
+                path = self.history / name
+                before = path.read_bytes()
+                path.write_bytes(before + b"\n")
+                with self.assertRaisesRegex(ValueError, "historical source checkout differs"):
+                    self.check_independent_history()
+                path.write_bytes(before)
+
+    def test_pinned_historical_head_does_not_authorize_extra_missing_or_mode_changed_sources(self):
+        self.independent_history()
+        extra = self.history / "src/extra.rs"
+        extra.write_text("pub fn unregistered() {}\n")
+        with self.assertRaisesRegex(ValueError, "extra.rs"):
+            self.check_independent_history()
+        extra.unlink()
+        path = self.history / "src/mcp/server.rs"
+        before = path.read_bytes()
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, "server.rs"):
+            self.check_independent_history()
+        path.write_bytes(before)
+        path.chmod(0o755)
+        with self.assertRaisesRegex(ValueError, "historical source checkout differs"):
+            self.check_independent_history()
+
+    def test_historical_replacement_objects_do_not_rebind_the_original_source(self):
+        self.independent_history()
+        original = self.inventory["runtime_base_commit"]
+        path = self.history / "src/mcp/server.rs"
+        before = path.read_bytes()
+        path.write_text("// a different source tree\n")
+        self.history_git("add", "--", "src/mcp/server.rs")
+        self.history_git("commit", "-qm", "Replacement fixture")
+        replacement = self.history_git("rev-parse", "HEAD").decode().strip()
+        self.history_git("checkout", "--detach", "-q", original)
+        self.history_git("replace", original, replacement)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertTrue(self.check_independent_history()["historical_checkout_verified"])
 
     def test_new_tool_and_changed_source_are_visible_without_advancing_qualification(self):
         value = self.check()

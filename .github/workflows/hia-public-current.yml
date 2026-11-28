@@ -1,4 +1,4 @@
-name: Current installed public124 default entry
+name: Retained installed public126 default entry
 on:
   workflow_dispatch:
   push:
@@ -26,18 +26,24 @@ jobs:
           path: candidate
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-          sparse-checkout-cone-mode: false
           sparse-checkout: |
-            /qualification/public124_default_entry_v1/
-            /native/
-            /scripts/
-            /runtime_support/
-            /authoring/
-            /tests/constructor_cases.py
-            /tests/hia_native/runtime_mcp*
-            /tests/hia_native/test_runtime_mcp.py
-            /tests/hia_native/view_call_oracle/
-            /tests/hia_native/workdir_oracle/
+            qualification
+            native
+            asm
+            scripts
+            runtime_support
+            authoring
+            tests
+            src
+            vendor
+            .github
+      - name: Restore the complete retained public126 source without changing current inputs
+        run: |
+          python3 -I -B candidate/tests/hia_native/historical_public58/writer_projection.py \
+            --source "$GITHUB_WORKSPACE/candidate" \
+            --output "$RUNNER_TEMP/publication-retained126" \
+            --project-profile
+          printf 'HIA_RETAINED_SOURCE=%s\n' "$RUNNER_TEMP/publication-retained126" >> "$GITHUB_ENV"
       - name: Checkout exact Hepta compiler
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -49,8 +55,8 @@ jobs:
         run: |
           test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           test "$(sha256sum "$PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 6e29126651210a809d954eacecb72356ef3887bb6d6dd21ff5800ec4e3552ed3
-          python3 -I -S -B -c 'import json,os,pathlib; root=pathlib.Path(os.environ["GITHUB_WORKSPACE"])/"candidate"; rows=json.loads((pathlib.Path(os.environ["PACKAGE"])/"SOURCE_ROWS.json").read_bytes()); assert len(rows)==536; assert all(not (root/r["path"]).is_symlink() and (root/r["path"]).stat().st_mode&0o777==int(r["mode"][-3:],8) for r in rows)'
-          python3 -I -S -B "$PACKAGE/entry.py" prepare --source "$GITHUB_WORKSPACE/candidate" --capture "$CAPTURE"
+          python3 -I -S -B -c 'import json,os,pathlib; root=pathlib.Path(os.environ["HIA_RETAINED_SOURCE"]); rows=json.loads((pathlib.Path(os.environ["PACKAGE"])/"SOURCE_ROWS.json").read_bytes()); assert len(rows)==536; assert all(not (root/r["path"]).is_symlink() and (root/r["path"]).stat().st_mode&0o777==int(r["mode"][-3:],8) for r in rows)'
+          python3 -I -S -B "$PACKAGE/entry.py" prepare --source "$HIA_RETAINED_SOURCE" --capture "$CAPTURE"
       - name: Invoke the actual fresh default build command
         run: |
           set +e
@@ -64,6 +70,18 @@ jobs:
       - name: Preserve all source and actual build bytes including any failure
         if: always()
         run: python3 -I -S -B "$PACKAGE/archive.py" pack --source "$PACKAGE" --capture "$CAPTURE" --output "$EXPORT" --driver-prefix "$DRIVER"
+      - name: Retain current-to-historical source custody receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public175-retained126-source-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/publication-retained126.writer-read/WRITER_SOURCE_PROJECTION.json
+            ${{ runner.temp }}/publication-retained126/CURRENT_SOURCE_PROJECTION.json
+            ${{ runner.temp }}/publication-retained126.writer-read/retained.stdout
+            ${{ runner.temp }}/publication-retained126.writer-read/retained.stderr
+          if-no-files-found: warn
+          retention-days: 30
       - name: Upload complete evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -310,6 +310,17 @@ def main():
     parser.add_argument("--check-only",action="store_true")
     args=parser.parse_args()
     source=args.source.resolve(strict=True)
+    writer_path=PREFIX/"writer_projection.py"
+    if (source/writer_path).is_file():
+        writer_raw=read(source,writer_path)
+        if SHA(writer_raw)!="87814848731d6c3fee2173ad0421a41ade3956753320616fffd8c791851b6bef":
+            raise ValueError("writer source projection implementation changed")
+        import types
+        writer=types.ModuleType("historical_writer_projection")
+        writer.__file__=str(source/writer_path)
+        exec(compile(writer_raw,writer.__file__,"exec"),writer.__dict__)
+        if writer.matches(source):
+            return writer.main()
     if not (source/PREFIX/"CURRENT_PROJECTION.json").exists():
         return historical_main()
     module_path=PREFIX/"current_projection.py"

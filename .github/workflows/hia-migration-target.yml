@@ -47,11 +47,17 @@ jobs:
           path: production-target
           persist-credentials: false
           sparse-checkout: src
+      - uses: actions/checkout@v4
+        with:
+          ref: a0dcdda1991ec536d5e2d252c006a778993fa566
+          path: historical-base
+          persist-credentials: false
+          sparse-checkout: src
       - name: Verify coverage reader and complete production source closure
         working-directory: candidate
         run: |
           python3 -B tests/hia_native/test_migration_target.py
-          python3 -B scripts/check_hia_native_target.py --target-root ../production-target --output target-coverage.json
+          python3 -B scripts/check_hia_native_target.py --historical-root ../historical-base --target-root ../production-target --output target-coverage.json
       - name: Retain current target coverage
         if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@v4

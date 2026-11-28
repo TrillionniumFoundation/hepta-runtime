@@ -12,6 +12,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import stat
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = "native/migration_target.json"
@@ -156,17 +157,79 @@ def actual_sources(root):
     return files
 
 
-def inspect_target(root, inventory=None, target_root=None):
+def historical_sources(root, inventory):
+    """Read a separate exact historical checkout, including its working bytes.
+
+    The candidate's src tree may advance by a normal production merge. It is
+    neither the old comparison source nor evidence that an old handler was
+    ported. Check both pinned Git identities and the complete materialized
+    source closure; a correct HEAD alone does not authorize changed files.
+    """
+    root = root.resolve(strict=True)
+    for key in ("runtime_base_commit", "runtime_base_tree"):
+        value = inventory.get(key)
+        if not isinstance(value, str) or not GIT_ID.fullmatch(value):
+            raise ValueError("missing complete historical identity: " + key)
+
+    def git(*arguments):
+        process = subprocess.run(
+            ["git", "--no-replace-objects", "--literal-pathspecs", "-C", str(root),
+             *arguments], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        if process.returncode:
+            raise ValueError("cannot read historical Git checkout: "
+                             + process.stderr.decode("utf-8", "replace").strip())
+        return process.stdout
+
+    if git("rev-parse", "--verify", "HEAD^{commit}").decode().strip() != inventory["runtime_base_commit"]:
+        raise ValueError("historical checkout commit differs from pinned baseline")
+    if git("rev-parse", "--verify", "HEAD^{tree}").decode().strip() != inventory["runtime_base_tree"]:
+        raise ValueError("historical checkout tree differs from pinned baseline")
+    expected = {}
+    for record in git("ls-tree", "-r", "-l", "-z", "HEAD", "--",
+                      "src", "Cargo.lock", "Cargo.toml").split(b"\0"):
+        if not record:
+            continue
+        metadata, path = record.split(b"\t", 1)
+        mode, kind, digest, size = metadata.decode().split()
+        name = path.decode()
+        if (mode not in ("100644", "100755") or kind != "blob"
+                or not GIT_ID.fullmatch(digest) or name in expected):
+            raise ValueError("invalid historical Git source entry: " + name)
+        expected[name] = {"path": name, "mode": mode, "git_blob": digest,
+                          "bytes": int(size)}
+    if not {"src/mcp/server.rs", "Cargo.lock", "Cargo.toml"} <= expected.keys():
+        raise ValueError("incomplete historical Git source closure")
+    if source_tree(expected) != git("rev-parse", "--verify", "HEAD:src").decode().strip():
+        raise ValueError("historical source entries do not reconstruct the pinned Git tree")
+    actual = actual_sources(root)
+    if actual != expected:
+        changed = sorted(name for name in actual.keys() & expected.keys()
+                         if actual[name] != expected[name])
+        raise ValueError("historical source checkout differs from pinned tree: "
+                         + json.dumps({"missing": sorted(expected.keys() - actual.keys()),
+                                       "extra": sorted(actual.keys() - expected.keys()),
+                                       "changed": changed}))
+    return actual
+
+
+def inspect_target(root, inventory=None, target_root=None, historical_root=None):
     root = root.resolve(strict=True)
     if inventory is None:
         inventory = _json(_regular(root, "native/migration.json")[0])
     snapshot, expected = read_snapshot(root, inventory)
-    baseline = actual_sources(root)
+    candidate = actual_sources(root)
+    historical_checkout_verified = historical_root is not None
+    if historical_checkout_verified:
+        historical_root = historical_root.resolve(strict=True)
+        baseline = historical_sources(historical_root, inventory)
+    else:
+        historical_root = root
+        baseline = candidate
     registered = inventory.get("legacy_tool_handlers")
     if not isinstance(registered, list):
         raise ValueError("missing historical handler inventory")
     old_names = [row["name"] for row in registered]
-    if old_names != TOOL.findall(_regular(root, "src/mcp/server.rs")[0].decode()):
+    if old_names != TOOL.findall(_regular(historical_root, "src/mcp/server.rs")[0].decode()):
         raise ValueError("historical handler inventory differs from actual source")
     if (len(set(old_names)) != len(old_names)
             or any(row.get("status") != "not_ported" or row.get("native_owner") is not None
@@ -200,6 +263,7 @@ def inspect_target(root, inventory=None, target_root=None):
         "target_src_tree": snapshot["target_src_tree"],
         "historical_comparison_base": snapshot["historical_comparison_base"],
         "target_checkout_verified": actual_target_verified,
+        "historical_checkout_verified": historical_checkout_verified,
         "historical_handler_count": len(old_names),
         "target_handler_count": len(target_names),
         "native_production_handler_count": 0,
@@ -214,6 +278,13 @@ def inspect_target(root, inventory=None, target_root=None):
         },
         "target_source_file_count": len(expected),
         "historical_source_file_count": len(baseline),
+        "candidate_source_file_count": len(candidate),
+        "candidate_source_drift": {
+            "target_only": sorted(expected.keys() - candidate.keys()),
+            "candidate_only": sorted(candidate.keys() - expected.keys()),
+            "changed": sorted(name for name in expected.keys() & candidate.keys()
+                              if expected[name] != candidate[name]),
+        },
         "target_behavior_qualified": False,
         "whole_runtime_replaced": False,
         "old_stack_removal_qualified": False,
@@ -226,11 +297,14 @@ def main():
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--target-root", type=Path,
                         help="independent checkout of the target production source")
+    parser.add_argument("--historical-root", type=Path,
+                        help="independent exact checkout of the pinned historical comparison source")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--require-complete", action="store_true")
     args = parser.parse_args()
     try:
-        result = inspect_target(args.root, target_root=args.target_root)
+        result = inspect_target(args.root, target_root=args.target_root,
+                                historical_root=args.historical_root)
         if args.require_complete:
             result["completion_check"] = "INCOMPLETE"
         raw = json.dumps(result, indent=2, sort_keys=True) + "\n"

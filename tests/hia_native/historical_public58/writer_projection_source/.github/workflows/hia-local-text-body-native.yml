@@ -1,0 +1,133 @@
+name: HIA Local Text Body Independent Fixture
+
+on:
+  push:
+    branches: ['codex/**', main]
+    paths:
+      - 'tests/hia_native/local_text_body/**'
+      - 'scripts/hia_native_local_text_body_build.py'
+      - 'scripts/qualify_hia_local_text_body.py'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - '.github/workflows/hia-local-text-body-native.yml'
+  pull_request:
+    paths:
+      - 'tests/hia_native/local_text_body/**'
+      - 'scripts/hia_native_local_text_body_build.py'
+      - 'scripts/qualify_hia_local_text_body.py'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - '.github/workflows/hia-local-text-body-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-local-text-body-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# This independently builds the final private 12-image body fixture. The read
+# candidate remains in the fixture until existing shared descendants are rebound.
+# It does not replace aggregate cold qualification or advertise a public handler.
+jobs:
+  body:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            tests/hia_native
+            .github/workflows
+            src
+            tests
+            .github
+            vendor
+            qualification
+      - name: Materialize explicit historical qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout independent original Local body source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/fs/core.rs
+            /src/mcp/fs/text_editing.rs
+            /src/mcp/fs/remote.rs
+            /src/mcp/fs/remote_unavailable.rs
+            /src/mcp/fs/delta.rs
+            /src/mcp/request_ctx.rs
+            /src/utils/line_hash.rs
+      - name: Verify source extraction and original compiler
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C original rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          rustup toolchain install 1.95.0 --profile minimal
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os, sys
+          source = Path(os.environ['HIA_QUALIFICATION_SOURCE']) / 'tests/hia_native/local_text_body'
+          sys.path.insert(0, str(source))
+          import verify_reference
+          import portable_support
+          portable_support.source_evidence()
+          verified = verify_reference.verify(source)
+          assert verified['exact_original_items'] == 74 and verified['target_files'] == 9
+          for name in verify_reference.TARGET_BLOBS:
+              assert (Path('original') / name).read_bytes() == (source / 'reference/target' / name).read_bytes()
+          PY
+      - name: Run every native case and fresh complete original pair
+        run: |
+          HIA_BODY_RUSTC="$(rustup which --toolchain 1.95.0 rustc)"
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_local_text_body.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --toolchain "$(dirname "$HIA_BODY_RUSTC")" \
+            --output "$RUNNER_TEMP/hia-local-text-body" \
+            --phase all
+      - name: Reopen complete source and process evidence
+        run: |
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_local_text_body.py \
+            --output "$RUNNER_TEMP/hia-local-text-body" --phase verify
+      - name: Retain complete qualification source profile
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json"; then
+            mkdir -p "$RUNNER_TEMP/hia-local-text-body"
+            cp "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json" "$RUNNER_TEMP/hia-local-text-body/source-profile.json"
+          fi
+      - name: Retain complete input, output, state and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-local-text-body-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-local-text-body/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
