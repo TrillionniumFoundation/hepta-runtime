@@ -1,0 +1,65 @@
+name: HIA Batch complete public fixture qualification
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'hia-batch-public-complete-*'
+permissions:
+  contents: read
+jobs:
+  complete-public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact new source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/batch_complete_public_ci/source
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout independent complete current original
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+      - name: Install exact Rust and native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: Fresh complete native and original qualification
+        run: |
+          rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -B runtime/tests/hia_native/batch_complete_public_ci/source/run_recipe.py \
+            --phase all --hepta "$GITHUB_WORKSPACE/compiler" --target "$GITHUB_WORKSPACE/original" \
+            --rust-bin "$rust_bin" --output "$RUNNER_TEMP/batch-public-complete"
+      - name: Reopen complete evidence without executing either implementation
+        run: |
+          python3 -B runtime/tests/hia_native/batch_complete_public_ci/source/run_recipe.py \
+            --phase verify --output "$RUNNER_TEMP/batch-public-complete"
+      - name: Archive complete source and execution records including failures
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/batch-public-complete"; then
+            python3 -B runtime/tests/hia_native/batch_complete_public_ci/source/export_evidence.py \
+              --input "$RUNNER_TEMP/batch-public-complete" --output "$RUNNER_TEMP/batch-public-complete-archive"
+          fi
+      - name: Retain complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-batch-public-complete-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/batch-public-complete-archive/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

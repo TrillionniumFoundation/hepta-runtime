@@ -1,0 +1,55 @@
+name: Independent complete Authority102 archive readback
+on:
+  push:
+    branches: ['hia-authority102-readback-6780-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+env:
+  JOINT_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/authority102_joint_ci
+  JOINT_PROFILE: '5ff90d433a604920d689f56ffd38e3c95e622f0ab5b72bc143d500d4c9e6404d'
+  READBACK_DRIVER: ${{ github.workspace }}/reader/tests/hia_native/authority102_readback_ci/read_archives.py
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  complete-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact qualified reader and source closure
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: f5b021fbfdc2e02d0df0bb4089001da4bae2ac3a
+          path: runtime
+          sparse-checkout: tests/hia_native/authority102_joint_ci
+          persist-credentials: false
+      - name: Checkout this isolated archive observer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: reader
+          sparse-checkout: tests/hia_native/authority102_readback_ci
+          persist-credentials: false
+      - name: Verify exact source and every published ZIP byte
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -B -c 'import hashlib,os,pathlib; p=pathlib.Path(os.environ["READBACK_DRIVER"]); assert hashlib.sha256(p.read_bytes()).hexdigest()=="e2b7bbd31491f5f601dc54a9fe9cd3aa014ad9c305c7d981e9b5babcb5b10852"'
+          python3 -I -B "$JOINT_SOURCE/check_package.py" --source "$JOINT_SOURCE" --expected-sha256 "$JOINT_PROFILE"
+          python3 -I -B "$READBACK_DRIVER" --phase download --output "$RUNNER_TEMP/external-readback"
+      - name: Independently recover every complete original member
+        run: |
+          python3 -I -B "$JOINT_SOURCE/extract_archive.py" --kind authority --archive "$RUNNER_TEMP/external-readback/authority.tar.gz" --index "$RUNNER_TEMP/external-readback/authority.index.json" --output "$RUNNER_TEMP/authority-extracted" > "$RUNNER_TEMP/external-readback/joint-authority-extraction.json"
+          python3 -I -B "$JOINT_SOURCE/extract_archive.py" --kind batch --archive "$RUNNER_TEMP/external-readback/batch.tar.gz" --index "$RUNNER_TEMP/external-readback/batch.index.json" --output "$RUNNER_TEMP/batch-extracted" > "$RUNNER_TEMP/external-readback/joint-batch-extraction.json"
+      - name: Unchanged complete strong reader and byte-identical receipts
+        run: |
+          python3 -I -B "$JOINT_SOURCE/verify_joint.py" --source "$JOINT_SOURCE" --expected-source-sha256 "$JOINT_PROFILE" --authority "$RUNNER_TEMP/authority-extracted" --batch "$RUNNER_TEMP/batch-extracted" > "$RUNNER_TEMP/external-readback/joint-complete-readback.json"
+          python3 -I -B "$READBACK_DRIVER" --phase compare --output "$RUNNER_TEMP/external-readback"
+      - name: Preserve exact independent receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authority102-external-readback-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/external-readback/*.json
+          if-no-files-found: error
+          retention-days: 14
