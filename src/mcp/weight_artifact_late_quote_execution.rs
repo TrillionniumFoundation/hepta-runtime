@@ -223,12 +223,13 @@ async fn report(
 	} else {
 		"RECOVERY_REQUIRED"
 	};
-	let report = json!({"schema":"hepta.late-quote.roundtrip.v1","journal_id":saved.journal_id,"plan_sha256":saved.plan_sha256,"attempt_sha256":saved.sha()?,
+	let mut report = json!({"schema":"hepta.late-quote.roundtrip.v1","journal_id":saved.journal_id,"plan_sha256":saved.plan_sha256,"attempt_sha256":saved.sha()?,
 		"status":status,"fixed_scope":SCOPE,"selected_action":action.map(Action::name),"decision":decision,"candidate":candidate,"restoration":restoration.receipt,
 		"parent_evaluation":parent,"candidate_evaluation":candidate_model,"restored_evaluation":restored,
 		"candidate_goal_met":goal,"scoped_original_graph_retention_byte_equal":scoped_retention,
 		"scoped_retention_uses_same_selected_weights":true,"scoped_retention_requires_conditional_graph_routing":true,
-		"unconditional_graph_retention_passed":unconditional_retention,
+		"unconditional_graph_retention_passed":unconditional_retention});
+	let quality = json!({
 		"unconditional_graph_accepted":goal && unconditional_retention && inverse_verified && outputs_restored && evaluation::valid(&parent) && evaluation::valid(&candidate_model) && authority_valid && errors.is_empty(),
 		"weights_graph_route_initial_state_and_evaluator_restored":inverse_verified,"fresh_restored_complete_outputs_equal":outputs_restored,
 		"research_roundtrip_verified":qualified,"candidate_publication_absent_verified":no_publication,"session_authority_valid_after_effect":authority_valid,
@@ -236,12 +237,24 @@ async fn report(
 		"original_preparation_wall_seconds":saved.preparation_wall_seconds,
 		"original_window":{"created_unix_ms":saved.created_unix_ms,"expires_unix_ms":saved.expires_unix_ms,"native_boot_clock":saved.native_boot_clock,"restarted_on_recovery":false},
 		"new_complete_forward_results_this_request":ledger["completed_forward_calls_with_durable_results"].as_u64().context("ledger forward count")?.checked_sub(prior_forward_results).context("ledger count moved backward")?,
-		"original_running_executable_sha256":saved.plan.running_executable_sha256,"original_evaluator_source_sha256":saved.plan.evaluator_source,
+		"original_running_executable_sha256":saved.plan.running_executable_sha256,"original_evaluator_source_sha256":saved.plan.evaluator_source});
+	let scope = json!({
 		"explicit_recovery":recovery,"reused_original_result":reused,"parent_or_candidate_forward_replayed":false,
 		"original_source_path_opened":!recovery && !reused,"pure_compiler_invocations_this_request":if recovery||reused {0}else{1},
 		"selection_replayed_on_recovery":false,"source_modified":false,"shared_model_activated":false,"production_eligible":false,
 		"optimizer_steps":0,"global_ndu_optimality_verified":false,"upstream_provenance_verified":false,
 		"scope_limit":"fixed lower-quote task, six-tick reset graph, source-bound F32 kernel and measured batches; no arbitrary-network or trading-profit claim"});
+	for fields in [quality, scope] {
+		report
+			.as_object_mut()
+			.context("roundtrip result object")?
+			.extend(
+				fields
+					.as_object()
+					.context("roundtrip result fields")?
+					.clone(),
+			);
+	}
 	ensure!(
 		serde_json::to_vec(&report)?.len() as u64 <= RESULT_BYTES,
 		"late-quote final result cap"
