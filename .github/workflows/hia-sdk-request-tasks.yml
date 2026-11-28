@@ -1,0 +1,80 @@
+name: Current SDK request tasks and cancellation registry
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-sdk-request-task-qualification-6780-20261116]
+permissions:
+  contents: read
+jobs:
+  current-request-tasks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      TASK_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/sdk_request_tasks_ci
+      RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TASK_RUN=$RUNNER_TEMP/sdk-request-tasks" "TASK_ARCHIVE=$RUNNER_TEMP/sdk-request-tasks-evidence" >> "$GITHUB_ENV"
+      - name: Checkout exact candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: tests/hia_native/sdk_request_tasks_ci
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout exact target dependency source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+          persist-credentials: false
+      - name: Verify complete source identity
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "$RUNTIME_SHA"
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C "$GITHUB_WORKSPACE/original-target" rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.toml" "$TASK_SOURCE/reference/target/Cargo.toml"
+          cmp "$GITHUB_WORKSPACE/original-target/Cargo.lock" "$TASK_SOURCE/reference/target/Cargo.lock"
+          python3 -I -B "$TASK_SOURCE/scripts/run_ci.py" --source "$TASK_SOURCE" --check-only
+      - name: Install build tools and Rust 1.95
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'TASK_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Fresh HIA and current SDK qualification
+        run: |
+          python3 -I -B "$TASK_SOURCE/scripts/run_ci.py" --source "$TASK_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$TASK_RUST_BIN" --output "$TASK_RUN"
+      - name: Independently read all retained evidence
+        run: |
+          python3 -I -B "$TASK_SOURCE/scripts/verify_complete.py" --source "$TASK_SOURCE" --run "$TASK_RUN" --require-recipe-pass > "$RUNNER_TEMP/sdk-request-tasks-readonly.json"
+      - name: Preserve complete successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -B "$TASK_SOURCE/scripts/export_artifact.py" --source "$TASK_SOURCE" --run "$TASK_RUN" --output "$TASK_ARCHIVE"
+      - name: Upload complete source and observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-request-tasks-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/sdk-request-tasks-evidence.tar.gz
+            ${{ runner.temp }}/sdk-request-tasks-evidence.archive.json
+            ${{ runner.temp }}/sdk-request-tasks-readonly.json
+          if-no-files-found: error
+          retention-days: 14
