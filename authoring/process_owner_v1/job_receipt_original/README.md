@@ -1,0 +1,1 @@
+The seven source inputs are complete original bytes from Hepta c7e19fe852ca57b78c77441d3ad2969ac198860e. See source-provenance.json and docs/evidence/process-job-receipt-component/20261128-2ac5/README.md for the explicit component scope and actual qualification. The two HIA sources are stored under native/process_job_receipt.hepta and native/process_job_receipt_packer.hepta.
