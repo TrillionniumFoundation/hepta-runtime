@@ -1,0 +1,79 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def dispatch(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)>=32:
+        if load(s,0)==3544386040927240776 and load(s,24)>=15:
+            return literal_entry(s,o,w)
+    return previous_path_entry(s,o,w)
+
+def literal_entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3544386040927240776 or load(s,8)!=3 or load(s,56)!=length(s)-64:
+        return 4294967295
+    kind=load(s,24)
+    size=length(s)-64
+    if kind<15 or kind>17 or load(s,32)!=0 or load(s,40)!=size or load(s,48)!=0:
+        return 4294967295
+    if utf8(s,64,size)==0:
+        return 4294967295
+    if length(w)<12288:
+        return 4294967294
+    install_data(w)
+    prefix=5
+    if kind==16:
+        prefix=19
+    if kind==17:
+        prefix=12
+    needed=prefix+2+size
+    if needed>=4294901760:
+        return 4294967295
+    if length(o)<needed:
+        return 4294967294
+    if kind==15:
+        store(o,0,69)
+        store(o,1,114)
+        store(o,2,114)
+        store(o,3,111)
+        store(o,4,114)
+    if kind==16:
+        store(o,0,78)
+        store(o,1,111)
+        store(o,2,116)
+        store(o,3,73)
+        store(o,4,109)
+        store(o,5,112)
+        store(o,6,108)
+        store(o,7,101)
+        store(o,8,109)
+        store(o,9,101)
+        store(o,10,110)
+        store(o,11,116)
+        store(o,12,101)
+        store(o,13,100)
+        store(o,14,69)
+        store(o,15,114)
+        store(o,16,114)
+        store(o,17,111)
+        store(o,18,114)
+    if kind==17:
+        store(o,0,82)
+        store(o,1,117)
+        store(o,2,110)
+        store(o,3,116)
+        store(o,4,105)
+        store(o,5,109)
+        store(o,6,101)
+        store(o,7,69)
+        store(o,8,114)
+        store(o,9,114)
+        store(o,10,111)
+        store(o,11,114)
+    store(o,prefix,58)
+    store(o,prefix+1,32)
+    at=0
+    while at<size:
+        store(o,prefix+2+at,byte(s,64+at))
+        at=at+1
+    return needed

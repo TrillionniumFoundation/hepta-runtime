@@ -1,0 +1,62 @@
+name: Author exact HIA audit record I/O source
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-io-author-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_storage_core
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Verify identities and author source without semantic execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          source=Path('runtime/tests/hia_native/audit_storage_core').resolve()
+          sys.path.insert(0,str(source))
+          import hashlib,json
+          raw_manifest=(source/'AUTHOR_SOURCE.json').read_bytes()
+          assert hashlib.sha256(raw_manifest).hexdigest()=='5253eea52eeee684f999560e537e56c673e4237cab21c600115e6f36c6a5b5eb'
+          manifest=json.loads(raw_manifest)
+          for name,pin in manifest['files'].items():
+              raw=(source/name).read_bytes()
+              assert len(raw)==pin['bytes'] and hashlib.sha256(raw).hexdigest()==pin['sha256'],name
+              assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==pin['git_blob'],name
+          for path in source.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          from process import Recorder
+          recorder=Recorder(source,Path(os.environ['RUNNER_TEMP'])/'audit-record-io-author-processes')
+          try:
+              raw,row=recorder.run('source-author',[sys.executable,'-I','-B',source/'authoring/author_record_io.py',
+                  '--root',source,'--hepta',Path('compiler').resolve()],timeout=60)
+              print(raw.decode(),end='')
+          finally:
+              error=recorder.directory/'source-author.stderr'
+              if error.is_file():sys.stderr.write(error.read_text())
+          PY
+      - name: Preserve complete source and authoring process
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-io-author-${{ github.sha }}
+          path: |
+            runtime/tests/hia_native/audit_storage_core
+            ${{ runner.temp }}/audit-record-io-author-processes
+          if-no-files-found: error
+          retention-days: 14

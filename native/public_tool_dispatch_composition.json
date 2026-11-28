@@ -1,0 +1,95 @@
+{
+  "fixed_children": [
+    0,
+    6
+  ],
+  "functions": {
+    "append_span": "f12",
+    "bad_arguments": "f5",
+    "bridge_call": "f3",
+    "dispatch_tool": "f2",
+    "emit": "f11",
+    "entry": "f0",
+    "get": "f27",
+    "hex_digit": "f6",
+    "install_literals": "f14",
+    "literal": "f25",
+    "literal_chunk_0": "f15",
+    "literal_chunk_1024": "f16",
+    "literal_chunk_2048": "f17",
+    "literal_chunk_3072": "f18",
+    "literal_chunk_4096": "f19",
+    "literal_chunk_5120": "f20",
+    "literal_chunk_6144": "f21",
+    "literal_chunk_7168": "f22",
+    "literal_size": "f24",
+    "literal_start": "f23",
+    "match_literal": "f7",
+    "put": "f28",
+    "quoted": "f13",
+    "read64": "f26",
+    "render": "f9",
+    "response": "f8",
+    "resumed": "f4",
+    "span_byte": "f10",
+    "valid_admission": "f1"
+  },
+  "imports": [
+    {
+      "functions": {
+        "f14": "d761090ba6af7c88f7516cc943c14d9d2317fb70ded50b6a1b4e3904afaefabb",
+        "f15": "54d5c542fea2ddc6ce9bc43ad142cdd8b8ee56e0b0bf717ee528e7674fe6e3e4",
+        "f16": "0f14a0d7d6c55d8b2b33c8aa6836b85f3d7e51788eb281c3717eae2dd814b7ea"
+      },
+      "relocation": {
+        "f14": "f26",
+        "f15": "f27",
+        "f16": "f28"
+      },
+      "source": "native/text_budget.hepta",
+      "source_sha256": "89df7b4320fdbd3525450e9446267ae3d54a5b62660d8904fe8f09be36a7fbf9"
+    }
+  ],
+  "literals": {
+    "11": "{\"jsonrpc\":\"2.0\",\"id\":",
+    "12": ",\"result\":",
+    "13": ",\"error\":",
+    "25": "{\"code\":-32601,\"message\":",
+    "30": "{}",
+    "31": "{\"completion\":{\"values\":[]}}",
+    "32": "{\"prompts\":[]}",
+    "33": "{\"resources\":[]}",
+    "34": "{\"resourceTemplates\":[]}",
+    "35": "{\"tools\":[{\"name\":\"effective_config\",\"title\":\"Read Redacted Effective Configuration\",\"description\":\"Read bounded effective Hepta capabilities and configured host aliases from a strict allowlist projection. Returns authorization switches and counts, never SSH destinations, private paths, credentials, environment values, privileged commands or raw policy. Does not modify configuration; administrator changes require reviewed version-controlled configuration and rollback.\",\"inputSchema\":{\"additionalProperties\":false,\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}},{\"name\":\"execution_shadow_admit\",\"title\":\"Execution Shadow Admission\",\"description\":\"Validate and hash a canonical execution_intent v1 against an allowlisted host. Shadow only: never starts a process, grants FinalUse or acknowledges an effect.\",\"inputSchema\":{\"$defs\":{\"CanonicalCurrentnessV1\":{\"enum\":[\"current\",\"stale\",\"unknown\"],\"type\":\"string\"},\"CanonicalExecutionBindingV1\":{\"additionalProperties\":false,\"properties\":{\"candidate_digest\":{\"type\":\"string\"},\"cell_id\":{\"type\":\"string\"},\"currentness\":{\"$ref\":\"#/$defs/CanonicalCurrentnessV1\"},\"final_use\":{\"$ref\":\"#/$defs/ShadowFinalUseV1\"},\"generation\":{\"minimum\":0,\"type\":\"integer\"},\"host\":{\"type\":\"string\"},\"idempotency_key\":{\"type\":\"string\"},\"objective_digest\":{\"type\":\"string\"},\"operation_id\":{\"type\":\"string\"},\"organ_id\":{\"type\":\"string\"},\"policy_digest\":{\"type\":\"string\"},\"predecessor\":{\"type\":\"string\"},\"principal\":{\"type\":\"string\"},\"rollback_reference\":{\"type\":\"string\"},\"run_id\":{\"type\":\"string\"},\"schema_version\":{\"minimum\":0,\"type\":\"integer\"},\"turn_id\":{\"type\":\"string\"}},\"required\":[\"schema_version\",\"run_id\",\"turn_id\",\"operation_id\",\"principal\",\"objective_digest\",\"policy_digest\",\"candidate_digest\",\"host\",\"generation\",\"idempotency_key\",\"currentness\",\"final_use\"],\"type\":\"object\"},\"CanonicalExecutionClassV1\":{\"enum\":[\"read_only_inspection\",\"file_read\",\"non_destructive_build\",\"restricted_file_write\",\"durable_process\",\"privileged_action\",\"cross_host_device\"],\"type\":\"string\"},\"CanonicalExecutionIntentV1\":{\"additionalProperties\":false,\"properties\":{\"binding\":{\"$ref\":\"#/$defs/CanonicalExecutionBindingV1\"},\"class\":{\"$ref\":\"#/$defs/CanonicalExecutionClassV1\"},\"payload_digest\":{\"type\":\"string\"}},\"required\":[\"binding\",\"class\",\"payload_digest\"],\"type\":\"object\"},\"CanonicalExecutionRecordV1\":{\"additionalProperties\":false,\"properties\":{\"kind\":{\"const\":\"execution_intent\",\"type\":\"string\"},\"record\":{\"$ref\":\"#/$defs/CanonicalExecutionIntentV1\"}},\"required\":[\"kind\",\"record\"],\"type\":\"object\"},\"ShadowFinalUseV1\":{\"additionalProperties\":false,\"properties\":{\"state\":{\"const\":\"not_granted\",\"type\":\"string\"}},\"required\":[\"state\"],\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"record\":{\"$ref\":\"#/$defs/CanonicalExecutionRecordV1\"}},\"required\":[\"record\"],\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}},{\"name\":\"host_list\",\"title\":\"Host List\",\"description\":\"List configured runtime host names and their capability flags. SSH destinations and credentials are never accepted from tool input.\",\"inputSchema\":{\"additionalProperties\":false,\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}}]}",
+    "40": "{}",
+    "41": "{\"resultType\":\"complete\",\"completion\":{\"values\":[]}}",
+    "42": "{\"resultType\":\"complete\",\"prompts\":[]}",
+    "43": "{\"resultType\":\"complete\",\"ttlMs\":0,\"cacheScope\":\"private\",\"resources\":[]}",
+    "44": "{\"resultType\":\"complete\",\"resourceTemplates\":[]}",
+    "45": "{\"resultType\":\"complete\",\"ttlMs\":0,\"cacheScope\":\"public\",\"tools\":[{\"name\":\"effective_config\",\"title\":\"Read Redacted Effective Configuration\",\"description\":\"Read bounded effective Hepta capabilities and configured host aliases from a strict allowlist projection. Returns authorization switches and counts, never SSH destinations, private paths, credentials, environment values, privileged commands or raw policy. Does not modify configuration; administrator changes require reviewed version-controlled configuration and rollback.\",\"inputSchema\":{\"additionalProperties\":false,\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}},{\"name\":\"execution_shadow_admit\",\"title\":\"Execution Shadow Admission\",\"description\":\"Validate and hash a canonical execution_intent v1 against an allowlisted host. Shadow only: never starts a process, grants FinalUse or acknowledges an effect.\",\"inputSchema\":{\"$defs\":{\"CanonicalCurrentnessV1\":{\"enum\":[\"current\",\"stale\",\"unknown\"],\"type\":\"string\"},\"CanonicalExecutionBindingV1\":{\"additionalProperties\":false,\"properties\":{\"candidate_digest\":{\"type\":\"string\"},\"cell_id\":{\"type\":\"string\"},\"currentness\":{\"$ref\":\"#/$defs/CanonicalCurrentnessV1\"},\"final_use\":{\"$ref\":\"#/$defs/ShadowFinalUseV1\"},\"generation\":{\"minimum\":0,\"type\":\"integer\"},\"host\":{\"type\":\"string\"},\"idempotency_key\":{\"type\":\"string\"},\"objective_digest\":{\"type\":\"string\"},\"operation_id\":{\"type\":\"string\"},\"organ_id\":{\"type\":\"string\"},\"policy_digest\":{\"type\":\"string\"},\"predecessor\":{\"type\":\"string\"},\"principal\":{\"type\":\"string\"},\"rollback_reference\":{\"type\":\"string\"},\"run_id\":{\"type\":\"string\"},\"schema_version\":{\"minimum\":0,\"type\":\"integer\"},\"turn_id\":{\"type\":\"string\"}},\"required\":[\"schema_version\",\"run_id\",\"turn_id\",\"operation_id\",\"principal\",\"objective_digest\",\"policy_digest\",\"candidate_digest\",\"host\",\"generation\",\"idempotency_key\",\"currentness\",\"final_use\"],\"type\":\"object\"},\"CanonicalExecutionClassV1\":{\"enum\":[\"read_only_inspection\",\"file_read\",\"non_destructive_build\",\"restricted_file_write\",\"durable_process\",\"privileged_action\",\"cross_host_device\"],\"type\":\"string\"},\"CanonicalExecutionIntentV1\":{\"additionalProperties\":false,\"properties\":{\"binding\":{\"$ref\":\"#/$defs/CanonicalExecutionBindingV1\"},\"class\":{\"$ref\":\"#/$defs/CanonicalExecutionClassV1\"},\"payload_digest\":{\"type\":\"string\"}},\"required\":[\"binding\",\"class\",\"payload_digest\"],\"type\":\"object\"},\"CanonicalExecutionRecordV1\":{\"additionalProperties\":false,\"properties\":{\"kind\":{\"const\":\"execution_intent\",\"type\":\"string\"},\"record\":{\"$ref\":\"#/$defs/CanonicalExecutionIntentV1\"}},\"required\":[\"kind\",\"record\"],\"type\":\"object\"},\"ShadowFinalUseV1\":{\"additionalProperties\":false,\"properties\":{\"state\":{\"const\":\"not_granted\",\"type\":\"string\"}},\"required\":[\"state\"],\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"record\":{\"$ref\":\"#/$defs/CanonicalExecutionRecordV1\"}},\"required\":[\"record\"],\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}},{\"name\":\"host_list\",\"title\":\"Host List\",\"description\":\"List configured runtime host names and their capability flags. SSH destinations and credentials are never accepted from tool input.\",\"inputSchema\":{\"additionalProperties\":false,\"type\":\"object\"},\"annotations\":{\"readOnlyHint\":true,\"destructiveHint\":false,\"idempotentHint\":true,\"openWorldHint\":false}}]}",
+    "50": "{\"content\":[{\"type\":\"text\",\"text\":",
+    "51": "{\"resultType\":\"complete\",\"content\":[{\"type\":\"text\",\"text\":",
+    "52": "}],\"isError\":false}",
+    "53": "}],\"isError\":true}",
+    "54": "{\"code\":-32602,\"message\":\"tool not found in this runtime mode\"}",
+    "60": "host_list",
+    "61": "effective_config",
+    "62": "execution_shadow_admit",
+    "63": "failed to deserialize parameters: unknown field `",
+    "64": "`, there are no fields"
+  },
+  "production_activated": false,
+  "public_request_audit_closed": false,
+  "schema": "hepta.runtime.public-registry-source.v1",
+  "source_dependencies": [
+    {
+      "path": "scripts/public_emitter_source.py.txt",
+      "sha256": "1a63dcac9959e6ee589c8a469a3b00aee5e1ae50bee91ee29818db9d5ee1f3ab"
+    },
+    {
+      "path": "tests/hia_native/public_registry_catalog.json",
+      "sha256": "b08d554b3dbdd9586e58a3d3096e71a5a0ba838a9d2ba81ea12f38a95e2969df"
+    }
+  ],
+  "source_sha256": "0c5d6aa6f14cee254bfe8a0ec01114153587b9789a05845a1cd0037e2cb9caf4"
+}

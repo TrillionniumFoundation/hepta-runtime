@@ -1,0 +1,57 @@
+name: HIA multi-read UTF8 independent uploaded recovery read
+on:
+  push:
+    branches: [hia-multi-read-utf8-independent-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure-read:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [pairs-0, pairs-1, pairs-2, pairs-3, pairs-4, pairs-5, pairs-6, pairs-7, pairs-8, pairs-9, pairs-a, pairs-b, pairs-c, pairs-d, pairs-e, pairs-f, singles, scalars, multi-0, multi-1, multi-2, tails, abi]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      MULTI_SOURCE: ${{ github.workspace }}/runtime/qualification/multi_read_body/v1/utf8_independent
+      MULTI_MANIFEST: 9cc169a4e57f47125acb2b8857d7bd94d965f74667cb908708d34995c91ab46d
+    steps:
+      - name: Checkout exact frozen actual domain and all readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/utf8_independent
+          persist-credentials: false
+      - name: Verify exact frozen source commit
+        shell: bash
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Read the same retained captures and all controls without application replay
+        shell: bash
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" read \
+            --work "$RUNNER_TEMP/multi-utf8-independent-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Retain complete captures and first failure without replay
+        if: always()
+        shell: bash
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/multi-utf8-independent-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/multi-utf8-independent-${{ matrix.group }}-export" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Upload complete evidence archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-utf8-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-utf8-independent-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

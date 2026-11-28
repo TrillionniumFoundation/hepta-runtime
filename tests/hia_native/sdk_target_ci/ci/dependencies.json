@@ -1,0 +1,160 @@
+{
+  "schema": "hepta.sdk-five-originals.ci-dependencies.v1",
+  "original_target": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "cargo_lock_sha256": "1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631",
+    "server_source_sha256": "0957f7d7d56ad76540a42ba82b33fc29a625bb186cece2a207a764ea8c5beb6f"
+  },
+  "historical_public_source_commit": "e3c7342325b2260be1459ac2a8c4e7c8d219e4f6",
+  "base_recovery_manifest_sha256": "c753d1f4dd25d5f5e49e8c6f3771a9b400b2fb6f832075489874e5f4025ce8b1",
+  "hepta": {
+    "repository": "TrillionniumFoundation/Hepta",
+    "commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+    "tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+    "development_fixed_point_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+  },
+  "rust_toolchain": "1.95.0",
+  "host": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "python_minimum": "3.11",
+    "build_tools": [
+      "git",
+      "as",
+      "objcopy",
+      "readelf",
+      "nm",
+      "cc"
+    ],
+    "ubuntu_packages": [
+      "python3",
+      "git",
+      "binutils",
+      "build-essential"
+    ],
+    "python_third_party_packages": []
+  },
+  "rust_projects": [
+    {
+      "id": "catalog",
+      "root": "g5",
+      "project": "oracle",
+      "binary": "g5-target-catalog-oracle",
+      "evidence_prefix": "",
+      "target_directory": "rust-build-catalog",
+      "cases": "cases/normal.jsonl",
+      "observations": "evidence/oracle-normal.jsonl",
+      "receipt": "evidence/oracle-build.json",
+      "rust_sources": [
+        "main.rs"
+      ],
+      "seed_lock": "ci/locked-fixtures/catalog/Cargo.lock"
+    },
+    {
+      "id": "context",
+      "root": "g5",
+      "project": "context-oracle",
+      "binary": "g5-target-context-oracle",
+      "evidence_prefix": "context-",
+      "target_directory": "rust-build-context",
+      "cases": "cases/context.bin",
+      "observations": "evidence/oracle-context.bin",
+      "receipt": "evidence/context-oracle-build.json",
+      "rust_sources": [
+        "main.rs"
+      ],
+      "seed_lock": "ci/locked-fixtures/context/Cargo.lock"
+    },
+    {
+      "id": "response",
+      "root": "g5/retained/g4",
+      "project": "oracle",
+      "binary": "g4-target-response-oracle",
+      "evidence_prefix": "",
+      "target_directory": "rust-build-response",
+      "cases": "cases/normal.jsonl",
+      "observations": "evidence/oracle-normal.jsonl",
+      "receipt": "evidence/oracle-build.json",
+      "rust_sources": [
+        "main.rs",
+        "typed_reference.rs",
+        "g2_reference.rs",
+        "generated_get_info.rs"
+      ],
+      "seed_lock": "ci/locked-fixtures/response/Cargo.lock"
+    },
+    {
+      "id": "transport",
+      "root": "g5/retained/g4/transport-regression",
+      "project": "oracle",
+      "binary": "g3-target-transport-oracle",
+      "evidence_prefix": "",
+      "target_directory": "rust-build-transport",
+      "cases": "cases/normal.jsonl",
+      "observations": "evidence/oracle-normal.jsonl",
+      "receipt": "evidence/oracle-build.json",
+      "rust_sources": [
+        "main.rs",
+        "message_model.rs"
+      ],
+      "seed_lock": "ci/locked-fixtures/transport/Cargo.lock"
+    },
+    {
+      "id": "connection",
+      "root": "g5/retained/g4/transport-regression/joined-g2",
+      "project": "oracle",
+      "binary": "g2-target-connection-oracle",
+      "evidence_prefix": "",
+      "target_directory": "rust-build-connection",
+      "cases": "cases/normal.jsonl",
+      "observations": "evidence/oracle-normal.jsonl",
+      "receipt": "evidence/oracle-build.json",
+      "rust_sources": [
+        "main.rs",
+        "generated_get_info.rs"
+      ],
+      "seed_lock": "ci/locked-fixtures/connection/Cargo.lock"
+    }
+  ],
+  "cache": {
+    "warmup": "scripts/prepare_ci_cargo_cache.py",
+    "network_phase": "cargo fetch --locked against checked frozen subset locks",
+    "build_phase": "fresh target dirs, exact target seed, cargo metadata --offline, cargo build --locked --offline",
+    "registry_sources_checked_against_archives": true
+  },
+  "generated_inputs": {
+    "root": "g5/retained/g4/transport-regression",
+    "generator": "scripts/make_normal_cases.py",
+    "generator_sha256": "ffc28afdb1ed25ae917df0573da040d481b280c9e070e3bd6d5df830314fa034",
+    "manifest": "cases/manifest.json",
+    "manifest_sha256": "7923820258d7a076606abbf4973e6760c39c83b7156990b523aa0e86528ca631",
+    "only_created_in_output_tree": true
+  },
+  "expected_domains": {
+    "g5_catalog_request_cases": 654,
+    "g5_context_cases": 104,
+    "g1_message_cases": 197,
+    "g3_total_oracle_cases": 228,
+    "g3_native_transport_cases": 25,
+    "g3_separate_codec_eof_cases": 4,
+    "g3_native_shutdown_calls": 12,
+    "g2_sessions": 67,
+    "g4_response_cases": 215,
+    "g4_typed_emitter_cases": 119,
+    "g4_cache_sessions": 3,
+    "g4_cache_response_lines": 15,
+    "controller_native_invocations": 2213,
+    "public_tool_routes": 8,
+    "public_tool_processes": 4,
+    "public_target_tool_responses": 32
+  },
+  "execution_status": "PREPARED_NOT_EXECUTED",
+  "full_sdk_qualified": false,
+  "full_async_runtime_qualified": false,
+  "native_task_registry_qualified": false,
+  "native_future_cancellation_qualified": false,
+  "fresh_cold_qualified": false,
+  "production_activated": false,
+  "old_path_removed": false
+}

@@ -1,0 +1,49 @@
+name: Read complete SSH source and reference failure archives
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-ssh-initial-readback-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: child
+            artifact: '14371967707'
+          - role: reference-failure
+            artifact: '14372288269'
+    steps:
+      - name: Set actual paths
+        run: |
+          printf '%s\n' "SR_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/initial_readback" "SR_ZIP=$RUNNER_TEMP/retained.zip" "SR_OUTPUT=$RUNNER_TEMP/readback" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/initial_readback
+      - name: Fetch only the exact completed artifact bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip > "$SR_ZIP"
+      - name: Read every original byte and metadata
+        run: |
+          test "$(sha256sum "$SR_SOURCE/inspect_archive.py" | cut -d' ' -f1)" = 7a13a4b8e796765bfd91a36e71706b5c61cb83d70aa2b36676955b15eeea3d2c
+          python3 -I -S -B "$SR_SOURCE/inspect_archive.py" --archive "$SR_ZIP" --output "$SR_OUTPUT" --role "${{ matrix.role }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-initial-pure-read-${{ matrix.role }}-${{ github.sha }}
+          path: |
+            ${{ env.SR_OUTPUT }}/READ.json
+            ${{ env.SR_OUTPUT }}/selected-*
+          compression-level: 0
+          if-no-files-found: error

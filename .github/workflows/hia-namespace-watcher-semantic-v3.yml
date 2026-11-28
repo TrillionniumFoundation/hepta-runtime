@@ -1,0 +1,143 @@
+name: Compare complete persistent Watcher against unchanged Rust
+on:
+  push:
+    branches: [hia-namespace-watcher-semantic-v3-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  evidence-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_semantic_v3
+      - name: Admit the full new source before any evidence transformation
+        run: |
+          export WATCHER_ROOT="$RUNNER_TEMP/namespace-watcher-encoding-v3"
+          printf 'WATCHER_ROOT=%s\n' "$WATCHER_ROOT" >> "$GITHUB_ENV"
+          mkdir "$WATCHER_ROOT"
+          cp -a tests/hia_native/namespace_watcher_semantic_v3 "$WATCHER_ROOT/source"
+          mkdir "$WATCHER_ROOT/outer"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["WATCHER_ROOT"])/"source";b=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(b).hexdigest()=="c78f7f95038fc29c4a7f84f68aff816a4efdc1802c516cb8df7cfbf94f5aa596"
+          for p,row in json.loads(b)["files"].items():
+              raw=(r/p).read_bytes();assert len(raw)==row["bytes"] and hashlib.sha256(raw).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"]
+              if p.endswith(".py"):compile(raw,str(r/p),"exec")
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$WATCHER_ROOT/source/source_check.py" > "$WATCHER_ROOT/outer/source.stdout" 2> "$WATCHER_ROOT/outer/source.stderr"
+      - name: Restore every exact byte and source of the preserved V2 failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14362281906/zip > "$WATCHER_ROOT/prior.zip"
+          timeout --signal=KILL 180 python3 -I -B "$WATCHER_ROOT/source/restore_prior.py" \
+            --archive "$WATCHER_ROOT/prior.zip" --output "$WATCHER_ROOT/prior" --pins "$WATCHER_ROOT/source/PRIOR-PINS.json" \
+            > "$WATCHER_ROOT/outer/restoration.stdout" 2> "$WATCHER_ROOT/outer/restoration.stderr"
+      - name: Compare all complete retained buffers and exact reversible evidence JSON without applications
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$WATCHER_ROOT/source/evidence_proof.py" \
+            --prior "$WATCHER_ROOT/prior/complete" --output "$WATCHER_ROOT/run" \
+            > "$WATCHER_ROOT/outer/proof.stdout" 2> "$WATCHER_ROOT/outer/proof.stderr"
+          cat "$WATCHER_ROOT/outer/proof.stdout"
+      - name: Retain and fully reread all new transport evidence and any failure
+        if: always()
+        run: |
+          if test -f "$WATCHER_ROOT/source/export_proof.py"; then
+            timeout --signal=KILL 180 python3 -I -B "$WATCHER_ROOT/source/export_proof.py" --workspace "$WATCHER_ROOT" \
+              --archive "$RUNNER_TEMP/namespace-watcher-encoding-v3.tar.gz"
+          fi
+          for name in source restoration proof; do
+            if test -f "$WATCHER_ROOT/outer/$name.stderr"; then cat "$WATCHER_ROOT/outer/$name.stderr"; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-encoding-v3
+          path: |
+            ${{ runner.temp }}/namespace-watcher-encoding-v3.tar.gz
+            ${{ runner.temp }}/namespace-watcher-encoding-v3.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+  semantic:
+    needs: evidence-proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_semantic_v3
+      - name: Admit all frozen source before any new application
+        run: |
+          export WATCHER_ROOT="$RUNNER_TEMP/namespace-watcher-semantic-v3"
+          printf 'WATCHER_ROOT=%s\n' "$WATCHER_ROOT" >> "$GITHUB_ENV"
+          mkdir "$WATCHER_ROOT"
+          cp -a tests/hia_native/namespace_watcher_semantic_v3 "$WATCHER_ROOT/source"
+          mkdir "$WATCHER_ROOT/outer"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["WATCHER_ROOT"])/"source";b=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(b).hexdigest()=="c78f7f95038fc29c4a7f84f68aff816a4efdc1802c516cb8df7cfbf94f5aa596"
+          for p,row in json.loads(b)["files"].items():
+              raw=(r/p).read_bytes();assert len(raw)==row["bytes"] and hashlib.sha256(raw).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==row["git_blob"]
+              if p.endswith(".py"):compile(raw,str(r/p),"exec")
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$WATCHER_ROOT/source/source_check.py" > "$WATCHER_ROOT/outer/source.stdout" 2> "$WATCHER_ROOT/outer/source.stderr"
+      - name: Install unchanged Rust 1.95 and the actual syscall observer
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'WATCHER_RUST=%s\n' "$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y strace
+      - name: Fully restore the exact unchanged native build and its original failed engineering report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14353077851/zip > "$WATCHER_ROOT/prior.zip"
+          timeout --signal=KILL 180 python3 -I -B "$WATCHER_ROOT/source/restore_build.py" \
+            --archive "$WATCHER_ROOT/prior.zip" --output "$WATCHER_ROOT/retained" --pins "$WATCHER_ROOT/source/BUILD-PINS.json" \
+            > "$WATCHER_ROOT/outer/restoration.stdout" 2> "$WATCHER_ROOT/outer/restoration.stderr"
+      - name: Fresh exact Rust and all actual observed and observer-free native groups
+        run: |
+          python3 -I -B "$WATCHER_ROOT/source/run_capture.py" --retained "$WATCHER_ROOT/retained" \
+            --rust-bin "$WATCHER_RUST" --output "$WATCHER_ROOT/run" --temporary "$RUNNER_TEMP/namespace-watcher-semantic-owned-v3" \
+            > "$WATCHER_ROOT/outer/capture.stdout" 2> "$WATCHER_ROOT/outer/capture.stderr"
+          cat "$WATCHER_ROOT/outer/capture.stdout"
+      - name: Retain and independently reread every complete captured byte and failure
+        if: always()
+        run: |
+          if test -f "$WATCHER_ROOT/source/export.py"; then
+            timeout --signal=KILL 180 python3 -I -B "$WATCHER_ROOT/source/export.py" --workspace "$WATCHER_ROOT" \
+              --archive "$RUNNER_TEMP/namespace-watcher-semantic-v3.tar.gz"
+          fi
+          if test -f "$WATCHER_ROOT/outer/capture.stderr"; then cat "$WATCHER_ROOT/outer/capture.stderr"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-semantic-v3
+          path: |
+            ${{ runner.temp }}/namespace-watcher-semantic-v3.tar.gz
+            ${{ runner.temp }}/namespace-watcher-semantic-v3.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

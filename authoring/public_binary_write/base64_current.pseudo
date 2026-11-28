@@ -1,0 +1,68 @@
+def decode(s:readbuf,o:mutbuf,emit:u64) -> u64:
+    size=length(s)-24
+    quad=0
+    left=0
+    pads=0
+    output=0
+    i=0
+    while i<size:
+        c=byte(s,24+i)
+        if c==61:
+            pads=pads+1
+            if quad<2 or quad+pads>4:
+                if quad==1:
+                    return (5<<32)+(output//3)*4+1
+                return choose(quad==0 and i==0,1,8)<<32
+        else:
+            v=value(c)
+            if v>=64:
+                return 3<<32
+            if pads!=0:
+                return choose(quad+pads==4,2,4)<<32
+            pads=0
+            if quad==0:
+                quad=1
+                left=v
+            else:
+                if quad==1:
+                    if emit!=0:
+                        store(o,64+output,(left<<2)|(v>>4))
+                    output=output+1
+                    left=v&15
+                    quad=2
+                else:
+                    if quad==2:
+                        if emit!=0:
+                            store(o,64+output,(left<<4)|(v>>2))
+                        output=output+1
+                        left=v&3
+                        quad=3
+                    else:
+                        if emit!=0:
+                            store(o,64+output,(left<<6)|v)
+                        output=output+1
+                        left=0
+                        quad=0
+        i=i+1
+    if quad==1:
+        return (5<<32)+(output//3)*4+1
+    if quad!=0 and quad+pads<4:
+        return 6<<32
+    return output
+
+def error(o:mutbuf,kind:u64,count:u64) -> u32:
+    if kind!=8:
+        return retained_error(o,kind,count)
+    if length(o)<90:
+        return 4294967294
+    i=0
+    while i<64:
+        put(o,i,0)
+        i=i+8
+    put(o,0,RESULT)
+    put(o,8,3)
+    put(o,24,15)
+    put(o,40,26)
+    put(o,56,26)
+    excess_padding(o,64)
+    return 90

@@ -1,0 +1,61 @@
+name: HIA resolved protocol feature qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-context-protocol-qualification-6780-20261116
+
+permissions:
+  contents: read
+
+jobs:
+  resolved_protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+      RUSTUP_TOOLCHAIN: '1.95.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: pinned-Hepta
+          persist-credentials: false
+      - name: Install the fixed original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Check exact source and original slices
+        run: python -I -S -B tests/hia_native/context_protocol_policy/qualify.py --phase source --source-root "$GITHUB_WORKSPACE"
+      - name: Fresh native, unchanged original and complete readers
+        run: |
+          umask 077
+          python -I -S -B tests/hia_native/context_protocol_policy/qualify.py \
+            --phase all --source-root "$GITHUB_WORKSPACE" \
+            --hepta "$GITHUB_WORKSPACE/pinned-Hepta" \
+            --output "$RUNNER_TEMP/context-protocol-evidence"
+      - name: Verify the complete result without writes or execution
+        run: |
+          python -I -S -B tests/hia_native/context_protocol_policy/qualify.py \
+            --phase verify --source-root "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/context-protocol-evidence"
+      - name: Preserve all successful or failed evidence
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/context-protocol-evidence" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/context-protocol-evidence.tar.gz" context-protocol-evidence
+            sha256sum "$RUNNER_TEMP/context-protocol-evidence.tar.gz" > "$RUNNER_TEMP/context-protocol-evidence.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: context-protocol-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/context-protocol-evidence.tar.gz
+            ${{ runner.temp }}/context-protocol-evidence.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error

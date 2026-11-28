@@ -1,0 +1,137 @@
+{
+  "explicit_edits": [
+    {
+      "after": "cmp ecx,14",
+      "before": "cmp ecx,12",
+      "count": 2
+    },
+    {
+      "after": "    mov edi,7\n    lea rsi,[rip+lock_initial]",
+      "before": "    mov edi,3\n    lea rsi,[rip+lock_initial]",
+      "count": 1
+    },
+    {
+      "after": "cmp qword ptr [r15+INLEN],536870912",
+      "before": "cmp qword ptr [r15+INLEN],134217728",
+      "count": 1
+    },
+    {
+      "after": "0x3130305457424648",
+      "before": "0x3130515242544c48",
+      "count": 1
+    },
+    {
+      "after": "cmp qword ptr [r15+INLEN],64",
+      "before": "cmp qword ptr [r15+INLEN],80",
+      "count": 1
+    },
+    {
+      "after": "    inc qword ptr [r15+GENERATION]\n    jz contract\n",
+      "before": "    mov rax,[rbx+56]\n    mov [r15+GENERATION],rax\n    mov qword ptr [r15+HINTLEN],0\n    mov qword ptr [r15+HINTCOUNT],0\n",
+      "count": 1
+    },
+    {
+      "after": "",
+      "before": "    call observe_hints\n",
+      "count": 1
+    },
+    {
+      "after": "cmp eax,0xffffffe1",
+      "before": "cmp eax,0xffffffdf",
+      "count": 1
+    },
+    {
+      "after": "    cmp qword ptr [r15+1440],0\n    jne contract\n    cmp [r15+1400],rax\n",
+      "before": "    cmp [r15+1400],rax\n",
+      "count": 1
+    },
+    {
+      "after": "    mov edi,5\n",
+      "before": "    mov edi,8\n",
+      "count": 2
+    },
+    {
+      "after": "    mov edi,3\n",
+      "before": "    mov edi,6\n",
+      "count": 1
+    },
+    {
+      "after": "    mov ebx,7\nobserve_one:",
+      "before": "    mov ebx,3\nobserve_one:",
+      "count": 1
+    },
+    {
+      "after": "    cmp ebx,7\n    jne observe_second\n    mov ebx,3\n",
+      "before": "    cmp ebx,3\n    jne observe_second\n    mov ebx,6\n",
+      "count": 1
+    },
+    {
+      "after": "    cmp ebx,3\n    jne observe_done\n    mov ebx,5\n",
+      "before": "    cmp ebx,6\n    jne observe_done\n    mov ebx,8\n",
+      "count": 1
+    },
+    {
+      "after": "0x3130414e42424c48",
+      "before": "0x3130414e42544c48",
+      "count": 1
+    },
+    {
+      "after": "0x3130494342424c48",
+      "before": "0x3130494342544c48",
+      "count": 1
+    },
+    {
+      "after": "lea rax,[r15+SLOTS+448]",
+      "before": "lea rax,[r15+SLOTS+192]",
+      "count": 1
+    },
+    {
+      "after": "lea rax,[r15+SLOTS+192]",
+      "before": "lea rax,[r15+SLOTS+384]",
+      "count": 1
+    },
+    {
+      "after": "    cmp esi,7\n    je fixture_shared_selected\n    cmp esi,3\n",
+      "before": "    cmp esi,3\n    je fixture_shared_selected\n    cmp esi,6\n",
+      "count": 1
+    },
+    {
+      "after": "cmp r12,1207959552",
+      "before": "cmp r12,268435456",
+      "count": 1
+    },
+    {
+      "after": "cmp r13,1073741824",
+      "before": "cmp r13,134217728",
+      "count": 1
+    }
+  ],
+  "export_bytes": 70979,
+  "export_occurrences": 1,
+  "export_sha256": "29e3a08373ed344ab6a50616b0e26eaf4b819cf776d170c9b78ea50c56625f07",
+  "fixed_slots": 14,
+  "fixture_bytes": 81981,
+  "fixture_prefix_bytes": 10920,
+  "fixture_sha256": "3dc42652656f64d065fa008277c271c85607568e289391421f2ce55115018500",
+  "fresh_current_original_compared": false,
+  "full_async_cancellation_qualified": false,
+  "observation_magic": "HLBBNA01",
+  "observed_slots": [
+    7,
+    3,
+    5
+  ],
+  "public_batch_qualified": false,
+  "removed_helpers": [
+    "observe_hints"
+  ],
+  "replaced_helpers": [
+    "pure_invoke",
+    "fixture_hint_callback"
+  ],
+  "retained_export_sha256": "5120f566fe8e4ace6c441d2dd110188663cb29bcc28af26a759b44a6f86b15b6",
+  "retained_fixture_sha256": "2980ab23ed5b7ee37f449b81542473969b6d02dc0e2a6d15b0948296aec6f010",
+  "schema": "hepta.runtime.rebuilt-batch-fixture-author.v1",
+  "semantic_qualification": false,
+  "serial_fixture_only": true
+}

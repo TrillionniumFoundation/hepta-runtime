@@ -1,0 +1,54 @@
+name: Complete independent evidence readback
+
+on:
+  push:
+    branches: ['hia-readback-qualification-6780-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  readback:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: public80
+            artifact: 14196246901
+          - kind: annotation
+            artifact: 14196351716
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact readback source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/artifact_readback
+      - name: Download the exact completed artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          READBACK_ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          set -euo pipefail
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$READBACK_ARTIFACT/zip" > "$RUNNER_TEMP/input.zip"
+      - name: Verify every archived byte and independently reread without native execution
+        env:
+          READBACK_KIND: ${{ matrix.kind }}
+        run: |
+          set -euo pipefail
+          python3 -I -B tests/hia_native/artifact_readback/verify_archives.py \
+            --kind "$READBACK_KIND" --zip "$RUNNER_TEMP/input.zip" \
+            --output "$RUNNER_TEMP/readback"
+      - name: Retain complete readback result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: complete-readback-${{ matrix.kind }}-${{ github.sha }}
+          path: ${{ runner.temp }}/readback/review/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

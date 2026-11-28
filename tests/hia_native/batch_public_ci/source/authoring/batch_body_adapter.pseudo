@@ -1,0 +1,156 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if length(w) < 4096:
+        return request_grow(o, w, 1, 4096)
+    if valid_input(s) == False:
+        return INVALID
+    if get(w, 0) == 0:
+        fill_range(w, 0, 1024, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 384, 4096)
+    if get(w, 0) != STATE_MAGIC:
+        return INVALID
+    phase = get(w, PHASE)
+    if phase == 0:
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, 64, load(s, 16))
+        put(w, 72, load(s, 40))
+        put(w, PHASE, 101)
+        return prepare_input(s, o, w)
+    if get(w, INPUT_LENGTH) != length(s) or get(w, 64) != load(s, 16) or get(w, 72) != load(s, 40):
+        return INVALID
+    if admit_growth(o, w) == False:
+        return INVALID
+    if phase == 101:
+        return prepare_input(s, o, w)
+    if phase != 1 and phase != 2:
+        return INVALID
+    if get(w, ACTION) != ACTION_MAGIC or get(w, ACTION + 8) != get(w, SEQUENCE) or get(w, ACTION + 64) != get(w, SEQUENCE):
+        return INVALID
+    if get(w, ACTION + 16) != phase - 1 or get(w, ACTION + 16) != get(w, 48):
+        return INVALID
+    if get(w, ACTION + 24) > 1 or get(w, ACTION + 32) != region(w, 0):
+        return INVALID
+    if get(w, ACTION + 40) != get(w, 56) or get(w, ACTION + 48) != region(w, 1) or get(w, ACTION + 56) != region_capacity(w, 1):
+        return INVALID
+    if get(w, ACTION + 80) != 0 or get(w, ACTION + 88) != 0 or get(w, ACTION + 104) != 0:
+        return INVALID
+    code = get(w, ACTION + 72)
+    if code == DELIVERY:
+        return delivery_again(o, w)
+    size = get(w, ACTION + 96)
+    if code == CANCELLED and size == 0:
+        put(w, PHASE, 0)
+        return CANCELLED
+    if code >= FIRST_ERROR:
+        put(w, PHASE, 0)
+        return code
+    if size > region_capacity(w, 1):
+        return INVALID
+    if phase == 1:
+        return after_input(s, o, w, code, size)
+    return after_body(o, w, code, size)
+
+def valid_input(s: readbuf) -> bool:
+    if length(s) < 128 or load(s, 0) != REQUEST_MAGIC or load(s, 8) != 1:
+        return False
+    if load(s, 16) != 1 and load(s, 16) != 2:
+        return False
+    path = load(s, 24)
+    typed = load(s, 32)
+    if path > length(s) - 128 or typed != length(s) - 64 - path:
+        return False
+    if load(s, 40) == 0 or load(s, 48) != 0 or load(s, 56) != 0:
+        return False
+    at = 64 + path
+    if load(s, at) != PARAMS_RESULT or load(s, at + 8) != 0:
+        return False
+    display = load(s, at + 16)
+    if display > typed - 64 or load(s, at + 24) != typed - 64 - display:
+        return False
+    if load(s, at + 40) != 0 or load(s, at + 48) != 0 or load(s, at + 56) != 0:
+        return False
+    return True
+
+def prepare_input(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    typed = load(s, 32)
+    if typed > MAXIMUM - 64:
+        return request_grow(o, w, 3, 0)
+    size = 64 + typed
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 64, 0)
+    put(w, at, INPUT_REQUEST)
+    put(w, at + 16, typed)
+    copy_range(w, s, at + 64, 64 + load(s, 24), typed)
+    return child(w, 0, size, 1)
+
+def prepare_body(s: readbuf, o: mutbuf, w: mutbuf, display: u64, records: u64, count: u64) -> u32:
+    path = load(s, 24)
+    if path > MAXIMUM - 64 or display > MAXIMUM - 64 - path or records > MAXIMUM - 64 - path - display:
+        return request_grow(o, w, 3, 0)
+    size = 64 + path + display + records
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    plan = region(w, 1) + 64
+    fill_range(w, at, 64, 0)
+    put(w, at, BODY_REQUEST)
+    put(w, at + 8, load(s, 16))
+    put(w, at + 16, path)
+    put(w, at + 24, display)
+    put(w, at + 32, count)
+    put(w, at + 40, records)
+    put(w, at + 48, 1)
+    copy_range(w, s, at + 64, 64, path)
+    copy_range(w, w, at + 64 + path, plan + 80, display + records)
+    return child(w, 1, size, 2)
+
+def after_input(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if code != 64 or size < 144 or get(w, at) != INPUT_RESULT or get(w, at + 8) != 0:
+        return INVALID
+    if get(w, at + 16) != size - 64 or get(w, at + 24) != 0 or get(w, at + 40) != 0 or get(w, at + 48) != 0 or get(w, at + 56) != 0:
+        return INVALID
+    plan = at + 64
+    if get(w, plan) != PLAN_REQUEST or get(w, plan + 8) != 0 or get(w, plan + 16) != 1 or get(w, plan + 24) != 0:
+        return INVALID
+    count = get(w, plan + 32)
+    display = get(w, plan + 40)
+    records = get(w, plan + 56)
+    if display > size - 144 or records != size - 144 - display:
+        return INVALID
+    if get(w, plan + 48) != 0 or get(w, plan + 64) != 0 or get(w, plan + 72) != 0 or count != get(w, at + 32):
+        return INVALID
+    typed = 64 + load(s, 24)
+    if display != load(s, typed + 16) or count != load(s, typed + 32):
+        return INVALID
+    i = 0
+    while i < display:
+        if byte(w, plan + 80 + i) != byte(s, typed + 64 + i):
+            return INVALID
+        i = i + 1
+    return prepare_body(s, o, w, display, records, count)
+
+def after_body(o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if size < 32 or code != size or get(w, at) != BODY_RESULT:
+        return INVALID
+    kind = get(w, at + 8)
+    if kind > 1 or get(w, at + 16) != size - 32 or get(w, at + 24) != 0:
+        return INVALID
+    if size > length(o):
+        return request_grow(o, w, 2, size)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, 1)
+    put(o, 16, kind)
+    put(o, 24, size - 32)
+    copy_range(o, w, 32, at + 32, size - 32)
+    put(w, PHASE, 0)
+    return size

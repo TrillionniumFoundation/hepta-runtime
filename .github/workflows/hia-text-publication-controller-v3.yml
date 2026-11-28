@@ -1,0 +1,70 @@
+name: Publisher gateway and caller actual HIA build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-controller-6780-v3-20261117']
+    paths: ['tests/hia_native/text_publication_controller_ci/**', '.github/workflows/hia-text-publication-controller-v3.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  controllers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_publication_controller_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-controller-build" "TP_EXPORT=$RUNNER_TEMP/text-publication-controller-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-controller-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/text_publication_controller_ci/source
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete source and exact compiler
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = b0adce18f8583331509f902de60b19ba01362623324d6f21a81f2c1dbf548ea3
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$TP_SOURCE/scripts/build.py" check --source "$TP_SOURCE"
+      - name: Author retained lifecycle controllers and compile three actual HIA owners
+        run: |
+          set +e
+          python3 -I -S -B "$TP_SOURCE/scripts/build.py" build --source "$TP_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$TP_OUTPUT" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          if [ "$tp_status" -ne 0 ] && [ -f "$TP_OUTPUT/author.stderr" ]; then cat "$TP_OUTPUT/author.stderr"; fi
+          test "$tp_status" -ne 0 || cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Read complete retained v1 failure without HIA or Rust replay
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$TP_SOURCE/scripts/read_retained_failure.py" --output "$TP_OUTPUT/retained-v1-failure"
+      - name: Preserve complete source and build including any failure
+        if: always()
+        run: |
+          python3 -I -S -B "$TP_SOURCE/scripts/archive.py" pack --source "$TP_SOURCE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-controller-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

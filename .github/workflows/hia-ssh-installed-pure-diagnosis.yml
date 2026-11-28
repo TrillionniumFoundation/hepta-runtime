@@ -1,0 +1,60 @@
+name: Read immutable SSH probes and incomplete installed relocation metadata
+on:
+  push:
+    branches: ['hia-ssh-installed-pure-diagnosis-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: ssh
+            first: 14387434055
+            second: 14388670406
+          - role: installed
+            first: 14374168295
+            second: 14384363662
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set immutable diagnostic paths
+        run: |
+          printf '%s\n' "PD_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/pure_diagnosis" "PD_CAPTURE=$RUNNER_TEMP/pure-diagnosis-${{ matrix.role }}" "PD_STAGE=$RUNNER_TEMP/pure-diagnosis-stage-${{ matrix.role }}" "PD_EXPORT=$RUNNER_TEMP/pure-diagnosis-export-${{ matrix.role }}" "PD_DRIVER=$RUNNER_TEMP/pure-diagnosis-driver-${{ matrix.role }}" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/pure_diagnosis
+      - name: Download exact completed artifacts without application replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --connect-timeout 20 --max-time 150 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.first }}/zip" -o "$RUNNER_TEMP/first.zip"
+          curl --fail --location --connect-timeout 20 --max-time 150 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.second }}/zip" -o "$RUNNER_TEMP/second.zip"
+      - name: Inspect full captured bytes and exact remaining phase
+        run: |
+          test "$(sha256sum "$PD_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 94b1f4adf608551d22df78d206cf0bead9d06d54c469211928a001944e8adee5
+          set +e
+          if [ "${{ matrix.role }}" = ssh ]; then
+            timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PD_SOURCE/recipe/inspect_probes.py" --source "$PD_SOURCE" --native "$RUNNER_TEMP/first.zip" --original "$RUNNER_TEMP/second.zip" --stage "$PD_STAGE" --output "$PD_CAPTURE" > "$PD_DRIVER.stdout" 2> "$PD_DRIVER.stderr"
+          else
+            timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PD_SOURCE/recipe/inspect_installed.py" --source "$PD_SOURCE" --diagnostic "$RUNNER_TEMP/first.zip" --partial "$RUNNER_TEMP/second.zip" --output "$PD_CAPTURE" > "$PD_DRIVER.stdout" 2> "$PD_DRIVER.stderr"
+          fi
+          pd_status=$?
+          cat "$PD_DRIVER.stderr"
+          cat "$PD_DRIVER.stdout"
+          exit "$pd_status"
+      - name: Preserve complete diagnostic source and evidence
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PD_SOURCE/recipe/archive.py" pack --source "$PD_SOURCE" --capture "$PD_CAPTURE" --output "$PD_EXPORT" --driver-prefix "$PD_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-installed-pure-diagnosis-${{ matrix.role }}-${{ github.sha }}
+          path: ${{ env.PD_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

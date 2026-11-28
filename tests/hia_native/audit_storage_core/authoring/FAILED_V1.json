@@ -1,0 +1,35 @@
+{
+  "artifact": {
+    "bytes": 83349,
+    "id": 14304603409,
+    "sha256": "fbaf520237af1e847aeb9665f9f7f4f8f1cb440a3759898e46ed5e438e6662ae"
+  },
+  "complete_retained_failure_records": [
+    {
+      "bytes": 1081,
+      "complete_utf8": "[\n  {\n    \"argv\": [\n      \"/usr/bin/python3\",\n      \"-I\",\n      \"-B\",\n      \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/authoring/author_record_io.py\",\n      \"--root\",\n      \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core\",\n      \"--hepta\",\n      \"/home/runner/work/hepta-runtime/hepta-runtime/compiler\"\n    ],\n    \"completed\": true,\n    \"cwd\": \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core\",\n    \"elapsed_seconds\": 0.5530884479999827,\n    \"exit_code\": 1,\n    \"name\": \"source-author\",\n    \"parent_pid\": 2737,\n    \"pgid\": 2738,\n    \"pid\": 2738,\n    \"stderr\": {\n      \"bytes\": 1608,\n      \"file\": \"source-author.stderr\",\n      \"sha256\": \"05fe02ff83fa91ffea6a442f733948e42aad70b260005fd69dbf1c40c7ac8844\"\n    },\n    \"stdin\": null,\n    \"stdout\": {\n      \"bytes\": 0,\n      \"file\": \"source-author.stdout\",\n      \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n    },\n    \"timed_out\": false,\n    \"timeout_seconds\": 60\n  }\n]\n",
+      "name": "_temp/audit-record-io-author-processes/processes.json",
+      "sha256": "1cd797248094990dd7a1c45272ebb670073d5a722c6441d5fac74072e52783c9"
+    },
+    {
+      "bytes": 1608,
+      "complete_utf8": "Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/authoring/author_record_io.py\", line 147, in <module>\n    generate(args.root.resolve(strict=True), args.hepta.resolve(strict=True))\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/audit_storage_core/authoring/author_record_io.py\", line 101, in generate\n    program = compact_authoring_cfg(dict(schema=\"hepta.hia.program.v8\", module=\"audit_record_io\",\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/tools/generate_hia_selfhost.py\", line 2138, in compact_authoring_cfg\n    verify_program(document)\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py\", line 959, in verify_program\n    _verify_function(data[\"schema\"], fn, block_maps[fn[\"name\"]], interfaces)\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py\", line 916, in _verify_function\n    state = check.transfer(edge, blocks[target])\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py\", line 785, in transfer\n    _reject(\"edge values do not match block parameter types\", \"E_HIA_CFG\")\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/compiler/hepta/hia_program.py\", line 61, in _reject\n    raise HIAProgramRejected(message, code)\nhepta.hia_program.HIAProgramRejected: E_HIA_CFG: edge values do not match block parameter types\n",
+      "name": "_temp/audit-record-io-author-processes/source-author.stderr",
+      "sha256": "05fe02ff83fa91ffea6a442f733948e42aad70b260005fd69dbf1c40c7ac8844"
+    }
+  ],
+  "independent_full_zip_readback": {
+    "job": 133864736970,
+    "members": 15,
+    "native_or_rust_executions": 0,
+    "run": 44031634410,
+    "source": "3ea35bf968e5fbd8a387f3667cd2ece8ba54fed2",
+    "status": "SUCCESS"
+  },
+  "job": 133863483556,
+  "revision": "Internal continuation helpers use u64 consistently with their sentinel; exported entry remains u32. The frozen v1 failure remains a failure.",
+  "run": 44031256671,
+  "schema": "hepta.audit-record-io.author-failure.v1",
+  "source_commit": "4288187e064d738922fe8e14bd33df601dc24f5a",
+  "status": "FAIL"
+}

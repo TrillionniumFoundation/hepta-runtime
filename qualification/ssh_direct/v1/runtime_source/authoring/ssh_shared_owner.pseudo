@@ -1,0 +1,430 @@
+def core(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 128 or read64(s, 0) != REQUEST_MAGIC:
+        return 4294967295
+    at = 88
+    while at < 128:
+        if read64(s, at) != 0:
+            return 4294967295
+        at = at + 8
+    op = read64(s, 8)
+    cap = read64(s, 16)
+    gen = read64(s, 24)
+    identity = read64(s, 32)
+    request = read64(s, 40)
+    generation = read64(s, 48)
+    a = read64(s, 56)
+    b = read64(s, 64)
+    c = read64(s, 72)
+    seq = read64(s, 80)
+    if op > 15 or cap == 0 or gen == 0 or c != 0:
+        return 4294967295
+    if length(o) < 384 or length(w) < 320:
+        return 4294967294
+    if op == 0:
+        if identity != 0 or request != 0 or generation != 0 or a != 0 or b != 0 or seq != 0:
+            return 4294967295
+        at = 0
+        while at < 320:
+            if get(w, at) != 0:
+                return 4294967295
+            at = at + 8
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, cap)
+        put(w, 16, gen)
+        put(w, 56, 1)
+        put(w, 96, 320)
+        return reply(o, w, op, 0, 0, 0)
+    if valid(w) == False or get(w, 8) != cap or get(w, 16) != gen:
+        return 4294967295
+    if op == 2 or op == 12:
+        if seq == 0:
+            return 4294967295
+    elif seq != 0:
+        return 4294967295
+    if op == 5 or op == 6 or op == 7 or op == 8 or op == 9:
+        return registry(s, o, w, op, identity, request, generation, a, b)
+    if identity != 0 or request != 0 or generation != 0:
+        return 4294967295
+    if op == 1:
+        if a != 0 or b != 0:
+            return 4294967295
+        if get(w, 32) == 1:
+            return reply(o, w, op, 3, 1, 0)
+        state = get(w, 24)
+        if state == 0:
+            if get(w, 168) == 18446744073709551615:
+                return 4294967295
+            next_seq = get(w, 168) + 1
+            put(w, 168, next_seq)
+            put(w, 176, next_seq)
+            put(w, 24, 1)
+            return reply(o, w, op, 1, 0, 1)
+        if state == 1:
+            return reply(o, w, op, 2, 0, 0)
+        if state == 3:
+            return reply(o, w, op, 3, 2, 0)
+        if get(w, 48) == 1:
+            freeze(w)
+            return reply(o, w, op, 3, 3, 0)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 2:
+        if get(w, 24) != 1 or seq != get(w, 176) or a > 1 or b == 0:
+            return 4294967295
+        put(w, 176, 0)
+        if a == 1:
+            put(w, 24, 3)
+            put(w, 136, b)
+            return reply(o, w, op, 3, 2, 0)
+        put(w, 24, 2)
+        put(w, 104, b)
+        if get(w, 32) == 0 and get(w, 48) == 0:
+            put(w, 40, 1)
+        else:
+            freeze(w)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 3 or op == 4:
+        if a != 0 or b != 0:
+            return 4294967295
+        if op == 3:
+            put(w, 32, 1)
+        freeze(w)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 10:
+        if a > 1 or get(w, 24) != 2 or get(w, 144) != 0:
+            return 4294967295
+        if a == 0:
+            if b != 0 or get(w, 160) != 0 or get(w, 88) != 0 or get(w, 64) != 0:
+                return 4294967295
+        elif b == 0:
+            return 4294967295
+        put(w, 144, 1)
+        put(w, 152, b)
+        freeze(w)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 11:
+        if a > 1 or b != 0 or get(w, 24) != 2:
+            return 4294967295
+        if a == 1 and get(w, 112) == 0 and get(w, 168) == 18446744073709551615:
+            return 4294967295
+        freeze(w)
+        if a == 0:
+            return reply(o, w, op, 3, 10, 0)
+        if get(w, 112) == 0:
+            if get(w, 104) == 0:
+                return reply(o, w, op, 3, 11, 0)
+            next_seq = get(w, 168) + 1
+            put(w, 168, next_seq)
+            put(w, 184, next_seq)
+            put(w, 232, get(w, 104))
+            put(w, 104, 0)
+            put(w, 112, 1)
+            return reply(o, w, op, 1, 0, 2)
+        return join_status(o, w, op)
+    if op == 12:
+        if get(w, 24) != 2 or get(w, 112) != 1 or get(w, 120) != 0 or seq != get(w, 184) or a > 1:
+            return 4294967295
+        if a == 0:
+            if b != 0 or get(w, 144) != 1 or get(w, 152) != 0 or get(w, 88) != 0 or get(w, 160) != 0 or get(w, 64) != 0:
+                return 4294967295
+        elif b == 0:
+            return 4294967295
+        put(w, 120, 1)
+        put(w, 128, b)
+        put(w, 184, 0)
+        if get(w, 144) == 0:
+            put(w, 144, 1)
+            put(w, 152, b)
+        return join_status(o, w, op)
+    if op == 13:
+        if a != 0 or b != 0:
+            return 4294967295
+        if get(w, 112) != 1:
+            return reply(o, w, op, 3, 11, 0)
+        return join_status(o, w, op)
+    if op == 14:
+        if a > 1 or b != 0:
+            return 4294967295
+        if a == 0:
+            put(w, 192, 1)
+        else:
+            put(w, 200, 1)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 15:
+        if a != 0 or b != 0:
+            return 4294967295
+        return reply(o, w, op, 0, 0, 0)
+    return 4294967295
+
+def registry(s:readbuf, o:mutbuf, w:mutbuf, op:u64, identity:u64, request:u64, generation:u64, a:u64, b:u64) -> u32:
+    if get(w, 24) != 2 or request == 0 or generation == 0:
+        return 4294967295
+    if op == 5:
+        if identity != 0 or a != 0 or b != 0 or get(w, 64) != 0:
+            return 4294967295
+        if find(w, 2, 0, request, generation) == 0:
+            return 4294967295
+        if get(w, 192) == 1:
+            put(w, 48, 1)
+            return reply(o, w, op, 3, 4, 0)
+        next_id = get(w, 56)
+        if next_id == 18446744073709551615:
+            put(w, 56, 0)
+            put(w, 48, 1)
+            return reply(o, w, op, 3, 5, 0)
+        if next_id == 0:
+            put(w, 56, 1)
+            return reply(o, w, op, 3, 6, 0)
+        at = free_row(w)
+        if at == 1:
+            return 4294967295
+        if at == 0:
+            return grow(o, w)
+        put(w, 56, next_id + 1)
+        put(w, 64, next_id)
+        put(w, 72, request)
+        put(w, 80, generation)
+        put(w, 208, at)
+        if at == get(w, 96):
+            put(w, 96, at + 64)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 6:
+        if identity == 0 or identity != get(w, 64) or request != get(w, 72) or generation != get(w, 80) or a > 1:
+            return 4294967295
+        if a == 0:
+            if b != 0:
+                return 4294967295
+        else:
+            if b == 0 or exists(w, 1, identity, b, generation):
+                return 4294967295
+            if get(w, 88) == 18446744073709551615 or get(w, 216) == 18446744073709551615:
+                return 4294967295
+            at = get(w, 208)
+            put(w, at, identity)
+            put(w, at + 8, b)
+            put(w, at + 16, generation)
+            put(w, at + 24, 1)
+            put(w, 88, get(w, 88) + 1)
+            put(w, 216, get(w, 216) + 1)
+        put(w, 64, 0)
+        put(w, 72, 0)
+        put(w, 80, 0)
+        put(w, 208, 0)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 7:
+        if identity == 0 or a > 1 or b != 0 or get(w, 64) != 0:
+            return 4294967295
+        if a == 0:
+            put(w, 48, 1)
+            return reply(o, w, op, 3, 7, 0)
+        at = find(w, 1, identity, request, generation)
+        if at == 0:
+            put(w, 48, 1)
+            return reply(o, w, op, 3, 8, 0)
+        if get(w, 224) == 18446744073709551615:
+            return 4294967295
+        if get(w, 192) == 1:
+            put(w, 48, 1)
+        clear_row(w, at)
+        put(w, 88, get(w, 88) - 1)
+        put(w, 224, get(w, 224) + 1)
+        return reply(o, w, op, 0, 0, 0)
+    if identity != 0 or a != 0 or b != 0:
+        return 4294967295
+    if op == 8:
+        if exists(w, 2, 0, request, generation) or get(w, 160) == 18446744073709551615:
+            return 4294967295
+        at = free_row(w)
+        if at == 1:
+            return 4294967295
+        if at == 0:
+            return grow(o, w)
+        put(w, at + 8, request)
+        put(w, at + 16, generation)
+        put(w, at + 24, 2)
+        put(w, 160, get(w, 160) + 1)
+        if at == get(w, 96):
+            put(w, 96, at + 64)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 9:
+        at = find(w, 2, 0, request, generation)
+        if at == 0 or (get(w, 72) == request and get(w, 80) == generation):
+            return 4294967295
+        clear_row(w, at)
+        put(w, 160, get(w, 160) - 1)
+        return reply(o, w, op, 0, 0, 0)
+    return 4294967295
+
+def free_row(w:mutbuf) -> u64:
+    at = 320
+    used = get(w, 96)
+    while at < used:
+        if get(w, at + 24) == 0 and at != get(w, 208):
+            return at
+        at = at + 64
+    if length(w) - used >= 64:
+        at = used
+        while at < used + 64:
+            if get(w, at) != 0:
+                return 1
+            at = at + 8
+        return used
+    return 0
+
+def grow(o:mutbuf, w:mutbuf) -> u32:
+    used = get(w, 96)
+    if used > 18446744073709551551:
+        return 4294967295
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, 1)
+    put(o, 16, used + 64)
+    put(o, 24, 0)
+    return 4294967248
+
+def find(w:mutbuf, kind:u64, identity:u64, cap:u64, gen:u64) -> u64:
+    at = 320
+    while at < get(w, 96):
+        if get(w, at + 24) == kind and get(w, at) == identity and get(w, at + 8) == cap and get(w, at + 16) == gen:
+            return at
+        at = at + 64
+    return 0
+
+def exists(w:mutbuf, kind:u64, identity:u64, cap:u64, gen:u64) -> bool:
+    at = 320
+    while at < get(w, 96):
+        if get(w, at + 24) == kind:
+            if kind == 1 and get(w, at) == identity:
+                return True
+            if get(w, at + 8) == cap:
+                return True
+        at = at + 64
+    return False
+
+def clear_row(w:mutbuf, at:u64) -> u64:
+    end = at + 64
+    while at < end:
+        put(w, at, 0)
+        at = at + 8
+    return 0
+
+def freeze(w:mutbuf) -> u64:
+    put(w, 40, 0)
+    put(w, 48, 1)
+    return 0
+
+def join_status(o:mutbuf, w:mutbuf, op:u64) -> u32:
+    if get(w, 120) == 0:
+        return reply(o, w, op, 2, 0, 0)
+    if get(w, 128) == 0:
+        return reply(o, w, op, 0, 0, 0)
+    return reply(o, w, op, 3, 12, 0)
+
+def reply(o:mutbuf, w:mutbuf, op:u64, status:u64, reason:u64, effect:u64) -> u32:
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, 384)
+    put(o, 16, op)
+    put(o, 24, status)
+    put(o, 32, reason)
+    put(o, 40, effect)
+    put(o, 48, get(w, 64))
+    put(o, 56, get(w, 168))
+    copy_range(o, w, 64, 0, 320)
+    return 384
+
+def valid(w:mutbuf) -> bool:
+    if get(w, 0) != STATE_MAGIC or get(w, 8) == 0 or get(w, 16) == 0 or get(w, 24) > 3:
+        return False
+    if get(w, 32) > 1 or get(w, 40) > 1 or get(w, 48) > 1 or get(w, 112) > 1 or get(w, 120) > 1:
+        return False
+    if get(w, 144) > 1 or get(w, 192) > 1 or get(w, 200) > 1:
+        return False
+    used = get(w, 96)
+    if used < 320 or used > length(w) or ((used - 320) & 63) != 0:
+        return False
+    if get(w, 224) > get(w, 216) or get(w, 88) != get(w, 216) - get(w, 224):
+        return False
+    if get(w, 24) == 1:
+        if get(w, 176) == 0 or get(w, 176) > get(w, 168):
+            return False
+    elif get(w, 176) != 0:
+        return False
+    if get(w, 24) == 3:
+        if get(w, 136) == 0:
+            return False
+    elif get(w, 136) != 0:
+        return False
+    if get(w, 24) != 2:
+        if get(w, 104) != 0 or get(w, 112) != 0 or get(w, 88) != 0 or get(w, 160) != 0 or get(w, 64) != 0:
+            return False
+    elif get(w, 112) == 0:
+        if get(w, 104) == 0 or get(w, 232) != 0:
+            return False
+    elif get(w, 104) != 0 or get(w, 232) == 0:
+        return False
+    if get(w, 120) == 1:
+        if get(w, 112) != 1 or get(w, 184) != 0 or get(w, 144) != 1:
+            return False
+    elif get(w, 128) != 0:
+        return False
+    if get(w, 112) == 1 and get(w, 120) == 0:
+        if get(w, 184) == 0 or get(w, 184) > get(w, 168):
+            return False
+    elif get(w, 184) != 0:
+        return False
+    if get(w, 144) == 1:
+        if get(w, 40) != 0 or get(w, 48) != 1:
+            return False
+    elif get(w, 152) != 0:
+        return False
+    if get(w, 64) == 0:
+        if get(w, 72) != 0 or get(w, 80) != 0 or get(w, 208) != 0:
+            return False
+    else:
+        at = get(w, 208)
+        if at < 320 or at >= used or ((at - 320) & 63) != 0 or get(w, at + 24) != 0:
+            return False
+        if get(w, 72) == 0 or get(w, 80) == 0:
+            return False
+    at = 240
+    while at < 320:
+        if get(w, at) != 0:
+            return False
+        at = at + 8
+    live = 0
+    tasks = 0
+    at = 320
+    while at < used:
+        kind = get(w, at + 24)
+        if kind > 2:
+            return False
+        if kind == 0:
+            p = at
+            while p < at + 64:
+                if get(w, p) != 0:
+                    return False
+                p = p + 8
+        else:
+            if get(w, at + 8) == 0 or get(w, at + 16) == 0:
+                return False
+            if kind == 1:
+                if get(w, at) == 0:
+                    return False
+                live = live + 1
+            else:
+                if get(w, at) != 0:
+                    return False
+                tasks = tasks + 1
+            p = at + 32
+            while p < at + 64:
+                if get(w, p) != 0:
+                    return False
+                p = p + 8
+            p = 320
+            while p < at:
+                if get(w, p + 24) == kind:
+                    if get(w, p + 8) == get(w, at + 8):
+                        return False
+                    if kind == 1 and get(w, p) == get(w, at):
+                        return False
+                p = p + 64
+        at = at + 64
+    return live == get(w, 88) and tasks == get(w, 160)

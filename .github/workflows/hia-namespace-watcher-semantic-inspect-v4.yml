@@ -1,0 +1,81 @@
+name: Watcher complete semantic captured structure
+on:
+  push:
+    branches: [hia-namespace-watcher-semantic-inspect-v4-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Admit frozen complete inspection source
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSPECT_ROOT="$RUNNER_TEMP/namespace-watcher-semantic-inspect-v4"
+          printf 'INSPECT_ROOT=%s\n' "$INSPECT_ROOT" >> "$GITHUB_ENV"
+          mkdir "$INSPECT_ROOT"
+          cp -a tests/hia_native/namespace_watcher_semantic_inspect_v4 "$INSPECT_ROOT/source"
+          mkdir "$INSPECT_ROOT/diagnostics"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"namespace-watcher-semantic-inspect-v4/source"
+          raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="229b64e0ff923fac31284d70829eb1c493df14e11d59fd06a516a311e009c21e"
+          m=json.loads(raw)
+          assert {p.name for p in r.iterdir()}==set(m["files"])|{"SOURCE.json"}
+          for name,row in m["files"].items():
+              b=(r/name).read_bytes()
+              assert len(b)==row["bytes"] and hashlib.sha256(b).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==row["git_blob"]
+              if name.endswith(".py"):compile(b,str(r/name),"exec")
+          PY
+      - name: Read every byte of the immutable completed uploaded artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14366409313/zip > "$INSPECT_ROOT/input.zip"
+          timeout --signal=KILL 180 python3 -I -B "$INSPECT_ROOT/source/restore.py" \
+            --archive "$INSPECT_ROOT/input.zip" --output "$INSPECT_ROOT/retained" \
+            --pins "$INSPECT_ROOT/source/CAPTURE-PINS.json" \
+            > "$INSPECT_ROOT/diagnostics/restoration.stdout" 2> "$INSPECT_ROOT/diagnostics/restoration.stderr"
+          cp "$INSPECT_ROOT/retained/RESTORE.json" "$INSPECT_ROOT/diagnostics/RESTORE.json"
+          cp "$INSPECT_ROOT/retained/artifact-manifest.json" "$INSPECT_ROOT/diagnostics/artifact-manifest.json"
+          timeout --signal=KILL 180 python3 -I -B "$INSPECT_ROOT/source/inspect.py" \
+            --root "$INSPECT_ROOT/retained/complete" --output "$INSPECT_ROOT/diagnostics/INSPECT.json" \
+            > "$INSPECT_ROOT/diagnostics/inspect.stdout" 2> "$INSPECT_ROOT/diagnostics/inspect.stderr"
+          cat "$INSPECT_ROOT/diagnostics/inspect.stdout"
+      - name: Preserve exact diagnostics even on failure
+        if: always()
+        shell: bash
+        run: |
+          if test -d "$INSPECT_ROOT/diagnostics"; then
+            for name in restoration inspect; do
+              if test -f "$INSPECT_ROOT/diagnostics/$name.stderr"; then cat "$INSPECT_ROOT/diagnostics/$name.stderr"; fi
+            done
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-semantic-inspect-v4
+          path: |
+            ${{ env.INSPECT_ROOT }}/source
+            ${{ env.INSPECT_ROOT }}/diagnostics
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 30

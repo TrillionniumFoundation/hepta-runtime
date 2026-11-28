@@ -1,0 +1,3 @@
+# Complete uploaded native HIA path diagnostics read
+
+Independently restore and fully read the pinned successful archive: all 21,901 actual original/native cases, 1,074 complete-buffer controls, 9 physical refusals and 2 relocations. The reader makes no application, Rust, compiler or native replay. It preserves and checks every source, image, producer stream, buffer, process receipt, directory and mode. All three protocols are checked against actual CPython responses; filename arguments carry data only and grant no descriptor or pathname authority. Source and raw HIA composition bytes are retained without numeric JSON conversion.

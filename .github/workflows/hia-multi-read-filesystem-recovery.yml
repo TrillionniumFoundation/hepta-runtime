@@ -1,0 +1,54 @@
+name: Recover two retained filesystem archives after terminal HTTP 503
+on:
+  push:
+    branches: [hia-multi-read-filesystem-recovery-fetch2-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: ["ownership-a","late-mutation"]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      MULTI_SOURCE: ${{ github.workspace }}/runtime/qualification/multi_read_body/v1/filesystem_recovery
+      MULTI_MANIFEST: f06db57bb94baf30a20adb00e34a7ce96d8b11efe8de364a15588ac8bb3db8ee
+    steps:
+      - name: Checkout exact frozen pure reader source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/filesystem_recovery
+          persist-credentials: false
+      - name: Verify exact source commit
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Read retained original and native filesystem evidence without replay
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/recovery_gate.py" recover \
+            --work "$RUNNER_TEMP/multi-filesystem-recovery-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Retain complete pure recovery and first failures
+        if: always()
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/recovery_gate.py" export \
+            --work "$RUNNER_TEMP/multi-filesystem-recovery-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/multi-filesystem-recovery-${{ matrix.group }}-export" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Upload all files and mode evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-filesystem-recovery-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-filesystem-recovery-${{ matrix.group }}-export
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0

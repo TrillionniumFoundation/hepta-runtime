@@ -1,0 +1,65 @@
+def catalog(s:readbuf, o:mutbuf, w:mutbuf, operation:u64, argument:u64, payload_size:u64) -> u32:
+    if operation != 1:
+        return retained_presence_catalog(s, o, w, operation, argument, payload_size)
+    put(w, 120, operation)
+    put(w, 128, argument)
+    put(w, 144, payload_size)
+    return prepare(s, o, w, 18)
+
+def prepare(s:readbuf, o:mutbuf, w:mutbuf, phase:u64) -> u32:
+    if phase == 18:
+        put(w, 8, 118)
+        if reserve(w, 0, 24) == 0:
+            return pending_grow(o, w)
+        if reserve(w, 1, 256) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        put(w, at, CONFIG_QUERY)
+        put(w, at + 8, 3)
+        put(w, at + 16, 0)
+        return child(w, 6, 24, 18)
+    if phase == 4:
+        operation = get(w, 120)
+        if operation == 7 or operation == 8:
+            if get(w, 144) != 0:
+                return INVALID
+            put(w, 8, 104)
+            if reserve(w, 0, 40) == 0:
+                return pending_grow(o, w)
+            if reserve(w, 1, 32) == 0:
+                return pending_grow(o, w)
+            at = region(w, 0)
+            put(w, at, CATALOG_QUERY)
+            put(w, at + 8, 7)
+            put(w, at + 16, get(w, 128))
+            put(w, at + 24, operation - 7)
+            put(w, at + 32, 10)
+            return child(w, 2, 40, 4)
+    return retained_presence_prepare(s, o, w, phase)
+
+def after_authority(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64, phase:u64) -> u32:
+    if phase == 18:
+        return after_catalog_presence(s, o, w, code, size)
+    return retained_presence_authority(s, o, w, code, size, phase)
+
+def after_catalog_presence(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != size or size < 32:
+        return INVALID
+    at = region(w, 1)
+    if get(w, at) != CONFIG_RESULT:
+        return INVALID
+    count = get(w, at + 24)
+    if count != size - 32:
+        return INVALID
+    status = get(w, at + 8)
+    if status == 0:
+        if count != 32 or get(w, at + 16) != 0:
+            return INVALID
+        put(w, 120, 8)
+        return prepare(s, o, w, 4)
+    if status == 1:
+        if count == CONFIG_ABSENT_SIZE and get(w, at + 16) == 9:
+            if config_absent(w, at + 32):
+                put(w, 120, 7)
+                return prepare(s, o, w, 4)
+    return INVALID

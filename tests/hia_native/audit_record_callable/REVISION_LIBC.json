@@ -1,0 +1,95 @@
+{
+  "after": {
+    "bytes": 4506,
+    "git_blob": "0f697dbd80cbadc129501bd5158202acb2777b1d",
+    "mode": "100644",
+    "sha256": "d8942aecf50fb52442baf69fa8803491d1ffd06b5de26ecf74bc4f79e3699806"
+  },
+  "before": {
+    "bytes": 4412,
+    "git_blob": "3c7985ec015849ca84e99ed480c3949f4729edaf",
+    "mode": "100644",
+    "sha256": "38d00f0af41bac7591e6b24a86fde23c252ed96efbc135150a85296b435b15a9"
+  },
+  "change": "Resolve all fifteen native capabilities from an explicit libc.so.6 object. Keep exact complete ELF, symbols, mappings and capability admission; do not accept the interposed embedding executable.",
+  "failure": {
+    "artifact": 14318385717,
+    "fresh_build_seconds": 7.428116176000003,
+    "job": 133959441040,
+    "logical_bytes": 2506029069,
+    "logical_files": 44747,
+    "message": "Actual ELF libc admission rejected ambient executable fsync before the first record call.",
+    "native_record_operations_completed": 0,
+    "run": 44060098314,
+    "status": "FAIL",
+    "tar": {
+      "bytes": 141584786,
+      "sha256": "6d3364f6ab539af356201d019a3e4da47825eb73db74b18c40585fc3ff50f788"
+    },
+    "zip": {
+      "bytes": 141585671,
+      "sha256": "114fb797450dc58552d4e6c0dde02e702e29a649630c6a2f0c22bdfe54b1fdac"
+    }
+  },
+  "inspection": {
+    "HIA_executions": 0,
+    "Rust_executions": 0,
+    "artifact": 14318825104,
+    "complete_failed_archive_read": true,
+    "explicit_fsync": {
+      "base": 140177276141568,
+      "filename": "/lib/x86_64-linux-gnu/libc.so.6",
+      "first16_hex": "7f454c46020101030000000000000000",
+      "library": {
+        "bytes": 2129424,
+        "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+      },
+      "library_file": "library-3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf.bin",
+      "name": "fsync",
+      "pointer": 140177277317280,
+      "resolved_path": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "scope": "libc.so.6",
+      "symbol": "fsync",
+      "symbol_address": 140177277317280
+    },
+    "explicit_same_library_all_fifteen": true,
+    "head": "dec90c170cad1b08157dae1521c59fa0b4690e5d",
+    "job": 133962277933,
+    "run": 44060921038,
+    "scope_null_fsync": {
+      "base": 4194304,
+      "filename": "python3",
+      "first16_hex": "7f454c46020101000000000000000000",
+      "library": {
+        "bytes": 8020928,
+        "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+      },
+      "library_file": "library-e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f.bin",
+      "name": "fsync",
+      "pointer": 4329136,
+      "resolved_path": "/usr/bin/python3.12",
+      "scope": null,
+      "symbol": "fsync",
+      "symbol_address": 4329136
+    },
+    "status": "SUCCESS",
+    "zip": {
+      "bytes": 6372437,
+      "sha256": "beee3a43246d9725476c37a01788dc5194e6b331a8303c37352f10dbd7a23749"
+    }
+  },
+  "original_rust_replay": 0,
+  "previous_execution_head": "8dbcadb5069226ac056a2eee593a43db23031dda",
+  "previous_source_commit": "753dcbc708ed1680cc860a01e48ae43f64183c9e",
+  "public_handler_qualified": false,
+  "schema": "hepta.audit-record-callable.libc-revision.v1",
+  "unchanged": [
+    "both semantic HIA sources and flat images",
+    "GAS adapter and callable bytes",
+    "HIA packer",
+    "all native domains",
+    "all reader checks",
+    "all deadlines"
+  ],
+  "whole_runtime_replaced": false
+}

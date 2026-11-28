@@ -1,0 +1,45 @@
+name: Inspect preserved audit callable control counters
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-controls-inspection-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_control_diagnostics
+      - name: Read complete failed capture and exact recorded control contexts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14317448899/zip > "$RUNNER_TEMP/audit-record-callable-failed.zip"
+          python3 -I -B - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p=Path("tests/hia_native/audit_record_control_diagnostics/inspect_controls.py")
+          raw=p.read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="06e79893b0493c2cd8b53eb266a33dbf7dbcc4bac7fd7320674b974d63feec2b"
+          compile(raw,str(p),"exec")
+          PY
+          timeout --signal=KILL 60 python3 -I -B tests/hia_native/audit_record_control_diagnostics/inspect_controls.py \
+            --archive "$RUNNER_TEMP/audit-record-callable-failed.zip" \
+            --output "$RUNNER_TEMP/audit-record-callable-controls-inspection"
+      - name: Preserve every diagnostic byte without replaying HIA or Rust
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-controls-inspection-${{ github.sha }}
+          path: ${{ runner.temp }}/audit-record-callable-controls-inspection
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

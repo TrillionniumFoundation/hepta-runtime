@@ -1,0 +1,47 @@
+name: HIA installed public-job qualification controls
+
+on:
+  push:
+    branches:
+      - 'codex/hia-installed-public-jobs-*'
+      - 'codex/hia-runtime-unified-*'
+  pull_request:
+    paths:
+      - 'tests/hia_installed_public_jobs_integration.py'
+      - 'tests/test_hia_installed_public_jobs_integration.py'
+      - 'tests/fixtures/hia_public_native_jobs.c'
+      - '.github/workflows/hia-installed-public-jobs-controls.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reader-controls:
+    name: External reader controls, not installed-native execution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Refuse substituted identities, unsafe files, forged receipts and hidden execution
+        run: python3 -I -B tests/test_hia_installed_public_jobs_integration.py -v
+
+      - name: Preserve common source, distribution and execution-chain reader controls
+        run: |
+          set -euo pipefail
+          python3 -I -B tests/test_hia_native_helper_mcp_integration.py -v
+          python3 -I -B tests/test_hia_native_language_coverage.py -v
+          python3 -I -B tests/test_hia_native_bootstrap_distribution.py -v
+          python3 -I -B tests/test_hia_native_execution_trace.py TraceReadbackTests -v
+          python3 -I -B tests/test_hia_native_execution_chain.py -v
+
+      - name: Compile the independent external workload fixture
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -Wall -Wextra -Werror tests/fixtures/hia_public_native_jobs.c \
+            -o "$RUNNER_TEMP/hia-public-native-fixture"

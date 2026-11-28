@@ -1,0 +1,182 @@
+{
+  "changes": [
+    {
+      "after": "audit_pinned_anchor_callable",
+      "before": "audit_record_callable",
+      "count": 21,
+      "why": "new private exports"
+    },
+    {
+      "after": "0x313058434e504148",
+      "before": "0x3130585443494148",
+      "count": 3,
+      "why": "new native context magic"
+    },
+    {
+      "after": "0x313051524e504148",
+      "before": "0x313051524f494148",
+      "count": 1,
+      "why": "new owner initial frame"
+    },
+    {
+      "after": "0x313053524e504148",
+      "before": "0x313053524f494148",
+      "count": 1,
+      "why": "new owner output frame"
+    },
+    {
+      "after": "0x314b43414e504148",
+      "before": "0x314b43414f494148",
+      "count": 1,
+      "why": "new owner acknowledgment"
+    },
+    {
+      "after": "cmpq $18,40(%r12)",
+      "before": "cmpq $16,40(%r12)",
+      "count": 1,
+      "why": "17 libc entries plus zero"
+    },
+    {
+      "after": "cmp $136,%ecx",
+      "before": "cmp $120,%ecx",
+      "count": 2,
+      "why": "all 17 libc entries admitted"
+    },
+    {
+      "after": "cmpq $0,136(%r15)",
+      "before": "cmpq $0,120(%r15)",
+      "count": 1,
+      "why": "table terminator"
+    },
+    {
+      "after": "cmpq $0,136(%rbx)",
+      "before": "cmpq $0,120(%rbx)",
+      "count": 1,
+      "why": "initial table terminator"
+    },
+    {
+      "after": "    add $144,%rdx\n    jc .Linvalid\n    cmp %rdx,%r12",
+      "before": "    add $128,%rdx\n    jc .Linvalid\n    cmp %rdx,%r12",
+      "count": 1,
+      "why": "complete initialize table alias extent"
+    },
+    {
+      "after": "    mov $18,%ecx\n    rep movsq\n    mov %r14,16(%r12)",
+      "before": "    mov $16,%ecx\n    rep movsq\n    mov %r14,16(%r12)",
+      "count": 1,
+      "why": "copy complete table"
+    },
+    {
+      "after": "    movq $18,40(%r12)",
+      "before": "    movq $16,40(%r12)",
+      "count": 1,
+      "why": "record complete table extent"
+    },
+    {
+      "after": "    cmp $128,%rsi\n    jne .Linvalid",
+      "before": "    cmp $128,%rsi\n    jb .Linvalid\n    cmp $4352,%rsi\n    ja .Linvalid",
+      "count": 1,
+      "why": "fixed initial request extent; ACK copies unchanged"
+    },
+    {
+      "after": ".Ljson:\n    cmpq $2,160(%r12)\n    jne .Lfailure",
+      "before": ".Ljson:\n    cmpq $1,160(%r12)\n    je .Ljson_admitted\n    cmpq $3,160(%r12)\n    jne .Lfailure",
+      "count": 1,
+      "why": "reuse exact anchor JSON op2 only"
+    },
+    {
+      "after": "    cmp $1,%rax\n    je .Lanchor_fs_allowed\n    cmp $2,%rax\n    je .Lanchor_fs_allowed\n    cmp $3,%rax\n    je .Lanchor_fs_allowed\n    cmp $4,%rax\n    je .Lanchor_fs_allowed\n    cmp $7,%rax\n    je .Lanchor_fs_allowed\n    cmp $15,%rax\n    je .Lanchor_fs_allowed\n    cmp $16,%rax\n    jne .Lfailure\n.Lanchor_fs_allowed:\n    movq $0,104(%r12)",
+      "before": "    cmp $1,%rax\n    jb .Lfailure\n    cmp $14,%rax\n    ja .Lfailure\n    movq $0,104(%r12)",
+      "count": 1,
+      "why": "allow only exact anchor filesystem effects"
+    },
+    {
+      "after": "    cmp $13,%rcx\n    je .Lrequire_directory\n    cmp $14,%rcx\n    je .Lrequire_directory",
+      "before": "    cmp $13,%rcx\n    jae .Lrequire_directory",
+      "count": 1,
+      "why": "new ops use file capability"
+    },
+    {
+      "after": ".Lfs_shape:\n    cmpq $15,160(%r12)\n    je .Lanchor_named_prepare\n    cmpq $1,160(%r12)",
+      "before": ".Lfs_shape:\n    cmpq $1,160(%r12)",
+      "count": 1,
+      "why": "named stat preparation"
+    },
+    {
+      "after": ".Lanchor_named_prepare:\n    call .Lnames\n    test %eax,%eax\n    jz .Lfailure\n    lea STAT_BUF(%r12),%rdi\n    xor %eax,%eax\n    mov $18,%ecx\n    rep stosq\n    movq $144,120(%r12)\n    jmp .Lfs_ready\n.Lfs_names:\n    call .Lnames",
+      "before": ".Lfs_names:\n    call .Lnames",
+      "count": 1,
+      "why": "retain complete raw named stat observation"
+    },
+    {
+      "after": ".Lfs_ready:\n    call .Lrecord_fs\n    call .Lobserve\n    mov 160(%r12),%rax\n    cmp $15,%rax\n    je .Lanchor_fstatat\n    cmp $16,%rax\n    je .Lanchor_pread",
+      "before": ".Lfs_ready:\n    call .Lrecord_fs\n    call .Lobserve\n    mov 160(%r12),%rax",
+      "count": 1,
+      "why": "new exact libc call dispatch"
+    },
+    {
+      "after": ".Lanchor_fstatat:\n    mov 192(%r12),%rax\n    mov 16(%rax),%edi\n    lea SCRATCH(%r12),%rsi\n    lea STAT_BUF(%r12),%rdx\n    mov $256,%ecx\n    LIBCALL 15,1\n    jmp .Lfs_return\n.Lanchor_pread:\n    mov 48(%r14),%rdx\n    cmp $2048,%rdx\n    ja .Lfailure\n    cmpq $0,72(%r14)\n    jne .Lfailure\n    cmpq $0,88(%r14)\n    jne .Lfailure\n    mov 56(%r14),%rcx\n    cmp $2048,%rcx\n    ja .Lfailure\n    mov 192(%r12),%rax\n    mov 16(%rax),%edi\n    lea ACK_BUF+128(%r12),%rsi\n    LIBCALL 16,0\n    jmp .Lfs_return\n.Lfs_write:\n",
+      "before": ".Lfs_write:\n",
+      "count": 1,
+      "why": "pread preserves actual count/offset/error; no retries in transport"
+    },
+    {
+      "after": "    cmp $2,%rcx\n    je .Lfs_metadata\n    cmp $15,%rcx\n    je .Lfs_metadata\n    cmp $16,%rcx\n    je .Lfs_read_value\n    cmp $3,%rcx",
+      "before": "    cmp $2,%rcx\n    je .Lfs_metadata\n    cmp $3,%rcx",
+      "count": 1,
+      "why": "new effect result projection"
+    },
+    {
+      "after": "    mov STAT_BUF+48(%r12),%rax\n    mov %rax,24(%rdi)",
+      "before": "    mov STAT_BUF+48(%r12),%rax\n    test %rax,%rax\n    js .Lfailure\n    mov %rax,24(%rdi)",
+      "count": 1,
+      "why": "preserve full signed size bits for HIA named-size decision"
+    },
+    {
+      "after": "    mov %rax,40(%rdi)\n    mov STAT_BUF+32(%r12),%eax\n    mov %rax,48(%rdi)\n    mov STAT_BUF+88(%r12),%rax\n    mov %rax,56(%rdi)\n    mov STAT_BUF+96(%r12),%rax\n    mov %rax,64(%rdi)\n    mov STAT_BUF+104(%r12),%rax\n    mov %rax,72(%rdi)\n    mov STAT_BUF+112(%r12),%rax\n    mov %rax,80(%rdi)\n    mov $96,%eax\n    jmp .Lfs_payload",
+      "before": "    mov %rax,40(%rdi)\n    mov $64,%eax\n    jmp .Lfs_payload",
+      "count": 1,
+      "why": "complete eleven-field inode stamp plus reserved zero"
+    },
+    {
+      "after": ".Lquiescent:\n    cmpq $1,CAPS(%r12)\n    jne .Lzero\n    cmpq $1,CAPS+8(%r12)\n    jne .Lzero\n    mov 16(%r12),%rax\n    cmp $0x7fffffff,%rax\n    ja .Lzero\n    cmp %rax,CAPS+16(%r12)\n    jne .Lzero\n    xor %r9d,%r9d\n    cmpq $2,8(%r12)\n    je .Lanchor_caps_scan\n    movabs $0x313053574e504148,%rax\n    cmp %rax,OWNER_WORK(%r12)\n    jne .Lanchor_caps_scan\n    cmpq $1,OWNER_WORK+40(%r12)\n    ja .Lzero\n    jne .Lanchor_caps_scan\n    mov OWNER_WORK+120(%r12),%r9\n    cmp $1,%r9\n    jbe .Lzero\n.Lanchor_caps_scan:\n    lea CAPS+24(%r12),%rdx\n    mov $15,%ecx\n    xor %r8d,%r8d\n.Lquiescent_words:\n    mov (%rdx),%rax\n    test %rax,%rax\n    jz .Lanchor_empty_slot\n    test %r9,%r9\n    jz .Lzero\n    cmp %r9,%rax\n    jne .Lzero\n    cmpq $1,8(%rdx)\n    jne .Lzero\n    mov 16(%rdx),%rax\n    cmp $0x7fffffff,%rax\n    ja .Lzero\n    inc %r8d\n    cmp $1,%r8d\n    ja .Lzero\n    jmp .Lanchor_next_slot\n.Lanchor_empty_slot:\n    cmpq $0,8(%rdx)\n    jne .Lzero\n    cmpq $0,16(%rdx)\n    jne .Lzero\n.Lanchor_next_slot:\n    add $24,%rdx\n    dec %ecx\n    jnz .Lquiescent_words\n    test %r9,%r9\n    jz .Lanchor_caps_ok\n    cmp $1,%r8d\n    jne .Lzero\n.Lanchor_caps_ok:\n    mov $1,%eax\n    ret\n",
+      "before": ".Lquiescent:\n    cmpq $1,CAPS(%r12)\n    jne .Lzero\n    cmpq $1,CAPS+8(%r12)\n    jne .Lzero\n    mov 16(%r12),%rax\n    cmp $0x7fffffff,%rax\n    ja .Lzero\n    cmp %rax,CAPS+16(%r12)\n    jne .Lzero\n    lea CAPS+24(%r12),%rdx\n    mov $45,%ecx\n.Lquiescent_words:\n    cmpq $0,(%rdx)\n    jne .Lzero\n    add $8,%rdx\n    dec %ecx\n    jnz .Lquiescent_words\n    mov $1,%eax\n    ret\n",
+      "count": 1,
+      "why": "stable capability set root plus exactly held HIA anchor"
+    },
+    {
+      "after": "    call .Lquiescent\n    test %eax,%eax\n    jz .Linvalid\n    lea TABLE(%r12),%r15\n    call *(%r15)\n    test %rax,%rax\n    jz .Linvalid\n    mov %rax,176(%r12)\n    movq $0,184(%r12)\n    call .Lcleanup\n    mov %r12,%rdi\n    xor %eax,%eax\n    mov $(CTX_BYTES/8),%ecx\n    rep stosq",
+      "before": "    call .Lquiescent\n    test %eax,%eax\n    jz .Linvalid\n    mov %r12,%rdi\n    xor %eax,%eax\n    mov $(CTX_BYTES/8),%ecx\n    rep stosq",
+      "count": 1,
+      "why": "dispose closes retained owned anchor then clears; borrowed root never closed"
+    },
+    {
+      "after": "    .zero @OWNER_BYTES@\n",
+      "before": "    .zero 295103\n",
+      "count": 1,
+      "why": "fresh exact owner image extent"
+    },
+    {
+      "after": " * Fixed synchronous effect transport for the pinned-anchor HIA owner.",
+      "before": " * Fixed synchronous effect transport for the unchanged audit HIA owners.",
+      "count": 1,
+      "why": "scope"
+    }
+  ],
+  "compiled": false,
+  "old_source_unchanged": true,
+  "preimage": {
+    "bytes": 23454,
+    "git_blob": "ef98f79d0aee17bd30210e55f9cfa89e09c84a5f",
+    "mode": "100644",
+    "sha256": "702270c084bb15ec941d8d746ab0cd3067f2220dbcc4254a3ad9167d522e7d65"
+  },
+  "schema": "hepta.audit-pinned-anchor.adapter-authoring.v1",
+  "semantic_executions": 0,
+  "successor_template": {
+    "bytes": 25888,
+    "git_blob": "f6c59be572fba2fd8dc386447dd820e70458bba2",
+    "mode": "100644",
+    "sha256": "2a622309dea8b03594499c7cb6e5d03cd9579d098f6441481752a511f6ec4595"
+  }
+}

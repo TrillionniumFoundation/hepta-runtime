@@ -1,0 +1,52 @@
+name: Qualify HIA JSON C recursion boundaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-value-native-boundary-v3-6780-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [high-0, high-1, high-2, high-3, high-4, high-5, high-6, high-7, high-8, error-0, error-1, error-2]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v2/native_boundary
+      PYJSON_MANIFEST: c022fb38426a46773cd6eba7997182ba68367b1e3a11bdab56ec1caf93090d0b
+    steps:
+      - name: Checkout complete frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_value/v2/native_boundary
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Capture each new HIA boundary case against saved originals
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" run \
+            --work "$RUNNER_TEMP/python-json-value-boundary" --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Preserve complete captures including failures
+        if: always()
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/python-json-value-boundary" --group "${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/python-json-value-export" --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-json-value-boundary-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/python-json-value-export
+          if-no-files-found: error
+          retention-days: 14

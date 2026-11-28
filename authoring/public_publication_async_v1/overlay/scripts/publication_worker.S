@@ -1,0 +1,1128 @@
+/* Copyright 2026 Muvon Un Limited
+ * SPDX-License-Identifier: Apache-2.0
+ * Fixed private publisher blocking executor. HIA owns all task transitions.
+ * Every body uses the unchanged qualified synchronous publication callable.
+ * Caller Drop never kills an admitted worker or reuses its borrowed storage.
+ */
+.intel_syntax noprefix
+.section .text
+.equ PW_MAGIC, 0x3130435057545048 /* HPTWPC01 */
+.equ PT_MAGIC, 0x3130304b57545048 /* HPTWK001 */
+.equ PW_STACK, 1048576
+.equ PW_MAX_INPUT, 50331712
+/* pool: magic0,pid8,stateMutex16,apiBusy24,state32/cap40,head48,
+ * wakeRead56,wakeWrite64,observer80/context88,logical sequence96.
+ * request192/64, output256/320, raw576, event584/64. */
+.macro PW_ENTER
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 72
+    mov r15, rdi
+    mov [rsp], rsi
+    mov [rsp+8], rdx
+    mov [rsp+16], rcx
+    mov [rsp+24], r8
+.endm
+.macro PW_LEAVE
+    add rsp, 72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+/* Native callbacks and task input storage are private capabilities. */
+.global publication_worker_create
+publication_worker_create:
+    PW_ENTER
+    test r15, r15
+    jz pw_create_invalid
+    mov edi, 4096
+    call .Lptp_map
+    cmp rax, -4095
+    jae pw_create_done
+    mov r12, rax
+    mov rax, PW_MAGIC
+    mov [r12], rax
+    mov eax, 39
+    syscall
+    mov [r12+8], rax
+    mov rax, [rsp]
+    mov [r12+80], rax
+    mov rax, [rsp+8]
+    mov [r12+88], rax
+    mov edi, 4096
+    call .Lptp_map
+    cmp rax, -4095
+    jae pw_create_state_failed
+    mov [r12+32], rax
+    mov qword ptr [r12+40], 4096
+    lea rdi, [rsp+40]
+    mov esi, 0x80800 /* O_NONBLOCK | O_CLOEXEC */
+    mov eax, 293 /* pipe2 */
+    syscall
+    test rax, rax
+    js pw_create_pipe_failed
+    mov eax, [rsp+40]
+    mov [r12+56], rax
+    mov eax, [rsp+44]
+    mov [r12+64], rax
+    mov rcx, r15
+    mov r15, r12
+    xor edi, edi
+    xor esi, esi
+    xor edx, edx
+    xor r8d, r8d
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    mov rax, r15
+    jmp pw_create_done
+pw_create_pipe_failed:
+    mov [rsp+48], rax
+    mov rdi, [r12+32]
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    mov rax, [rsp+48]
+    jmp pw_create_state_failed
+pw_create_state_failed:
+    mov [rsp+48], rax
+    mov rdi, r12
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    mov rax, [rsp+48]
+    jmp pw_create_done
+pw_create_invalid:
+    mov rax, -22
+pw_create_done:
+    PW_LEAVE
+
+/* Parent-only APIs reject reentry; worker mutation has a separate mutex. */
+pw_api_begin:
+    test r15, r15
+    jz pw_api_invalid
+    mov rax, PW_MAGIC
+    cmp [r15], rax
+    jne pw_api_invalid
+    mov eax, 39
+    syscall
+    cmp [r15+8], rax
+    jne pw_api_invalid
+    xor eax, eax
+    mov ecx, 1
+    lock cmpxchg qword ptr [r15+24], rcx
+    jnz pw_api_busy
+    xor eax, eax
+    ret
+pw_api_invalid:
+    mov eax, 0xffffffff
+    ret
+pw_api_busy:
+    mov eax, 0xfffffffd
+    ret
+pw_api_finish:
+    mov qword ptr [r15+24], 0
+    PW_LEAVE
+
+/* submit(pool, complete HTPBQ001 bytes, extent, private tag, output320).
+ * Copy and own all input before enqueue; no input address survives a borrow. */
+.global publication_worker_submit
+publication_worker_submit:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    cmp qword ptr [rsp+8], 64
+    jb pw_submit_invalid
+    cmp qword ptr [rsp+8], PW_MAX_INPUT
+    ja pw_submit_invalid
+    cmp qword ptr [rsp+16], 0
+    je pw_submit_invalid
+    cmp qword ptr [rsp+24], 0
+    je pw_submit_invalid
+    cmp qword ptr [rsp], 0
+    je pw_submit_invalid
+    mov edi, 4096
+    call .Lptp_map
+    cmp rax, -4095
+    jae pw_submit_resource
+    mov r14, rax
+    mov rax, PT_MAGIC
+    mov [r14], rax
+    mov [r14+8], r15
+    mov rax, [rsp+16]
+    mov [r14+32], rax
+    lea rdi, [r14+48]
+    mov rsi, [rsp+8]
+    call .Lptp_grow
+    test eax, eax
+    jnz pw_submit_alloc_failed
+    mov rdi, [r14+48]
+    mov rsi, [rsp]
+    mov rcx, [rsp+8]
+    mov [r14+64], rcx
+    rep movsb
+    mov edi, PW_STACK
+    call .Lptp_map
+    cmp rax, -4095
+    jae pw_submit_alloc_failed
+    mov [r14+72], rax
+    lea rdi, [rip + pw_body_observer]
+    mov rsi, r14
+    cmp qword ptr [r15+80], 0
+    jne pw_submit_with_observer
+    xor edi, edi
+    xor esi, esi
+pw_submit_with_observer:
+    call text_publication_create
+    cmp rax, -4095
+    jae pw_submit_alloc_failed
+    mov [r14+40], rax
+    mov edi, 1
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, [rsp+24]
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    mov rdx, [rsp+24]
+    cmp qword ptr [rdx+16], 0
+    jne pw_submit_closed
+    mov rax, [rdx+32]
+    mov [r14+24], rax
+    mov rax, [r15+48]
+    mov [r14+16], rax
+    mov [r15+48], r14
+    call pw_service_locked
+    mov eax, 320
+    jmp pw_api_finish
+pw_submit_closed:
+    call pw_free_task
+    mov eax, 320
+    jmp pw_api_finish
+pw_submit_alloc_failed:
+    call pw_free_task
+pw_submit_resource:
+    mov eax, 0xfffffffc
+    jmp pw_api_finish
+pw_submit_invalid:
+    mov eax, 0xffffffff
+    jmp pw_api_finish
+pw_api_return:
+    PW_LEAVE
+
+/* All state changes and complete observer records are serialized here.
+ * command, job, now, argument, optional caller-owned output320. */
+pw_pool:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 64
+    mov [rsp], rdi
+    mov [rsp+8], rsi
+    mov [rsp+16], rdx
+    mov [rsp+24], rcx
+    mov [rsp+32], r8
+    lea rdi, [r15+16]
+    call pw_mutex_lock
+    mov rax, 0x3130305157545048 /* HPTWQ001 */
+    mov [r15+192], rax
+    mov rax, [rsp]
+    mov [r15+200], rax
+    mov rax, [rsp+8]
+    mov [r15+208], rax
+    mov rax, [rsp+16]
+    mov [r15+216], rax
+    mov rax, [rsp+24]
+    mov [r15+224], rax
+    mov qword ptr [r15+232], 0
+    mov qword ptr [r15+240], 0
+    mov qword ptr [r15+248], 0
+pw_pool_retry:
+    lea rdi, [r15+256]
+    xor eax, eax
+    mov ecx, 40
+    rep stosq
+    lea rdi, [r15+192]
+    mov esi, 64
+    lea rdx, [r15+256]
+    mov ecx, 320
+    mov r8, [r15+32]
+    mov r9, [r15+40]
+    call pw_pool_entry
+    mov edx, eax
+    cmp rax, rdx
+    jne pw_fatal
+    mov [r15+576], rax
+    inc qword ptr [r15+96]
+    mov edx, 1
+    lea rcx, [r15+192]
+    mov r8d, 64
+    call pw_emit_locked
+    mov edx, 2
+    lea rcx, [r15+256]
+    mov r8d, 320
+    call pw_emit_locked
+    mov edx, 3
+    mov rcx, [r15+32]
+    mov r8, [r15+40]
+    call pw_emit_locked
+    mov edx, 4
+    lea rcx, [r15+576]
+    mov r8d, 8
+    call pw_emit_locked
+    mov eax, [r15+576]
+    cmp eax, 0xffffffd0
+    jne pw_pool_complete
+    mov rax, 0x3230305357524748
+    cmp [r15+256], rax
+    jne pw_fatal
+    cmp qword ptr [r15+264], 1
+    jne pw_fatal
+    cmp qword ptr [r15+280], 0
+    jne pw_fatal
+    mov rsi, [r15+272]
+    cmp rsi, [r15+40]
+    jbe pw_fatal
+    cmp rsi, 268435456
+    ja pw_fatal
+    lea rdi, [r15+32]
+    call .Lptp_grow
+    test eax, eax
+    jnz pw_fatal
+    jmp pw_pool_retry
+pw_pool_complete:
+    mov rdi, [rsp+32]
+    test rdi, rdi
+    jz pw_pool_unlock
+    lea rsi, [r15+256]
+    mov ecx, 40
+    rep movsq
+pw_pool_unlock:
+    mov rax, [r15+576]
+    mov [rsp+40], rax
+    lea rdi, [r15+16]
+    call pw_mutex_unlock
+    mov rax, [rsp+40]
+    leave
+    ret
+
+pw_emit_locked:
+    mov rax, [r15+80]
+    test rax, rax
+    jz pw_emit_none
+    sub rsp, 8
+    mov rdi, [r15+88]
+    mov rsi, r15
+    call rax
+    test rax, rax
+    jnz pw_fatal
+    add rsp, 8
+pw_emit_none:
+    xor eax, eax
+    ret
+
+/* A PID-owned futex serializes HIA mutations, never a body filesystem wait. */
+pw_mutex_lock:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32
+    mov [rsp], rdi
+    mov eax, 39
+    syscall
+    mov [rsp+8], eax
+pw_mutex_retry:
+    mov rdi, [rsp]
+    xor eax, eax
+    mov ecx, [rsp+8]
+    lock cmpxchg dword ptr [rdi], ecx
+    jz pw_mutex_acquired
+    mov edx, eax
+    mov qword ptr [rsp+16], 0
+    mov qword ptr [rsp+24], 10000000
+    xor esi, esi
+    lea r10, [rsp+16]
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -110
+    jne pw_mutex_retry
+    mov eax, [rsp+8]
+    cmp rax, [r15+8]
+    jne pw_mutex_retry
+    mov rcx, [rsp]
+    mov edi, [rcx]
+    test edi, edi
+    jz pw_mutex_retry
+    xor esi, esi
+    mov edx, 1
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    test rax, rax
+    jg pw_fatal
+    jmp pw_mutex_retry
+pw_mutex_acquired:
+    leave
+    ret
+pw_mutex_unlock:
+    mov dword ptr [rdi], 0
+pw_wake_all:
+    mov esi, 1
+    mov edx, 2147483647
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    js pw_fatal
+    ret
+
+pw_clock:
+    sub rsp, 24
+    mov edi, 1
+    mov rsi, rsp
+    mov eax, 228
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    mov rax, [rsp]
+    mov ecx, 1000000000
+    mul rcx
+    test rdx, rdx
+    jnz pw_fatal
+    cmp [rsp+8], rcx
+    jae pw_fatal
+    add rax, [rsp+8]
+    jc pw_fatal
+    add rsp, 24
+    ret
+
+/* Read-only body observer enters the same journal lock and always preserves
+ * the actual body context, effect sequence, complete span and job identity. */
+pw_body_observer:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 88
+    mov r14, rdi
+    mov r15, [r14+8]
+    mov [rsp], rsi
+    mov [rsp+8], rdx
+    mov [rsp+16], rcx
+    mov [rsp+24], r8
+    lea rdi, [r15+16]
+    call pw_mutex_lock
+    lea rdi, [rsp+32]
+    xor eax, eax
+    mov ecx, 7
+    rep stosq
+    mov rax, [r14+24]
+    mov [rsp+32], rax
+    mov rax, [r14+32]
+    mov [rsp+40], rax
+    mov rax, [rsp]
+    mov [rsp+48], rax
+    mov rax, [rsp+8]
+    mov [rsp+56], rax
+    mov rax, [rsp+24]
+    mov [rsp+64], rax
+    mov rax, [rsp]
+    mov rdx, [rax+216]
+    mov [rsp+72], rdx
+    mov rdx, [rax+224]
+    mov [rsp+80], rdx
+    mov edx, 7
+    lea rcx, [rsp+32]
+    mov r8d, 56
+    call pw_emit_locked
+    mov edx, 8
+    mov rcx, [rsp+16]
+    mov r8, [rsp+24]
+    call pw_emit_locked
+    mov edx, 9
+    mov rcx, [rsp]
+    mov r8d, 4096
+    call pw_emit_locked
+    lea rdi, [r15+16]
+    call pw_mutex_unlock
+    xor eax, eax
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+/* Find a private issued task. Retired IDs never become aliases. */
+pw_find_task:
+    mov rax, [r15+48]
+pw_find_next:
+    test rax, rax
+    jz pw_find_done
+    cmp [rax+24], rsi
+    je pw_find_done
+    mov rax, [rax+16]
+    jmp pw_find_next
+pw_find_done:
+    ret
+
+.global publication_worker_service
+publication_worker_service:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    call pw_service_locked
+    xor eax, eax
+    jmp pw_api_finish
+
+/* Parent service owns wait4 and clone. No worker writes the linked task list. */
+pw_service_locked:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 336
+    mov r13, rsp
+    lea r12, [r15+48]
+pw_service_scan:
+    mov r14, [r12]
+    test r14, r14
+    jz pw_service_start
+    cmp qword ptr [r14+104], 0
+    jne pw_service_retire
+    mov rdi, [r14+80]
+    test rdi, rdi
+    jz pw_service_keep
+    lea rsi, [r14+144]
+    mov edx, 1
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    cmp rax, -4
+    je pw_service_scan
+    test rax, rax
+    js pw_fatal
+    jz pw_service_keep
+    cmp rax, [r14+80]
+    jne pw_fatal
+    mov edi, 6
+    mov esi, [r14+144]
+    call pw_process_event
+    cmp qword ptr [r14+96], 1
+    jne pw_service_abnormal
+    cmp dword ptr [r14+144], 0
+    jne pw_fatal
+    mov edi, 10
+    mov rsi, [r14+24]
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, r13
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    jmp pw_service_reaped
+pw_service_abnormal:
+    call pw_clock
+    mov rdx, rax
+    mov [r14+128], rax
+    mov ecx, [r14+144]
+    test ecx, ecx
+    jnz pw_service_abnormal_status
+    mov ecx, 256
+pw_service_abnormal_status:
+    mov [r14+120], rcx
+    mov edi, 14
+    mov rsi, [r14+24]
+    mov r8, r13
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    mov qword ptr [r14+96], 1
+pw_service_reaped:
+    mov qword ptr [r14+104], 1
+pw_service_retire:
+    mov rax, [r14+112]
+    cmp rax, 1
+    je pw_service_free
+    cmp rax, 3
+    jne pw_service_keep
+pw_service_free:
+    mov rax, [r14+16]
+    mov [r12], rax
+    call pw_free_task
+    jmp pw_service_scan
+pw_service_keep:
+    lea r12, [r14+16]
+    jmp pw_service_scan
+pw_service_start:
+    mov edi, 2
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, r13
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    cmp qword ptr [r13+16], 3
+    je pw_service_drain_pipe
+    cmp qword ptr [r13+16], 0
+    jne pw_fatal
+    mov rsi, [r13+32]
+    call pw_find_task
+    test rax, rax
+    jz pw_fatal
+    mov r14, rax
+    cmp qword ptr [r14+80], 0
+    jne pw_fatal
+    cmp qword ptr [r14+96], 0
+    jne pw_fatal
+    mov rax, [r14+72]
+    lea rsi, [rax+PW_STACK]
+    mov edi, 0x511 /* CLONE_VM | CLONE_FILES | SIGCHLD */
+    xor edx, edx
+    xor r10d, r10d
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    jz pw_child
+    js pw_service_clone_failed
+    mov [r14+80], rax
+    mov edi, 5
+    xor esi, esi
+    call pw_process_event
+    mov edi, 3
+    mov rsi, [r14+24]
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, r13
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    cmp qword ptr [r13+16], 0
+    jne pw_fatal
+    mov dword ptr [r14+88], 1
+    lea rdi, [r14+88]
+    call pw_wake_all
+    jmp pw_service_start
+pw_service_clone_failed:
+    neg rax
+    mov [r14+120], rax
+    mov esi, eax
+    mov edi, 5
+    call pw_process_event
+    mov edi, 13
+    mov rsi, [r14+24]
+    xor edx, edx
+    mov rcx, [r14+120]
+    mov r8, r13
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    mov qword ptr [r14+96], 1
+    mov qword ptr [r14+104], 1
+    jmp pw_service_start
+pw_service_drain_pipe:
+    mov rdi, [r15+56]
+    lea rsi, [r13+320]
+    mov edx, 16
+    xor eax, eax
+    syscall
+    cmp rax, -4
+    je pw_service_drain_pipe
+    cmp rax, -11
+    je pw_service_done
+    test rax, rax
+    jle pw_fatal
+    jmp pw_service_drain_pipe
+pw_service_done:
+    add rsp, 336
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+/* Clone begins on its owned stack and cannot enter HIA BEGIN before clone ACK. */
+pw_child:
+    xor ebp, ebp
+    mov edi, 1 /* PR_SET_PDEATHSIG */
+    mov esi, 9
+    xor edx, edx
+    xor r10d, r10d
+    xor r8d, r8d
+    mov eax, 157
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    mov eax, 110
+    syscall
+    cmp rax, [r15+8]
+    jne pw_fatal
+pw_child_gate:
+    cmp dword ptr [r14+88], 1
+    je pw_child_ready
+    lea rdi, [r14+88]
+    xor esi, esi
+    xor edx, edx
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    cmp rax, -4
+    je pw_child_gate
+    cmp rax, -11
+    je pw_child_gate
+    test rax, rax
+    jnz pw_fatal
+    jmp pw_child_gate
+pw_child_ready:
+    call pw_clock
+    mov [r14+136], rax
+    mov rdx, rax
+    mov edi, 4
+    mov rsi, [r14+24]
+    xor ecx, ecx
+    lea r8, [r14+192]
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    cmp qword ptr [r14+208], 0
+    jne pw_fatal
+    mov rdi, [r14+40]
+    mov rsi, [r14+48]
+    mov rdx, [r14+64]
+    call text_publication_invoke
+    mov edx, eax
+    cmp rax, rdx
+    jne pw_fatal
+    mov [r14+120], rax
+    call pw_clock
+    mov [r14+128], rax
+    mov rdx, rax
+    mov edi, 5
+    mov rsi, [r14+24]
+    mov rcx, [r14+120]
+    lea r8, [r14+192]
+    call pw_pool
+    cmp eax, 320
+    jne pw_fatal
+    cmp qword ptr [r14+208], 0
+    jne pw_fatal
+    mov qword ptr [r14+96], 1
+pw_child_notify:
+    mov rdi, [r15+64]
+    lea rsi, [r14+24]
+    mov edx, 8
+    mov eax, 1
+    syscall
+    cmp rax, -4
+    je pw_child_notify
+    cmp rax, -11
+    je pw_child_exit
+    cmp rax, 8
+    jne pw_fatal
+pw_child_exit:
+    xor edi, edi
+    mov eax, 60
+    syscall
+    ud2
+
+/* wait4/clone event includes complete native outcome under the journal mutex. */
+pw_process_event:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 48
+    mov [rsp], rdi
+    mov [rsp+8], rsi
+    lea rdi, [r15+16]
+    call pw_mutex_lock
+    mov rax, [r14+24]
+    mov [rsp+16], rax
+    mov rax, [r14+32]
+    mov [rsp+24], rax
+    mov rax, [r14+80]
+    mov [rsp+32], rax
+    mov rax, [rsp+8]
+    mov [rsp+40], rax
+    mov rdx, [rsp]
+    lea rcx, [rsp+16]
+    mov r8d, 32
+    call pw_emit_locked
+    lea rdi, [r15+16]
+    call pw_mutex_unlock
+    leave
+    ret
+
+.global publication_worker_poll
+publication_worker_poll:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    cmp qword ptr [rsp+8], 0
+    je pw_api_invalid_owned
+    call pw_service_locked
+    mov rsi, [rsp]
+    call pw_find_task
+    test rax, rax
+    jz pw_api_invalid_owned
+    mov r14, rax
+    mov edi, 7
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, [rsp+8]
+    call pw_pool
+    jmp pw_api_finish
+pw_api_invalid_owned:
+    mov eax, 0xffffffff
+    jmp pw_api_finish
+
+/* take(pool,job,output320,borrow64). The borrow lasts until explicit release.
+ * Its pointers cannot be selected or supplied by a public request. */
+.global publication_worker_take
+publication_worker_take:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    cmp qword ptr [rsp+8], 0
+    je pw_api_invalid_owned
+    cmp qword ptr [rsp+16], 0
+    je pw_api_invalid_owned
+    call pw_service_locked
+    mov rsi, [rsp]
+    call pw_find_task
+    test rax, rax
+    jz pw_api_invalid_owned
+    mov r14, rax
+    mov edi, 8
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, [rsp+8]
+    call pw_pool
+    cmp eax, 320
+    jne pw_api_finish
+    mov rdx, [rsp+8]
+    cmp qword ptr [rdx+16], 0
+    jne pw_api_finish
+    mov qword ptr [r14+112], 2
+    mov rdi, [rsp+16]
+    xor eax, eax
+    mov ecx, 8
+    rep stosq
+    mov rdi, [rsp+16]
+    mov rax, 0x3130304257545048 /* HPTWB001 */
+    mov [rdi], rax
+    mov qword ptr [rdi+8], 64
+    mov rax, [r14+24]
+    mov [rdi+16], rax
+    mov rax, [r14+120]
+    mov [rdi+24], rax
+    mov rax, [r14+32]
+    mov [rdi+48], rax
+    cmp qword ptr [rdx+88], 0
+    jne pw_take_infrastructure
+    cmp qword ptr [r14+120], 64
+    jne pw_take_ready
+    mov rbx, [r14+40]
+    cmp qword ptr [rbx+56], 2
+    jne pw_fatal
+    cmp qword ptr [rbx+184], 0
+    jne pw_fatal
+    mov rax, [rbx+168]
+    cmp rax, 64
+    jb pw_fatal
+    cmp rax, [rbx+112]
+    ja pw_fatal
+    mov [rdi+40], rax
+    mov rax, [rbx+104]
+    mov [rdi+32], rax
+    jmp pw_take_ready
+pw_take_infrastructure:
+    mov qword ptr [rdi+56], 1
+pw_take_ready:
+    mov eax, 320
+    jmp pw_api_finish
+
+/* Drop means the actual handler future disappeared; it is never notification
+ * cancellation or transport EOF. Already enqueued blocking bodies continue. */
+.global publication_worker_drop
+publication_worker_drop:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    mov rsi, [rsp]
+    call pw_find_task
+    test rax, rax
+    jz pw_api_invalid_owned
+    mov r14, rax
+    mov edi, 6
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call pw_pool
+    cmp eax, 320
+    jne pw_api_finish
+    mov qword ptr [r14+112], 1
+    call pw_service_locked
+    xor eax, eax
+    jmp pw_api_finish
+
+.global publication_worker_release
+publication_worker_release:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    mov rsi, [rsp]
+    call pw_find_task
+    test rax, rax
+    jz pw_api_invalid_owned
+    mov r14, rax
+    mov edi, 9
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call pw_pool
+    cmp eax, 320
+    jne pw_api_finish
+    mov qword ptr [r14+112], 3
+    /* The worker will not access the result after its HIA COMPLETE. */
+    mov rdi, [r14+40]
+    cmp qword ptr [rdi+56], 2
+    jne pw_release_body_done
+    call text_publication_release
+    test eax, eax
+    jnz pw_fatal
+pw_release_body_done:
+    call pw_service_locked
+    xor eax, eax
+    jmp pw_api_finish
+
+.global publication_worker_close
+publication_worker_close:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    mov edi, 11
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call pw_pool
+    cmp eax, 320
+    jne pw_api_finish
+    call pw_service_locked
+    xor eax, eax
+    jmp pw_api_finish
+
+/* Complete actual HIA state observation; no service or task transition. */
+.global publication_worker_observe
+publication_worker_observe:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    cmp qword ptr [rsp], 0
+    je pw_api_invalid_owned
+    mov edi, 12
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    mov r8, [rsp]
+    call pw_pool
+    jmp pw_api_finish
+
+.global publication_worker_wake_fd
+publication_worker_wake_fd:
+    mov rax, PW_MAGIC
+    cmp [rdi], rax
+    jne pw_wake_bad
+    mov rax, [rdi+56]
+    ret
+pw_wake_bad:
+    mov rax, -22
+    ret
+
+.global publication_worker_destroy
+publication_worker_destroy:
+    PW_ENTER
+    call pw_api_begin
+    test eax, eax
+    jnz pw_api_return
+    call pw_service_locked
+    cmp qword ptr [r15+48], 0
+    jne pw_destroy_busy
+    mov edi, 12
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call pw_pool
+    cmp eax, 320
+    jne pw_api_finish
+    /* No linked tasks remain, therefore no child can mutate this result.
+     * Both complete HIA live and active counters must agree with that fact. */
+    cmp qword ptr [r15+272], 0
+    jne pw_fatal
+    cmp qword ptr [r15+416], 0
+    jne pw_fatal
+    cmp qword ptr [r15+424], 0
+    jne pw_fatal
+    mov rdi, [r15+56]
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    mov rdi, [r15+64]
+    mov eax, 3
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    mov rdi, [r15+32]
+    mov rsi, [r15+40]
+    add rsi, 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    mov rdi, r15
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    PW_LEAVE
+pw_destroy_busy:
+    mov eax, 0xfffffffd
+    jmp pw_api_finish
+
+pw_free_task:
+    push rbp
+    mov rbp, rsp
+    mov rax, [r14+80]
+    test rax, rax
+    jz pw_free_unstarted
+    cmp qword ptr [r14+104], 1
+    jne pw_fatal
+pw_free_unstarted:
+    mov rdi, [r14+40]
+    test rdi, rdi
+    jz pw_free_input
+    cmp qword ptr [rdi+56], 2
+    jne pw_free_body
+    call text_publication_release
+    test eax, eax
+    jnz pw_fatal
+    mov rdi, [r14+40]
+pw_free_body:
+    call text_publication_destroy
+    test eax, eax
+    jnz pw_fatal
+pw_free_input:
+    mov rdi, [r14+48]
+    test rdi, rdi
+    jz pw_free_stack
+    mov rsi, [r14+56]
+    add rsi, 4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz pw_fatal
+pw_free_stack:
+    mov rdi, [r14+72]
+    test rdi, rdi
+    jz pw_free_control
+    mov esi, PW_STACK+4096
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz pw_fatal
+pw_free_control:
+    mov rdi, r14
+    mov esi, 8192
+    mov eax, 11
+    syscall
+    test rax, rax
+    jnz pw_fatal
+    leave
+    ret
+
+/* Unexpected private invariants never produce a successful handler response.
+ * Parent failure kills/reaps its children; a worker failure is observed by wait4. */
+pw_fatal:
+    mov eax, 39
+    syscall
+    test r15, r15
+    jz pw_fatal_exit
+    cmp rax, [r15+8]
+    jne pw_fatal_exit
+    mov rbx, [r15+48]
+pw_fatal_kill:
+    test rbx, rbx
+    jz pw_fatal_wait_begin
+    cmp qword ptr [rbx+104], 0
+    jne pw_fatal_kill_next
+    mov rdi, [rbx+80]
+    test rdi, rdi
+    jz pw_fatal_kill_next
+    mov esi, 9
+    mov eax, 62
+    syscall
+pw_fatal_kill_next:
+    mov rbx, [rbx+16]
+    jmp pw_fatal_kill
+pw_fatal_wait_begin:
+    mov rbx, [r15+48]
+pw_fatal_wait:
+    test rbx, rbx
+    jz pw_fatal_exit
+    cmp qword ptr [rbx+104], 0
+    jne pw_fatal_wait_next
+    mov rdi, [rbx+80]
+    test rdi, rdi
+    jz pw_fatal_wait_next
+pw_fatal_wait_retry:
+    xor esi, esi
+    xor edx, edx
+    xor r10d, r10d
+    mov eax, 61
+    syscall
+    cmp rax, -4
+    je pw_fatal_wait_retry
+pw_fatal_wait_next:
+    mov rbx, [rbx+16]
+    jmp pw_fatal_wait
+pw_fatal_exit:
+    mov edi, 111
+    mov eax, 60
+    syscall
+    ud2
+
+.balign 16
+.global publication_worker_pool_call_displacement
+pw_pool_entry:
+    .byte 0xe9
+publication_worker_pool_call_displacement:
+    .long 0

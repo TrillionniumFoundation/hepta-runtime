@@ -1,0 +1,43 @@
+name: Author and compile private publisher worker lifetime owner
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publisher-worker-author-6780-v1-20261117']
+permissions:
+  contents: read
+jobs:
+  author-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set actual runner paths
+        run: |
+          printf '%s\n' "PW_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/publication_worker_author_v1/source" "PW_RUN=$RUNNER_TEMP/publication-worker" "PW_EXPORT=$RUNNER_TEMP/publication-worker-export" "PW_DRIVER=$RUNNER_TEMP/publication-worker-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_worker_author_v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Fresh author and real HIA compiler build
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/build_pool.py" --source "$PW_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PW_RUN" > "$PW_DRIVER.stdout" 2> "$PW_DRIVER.stderr"
+      - name: Preserve and reread all complete failure or success bytes
+        if: always()
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/archive.py" pack --source "$PW_SOURCE" --capture "$PW_RUN" --output "$PW_EXPORT" --driver-prefix "$PW_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publisher-worker-author-${{ github.sha }}
+          path: ${{ env.PW_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

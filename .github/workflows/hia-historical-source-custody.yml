@@ -1,0 +1,75 @@
+name: Historical source custody
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hia-historical-source-custody.yml'
+      - 'tests/hia_native/historical_public58/**'
+      - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'tests/hia_native/test_historical_current_projection.py'
+      - 'authoring/**'
+      - 'qualification/**'
+      - 'runtime_support/**'
+      - 'vendor/**'
+      - 'native/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  push:
+    paths:
+      - '.github/workflows/hia-historical-source-custody.yml'
+      - 'tests/hia_native/historical_public58/**'
+      - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'tests/hia_native/test_historical_current_projection.py'
+      - 'authoring/**'
+      - 'qualification/**'
+      - 'runtime_support/**'
+      - 'vendor/**'
+      - 'native/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+permissions:
+  contents: read
+
+jobs:
+  original-source-custody:
+    name: Complete historical source reference controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            asm
+            scripts
+            src
+            tests
+            .github
+            authoring
+            vendor
+            runtime_support
+            qualification
+      - name: Check writer source closure and refusal controls
+        run: python3 -I -B tests/hia_native/test_historical_writer_projection.py -v
+      - name: Restore the exact retained read source in an independent directory
+        run: |
+          python3 -I -B tests/hia_native/historical_public58/writer_projection.py \
+            --source "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/hia-retained-read" \
+            --project-read
+      - name: Check complete retained source projection and original workflow inverses
+        run: python3 -I -B "$RUNNER_TEMP/hia-retained-read/tests/hia_native/test_historical_current_projection.py" -v
+      - name: Restore the exact original reference inputs in an independent source directory
+        run: |
+          python3 -I -B "$RUNNER_TEMP/hia-retained-read/tests/hia_native/historical_public58/current_projection.py" \
+            --source "$RUNNER_TEMP/hia-retained-read" \
+            --output "$RUNNER_TEMP/hia-current-profile" \
+            --project-only
+      - name: Check fixed authorities, independent roots and terminal drift
+        run: python3 -I -B "$RUNNER_TEMP/hia-current-profile/tests/hia_native/test_historical_public_source_custody.py" -v

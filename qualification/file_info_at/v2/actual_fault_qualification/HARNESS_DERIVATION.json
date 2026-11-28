@@ -1,0 +1,290 @@
+{
+  "schema": "hepta.runtime.file-info-read67-rebind.exact-harness-derivation.v1",
+  "source_original": "763f99b9ab00e450850efba88508e393afbe5238",
+  "read_capture_pure_recovery": "807309e4f3e9d8d1055fb6dc54e2ed079cd247d9",
+  "patches": [
+    {
+      "path": "scripts/reference_worker.py",
+      "before_sha256": "99daa6f12fad389f42e360d197bc0aa8b44bfb2dc8b345f7b1e785672002bc52",
+      "after_sha256": "ff26832fcba243375924c607b7c144e54b2abe74d6cf5beb3bf2670fc542c6d7",
+      "changes": [
+        {
+          "before": "if self.arm and owner==\"info\"and operation==2 and self.operations[key]==1:",
+          "after": "if self.arm and owner==self.arm and operation=={\"info\":2,\"read\":6}[owner]and self.operations[key]==1:"
+        },
+        {
+          "before": "if command==18:\n        require(not proxy.arm,\"fstat failure already armed\");proxy.arm=True;reply(0,slot=slot);continue",
+          "after": "if command in(18,21):\n        require(not proxy.arm,\"fstat failure already armed\");proxy.arm=\"read\"if command==21 else\"info\";reply(0,slot=slot);continue"
+        }
+      ]
+    },
+    {
+      "path": "scripts/run_case.py",
+      "before_sha256": "c7acffd60035dd4c137129bde128da271fa048d87eeccf56e98d0120e28e0705",
+      "after_sha256": "f3916044922d2461ce9b31c0b2a5e0ba9321f16e81237281bc5487fb7f7de8c1",
+      "changes": [
+        {
+          "before": "raw,n=carrier.exchange(18,slot);require(U(raw,8)==0,\"real fstat-filter arm\")",
+          "after": "raw,n=carrier.exchange(21 if q[\"fault_owner\"]==\"read\"else 18,slot);require(U(raw,8)==0,\"real fstat-filter arm\")"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_journal.py",
+      "before_sha256": "61173f34ddcb0899260df2df6e09b595834c2c7863324a44fcdd1410479a0044",
+      "after_sha256": "7eb668ec8295939cc05fb306627f7f794a18e706c7256fed1ba9c3b67707c544",
+      "changes": [
+        {
+          "before": "payload=data.hex()if op in(1,2,3,5,6,9,11,19)else None,",
+          "after": "payload=data.hex()if op in(1,2,3,4,5,6,9,11,19)else None,"
+        },
+        {
+          "before": "read_work=None;meta_work=None;read_gen=0;meta_gen=0;last_stat=None;captured_snapshot=None",
+          "after": "read_work=None;meta_work=None;read_gen=0;meta_gen=0;last_stat=None;captured_snapshot=None;fingerprint_orphans=[]"
+        },
+        {
+          "before": "read_generation=read_gen,metadata_generation=meta_gen)",
+          "after": "read_generation=read_gen,metadata_generation=meta_gen,fingerprint_orphans=fingerprint_orphans)"
+        },
+        {
+          "before": "read_work=row[\"workspace\"];row[\"effects\"]=view_child.records",
+          "after": "read_work=row[\"workspace\"]\n                    require([{k:v for k,v in e.items()if k!=\"phase\"}for e in row[\"effects\"]]==view_child.records,\n                        \"complete fingerprint leaf effects equal outer journal projection\")\n                    fingerprint_orphans+=row[\"orphans\"]"
+        },
+        {
+          "before": "generation=read_gen if op==1 else meta_gen,effects=row.get(\"effects\"),codec=row.get(\"codec\")))",
+          "after": "generation=read_gen if op==1 else meta_gen,effects=row.get(\"effects\"),codec=row.get(\"codec\"),orphans=row.get(\"orphans\",[])))"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_capture.py",
+      "before_sha256": "b9f2a6d29105c806e79629280c325ba73bcdf6565108fa176c64e2f6350e54fc",
+      "after_sha256": "f76167b44d137dc1d1d501da67cf0e2b89c0fd0af9b867c5552f0ecce33943e4",
+      "changes": [
+        {
+          "before": "and U(a,16)==r[\"command\"]in range(1,21)and U(a,24)==r[\"session\"]in(0,1)",
+          "after": "and U(a,16)==r[\"command\"]in range(1,22)and U(a,24)==r[\"session\"]in(0,1)"
+        },
+        {
+          "before": "_,body,armed=exchange(row[\"arm_exchange\"],18,slot);require(not body and U(armed,8)==0,\"real fixed kernel error arm\")",
+          "after": "_,body,armed=exchange(row[\"arm_exchange\"],21 if q[\"fault_owner\"]==\"read\"else 18,slot);require(not body and U(armed,8)==0,\"real fixed kernel error arm\")"
+        },
+        {
+          "before": "require(len(records)==count and U(ctx,400)==int(q[\"arm_fstat_error\"])and U(ctx,376)==observed_pool[\"value\"][\"address\"],\"actual orphan ledger transition\")",
+          "after": "require(len(records)==count and U(ctx,400)==int(q[\"fault_owner\"]==\"info\")\n                    and U(child,400)==int(q[\"fault_owner\"]==\"read\")\n                    and U(ctx,376)==U(child,376)==observed_pool[\"value\"][\"address\"],\n                    \"outer and fingerprint child share the exact process pool with separate ownership ledgers\")"
+        },
+        {
+          "before": "newest=records[-1];require(newest[\"generation\"]==1,\"orphan generation\")",
+          "after": "newest=records[-1];require(newest[\"generation\"]==1,\"orphan generation\")\n                    require((newest[\"context\"]==U(ctx,384))==(q[\"fault_owner\"]==\"read\"),\n                        \"process record belongs to the exact fingerprint context or the outer regular owner\")"
+        },
+        {
+          "before": "if q[\"observer\"]:require(len(parsed[\"orphans\"])==1 and parsed[\"orphans\"][0][\"fd\"]==newest[\"fd\"],\"actual opened token became process orphan\")",
+          "after": "if q[\"observer\"]:\n                        transfers=parsed[\"fingerprint_orphans\"]if q[\"fault_owner\"]==\"read\"else parsed[\"orphans\"]\n                        other=parsed[\"orphans\"]if q[\"fault_owner\"]==\"read\"else parsed[\"fingerprint_orphans\"]\n                        require(len(transfers)==1 and transfers[0][\"fd\"]==newest[\"fd\"]and not other,\n                            \"exact opened token and owning HIA layer became the process orphan\")"
+        },
+        {
+          "before": "op=e[\"operation\"];ret=e[\"raw_return\"];args={}",
+          "after": "op=e[\"operation\"];ret=e[\"raw_return\"];args={}\n            if op==4:continue # fully admitted first-fstat orphan transfer has no Python OS call"
+        },
+        {
+          "before": "shared_orphan_growth_or_concurrency_qualified=False,public_route=False,remote_ssh=False,full_sdk=False,whole_runtime_replaced=False)",
+          "after": "shared_orphan_growth_or_concurrency_qualified=False,public_route=False,remote_ssh=False,full_sdk=False,whole_runtime_replaced=False,\n        read67_shared_pool_rebind=True,formatter34_rebind=True,original_cpython_internal_syscall_stream_observed=False)"
+        },
+        {
+          "before": "from cases import group",
+          "after": "from cases import group\nfrom continuation import verify_capture"
+        },
+        {
+          "before": "values=rows(folder,report);require([v[\"input\"]for v in values]==queries,\"all fixed original inputs\")",
+          "after": "values=rows(folder,report);require([v[\"input\"]for v in values]==queries,\"all fixed original inputs\")\n    verify_capture(source,data,name,report,values)"
+        },
+        {
+          "before": "from continuation import verify_capture\n",
+          "after": "from continuation import verify_capture,old_elf\n"
+        },
+        {
+          "before": "receipt==case[\"process\"]and receipt[\"binary\"]==(build[\"elf\"]if role==\"native\"else PYTHON)",
+          "after": "receipt==case[\"process\"]and receipt[\"binary\"]==\n            ((old_elf(source)if q[\"id\"]in report[\"continuation\"][\"retained_case_ids\"]else build[\"elf\"])if role==\"native\"else PYTHON)"
+        }
+      ]
+    },
+    {
+      "path": "scripts/physical_controls.py",
+      "before_sha256": "0f500c753af84cb0167981599f1a636d0e1e40b6714f307ed1fe16fcdcb8d590",
+      "after_sha256": "1f0e7d3b893b6bf516d68d250d7dde4715778cf199302a29677bacecbbbf60a0",
+      "changes": [
+        {
+          "before": "roots=[selected_source,selected]",
+          "after": "roots=[ROOT,selected_source,selected]"
+        },
+        {
+          "before": "roots=[new_source,new_data]",
+          "after": "roots=[ROOT,new_source,new_data]"
+        },
+        {
+          "before": "        require(guard[\"evidence\"][\"status\"]==\"REJECTED\"and expected in guard[\"evidence\"][\"message\"],\"wrong physical rejection reason: \"+name)",
+          "after": "        if a.group==\"shm\":\n            expected={\"original-stdout\":\"complete retained original process files remain unchanged\",\n                \"honest-original-result\":\"complete retained original case is unchanged\"}.get(name,expected)\n        require(guard[\"evidence\"][\"status\"]==\"REJECTED\"and expected in guard[\"evidence\"][\"message\"],\"wrong physical rejection reason: \"+name)"
+        },
+        {
+          "before": "        if a.group==\"shm\":\n            expected={\"original-stdout\":\"complete retained original process files remain unchanged\",\n                \"honest-original-result\":\"complete retained original case is unchanged\"}.get(name,expected)",
+          "after": "        expected={\"original-stdout\":\"complete retained original process files remain unchanged\",\n            \"honest-original-result\":\"complete retained original case is unchanged\",\n            \"native-image\":\"complete old and corrected fixture binaries\"}.get(name,expected)\n        if a.group==\"shm\":\n            expected={\"native-journal\":\"complete retained original process files remain unchanged\",\n                \"honest-native-result\":\"complete retained original case is unchanged\"}.get(name,expected)"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_evidence.py",
+      "before_sha256": "9e51a60105ba5121dd3b080aa0049c55fbe77e5c848048fb79f303061942da61",
+      "after_sha256": "6c07d6b582ae368d4d93faaa9488da5140660136b19a899f27f9648c97bc5377",
+      "changes": [
+        {
+          "before": "saved_guard(guard,{selected_origin:tree(selected_source),data_origin:tree(copied)})",
+          "after": "saved_guard(guard,{original_source:tree(source),selected_origin:tree(selected_source),data_origin:tree(copied)})"
+        },
+        {
+          "before": "saved_guard(guard,{base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})",
+          "after": "saved_guard(guard,{original_source:tree(source),base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})"
+        },
+        {
+          "before": "import read_build_evidence,read_capture",
+          "after": "import read_build_evidence,read_capture\nfrom continuation import admission"
+        },
+        {
+          "before": "expected=[(\"source-check\",60),(\"build-fetch\",60),(\"build-unpack\",180),(\"build-admission\",180),",
+          "after": "expected=[(\"source-check\",60),(\"partial-fetch\",60),(\"partial-unpack\",180),(\"partial-admission\",180),\n        (\"build-fetch\",60),(\"build-unpack\",180),(\"build-admission\",180),"
+        },
+        {
+          "before": "require(pin(carrier)==process[\"receipt\"] and record[\"parent_pgid\"]==p[\"pgid\"],\n                    \"all actual per-input processes stay in the bounded group\")",
+          "after": "retained=role==\"original\"and process[\"id\"]in r[\"continuation\"][\"retained_original_ids\"]\n                old_processes=decode((capture/\"application/retained/original/restored/run/processes/processes.json\").read_bytes())\n                owner=old_processes[-1]if retained else p\n                require(pin(carrier)==process[\"receipt\"]and record[\"parent_pgid\"]==owner[\"pgid\"],\n                    \"each actual process stays in its original or new bounded producer group\")"
+        },
+        {
+          "before": "reuse_origin=processes[1][\"argv\"][processes[1][\"argv\"].index(\"--work\")+1]",
+          "after": "fetch=next(p for p in processes if p[\"name\"]==\"build-fetch\")\n    reuse_origin=fetch[\"argv\"][fetch[\"argv\"].index(\"--work\")+1]"
+        },
+        {
+          "before": "data=capture/\"application\";actual=read_capture.verify(source,data,name)",
+          "after": "data=capture/\"application\"\n    partial=admission(source,data/\"retained\",name);partial_guard=decode((capture/\"PARTIAL_ADMISSION.json\").read_bytes())\n    require(partial_guard==returns[\"partial-admission\"]and partial_guard[\"evidence\"]==partial==gate[\"partial_boundary\"],\n        \"exact retained original prefix and unexecuted native/original suffix\")\n    fetch=next(p for p in processes if p[\"name\"]==\"partial-fetch\")\n    partial_origin=fetch[\"argv\"][fetch[\"argv\"].index(\"--work\")+1]\n    guarded_files+=saved_guard(partial_guard,{original_source:tree(source),partial_origin:tree(data/\"retained\")})\n    actual=read_capture.verify(source,data,name)"
+        },
+        {
+          "before": "old_data=processes[6][\"argv\"][processes[6][\"argv\"].index(\"--data\")+1]",
+          "after": "reader=next(p for p in processes if p[\"name\"]==\"full-read\")\n    old_data=reader[\"argv\"][reader[\"argv\"].index(\"--data\")+1]"
+        },
+        {
+          "before": "controls_origin=processes[7][\"argv\"][processes[7][\"argv\"].index(\"--output\")+1]",
+          "after": "control_process=next(p for p in processes if p[\"name\"]==\"physical-controls\")\n    controls_origin=control_process[\"argv\"][control_process[\"argv\"].index(\"--output\")+1]"
+        },
+        {
+          "before": "producer_processes=len(processes),retained_guard_invocations=12,retained_guard_probes=132,",
+          "after": "producer_processes=len(processes),retained_guard_invocations=13,retained_guard_probes=143,"
+        },
+        {
+          "before": "from continuation import admission\n",
+          "after": "from continuation import admission as partial_admission\n"
+        },
+        {
+          "before": "partial=admission(source,data/\"retained\",name)",
+          "after": "partial=partial_admission(source,data/\"retained\",name)"
+        },
+        {
+          "before": "from continuation import admission as partial_admission\n",
+          "after": "from continuation import admission as partial_admission,producer_group\n"
+        },
+        {
+          "before": "                retained=role==\"original\"and process[\"id\"]in r[\"continuation\"][\"retained_original_ids\"]\n                old_processes=decode((capture/\"application/retained/original/restored/run/processes/processes.json\").read_bytes())\n                owner=old_processes[-1]if retained else p\n                require(pin(carrier)==process[\"receipt\"]and record[\"parent_pgid\"]==owner[\"pgid\"],",
+          "after": "                retained=process[\"id\"]in r[\"continuation\"][\"retained_case_ids\"]\n                pgid=producer_group(capture/\"application\",role,process[\"id\"],p)if retained else p[\"pgid\"]\n                require(pin(carrier)==process[\"receipt\"]and record[\"parent_pgid\"]==pgid,"
+        }
+      ]
+    },
+    {
+      "path": "scripts/carrier.py",
+      "before_sha256": "4c207c9cca32dbeb5972424f5667845d13eb5da60bc17d7eaf645fca253deb9e",
+      "changes": [
+        {
+          "before": "command in range(1,21)",
+          "after": "command in range(1,22)"
+        }
+      ],
+      "after_sha256": "715035e5906f6c31cee0e4fa3ce86fad4fd9dab4143aac4a4938a1679f11c22f"
+    },
+    {
+      "path": "scripts/capture.py",
+      "before_sha256": "4fbbd6745936694b2a1d6c61492f4be64c69e08e7352adeabf83d6e6f18474de",
+      "changes": [
+        {
+          "before": "from run_case import run",
+          "after": "from run_case import run\nfrom continuation import declaration,seed"
+        },
+        {
+          "before": "p.add_argument(\"--group\",required=True);p.add_argument(\"--output\",type=Path,required=True);p.add_argument(\"--build\",type=Path)",
+          "after": "p.add_argument(\"--group\",required=True);p.add_argument(\"--output\",type=Path,required=True);p.add_argument(\"--build\",type=Path)\n    p.add_argument(\"--retained\",type=Path,required=True)"
+        },
+        {
+          "before": "count=0;calls=0;pins=[];current=None;fixture=None;carrier=None",
+          "after": "plan=declaration(SOURCE,a.group,a.role);pending_ids=set(plan[\"newly_executed_ids\"])\n    count=0;calls=0;pins=[];current=None;fixture=None;carrier=None"
+        },
+        {
+          "before": "try:\n        for q in queries:\n            current=q;",
+          "after": "try:\n        if not native:\n            for data,row in seed(SOURCE,a.retained,a.group,a.output,store):\n                stream.write(data);stream.flush();raw.flush();digest.update(data);length+=len(data)\n                count+=1;calls+=len(row[\"actual\"][\"chain\"][\"invocations\"])\n                pins.append(dict(id=row[\"input\"][\"id\"],bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))\n                processes.append(dict(id=row[\"input\"][\"id\"],path=row[\"process_path\"],\n                    receipt=pin(a.output/row[\"process_path\"]/\"carrier-process.json\")))\n        for q in queries:\n            if q[\"id\"]not in pending_ids:continue\n            current=q;"
+        },
+        {
+          "before": "stream.close();raw.close()\n        report=dict",
+          "after": "require(count==len(queries)and calls==sum(q[\"attempts\"]for q in queries),\"complete inherited prefix and new suffix\")\n        stream.close();raw.close()\n        report=dict"
+        },
+        {
+          "before": "entry_invocations=calls,actual_inputs_only=True,expected_values_generated=False",
+          "after": "entry_invocations=calls,continuation=plan,actual_inputs_only=True,expected_values_generated=False"
+        },
+        {
+          "before": "        if not native:\n            for data,row in seed(SOURCE,a.retained,a.group,a.output,store):\n                stream.write(data);stream.flush();raw.flush();digest.update(data);length+=len(data)\n                count+=1;calls+=len(row[\"actual\"][\"chain\"][\"invocations\"])\n                pins.append(dict(id=row[\"input\"][\"id\"],bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))\n                processes.append(dict(id=row[\"input\"][\"id\"],path=row[\"process_path\"],\n                    receipt=pin(a.output/row[\"process_path\"]/\"carrier-process.json\")))\n",
+          "after": "        for data,row in seed(SOURCE,a.retained,a.group,a.role,a.output,store):\n            stream.write(data);stream.flush();raw.flush();digest.update(data);length+=len(data)\n            count+=1;calls+=len(row[\"actual\"][\"chain\"][\"invocations\"])\n            pins.append(dict(id=row[\"input\"][\"id\"],bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))\n            processes.append(dict(id=row[\"input\"][\"id\"],path=row[\"process_path\"],\n                receipt=pin(a.output/row[\"process_path\"]/\"carrier-process.json\")))\n"
+        }
+      ],
+      "after_sha256": "03b1b776b7ff1bae8b13bf2f175cd63a3d8589a5f25c65f7df2e525642fd6ba8"
+    },
+    {
+      "path": "scripts/gate.py",
+      "before_sha256": "f446aad7e5c53b283c7c039ea05d123c8194d48655cd4288c9d4f03f02188d05",
+      "changes": [
+        {
+          "before": "(capture/\"INPUT_DOMAIN.json\").write_bytes(raw)\n        for stage,limit",
+          "after": "(capture/\"INPUT_DOMAIN.json\").write_bytes(raw)\n        data=capture/\"application\";data.mkdir();retained=data/\"retained\";retained.mkdir()\n        for stage,limit in((\"fetch\",60),(\"unpack\",180)):\n            raw,row=rec.run(\"partial-\"+stage,[sys.executable,\"-I\",\"-S\",\"-B\",ROOT/\"scripts/restore_original.py\",stage,\n                \"--source\",ROOT,\"--work\",retained,\"--group\",a.group],timeout=limit)\n            require(decode(raw)[\"status\"]==\"PASS\",\"complete prior partial archive \"+stage)\n        raw,row=rec.run(\"partial-admission\",[sys.executable,\"-I\",\"-S\",\"-B\",ROOT/\"scripts/read_partial_main.py\",\n            \"--source\",ROOT,\"--work\",retained,\"--group\",a.group],timeout=180)\n        partial_guard=decode(raw);require(partial_guard[\"evidence\"][\"status\"]==\"COMPLETE_INFO_PARTIAL_BOUNDARY_PASS\",\n            \"actual old completed prefix and never-executed suffix\")\n        (capture/\"PARTIAL_ADMISSION.json\").write_bytes(raw)\n        for stage,limit"
+        },
+        {
+          "before": "data=capture/\"application\";data.mkdir();production=data/\"production\";production.mkdir()",
+          "after": "production=data/\"production\";production.mkdir()"
+        },
+        {
+          "before": "\"--group\",a.group,\"--output\",data/role]",
+          "after": "\"--group\",a.group,\"--output\",data/role,\"--retained\",retained]"
+        },
+        {
+          "before": "compiled_build_reused=True,compiler_or_rust_executions=0,complete_upstream_build=",
+          "after": "partial_boundary=partial_guard[\"evidence\"],compiled_build_reused=True,compiler_or_rust_executions=0,complete_upstream_build="
+        }
+      ],
+      "after_sha256": "ceffa7794bdd0f5074ff462c4103ccbcb1727bddd8afdc40d41e9861c86b8489"
+    },
+    {
+      "path": "scripts/check_source.py",
+      "before_sha256": "a8ab9620245b32d2bb6195d25c89e167162a6a5a20c4c29b59b02994ec8cdcd4",
+      "changes": [
+        {
+          "before": "import read_capture,read_journal,read_fingerprint_journal,read_metadata_journal",
+          "after": "import read_capture,read_journal,read_fingerprint_journal,read_metadata_journal\n    from continuation import planned\n    require(planned(SOURCE,\"child-orphans\")[\"actual_original_invocations\"]==0\n        and planned(SOURCE,\"shm\")[\"actual_original_invocations\"]==1,\"fixed zero-replay prefix\")"
+        },
+        {
+          "before": "    require(planned(SOURCE,\"child-orphans\")[\"actual_original_invocations\"]==0\n        and planned(SOURCE,\"shm\")[\"actual_original_invocations\"]==1,\"fixed zero-replay prefix\")",
+          "after": "    require(planned(SOURCE,\"child-orphans\")[\"roles\"][\"original\"][\"actual_calls\"]==7\n        and planned(SOURCE,\"shm\")[\"roles\"][\"original\"][\"actual_calls\"]==2,\"all originals retained without application replay\")"
+        }
+      ],
+      "after_sha256": "8c02839ed9834cba6e0bd8ba9ea5b7d913e75670afb79f5c76b74751b3e2a0fa"
+    }
+  ],
+  "read_fingerprint_journal_replacement": {
+    "git_blob": "5c0330a3ec9bbc4fb1a0272c7497970beef9f9e8",
+    "source_commit": "2020d5da34ebcfae043d96bb1eeac63943c0c525",
+    "path": "qualification/binary_read_orphans/v1/retained_recovery/scripts/read_journal.py",
+    "entire_file_unchanged": true
+  },
+  "production_hia_changes": false,
+  "original_target_changes": false,
+  "fixture_cmd21_only_arms_real_kernel_seccomp_after_fixed_zero_ack": true
+}

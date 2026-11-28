@@ -652,3 +652,42 @@ fn bounded_frame_admission_is_independent_from_argument_shape() {
 		assert!(raw.protocol_error().is_some());
 	}
 }
+
+#[tokio::test]
+async fn losing_a_receive_poll_preserves_the_inflight_frame_and_order() {
+	let first = call_line("hia_artifact", r#"{"request_key":"first"}"#, 980);
+	let second = call_line("rea_get_evidence_bundle", "{}", 981);
+	let input = format!("{first}{second}").into_bytes();
+	let mut transport = ReaMcpTransport::new(Cursor::new(input), tokio::io::sink());
+	let (allow, admit) = tokio::sync::oneshot::channel();
+	{
+		let receive = transport.receive_with(move |message, frame| {
+			let Some(CapturedLine::Bytes(frame)) = frame else {
+				panic!("expected captured first frame");
+			};
+			assert_eq!(frame, first.as_bytes());
+			PreparedFrame::Admission(Box::pin(async move {
+				admit.await.unwrap();
+				message
+			}))
+		});
+		tokio::pin!(receive);
+		let poll = std::future::poll_fn(|cx| Poll::Ready(receive.as_mut().poll(cx))).await;
+		assert!(poll.is_pending());
+	}
+	{
+		let receive = transport.receive_with(|_, _| panic!("read ahead during admission"));
+		tokio::pin!(receive);
+		let poll = std::future::poll_fn(|cx| Poll::Ready(receive.as_mut().poll(cx))).await;
+		assert!(poll.is_pending());
+	}
+	allow
+		.send(())
+		.expect("first admission must survive cancellation");
+	let first = transport.receive().await.expect("first decoded message");
+	assert_eq!(serde_json::to_value(first).unwrap()["id"], 980);
+	let second = transport.receive().await.expect("second decoded message");
+	assert_eq!(raw(&second).object_keys(&[]).unwrap().len(), 0);
+	assert_eq!(serde_json::to_value(second).unwrap()["id"], 981);
+	assert!(transport.receive().await.is_none());
+}

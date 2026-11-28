@@ -1,0 +1,31 @@
+fn name(value: &str) -> Result<std::ffi::CString> {
+	std::ffi::CString::new(value).map_err(|_| anyhow!("invalid private metadata component"))
+}
+
+#[cfg(unix)]
+fn open_at(directory: &File, component: &str, flags: i32, mode: u32) -> Result<File> {
+	let component = name(component)?;
+	open_at_component(directory, &component, flags, mode)
+}
+
+#[cfg(unix)]
+fn open_at_component(
+	directory: &File,
+	component: &std::ffi::CStr,
+	flags: i32,
+	mode: u32,
+) -> Result<File> {
+	use std::os::fd::{AsRawFd, FromRawFd};
+	let descriptor = unsafe {
+		libc::openat(
+			directory.as_raw_fd(),
+			component.as_ptr(),
+			flags | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+			mode,
+		)
+	};
+	if descriptor < 0 {
+		return Err(std::io::Error::last_os_error().into());
+	}
+	Ok(unsafe { File::from_raw_fd(descriptor) })
+}

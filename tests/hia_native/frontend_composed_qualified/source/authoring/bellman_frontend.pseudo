@@ -1,0 +1,214 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) >= 4096:
+        if get(w, 0) == FRONTEND_STATE and get(w, 8) == 97:
+            if length(o) < 64:
+                return SHORT_OUTPUT
+            if get(w, 24) != length(s):
+                return INVALID
+            if admit_growth(o, w) == False:
+                return INVALID
+            return bellman_resume(s, o, w)
+    return retained_bellman_entry(s, o, w)
+
+def tool_kind(w:mutbuf, at:u64, size:u64) -> u64:
+    if size == BELLMAN_NAME_SIZE:
+        if bellman_name(w, at):
+            return 11
+    return retained_bellman_tool_kind(w, at, size)
+
+def prepare(s:readbuf, o:mutbuf, w:mutbuf, phase:u64) -> u32:
+    if phase == 6 and get(w, 112) == 11:
+        fill_range(w, 1280, 128, 0)
+        put(w, 1280, BELLMAN_STATE)
+        return prepare_bellman(s, o, w, 15)
+    if phase >= 15 and phase <= 17:
+        return prepare_bellman(s, o, w, phase)
+    return retained_bellman_prepare(s, o, w, phase)
+
+def prepare_bellman(s:readbuf, o:mutbuf, w:mutbuf, phase:u64) -> u32:
+    if get(w, 1280) != BELLMAN_STATE or get(w, 112) != 11:
+        return INVALID
+    put(w, 8, phase + 100)
+    size = 0
+    command = 0
+    if phase == 15:
+        if get(w, 1288) != 0 or get(w, 1296) != 0:
+            return INVALID
+    elif phase == 16:
+        if get(w, 1288) == 0:
+            return INVALID
+        command = get(w, 1304)
+        if command < 1 or command > 3:
+            return INVALID
+        if command == 1:
+            size = get(w, 656)
+        elif get(w, 1296) == 0:
+            return INVALID
+    elif phase == 17:
+        if get(w, 1288) == 0:
+            return INVALID
+    else:
+        return INVALID
+    if size > 18446744073709551551:
+        return request_grow(o, w, 3, 0)
+    if reserve(w, 0, size + 64) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 64, 0)
+    if phase == 15:
+        put(w, at, TAG_REQUEST)
+        put(w, at + 8, 1)
+    elif phase == 17:
+        put(w, at, RETIRE_REQUEST)
+        put(w, at + 8, 1)
+        put(w, at + 16, get(w, 1288))
+    else:
+        put(w, at, CALLER_REQUEST)
+        put(w, at + 8, command)
+        put(w, at + 16, get(w, 1288))
+        put(w, at + 24, size)
+        if size != 0:
+            copy_within(w, at + 64, region(w, 4), size)
+    return child(w, 14, size + 64, phase)
+
+def after_bellman(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64, phase:u64) -> u32:
+    if get(w, 1280) != BELLMAN_STATE or get(w, 112) != 11:
+        return INVALID
+    if phase == 15:
+        return after_bellman_allocate(s, o, w, code, size)
+    if phase == 16:
+        return after_bellman_caller(s, o, w, code, size)
+    if phase == 17:
+        return after_bellman_retire(s, o, w, code, size)
+    return INVALID
+
+def after_bellman_allocate(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != 32 or size != 32:
+        return INVALID
+    at = region(w, 1)
+    if get(w, at) != TAG_RESPONSE or get(w, at + 8) == 0:
+        return INVALID
+    if get(w, at + 16) != 0 or get(w, at + 24) != 0:
+        return INVALID
+    if get(w, 1288) != 0 or get(w, 1296) != 0:
+        return INVALID
+    put(w, 1288, get(w, at + 8))
+    put(w, 1304, 1)
+    return prepare(s, o, w, 16)
+
+def after_bellman_caller(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != 64 or size < 64:
+        return INVALID
+    at = region(w, 1)
+    if get(w, at) != CALLER_RESPONSE:
+        return INVALID
+    if get(w, at + 16) != get(w, 1288) or get(w, 1288) == 0:
+        return INVALID
+    if get(w, at + 40) != 0 or get(w, at + 48) != 0 or get(w, at + 56) != 0:
+        return INVALID
+    status = get(w, at + 8)
+    if status > 4:
+        return INVALID
+    text_size = get(w, at + 32)
+    if text_size != size - 64:
+        return INVALID
+    job = get(w, at + 24)
+    if get(w, 1296) != 0 and job != get(w, 1296):
+        return INVALID
+    command = get(w, 1304)
+    if command < 1 or command > 3:
+        return INVALID
+    if command == 3 and status != 4:
+        return INVALID
+    if status == 4 and command != 3:
+        return INVALID
+    if status == 3 or status == 4:
+        if text_size != 0 or job == 0:
+            return INVALID
+    if status == 3:
+        put(w, 1296, job)
+        put(w, 1304, 0)
+        put(w, 1312, 0)
+        put(w, 1320, get(w, 16))
+        put(w, 8, 97)
+        return bellman_pending(o, w)
+    if reserve(w, 5, text_size) == 0:
+        return pending_grow(o, w)
+    if text_size != 0:
+        copy_within(w, region(w, 5), region(w, 1) + 64, text_size)
+    put(w, 1296, job)
+    put(w, 1312, status)
+    put(w, 184, 0)
+    if status == 1 or status == 2:
+        put(w, 184, 1)
+    return prepare(s, o, w, 17)
+
+def after_bellman_retire(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != 32 or size != 32:
+        return INVALID
+    at = region(w, 1)
+    if get(w, at) != RETIRE_RESPONSE:
+        return INVALID
+    if get(w, at + 8) != get(w, 1288) or get(w, 1288) == 0:
+        return INVALID
+    if get(w, at + 16) != 0 or get(w, at + 24) != 0:
+        return INVALID
+    status = get(w, 1312)
+    if status > 4 or status == 3:
+        return INVALID
+    fill_range(w, 1280, 128, 0)
+    if status == 4:
+        return finish(o, w, 0, 0, 0, 0)
+    if status == 1:
+        return render(s, o, w, 4)
+    return render(s, o, w, 3)
+
+def bellman_resume(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if get(w, 1280) != BELLMAN_STATE or get(w, 112) != 11:
+        return INVALID
+    if get(w, 1288) == 0 or get(w, 1296) == 0:
+        return INVALID
+    if get(w, 1304) != 0 or get(w, 1320) != get(w, 16):
+        return INVALID
+    if get(w, 1312) != 0 or get(w, 1328) != 0 or get(w, 1336) != 0:
+        return INVALID
+    if get(w, 1344) == 0:
+        i = 1352
+        while i < 1408:
+            if get(w, i) != 0:
+                return INVALID
+            i = i + 8
+        return bellman_pending(o, w)
+    if get(w, 1344) != HOST_REQUEST:
+        return INVALID
+    command = get(w, 1352)
+    if command != 2 and command != 3:
+        return INVALID
+    if get(w, 1360) != get(w, 1288) or get(w, 1368) != get(w, 1296):
+        return INVALID
+    if get(w, 1376) != get(w, 1320):
+        return INVALID
+    if get(w, 1384) != 0 or get(w, 1392) != 0 or get(w, 1400) != 0:
+        return INVALID
+    fill_range(w, 1344, 64, 0)
+    put(w, 1304, command)
+    return prepare(s, o, w, 16)
+
+def bellman_pending(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, 8) != 97 or get(w, 1280) != BELLMAN_STATE:
+        return INVALID
+    if get(w, 1288) == 0 or get(w, 1296) == 0 or get(w, 1320) == 0:
+        return INVALID
+    if get(w, 1320) != get(w, 16) or get(w, 152) != 0:
+        return INVALID
+    if get(w, 1304) != 0 or get(w, 1312) != 0 or get(w, 1328) != 0 or get(w, 1336) != 0:
+        return INVALID
+    if length(o) < 64:
+        return SHORT_OUTPUT
+    fill_range(o, 0, 64, 0)
+    put(o, 0, FRONTEND_RESPONSE)
+    put(o, 8, 4)
+    put(o, 48, get(w, 16))
+    return 64

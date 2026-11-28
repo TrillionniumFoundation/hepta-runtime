@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "/home/runner/work/_temp/fingerprint-physical/source/physical_worker.py", line 31, in <module>
+    run(a.retained.resolve(strict=True),a.output.resolve(strict=True),a.part)
+  File "/home/runner/work/_temp/fingerprint-physical/source/physical_worker.py", line 19, in run
+    rows=physical_controls.run_subset(output/"baseline",output,prepared,names,baseline)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/fingerprint-physical/source/physical_controls.py", line 30, in run_subset
+    proof=prepared["guard"].guarded(operation,roots=bundle.roots(target,prepared),foreign_path=str(base/"BUNDLE.json"))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/fingerprint-physical/restored/retained/restored/prior/source/read_only_guard.py", line 173, in guarded
+    result = operation()
+             ^^^^^^^^^^^
+  File "/home/runner/work/_temp/fingerprint-physical/source/physical_controls.py", line 29, in <lambda>
+    operation=(lambda:bundle.verify(target,prepared)) if admitted else (lambda:refused(target,prepared))
+                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/fingerprint-physical/source/physical_controls.py", line 21, in refused
+    raise ValueError("source-derived physical mutation accepted")
+ValueError: source-derived physical mutation accepted

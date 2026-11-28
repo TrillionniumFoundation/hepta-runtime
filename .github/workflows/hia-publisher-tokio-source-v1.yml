@@ -1,0 +1,36 @@
+name: Read exact retained publisher Tokio source
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publisher-tokio-source-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publisher_tokio_source_v1
+      - name: Read all immutable archive bytes and exact Tokio sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B qualification/publisher_tokio_source_v1/recipe/read_tokio.py --output "$RUNNER_TEMP/publisher-tokio"
+      - name: Preserve exact selected source and complete archive receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-tokio-source-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/publisher-tokio/TOKIO_SOURCE.json
+            ${{ runner.temp }}/publisher-tokio/RESTORED.json
+            ${{ runner.temp }}/publisher-tokio/outer/ARCHIVE.json
+            ${{ runner.temp }}/publisher-tokio/outer/FILES.json
+          compression-level: 0
+          if-no-files-found: error

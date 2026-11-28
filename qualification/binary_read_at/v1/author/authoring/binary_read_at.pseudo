@@ -1,0 +1,111 @@
+def dispatch(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)>=96:
+        if load(s,0)==AT_REQUEST:
+            return at_start(s,o,w)
+        if load(s,0)==REQUEST and load(s,8)==2:
+            if length(w)>=4096:
+                if get(w,0)==WORK_MAGIC and get(w,424)==AT_REQUEST:
+                    return at_resume(s,o,w)
+    return original_entry(s,o,w)
+
+def at_start(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=AT_REQUEST or load(s,8)!=1 or load(s,16)!=0:
+        return INVALID
+    mode=load(s,24)
+    size=load(s,40)
+    if mode<2 or mode>3 or load(s,32)>2147483647:
+        return INVALID
+    if size!=length(s)-96 or load(s,88)!=size:
+        return INVALID
+    if load(s,48)!=0 or load(s,56)!=0 or load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+        return INVALID
+    if utf8(s,96,size)==0:
+        return INVALID
+    at=0
+    while at<size:
+        if byte(s,96+at)==47:
+            return INVALID
+        at=at+1
+    if length(o)<64:
+        return CAPACITY
+    needed=required(0,size,0,mode,0)
+    if needed>=LIMIT:
+        return INVALID
+    if length(w)<needed:
+        return short_header(o,4,needed)
+    if get(w,0)==WORK_MAGIC:
+        if get(w,8)!=99 and get(w,8)!=0:
+            return INVALID
+    fill_range(w,0,4096,0)
+    layout(w,0,size,0,mode,0)
+    put(w,0,WORK_MAGIC)
+    put(w,8,20)
+    put(w,56,mode)
+    put(w,72,size)
+    put(w,88,load(s,32))
+    put(w,96,MAXIMUM)
+    put(w,112,MAXIMUM)
+    put(w,144,size)
+    put(w,400,size)
+    put(w,424,AT_REQUEST)
+    copy_in(s,w,96,PATH_RAW,size)
+    copy_in(s,w,96,PATH_NORMAL,size)
+    return at_flow(o,w)
+
+def at_resume(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=2 or load(s,88)!=length(s)-96:
+        return INVALID
+    if length(o)<64:
+        return CAPACITY
+    if length(w)<4096 or get(w,0)!=WORK_MAGIC or get(w,424)!=AT_REQUEST:
+        return INVALID
+    if length(w)<get(w,384):
+        return short_header(o,4,get(w,384))
+    if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+        return INVALID
+    if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+        return INVALID
+    if length(s)-96>get(w,416):
+        return INVALID
+    sequence=load(s,16)
+    if get(w,24)!=0:
+        if sequence!=get(w,24):
+            return INVALID
+        copy_in(s,w,96,REPLY,length(s)-96)
+        put(w,32,sequence)
+        put(w,40,load(s,24))
+        put(w,48,length(s)-96)
+        put(w,24,0)
+    else:
+        if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+            return INVALID
+        at=0
+        while at<get(w,48):
+            if byte(s,96+at)!=byte(w,REPLY+at):
+                return INVALID
+            at=at+1
+    return at_flow(o,w)
+
+def at_flow(o:mutbuf,w:mutbuf) -> u32:
+    status=NEXT
+    while status==NEXT:
+        phase=get(w,8)
+        if phase<20:
+            return INVALID
+        if phase<36:
+            status=open_source(o,w)
+        else:
+            if phase<50:
+                status=read_source(o,w)
+            else:
+                if phase<90:
+                    status=encode_result(o,w)
+                else:
+                    if phase==90:
+                        put(w,88,MAXIMUM)
+                    status=finish(o,w)
+    return status

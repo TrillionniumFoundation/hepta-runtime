@@ -1,0 +1,282 @@
+{
+  "schema": "hepta.historical58.local-body-workflow-handoff.v1",
+  "status": "EXACT_SOURCE_CANDIDATE_QUALIFIED",
+  "base": {
+    "commit": "c5cbd4d26f2b5ce074b78d77359d903a434139f1",
+    "tree": "8e2df796b3295673d2c6f58d4ae3c0402e19ea03"
+  },
+  "candidate": {
+    "commit": "737dde9434ea5adef0e4819d00e76d4ddb9f1bf0",
+    "tree": "0f4d5e5c13076f4118e3576a95fffa72992c7a00",
+    "branch": "hia-historical58-workflow-fix-6780-20261117"
+  },
+  "install": [
+    {
+      "path": "tests/hia_native/historical_public58/PROFILE.json",
+      "mode": "100644",
+      "after": {
+        "git_blob": "01f9ef84495650b7093171ea231c9709aa1d24e2",
+        "sha256": "0558fd23027d47cfb26f077691548a5f95f12e6bd9ac4a44685fdbff68932468",
+        "bytes": 141239
+      }
+    },
+    {
+      "path": "tests/hia_native/historical_public58/materialize.py",
+      "mode": "100644",
+      "after": {
+        "git_blob": "a8d7fc186cd6e7b06475e79c0cbb32726d8cbd0a",
+        "sha256": "258390eae1bf53d08b342beb6c9d4816d633d850c29a886c2d7c177710161040",
+        "bytes": 8910
+      }
+    },
+    {
+      "path": "tests/hia_native/historical_public58/README.md",
+      "mode": "100644",
+      "after": {
+        "git_blob": "1a72870358349dd6769a3e07461e941b4ef2235f",
+        "sha256": "417141067dc6a21fc0e98d89ca69ac4d02afe676c2251bc890175fe933940520",
+        "bytes": 3708
+      }
+    },
+    {
+      "path": "tests/hia_native/historical_public58/source/.github/workflows/hia-local-text-body-native.yml",
+      "mode": "100644",
+      "after": {
+        "git_blob": "ec68554f2d88d0cf7b45c78abac037212cba9c55",
+        "sha256": "02662c10a11f2b16ccadde78c8dc3948ff67d19f300872d6ca87c46fea4cee17",
+        "bytes": 5712
+      }
+    }
+  ],
+  "problem": {
+    "run": 44009706340,
+    "job": 133793490779,
+    "status": "FAIL",
+    "retained": true,
+    "reason": "Current sparse-checkout workflow was copied into historical source root, whose unchanged Local body source_files.json binds its previous exact bytes."
+  },
+  "change": {
+    "historical_restore_files_before": 119,
+    "historical_restore_files_after": 120,
+    "restored_workflow": ".github/workflows/hia-local-text-body-native.yml",
+    "workflow_source_commit": "208ff61db1da78aadfeb8d7913af7ddf4b59d461",
+    "workflow_blob": "ec68554f2d88d0cf7b45c78abac037212cba9c55",
+    "current_workflow_bindings": 4,
+    "current_workflows_changed": false,
+    "current_production_graph_files_unchanged": 390,
+    "previous_authority_pins_unchanged": 6,
+    "all_119_previous_restores_unchanged": true,
+    "all_other_previous_profile_fields_unchanged": true,
+    "unchanged_body_source_manifest": true
+  },
+  "qualification": {
+    "commit": "ffc4b4109597451287575a1306bc146d61a3fe80",
+    "tree": "20f6b928c4ada46f33a66158168faa3f8c6d25a9",
+    "prefix": "qualification/historical58_workflow_binding_v1/source",
+    "source_manifest_sha256": "bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e",
+    "run": 44011638674,
+    "job": 133799781081,
+    "status": "SUCCESS",
+    "reports": [
+      {
+        "body_source_files": 67,
+        "changed_paths": [
+          "tests/hia_native/historical_public58/PROFILE.json",
+          "tests/hia_native/historical_public58/README.md",
+          "tests/hia_native/historical_public58/materialize.py",
+          "tests/hia_native/historical_public58/source/.github/workflows/hia-local-text-body-native.yml"
+        ],
+        "current_authority_files": 6,
+        "current_graph_files": 390,
+        "current_workflow_files": 4,
+        "guard_probes": 48,
+        "guard_proofs": 4,
+        "historical_restore_files": 120,
+        "native_or_rust_executions": 0,
+        "old_source_refusals": 1,
+        "original_failure_preserved": {
+          "job": 133793490779,
+          "run": 44009706340,
+          "status": "FAIL"
+        },
+        "physical_source_mutants": 2,
+        "production_graph_changed": false,
+        "schema": "hepta.historical-workflow.source-regression.v1",
+        "source_admission_weakened": false,
+        "source_manifest_sha256": "bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e",
+        "status": "PASS",
+        "tree_leaves": 13258
+      },
+      {
+        "process": {
+          "argv": [
+            "/usr/bin/python3",
+            "-I",
+            "-B",
+            "/home/runner/work/hepta-runtime/hepta-runtime/qualification/qualification/historical58_workflow_binding_v1/source/run_ci.py",
+            "export-child",
+            "--work",
+            "/home/runner/work/_temp/historical-workflow-work",
+            "--archive",
+            "/home/runner/work/_temp/historical-workflow-bundle/complete.tar.gz",
+            "--source-manifest-sha256",
+            "bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e"
+          ],
+          "completed": true,
+          "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/qualification/qualification/historical58_workflow_binding_v1/source",
+          "elapsed_seconds": 7.228474856000005,
+          "exit_code": 0,
+          "name": "export",
+          "parent_pid": 2930,
+          "pgid": 2931,
+          "pid": 2931,
+          "stderr": {
+            "bytes": 0,
+            "file": "export.stderr",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdin": null,
+          "stdout": {
+            "bytes": 447,
+            "file": "export.stdout",
+            "sha256": "061dd983228b4f72c2793d5819088c5df58785df0c9c5daf309b0a6e1455ff3c"
+          },
+          "timed_out": false,
+          "timeout_seconds": 180
+        },
+        "result": {
+          "all_logical_files_reread": true,
+          "all_object_bytes_and_modes_reread": true,
+          "archive": "complete.tar.gz",
+          "bytes": 51113409,
+          "logical_bytes": 719919182,
+          "logical_files": 19165,
+          "mode": 420,
+          "schema": "hepta.historical-workflow.archive-write-readback.v1",
+          "semantic_reexecutions": 0,
+          "sha256": "a5d8154a1922418df9fc0bbf3a0c1ecd7f7ed76113b6d7013702dd6b6378f018",
+          "unique_bytes": 124463668,
+          "unique_objects": 3053,
+          "whole_runtime_replaced": false
+        },
+        "stage": "export",
+        "status": "PASS"
+      },
+      {
+        "process": {
+          "argv": [
+            "/usr/bin/python3",
+            "-I",
+            "-B",
+            "/home/runner/work/hepta-runtime/hepta-runtime/qualification/qualification/historical58_workflow_binding_v1/source/read_archive.py",
+            "--work",
+            "/home/runner/work/_temp/historical-workflow-work",
+            "--archive",
+            "/home/runner/work/_temp/historical-workflow-bundle/complete.tar.gz",
+            "--source-manifest-sha256",
+            "bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e"
+          ],
+          "completed": true,
+          "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/qualification/qualification/historical58_workflow_binding_v1/source",
+          "elapsed_seconds": 5.987894494999999,
+          "exit_code": 0,
+          "name": "read",
+          "parent_pid": 2935,
+          "pgid": 2936,
+          "pid": 2936,
+          "stderr": {
+            "bytes": 0,
+            "file": "read.stderr",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdin": null,
+          "stdout": {
+            "bytes": 13573812,
+            "file": "read.stdout",
+            "sha256": "a3b98f29bfa7454c27892f4c6bb37f3712052fc5e55728a4e7c3880c1fe953da"
+          },
+          "timed_out": false,
+          "timeout_seconds": 180
+        },
+        "result": {
+          "archive": {
+            "bytes": 51113409,
+            "mode": 420,
+            "sha256": "a5d8154a1922418df9fc0bbf3a0c1ecd7f7ed76113b6d7013702dd6b6378f018"
+          },
+          "body_source_files": 67,
+          "changed_paths": [
+            "tests/hia_native/historical_public58/PROFILE.json",
+            "tests/hia_native/historical_public58/README.md",
+            "tests/hia_native/historical_public58/materialize.py",
+            "tests/hia_native/historical_public58/source/.github/workflows/hia-local-text-body-native.yml"
+          ],
+          "current_graph_files": 390,
+          "historical_restore_files": 120,
+          "logical_bytes": 719919182,
+          "logical_files": 19165,
+          "native_or_rust_executions": 0,
+          "original_failure_preserved": true,
+          "processes": 10,
+          "reader_writes": 0,
+          "retained_guard_probes": 48,
+          "schema": "hepta.historical-workflow.independent-archive-read.v1",
+          "source_manifest_sha256": "bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e",
+          "status": "PASS",
+          "tar_members": 3054,
+          "unique_bytes": 124463668,
+          "unique_objects": 3053,
+          "whole_runtime_replaced": false
+        },
+        "stage": "read",
+        "status": "PASS"
+      }
+    ]
+  },
+  "complete_artifact": {
+    "id": 14296902445,
+    "zip_bytes": 56211978,
+    "zip_sha256": "a5122183aa3dbf31a9a070805cb01000fc64588457e9644f317f849cac8dccc6",
+    "tar": {
+      "all_logical_files_reread": true,
+      "all_object_bytes_and_modes_reread": true,
+      "archive": "complete.tar.gz",
+      "bytes": 51113409,
+      "logical_bytes": 719919182,
+      "logical_files": 19165,
+      "mode": 420,
+      "schema": "hepta.historical-workflow.archive-write-readback.v1",
+      "semantic_reexecutions": 0,
+      "sha256": "a5d8154a1922418df9fc0bbf3a0c1ecd7f7ed76113b6d7013702dd6b6378f018",
+      "unique_bytes": 124463668,
+      "unique_objects": 3053,
+      "whole_runtime_replaced": false
+    }
+  },
+  "root_review": {
+    "full_candidate_blob_readbacks": 4,
+    "full_candidate_tree_rebuilt_from_c5_plus_exact_four_rows": true,
+    "complete_base_candidate_git_tree_compared_in_ci": true,
+    "full_original_materializer_body_and_manifest_read": true,
+    "profile_change_scope_verified": true,
+    "source_processes": 10,
+    "guard_proofs": 5,
+    "guard_probes": 60,
+    "semantic_or_rust_execution": false
+  },
+  "integration": {
+    "ref": "codex/hia-runtime-integration-20261115-6780",
+    "installed": false,
+    "reason": "Prepared exact candidate; current c5 native and Rust automatic qualification jobs are still running."
+  },
+  "flags": {
+    "historical_gate_skipped": false,
+    "deadlines_changed": false,
+    "source_admission_weakened": false,
+    "local_hia_executed": false,
+    "local_rust_executed": false,
+    "whole_sdk_closed": false,
+    "whole_runtime_replaced": false,
+    "old_stack_removal_qualified": false
+  }
+}

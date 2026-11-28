@@ -141,6 +141,8 @@ struct StructuredField<'a> {
 }
 
 fn rewrite(frame: &mut Vec<u8>, limit: usize) -> io::Result<()> {
+	#[cfg(target_os = "linux")]
+	super::hia_wire_candidate::rewrite_reply(frame, limit)?;
 	let replacement = (|| {
 		let envelope: Frame<'_> = serde_json::from_slice(frame).ok()?;
 		let result = envelope.result?;

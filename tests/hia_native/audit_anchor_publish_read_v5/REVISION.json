@@ -1,0 +1,75 @@
+{
+  "budgets": {
+    "export": 180,
+    "guarded_join": 180,
+    "job_minutes": 15,
+    "parallel_read_parent": 180,
+    "restore": 180,
+    "source": 60
+  },
+  "full_join": {
+    "actual_child_process_custody": true,
+    "guard_probes": 12,
+    "timeout_seconds": 180,
+    "whole_child_input_metadata_equal": true,
+    "whole_input_bytes_reopened": true
+  },
+  "only_reader_code_change": "Remove one duplicate physical keyword from prepare() return. Entire per-row verifier and all guards unchanged.",
+  "original_status": "FAILURE: all physical controls passed; final serial pure verification timed out at 180 seconds",
+  "parent": "788f2c0d8660148cf45dcec8c8802b04f83556e7",
+  "partition": {
+    "all_original_statements_preserved": true,
+    "inherited_process_group": true,
+    "only_ast_change": "outer iterator over fixed disjoint rows",
+    "owned_workers": 2,
+    "selected_rows": [
+      9,
+      8
+    ],
+    "whole_original_physical_tree_guarded_per_worker": true,
+    "whole_parent_timeout_seconds": 180,
+    "worker_guard_probes": 24
+  },
+  "prior_source_only_failure": {
+    "artifact": {
+      "bytes": 30828,
+      "id": 14333809375,
+      "sha256": "6e4248cb09921227ec0a3d72be13503e5fdc97fdf260fa0d02091cba901e4637"
+    },
+    "exception": "SyntaxError: keyword argument repeated: physical",
+    "head": "788f2c0d8660148cf45dcec8c8802b04f83556e7",
+    "job": 134089916803,
+    "native_or_rust_executions": 0,
+    "original_artifact_downloaded": false,
+    "physical_reader_executed": false,
+    "repair": "Remove only the duplicated physical keyword in prepare's return mapping. No verifier body or domain changes.",
+    "run": 44097932970,
+    "schema": "hepta.audit-anchor-publish.retained-failure.v1",
+    "stage": "source-only Python compilation",
+    "status": "FAILURE",
+    "tar": {
+      "bytes": 29927,
+      "sha256": "93332072a24db7b748d0da70d37c0ac988fed6d6b3dc55837c531c2b33ca60f3"
+    }
+  },
+  "remaining": {
+    "archive_store": true,
+    "begin_finish": true,
+    "hot_cache": true,
+    "independent_uploaded_read": true,
+    "namespace_version": true,
+    "public": true
+  },
+  "retained_artifact": 14332539153,
+  "retained_run": 44094281297,
+  "schema": "hepta.audit-anchor-publish.pure-parallel-continuation.v1",
+  "unchanged": {
+    "cases": 99,
+    "native_or_rust_executions": 0,
+    "operations": 137,
+    "original_physical_guard_probes": 204,
+    "physical_admissions": 2,
+    "physical_control_replays": 0,
+    "physical_refusals": 15
+  }
+}

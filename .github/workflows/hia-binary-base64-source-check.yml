@@ -1,0 +1,40 @@
+name: Check frozen HIA strict Base64 source and input domain
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-base64-check-fixed-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_base64_decode/v1/source
+      BINARY_MANIFEST: 244b747ca05abd7af73f21d9e41b7eaa47a92d89b54208078b3ae27dcd15fb5b
+    steps:
+      - name: Checkout the frozen decoder and complete readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_base64_decode/v1/source
+          persist-credentials: false
+      - name: Source and input-only admission with zero application calls
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" check \
+            --work "$RUNNER_TEMP/base64-source-check" --source-manifest-sha256 "$BINARY_MANIFEST" \
+            > "$RUNNER_TEMP/SOURCE_CHECK.json"
+          cat "$RUNNER_TEMP/SOURCE_CHECK.json"
+      - name: Retain the exact source-only check result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-base64-source-check-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/SOURCE_CHECK.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

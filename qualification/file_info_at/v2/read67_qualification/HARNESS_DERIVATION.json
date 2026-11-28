@@ -1,0 +1,134 @@
+{
+  "schema": "hepta.runtime.file-info-read67-rebind.exact-harness-derivation.v1",
+  "source_original": "763f99b9ab00e450850efba88508e393afbe5238",
+  "read_capture_pure_recovery": "807309e4f3e9d8d1055fb6dc54e2ed079cd247d9",
+  "patches": [
+    {
+      "path": "scripts/reference_worker.py",
+      "before_sha256": "99daa6f12fad389f42e360d197bc0aa8b44bfb2dc8b345f7b1e785672002bc52",
+      "after_sha256": "ff26832fcba243375924c607b7c144e54b2abe74d6cf5beb3bf2670fc542c6d7",
+      "changes": [
+        {
+          "before": "if self.arm and owner==\"info\"and operation==2 and self.operations[key]==1:",
+          "after": "if self.arm and owner==self.arm and operation=={\"info\":2,\"read\":6}[owner]and self.operations[key]==1:"
+        },
+        {
+          "before": "if command==18:\n        require(not proxy.arm,\"fstat failure already armed\");proxy.arm=True;reply(0,slot=slot);continue",
+          "after": "if command in(18,21):\n        require(not proxy.arm,\"fstat failure already armed\");proxy.arm=\"read\"if command==21 else\"info\";reply(0,slot=slot);continue"
+        }
+      ]
+    },
+    {
+      "path": "scripts/run_case.py",
+      "before_sha256": "c7acffd60035dd4c137129bde128da271fa048d87eeccf56e98d0120e28e0705",
+      "after_sha256": "f3916044922d2461ce9b31c0b2a5e0ba9321f16e81237281bc5487fb7f7de8c1",
+      "changes": [
+        {
+          "before": "raw,n=carrier.exchange(18,slot);require(U(raw,8)==0,\"real fstat-filter arm\")",
+          "after": "raw,n=carrier.exchange(21 if q[\"fault_owner\"]==\"read\"else 18,slot);require(U(raw,8)==0,\"real fstat-filter arm\")"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_journal.py",
+      "before_sha256": "61173f34ddcb0899260df2df6e09b595834c2c7863324a44fcdd1410479a0044",
+      "after_sha256": "7eb668ec8295939cc05fb306627f7f794a18e706c7256fed1ba9c3b67707c544",
+      "changes": [
+        {
+          "before": "payload=data.hex()if op in(1,2,3,5,6,9,11,19)else None,",
+          "after": "payload=data.hex()if op in(1,2,3,4,5,6,9,11,19)else None,"
+        },
+        {
+          "before": "read_work=None;meta_work=None;read_gen=0;meta_gen=0;last_stat=None;captured_snapshot=None",
+          "after": "read_work=None;meta_work=None;read_gen=0;meta_gen=0;last_stat=None;captured_snapshot=None;fingerprint_orphans=[]"
+        },
+        {
+          "before": "read_generation=read_gen,metadata_generation=meta_gen)",
+          "after": "read_generation=read_gen,metadata_generation=meta_gen,fingerprint_orphans=fingerprint_orphans)"
+        },
+        {
+          "before": "read_work=row[\"workspace\"];row[\"effects\"]=view_child.records",
+          "after": "read_work=row[\"workspace\"]\n                    require([{k:v for k,v in e.items()if k!=\"phase\"}for e in row[\"effects\"]]==view_child.records,\n                        \"complete fingerprint leaf effects equal outer journal projection\")\n                    fingerprint_orphans+=row[\"orphans\"]"
+        },
+        {
+          "before": "generation=read_gen if op==1 else meta_gen,effects=row.get(\"effects\"),codec=row.get(\"codec\")))",
+          "after": "generation=read_gen if op==1 else meta_gen,effects=row.get(\"effects\"),codec=row.get(\"codec\"),orphans=row.get(\"orphans\",[])))"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_capture.py",
+      "before_sha256": "b9f2a6d29105c806e79629280c325ba73bcdf6565108fa176c64e2f6350e54fc",
+      "after_sha256": "e7407912306d9ff38d2ec0f1037ed0286458e1953b0f58966a5a4e67606823ce",
+      "changes": [
+        {
+          "before": "and U(a,16)==r[\"command\"]in range(1,21)and U(a,24)==r[\"session\"]in(0,1)",
+          "after": "and U(a,16)==r[\"command\"]in range(1,22)and U(a,24)==r[\"session\"]in(0,1)"
+        },
+        {
+          "before": "_,body,armed=exchange(row[\"arm_exchange\"],18,slot);require(not body and U(armed,8)==0,\"real fixed kernel error arm\")",
+          "after": "_,body,armed=exchange(row[\"arm_exchange\"],21 if q[\"fault_owner\"]==\"read\"else 18,slot);require(not body and U(armed,8)==0,\"real fixed kernel error arm\")"
+        },
+        {
+          "before": "require(len(records)==count and U(ctx,400)==int(q[\"arm_fstat_error\"])and U(ctx,376)==observed_pool[\"value\"][\"address\"],\"actual orphan ledger transition\")",
+          "after": "require(len(records)==count and U(ctx,400)==int(q[\"fault_owner\"]==\"info\")\n                    and U(child,400)==int(q[\"fault_owner\"]==\"read\")\n                    and U(ctx,376)==U(child,376)==observed_pool[\"value\"][\"address\"],\n                    \"outer and fingerprint child share the exact process pool with separate ownership ledgers\")"
+        },
+        {
+          "before": "newest=records[-1];require(newest[\"generation\"]==1,\"orphan generation\")",
+          "after": "newest=records[-1];require(newest[\"generation\"]==1,\"orphan generation\")\n                    require((newest[\"context\"]==U(ctx,384))==(q[\"fault_owner\"]==\"read\"),\n                        \"process record belongs to the exact fingerprint context or the outer regular owner\")"
+        },
+        {
+          "before": "if q[\"observer\"]:require(len(parsed[\"orphans\"])==1 and parsed[\"orphans\"][0][\"fd\"]==newest[\"fd\"],\"actual opened token became process orphan\")",
+          "after": "if q[\"observer\"]:\n                        transfers=parsed[\"fingerprint_orphans\"]if q[\"fault_owner\"]==\"read\"else parsed[\"orphans\"]\n                        other=parsed[\"orphans\"]if q[\"fault_owner\"]==\"read\"else parsed[\"fingerprint_orphans\"]\n                        require(len(transfers)==1 and transfers[0][\"fd\"]==newest[\"fd\"]and not other,\n                            \"exact opened token and owning HIA layer became the process orphan\")"
+        },
+        {
+          "before": "op=e[\"operation\"];ret=e[\"raw_return\"];args={}",
+          "after": "op=e[\"operation\"];ret=e[\"raw_return\"];args={}\n            if op==4:continue # fully admitted first-fstat orphan transfer has no Python OS call"
+        },
+        {
+          "before": "shared_orphan_growth_or_concurrency_qualified=False,public_route=False,remote_ssh=False,full_sdk=False,whole_runtime_replaced=False)",
+          "after": "shared_orphan_growth_or_concurrency_qualified=False,public_route=False,remote_ssh=False,full_sdk=False,whole_runtime_replaced=False,\n        read67_shared_pool_rebind=True,formatter34_rebind=True,original_cpython_internal_syscall_stream_observed=False)"
+        }
+      ]
+    },
+    {
+      "path": "scripts/physical_controls.py",
+      "before_sha256": "0f500c753af84cb0167981599f1a636d0e1e40b6714f307ed1fe16fcdcb8d590",
+      "after_sha256": "238d8bb08a01b0e9aaa3d758debe9a0a306eded25c16810cc57672ef73f9c692",
+      "changes": [
+        {
+          "before": "roots=[selected_source,selected]",
+          "after": "roots=[ROOT,selected_source,selected]"
+        },
+        {
+          "before": "roots=[new_source,new_data]",
+          "after": "roots=[ROOT,new_source,new_data]"
+        }
+      ]
+    },
+    {
+      "path": "scripts/read_evidence.py",
+      "before_sha256": "9e51a60105ba5121dd3b080aa0049c55fbe77e5c848048fb79f303061942da61",
+      "after_sha256": "7248aa3d06e933b36870764eaee2ab2809f15db16734f7ccf27ee87db3517247",
+      "changes": [
+        {
+          "before": "saved_guard(guard,{selected_origin:tree(selected_source),data_origin:tree(copied)})",
+          "after": "saved_guard(guard,{original_source:tree(source),selected_origin:tree(selected_source),data_origin:tree(copied)})"
+        },
+        {
+          "before": "saved_guard(guard,{base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})",
+          "after": "saved_guard(guard,{original_source:tree(source),base+\"/source\":tree(root/\"source\"),base+\"/data\":tree(root/\"data\")})"
+        }
+      ]
+    }
+  ],
+  "read_fingerprint_journal_replacement": {
+    "git_blob": "5c0330a3ec9bbc4fb1a0272c7497970beef9f9e8",
+    "source_commit": "2020d5da34ebcfae043d96bb1eeac63943c0c525",
+    "path": "qualification/binary_read_orphans/v1/retained_recovery/scripts/read_journal.py",
+    "entire_file_unchanged": true
+  },
+  "production_hia_changes": false,
+  "original_target_changes": false,
+  "fixture_cmd21_only_arms_real_kernel_seccomp_after_fixed_zero_ack": true
+}

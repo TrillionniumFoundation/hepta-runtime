@@ -1,0 +1,163 @@
+{
+  "schema": "hepta.runtime.binary-read-orphans.native-derivation.v1",
+  "bridge": {
+    "source": "baseline/binary_read_body_callable.S",
+    "target": "asm/binary_read_body_callable.S",
+    "edits": [
+      {
+        "label": "create ABI",
+        "before": "/* Trusted rdi callback or zero, rsi callback context. */",
+        "after": "/* Trusted graph registers: callback or zero, callback context, shared process pool.\n * Every context receives the same creator-PID pool; this owner never destroys it. */"
+      },
+      {
+        "label": "pool admission",
+        "before": "    mov r13, rdi\n    mov r14, rsi\n    mov edi, 4096\n    call .Lbrd_map\n",
+        "after": "    mov r13, rdi\n    mov r14, rsi\n    mov r15, rdx\n    test r15, r15\n    jz .Lbrd_create_bad\n    test r15, 4095\n    jnz .Lbrd_create_bad\n    movabs rax, 0x31303050524f5048 /* HPORP001 */\n    cmp [r15], rax\n    jne .Lbrd_create_bad\n    cmp qword ptr [r15+8], 4096\n    jne .Lbrd_create_bad\n    mov eax, 39\n    syscall\n    cmp [r15+16], rax\n    jne .Lbrd_create_bad\n    mov edi, 4096\n    call .Lbrd_map\n"
+      },
+      {
+        "label": "pool binding",
+        "before": "    mov [r12+40], r13\n    mov [r12+48], r14\n",
+        "after": "    mov [r12+40], r13\n    mov [r12+48], r14\n    mov [r12+376], r15\n"
+      },
+      {
+        "label": "constructor refusal",
+        "before": ".Lbrd_create_fail:\n",
+        "after": ".Lbrd_create_bad:\n    mov rax, -22\n    jmp .Lbrd_create_return\n.Lbrd_create_fail:\n"
+      },
+      {
+        "label": "exclude sentinel as FD",
+        "before": ".Lbrd_fd_find:\n    xor eax, eax\n",
+        "after": ".Lbrd_fd_find:\n    cmp rdi, 2147483647\n    ja .Lbrd_fd_not_owned\n    xor eax, eax\n"
+      },
+      {
+        "label": "orphan dispatch",
+        "before": "    cmp rbx, 5\n    je .Lbrd_os_close\n",
+        "after": "    cmp rbx, 4\n    je .Lbrd_os_orphan\n    cmp rbx, 5\n    je .Lbrd_os_close\n"
+      },
+      {
+        "label": "orphan actual append",
+        "before": ".Lbrd_os_close:\n",
+        "after": "/* ORPHAN_OWNED is a process-lifetime transfer, never an OS close or dup.\n * The exact c811 primitive records only a token opened by this context.\n * Failed append leaves that token operable and reports private resource failure. */\n.Lbrd_os_orphan:\n    cmp r15d, 8\n    jae .Lbrd_os_bad\n    cmp qword ptr [r12+184], 0\n    je .Lbrd_os_bad\n    cmp qword ptr [r12+400], -1\n    je .Lbrd_os_bad\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    or rax, [rbp+56]\n    jnz .Lbrd_os_bad\n    mov rdi, [r12+376]\n    mov rsi, [rbp+32]\n    mov rdx, r12\n    mov rcx, [r12+192]\n    call hia_process_orphans_append\n    test rax, rax\n    jnz .Lbrd_os_resource\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n    inc qword ptr [r12+400]\n    mov qword ptr [r12+232], 0\n    jmp .Lbrd_os_ok\n.Lbrd_os_resource:\n    mov eax, B_RESOURCE\n    jmp .Lbrd_os_done\n.Lbrd_os_close:\n"
+      },
+      {
+        "label": "resource failure preserved",
+        "before": "    call .Lbrd_os\n    test eax, eax\n    jnz .Lbrd_invoke_failed\n",
+        "after": "    call .Lbrd_os\n    cmp eax, B_RESOURCE\n    je .Lbrd_invoke_resource\n    test eax, eax\n    jnz .Lbrd_invoke_failed\n"
+      }
+    ]
+  },
+  "fixture": {
+    "source": "reference/binary_read_body_fixture.S",
+    "target": "asm/binary_read_body_fixture.S",
+    "edits": [
+      {
+        "label": "one pool per process",
+        "before": "    mov r15, rax\n.Lbrf_loop:\n    xor edi, edi\n",
+        "after": "    mov r15, rax\n    call hia_process_orphans_create\n    cmp rax, -4095\n    jae .Lbrf_fatal\n    mov [r15+80], rax\n.Lbrf_loop:\n    mov rdi, [r15+72]\n"
+      },
+      {
+        "label": "control fd routing",
+        "before": "    xor edi, edi\n    mov rsi, [r15+16]\n",
+        "after": "    mov rdi, [r15+72]\n    mov rsi, [r15+16]\n"
+      },
+      {
+        "label": "fixture op upper bound",
+        "before": "    cmp r14, 13\n    ja .Lbrf_fatal\n",
+        "after": "    cmp r14, 25\n    ja .Lbrf_fatal\n"
+      },
+      {
+        "label": "fixture control dispatch",
+        "before": "    cmp r14, 8\n    je .Lbrf_create_explicit\n",
+        "after": "    mov r12, [r15+rbx*8]\n    cmp r14, 14\n    je .Lbrf_pool_snapshot\n    cmp r14, 15\n    je .Lbrf_arm_first\n    cmp r14, 16\n    je .Lbrf_arm_second\n    cmp r14, 17\n    je .Lbrf_move_control\n    cmp r14, 20\n    je .Lbrf_pool_fork_refusal\n    cmp r14, 21\n    je .Lbrf_close_retained\n    cmp r14, 22\n    je .Lbrf_arm_eof\n    cmp r14, 23\n    je .Lbrf_arm_last\n    cmp r14, 24\n    je .Lbrf_null_pool_refusal\n    cmp r14, 8\n    je .Lbrf_create_explicit\n"
+      },
+      {
+        "label": "owned/refusal dispatch",
+        "before": "    test r12, r12\n    jz .Lbrf_no_context\n    cmp r14, 2\n",
+        "after": "    test r12, r12\n    jz .Lbrf_no_context\n    cmp r14, 18\n    je .Lbrf_unowned_refusal\n    cmp r14, 19\n    je .Lbrf_borrowed_refusal\n    cmp r14, 25\n    je .Lbrf_sentinel_refusal\n    cmp r14, 2\n"
+      },
+      {
+        "label": "three fixed create bindings",
+        "before": "    mov esi, 3\n    call binary_read_body_create\n",
+        "after": "    mov rsi, r15\n    mov rdx, [r15+80]\n    call binary_read_body_create\n",
+        "count": 3
+      },
+      {
+        "label": "observer-off shared pool",
+        "before": "    xor edi, edi\n    xor esi, esi\n    call binary_read_body_create\n",
+        "after": "    xor edi, edi\n    xor esi, esi\n    mov rdx, [r15+80]\n    call binary_read_body_create\n"
+      },
+      {
+        "label": "parent FD0 storage",
+        "before": "    mov [r15+32+rbx*8], rax\n    jmp .Lbrf_reply\n",
+        "after": "    inc rax /* Stored FD+1, so an actual held parent FD0 remains representable. */\n    mov [r15+32+rbx*8], rax\n    jmp .Lbrf_reply\n"
+      },
+      {
+        "label": "borrow actual parent",
+        "before": "    mov rsi, [r15+32+rbx*8]\n    lea rdx, [rbp+64]\n",
+        "after": "    mov rsi, [r15+32+rbx*8]\n    dec rsi\n    lea rdx, [rbp+64]\n"
+      },
+      {
+        "label": "parent close/stat actual fd",
+        "before": "    test rdi, rdi\n    jz .Lbrf_no_context\n",
+        "after": "    test rdi, rdi\n    jz .Lbrf_no_context\n    dec rdi\n",
+        "count": 2
+      },
+      {
+        "label": "EOF actual parent",
+        "before": "    test rdi, rdi\n    jz .Lbrf_eof_next\n    mov eax, 3\n",
+        "after": "    test rdi, rdi\n    jz .Lbrf_eof_next\n    dec rdi\n    mov eax, 3\n"
+      },
+      {
+        "label": "closed held parent EOF",
+        "before": "    test rax, rax\n    jnz .Lbrf_fatal\n    mov qword ptr [r15+32+rbx*8], 0\n.Lbrf_eof_next:\n",
+        "after": "    test rax, rax\n    jz .Lbrf_eof_parent_closed\n    cmp rax, -9\n    jne .Lbrf_fatal\n.Lbrf_eof_parent_closed:\n    mov qword ptr [r15+32+rbx*8], 0\n.Lbrf_eof_next:\n"
+      },
+      {
+        "label": "EOF held orphan witness",
+        "before": ".Lbrf_eof_control:\n    mov rdi, r15\n",
+        "after": ".Lbrf_eof_control:\n    cmp qword ptr [r15+120], 1\n    jne .Lbrf_eof_unmap\n    lea rdi, [r15+256]\n    xor eax, eax\n    mov ecx, 8\n    rep stosq\n    movabs rax, 0x31464f4544524248 /* HBRDEOF1 */\n    mov [r15+256], rax\n    mov rax, [r15+80]\n    mov rcx, [rax+48]\n    mov [r15+264], rcx\n    mov rcx, [rax+56]\n    mov [r15+272], rcx\n    mov edi, 4\n    lea rsi, [r15+256]\n    mov edx, 64\n    call .Lbrf_write_all\n    test rax, rax\n    jnz .Lbrf_fatal\n    mov edi, 5\n    lea rsi, [r15+320]\n    mov edx, 8\n    call .Lbrf_read_exact\n    cmp rax, 8\n    jne .Lbrf_fatal\n    cmp qword ptr [r15+320], 0\n    jne .Lbrf_fatal\n.Lbrf_eof_unmap:\n    /* The shared orphan pool and its FDs are left alive until whole-process exit. */\n    mov rdi, [r15+72]\n    test rdi, rdi\n    jz .Lbrf_eof_fixture\n    mov eax, 3\n    syscall\n.Lbrf_eof_fixture:\n    mov rdi, r15\n"
+      },
+      {
+        "label": "callback context ABI",
+        "before": "/* Immutable observer binding: rdi owned FD, rsi context, rdx event,",
+        "after": "/* Immutable observer binding: rdi private fixture context, rsi context, rdx event,"
+      },
+      {
+        "label": "journal fixed FD3",
+        "before": "    mov rdi, rbx\n    mov rsi, ",
+        "after": "    mov edi, 3\n    mov rsi, ",
+        "count": 2
+      },
+      {
+        "label": "actual first/second/last fstat filter",
+        "before": "    cmp qword ptr [rsp+128], 0\n    jne .Lbrf_journal_hook_bad\n    xor eax, eax\n",
+        "after": "    cmp qword ptr [rsp+128], 0\n    jne .Lbrf_journal_hook_bad\n    cmp qword ptr [rbx+88], 0\n    je .Lbrf_journal_hook_ok\n    cmp qword ptr [r14+24], 6\n    jne .Lbrf_journal_hook_ok\n    mov rax, [r12+88]\n    mov rax, [rax+8]\n    cmp qword ptr [rbx+88], 255\n    je .Lbrf_journal_last_stat\n    cmp rax, [rbx+88]\n    jne .Lbrf_journal_hook_ok\n    jmp .Lbrf_journal_install\n.Lbrf_journal_last_stat:\n    cmp rax, 39\n    je .Lbrf_journal_install\n    cmp rax, 49\n    jne .Lbrf_journal_hook_ok\n.Lbrf_journal_install:\n    mov rdi, [r14+32]\n    call .Lbrf_install_fstat_error\n    test rax, rax\n    jnz .Lbrf_journal_return\n    mov qword ptr [rbx+88], 0\n    inc qword ptr [rbx+96]\n.Lbrf_journal_hook_ok:\n    xor eax, eax\n"
+      },
+      {
+        "label": "fixture private pool and actual fault controls",
+        "before": ".Lbrf_context:\n",
+        "after": "/* Fixed private fixture-only controls. They do not add callable policy. */\n.Lbrf_move_control:\n    cmp qword ptr [r15+72], 0\n    jne .Lbrf_no_context\n    xor edi, edi\n    mov eax, 32\n    syscall\n    cmp rax, -4095\n    jae .Lbrf_fatal\n    mov [r15+72], rax\n    xor edi, edi\n    mov eax, 3\n    syscall\n    test rax, rax\n    jnz .Lbrf_fatal\n    xor r13d, r13d\n    jmp .Lbrf_empty_reply\n.Lbrf_arm_first:\n    mov eax, 25\n    jmp .Lbrf_arm_stat\n.Lbrf_arm_second:\n    mov eax, 29\n    jmp .Lbrf_arm_stat\n.Lbrf_arm_last:\n    mov eax, 255\n.Lbrf_arm_stat:\n    cmp qword ptr [r15+88], 0\n    jne .Lbrf_no_context\n    mov [r15+88], rax\n    xor r13d, r13d\n    jmp .Lbrf_empty_reply\n.Lbrf_arm_eof:\n    cmp qword ptr [r15+120], 0\n    jne .Lbrf_no_context\n    mov qword ptr [r15+120], 1\n    xor r13d, r13d\n    jmp .Lbrf_empty_reply\n.Lbrf_close_retained:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lbrf_no_context\n    dec rdi\n    mov eax, 3\n    syscall\n    mov r13, rax\n    jmp .Lbrf_empty_reply\n.Lbrf_null_pool_refusal:\n    xor edi, edi\n    xor esi, esi\n    xor edx, edx\n    call binary_read_body_create\n    cmp rax, -22\n    jne .Lbrf_fatal\n    mov r13, rax\n    jmp .Lbrf_empty_reply\n.Lbrf_unowned_refusal:\n    mov r13d, 2147483647\n    jmp .Lbrf_orphan_refusal\n.Lbrf_sentinel_refusal:\n    mov r13, -1\n    jmp .Lbrf_orphan_refusal\n.Lbrf_borrowed_refusal:\n    mov r13, [r15+32+rbx*8]\n    test r13, r13\n    jz .Lbrf_no_context\n    dec r13\n.Lbrf_orphan_refusal:\n    cmp qword ptr [r12+56], 0\n    jne .Lbrf_no_context\n    cmp qword ptr [r12+184], 0\n    jne .Lbrf_no_context\n    cmp qword ptr [r12+352], 0\n    jne .Lbrf_no_context\n    sub rsp, 80\n    mov rdi, rsp\n    mov rsi, [r12+104]\n    mov ecx, 64\n    rep movsb\n    mov rax, [r12+232]\n    mov [rsp+64], rax\n    mov rax, [r12+240]\n    mov [rsp+72], rax\n    mov rdi, [r12+104]\n    xor eax, eax\n    mov ecx, 8\n    rep stosq\n    mov rbp, [r12+104]\n    mov qword ptr [rbp+24], 4\n    mov [rbp+32], r13\n    cmp r14, 19\n    jne .Lbrf_orphan_refusal_ready\n    mov [r12+344], r13\n    mov qword ptr [r12+352], 1\n.Lbrf_orphan_refusal_ready:\n    call .Lbrd_os\n    mov r13, rax\n    mov qword ptr [r12+344], 0\n    mov qword ptr [r12+352], 0\n    mov rdi, [r12+104]\n    mov rsi, rsp\n    mov ecx, 64\n    rep movsb\n    mov rax, [rsp+64]\n    mov [r12+232], rax\n    mov rax, [rsp+72]\n    mov [r12+240], rax\n    add rsp, 80\n    cmp r13d, B_INVALID\n    jne .Lbrf_fatal\n    jmp .Lbrf_empty_reply\n.Lbrf_empty_reply:\n    xor r14d, r14d\n    xor ebp, ebp\n    jmp .Lbrf_reply\n\n.Lbrf_pool_snapshot:\n    mov rax, [r15+80]\n    mov r13, [rax+56]\n    cmp r13, 65533\n    ja .Lbrf_fatal\n    mov rsi, r13\n    shl rsi, 12\n    add rsi, 4128\n    lea rdi, [r15+208]\n    call .Lbrd_grow\n    test eax, eax\n    jnz .Lbrf_fatal\n    mov r14, [r15+208]\n    mov rax, 0x3130304e53504f48 /* HOPSN001 */\n    mov [r14], rax\n    mov rdx, [r15+80]\n    mov [r14+8], rdx\n    mov rax, [rdx+48]\n    mov [r14+16], rax\n    mov [r14+24], r13\n    lea rdi, [r14+32]\n    mov rsi, rdx\n    mov ecx, 4096\n    rep movsb\n    mov rdx, [rdx+32]\n    mov rbp, 4128\n.Lbrf_pool_copy_page:\n    test r13, r13\n    jz .Lbrf_pool_copied\n    test rdx, rdx\n    jz .Lbrf_fatal\n    lea rdi, [r14+rbp]\n    mov rsi, rdx\n    mov ecx, 4096\n    rep movsb\n    mov rdx, [rdx+16]\n    add rbp, 4096\n    dec r13\n    jmp .Lbrf_pool_copy_page\n.Lbrf_pool_copied:\n    test rdx, rdx\n    jnz .Lbrf_fatal\n    xor r13d, r13d\n    jmp .Lbrf_reply\n\n/* The root primitive rejects a copied pool in a distinct actual PID. */\n.Lbrf_pool_fork_refusal:\n    mov eax, 57\n    syscall\n    test rax, rax\n    jz .Lbrf_orphan_child\n    cmp rax, -4095\n    jae .Lbrf_fatal\n    mov [r15+304], rax\n.Lbrf_orphan_wait:\n    mov rdi, [r15+304]\n    lea rsi, [r15+312]\n    xor edx, edx\n    xor r10d, r10d\n    mov eax, 61\n    syscall\n    cmp rax, -4\n    je .Lbrf_orphan_wait\n    cmp rax, [r15+304]\n    jne .Lbrf_fatal\n    cmp dword ptr [r15+312], 0\n    jne .Lbrf_fatal\n    xor r13d, r13d\n    jmp .Lbrf_empty_reply\n.Lbrf_orphan_child:\n    mov rdi, [r15+80]\n    xor esi, esi\n    mov rdx, r15\n    mov ecx, 1\n    call hia_process_orphans_append\n    cmp rax, -22\n    jne .Lbrf_fatal\n    xor edi, edi\n    mov eax, 60\n    syscall\n\n/* Actual seccomp filter, never an observer-provided syscall reply.\n * Only fstat / newfstatat for the just-opened owned FD gets kernel EIO.\n * It remains installed until this OS process exits. */\n.Lbrf_install_fstat_error:\n    B_ENTER\n    mov r13, rdi\n    cmp r13, 2147483647\n    ja .Lbrf_filter_bad\n    sub rsp, 96\n    mov rdi, rsp\n    xor eax, eax\n    mov ecx, 12\n    rep stosq\n    mov qword ptr [rsp], 0x20\n    movabs rax, 0x0000000500010015\n    mov [rsp+8], rax\n    movabs rax, 0x0000010603000015\n    mov [rsp+16], rax\n    movabs rax, 0x0000001000000020\n    mov [rsp+24], rax\n    mov rax, r13\n    shl rax, 32\n    or rax, 0x01000015\n    mov [rsp+32], rax\n    movabs rax, 0x0005000500000006\n    mov [rsp+40], rax\n    movabs rax, 0x7fff000000000006\n    mov [rsp+48], rax\n    mov word ptr [rsp+64], 7\n    lea rax, [rsp]\n    mov [rsp+72], rax\n    mov edi, 38 /* PR_SET_NO_NEW_PRIVS */\n    mov esi, 1\n    xor edx, edx\n    xor r10d, r10d\n    xor r8d, r8d\n    mov eax, 157\n    syscall\n    test rax, rax\n    jnz .Lbrf_filter_done\n    mov edi, 1 /* SECCOMP_SET_MODE_FILTER */\n    xor esi, esi\n    lea rdx, [rsp+64]\n    mov eax, 317\n    syscall\n.Lbrf_filter_done:\n    add rsp, 96\n    jmp .Lbrf_filter_return\n.Lbrf_filter_bad:\n    mov rax, -22\n.Lbrf_filter_return:\n    B_LEAVE\n\n.Lbrf_context:\n"
+      }
+    ]
+  },
+  "shared_fixture_fragments": [
+    {
+      "source": "reference/file_info_at_fixture.S",
+      "from": ".Liff_pool_snapshot:",
+      "to": ".Liff_child_contexts:",
+      "target": ".Lbrf_pool_snapshot:"
+    },
+    {
+      "source": "reference/file_info_at_fixture.S",
+      "from": "/* The root primitive rejects",
+      "to": ".Liff_context:",
+      "target": "/* The root primitive rejects"
+    },
+    {
+      "source": "reference/file_info_at_fixture.S",
+      "from": "/* Actual seccomp filter",
+      "to": ".balign 16\n.global file_info_at_error_call_displacement",
+      "target": "/* Actual seccomp filter"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Watcher complete semantic readback
+
+This source reads the complete uploaded V4 producer capture. It never invokes HIA, native application code or Rust. The original source, 58 cases / 984 operations, three physical roles, whole streams, owned filesystem observations, real syscall effects, complete native buffers and retained builds remain fixed. A successful first read is still pending physical mutation and relocation controls; namespace/store/public flags remain false. All prior V1–V3 failures remain attributed to their original source and runs. The reader process budget is 180 seconds and the CI job budget is 15 minutes.
+
+The strengthened reader retains every original positive File CLOEXEC check and binds it to the next same-descriptor close; source-defined vacancy scans remain exact. Physical controls retain 16 rehashed complete ordinary-group clones and two complete ordinary admissions. The CI additionally restores the whole uploaded capture to a second physical root and repeats the full 58-case reader. All pure processes retain independent 180-second limits. None performs application, HIA or Rust execution.

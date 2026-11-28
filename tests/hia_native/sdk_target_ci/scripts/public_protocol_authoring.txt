@@ -1,0 +1,147 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(o) < 32:
+        return RESOURCE
+    if length(w) < WORK_MIN:
+        return grow(o, 1, WORK_MIN)
+    if get(w, 0) != STATE_MAGIC:
+        fill_range(w, 0, 368, 0)
+        put(w, 0, STATE_MAGIC)
+    phase = get(w, 8)
+    if phase == 0:
+        return start(s, w)
+    if get(w, 320) != get(w, 16):
+        return INVALID
+    code = get(w, 328)
+    size = get(w, 352)
+    if code >= 4294901760:
+        put(w, 8, 0)
+        return code
+    if phase == 1:
+        return after_message(w, code, size)
+    if phase == 2:
+        return after_request(w, code, size)
+    if phase == 3 or phase == 4:
+        return finish(o, w, code, size)
+    return INVALID
+
+def grow(o:mutbuf, which:u64, size:u64) -> u32:
+    fill_range(o, 0, 32, 0)
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, which)
+    put(o, 16, size)
+    return GROW
+
+def child(w:mutbuf, phase:u64, target:u64, start:u64, size:u64, result:u64, capacity:u64) -> u32:
+    sequence = get(w, 16) + 1
+    if sequence == 0:
+        return RESOURCE
+    put(w, 8, phase)
+    put(w, 16, sequence)
+    fill_range(w, 256, 112, 0)
+    put(w, 256, ACTION_MAGIC)
+    put(w, 264, sequence)
+    put(w, 272, target)
+    put(w, 288, start)
+    put(w, 296, size)
+    put(w, 304, result)
+    put(w, 312, capacity)
+    return CALL
+
+def start(s:readbuf, w:mutbuf) -> u32:
+    if length(s) < 32 or length(s) > ORIGINAL_CAP:
+        return INVALID
+    magic = read64(s, 0)
+    if magic != PROTOCOL_INPUT and magic != PROTOCOL_RESUME:
+        return INVALID
+    copy_range(w, s, ORIGINAL, 0, length(s))
+    put(w, 24, length(s))
+    if magic == PROTOCOL_RESUME:
+        return child(w, 4, 3, ORIGINAL, length(s), TEMP, TEMP_CAP)
+    mode = read64(s, 8)
+    size = read64(s, 16)
+    if mode > 2 or size != length(s) - 32 or size > JSON_MAX:
+        return INVALID
+    put(w, 32, mode)
+    put(w, 40, size)
+    put(w, TEMP, MESSAGE_INPUT)
+    put(w, TEMP + 8, 1)
+    put(w, TEMP + 16, size)
+    copy_range(w, s, TEMP + 24, 32, size)
+    return child(w, 1, 0, TEMP, 24 + size, MESSAGE, MESSAGE_CAP)
+
+def after_message(w:mutbuf, code:u64, size:u64) -> u32:
+    if size < 256 or size > MESSAGE_CAP or code != size:
+        put(w, 8, 0)
+        return INVALID
+    if get(w, MESSAGE) != MESSAGE_OUTPUT:
+        put(w, 8, 0)
+        return INVALID
+    put(w, 48, size)
+    if get(w, MESSAGE + 8) != 1 or get(w, MESSAGE + 16) != 14:
+        return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+    return child(w, 2, 1, MESSAGE, size, REQUEST, REQUEST_CAP)
+
+def after_request(w:mutbuf, code:u64, size:u64) -> u32:
+    if size < 160 or size > REQUEST_CAP or code != size:
+        put(w, 8, 0)
+        return INVALID
+    if get(w, REQUEST) != REQUEST_OUTPUT or get(w, REQUEST + 8) != 1:
+        put(w, 8, 0)
+        return INVALID
+    if get(w, REQUEST + 24) != 1 or get(w, REQUEST + 32) != size:
+        put(w, 8, 0)
+        return INVALID
+    json_size = get(w, 40)
+    message_size = get(w, 48)
+    if json_size > BRIDGE_CAP - 40:
+        return RESOURCE
+    available = BRIDGE_CAP - 40 - json_size
+    if message_size > available:
+        return RESOURCE
+    if size > available - message_size:
+        return RESOURCE
+    put(w, 56, size)
+    put(w, BRIDGE, BRIDGE_INPUT)
+    put(w, BRIDGE + 8, get(w, 32))
+    put(w, BRIDGE + 16, json_size)
+    put(w, BRIDGE + 24, message_size)
+    put(w, BRIDGE + 32, size)
+    copy_within(w, BRIDGE + 40, ORIGINAL + 32, json_size)
+    copy_within(w, BRIDGE + 40 + json_size, MESSAGE, message_size)
+    copy_within(w, BRIDGE + 40 + json_size + message_size, REQUEST, size)
+    return child(w, 3, 2, BRIDGE, 40 + json_size + message_size + size, TEMP, TEMP_CAP)
+
+def finish(o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if code != 192 or size < 192 or size > TEMP_CAP:
+        put(w, 8, 0)
+        return INVALID
+    if get(w, TEMP) != PROTOCOL_OUTPUT:
+        put(w, 8, 0)
+        return INVALID
+    id_size = get(w, TEMP + 48)
+    name_size = get(w, TEMP + 56)
+    version_size = get(w, TEMP + 64)
+    if id_size > size - 192:
+        return INVALID
+    if name_size > size - 192 - id_size:
+        return INVALID
+    if version_size != size - 192 - id_size - name_size:
+        return INVALID
+    if length(o) < size:
+        return grow(o, 2, size)
+    copy_range(o, w, 0, TEMP, size)
+    put(w, 8, 0)
+    return 192
+
+
+def copy_within(w:mutbuf, target:u64, source:u64, size:u64) -> u64:
+    at = 0
+    while size - at >= 8:
+        value = get(w, source + at)
+        put(w, target + at, value)
+        at = at + 8
+    while at < size:
+        value = get(w, source + at) & 255
+        store(w, target + at, value)
+        at = at + 1
+    return 0

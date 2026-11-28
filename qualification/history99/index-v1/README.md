@@ -1,0 +1,3 @@
+# Historical main99 control continuation
+
+The exact 99d107 workflow remains FAIL: its 405-check / 81-recipe aggregate succeeded, then the filesystem evidence control reached its original 180-second deadline and the following configuration/regex control was skipped. This frozen first step reads every byte of the immutable complete failed ZIP and TAR, records every member, and retains exact diagnostic JSON. It executes no native or Rust implementation and changes no historical report or source pin. Pending controls will be separately frozen after inspecting their actual source/capture identities. The old 6750 recovery remains a distinct qualification.

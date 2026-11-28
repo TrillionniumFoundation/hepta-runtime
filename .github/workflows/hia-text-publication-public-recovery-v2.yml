@@ -1,0 +1,101 @@
+name: Public publisher complete retained recovery
+on:
+  push:
+    branches: ['hia-text-publication-public-recovery-6780-v2-20261117']
+    paths: ['tests/hia_native/text_publication_public_recovery_ci/**','.github/workflows/hia-text-publication-public-recovery-v2.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_recovery_ci/source" "TP_OUTPUT=$RUNNER_TEMP/publisher-public-recovery" "TP_EXPORT=$RUNNER_TEMP/publisher-public-recovery-export" "TP_DRIVER=$RUNNER_TEMP/publisher-public-recovery-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_public_recovery_ci/source
+      - name: Verify complete frozen reader and input domain
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c825ab0f81fbc39b3620884570933c312b52249e5bcadf663ece0e104b9fb32a
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py"
+      - name: Restore complete retained artifact and read existing evidence only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/recover_public.py" --output "$TP_OUTPUT" --key "dependencies" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Preserve complete original artifact source and new proof
+        if: always()
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload full retained evidence and pure-read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-public-recovery-dependencies-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+  public:
+    needs: dependencies
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        key: ["carrier_absent_legacy","carrier_absent_modern","carrier_body_legacy","carrier_body_modern","carrier_capabilities_legacy","carrier_capabilities_modern","carrier_catalog_legacy","carrier_catalog_modern","carrier_configured_legacy","carrier_configured_modern","carrier_denied_legacy","carrier_denied_modern","carrier_fence_required_legacy","carrier_fence_required_modern","carrier_typed_legacy","carrier_typed_modern","stdio_absent_legacy","stdio_absent_modern","stdio_configured_legacy","stdio_configured_modern","stdio_denied_legacy","stdio_denied_modern","stdio_fence_required_legacy","stdio_fence_required_modern"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_recovery_ci/source" "TP_OUTPUT=$RUNNER_TEMP/publisher-public-recovery" "TP_EXPORT=$RUNNER_TEMP/publisher-public-recovery-export" "TP_DRIVER=$RUNNER_TEMP/publisher-public-recovery-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_public_recovery_ci/source
+      - name: Verify complete frozen reader and input domain
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c825ab0f81fbc39b3620884570933c312b52249e5bcadf663ece0e104b9fb32a
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py"
+      - name: Restore complete retained artifact and read existing evidence only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/recover_public.py" --output "$TP_OUTPUT" --key "${{ matrix.key }}" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Preserve complete original artifact source and new proof
+        if: always()
+        run: python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload full retained evidence and pure-read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-public-recovery-${{ matrix.key }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

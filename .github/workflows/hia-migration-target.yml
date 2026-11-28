@@ -1,0 +1,67 @@
+name: HIA Migration Target Coverage
+
+on:
+  push:
+    branches: ['codex/**', main]
+    paths:
+      - 'native/migration*.json'
+      - 'scripts/check_hia_native*.py'
+      - 'tests/hia_native/test_migration_target.py'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/hia-migration-target.yml'
+  pull_request:
+    paths:
+      - 'native/migration*.json'
+      - 'scripts/check_hia_native*.py'
+      - 'tests/hia_native/test_migration_target.py'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/hia-migration-target.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: Compare migration scope with independent current main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production-target
+          persist-credentials: false
+          sparse-checkout: src
+      - uses: actions/checkout@v4
+        with:
+          ref: a0dcdda1991ec536d5e2d252c006a778993fa566
+          path: historical-base
+          persist-credentials: false
+          sparse-checkout: src
+      - name: Verify coverage reader and complete production source closure
+        working-directory: candidate
+        run: |
+          python3 -B tests/hia_native/test_migration_target.py
+          python3 -B scripts/check_hia_native_target.py --historical-root ../historical-base --target-root ../production-target --output target-coverage.json
+      - name: Retain current target coverage
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hia-migration-target-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate/target-coverage.json
+          if-no-files-found: warn

@@ -1,0 +1,15 @@
+# Five binary handler caller plans
+
+The frozen target is d3d75c30719db966b004756f610007a7c723729e. The frozen compiler is d3e2c90173cf733e42b299d0c4274df4b593a12f; its exact B1/B2/B3 is bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0.
+
+This package runs 433 original input objects in 24 independent configuration profiles/process groups. It builds seven HIA images: the admitted Map owner, all five admitted typed parameter owners, and the new caller plan. The real installed-config ELF from the fully admitted binary root package receives every actual planner operation-8/9 request. Its full archive, source, compiler closure, compile receipts, 19 images, linker and ELF are checked before reuse. No previous root semantic domain or Rust result is replayed.
+
+The unchanged original binary.rs slice includes constants, typed declarations, root functions, info/read/write/upload/patch_inode. Exact configuration declarations, validation and path rules are retained. All current locked sources of 22 crates are archived and checked. Four original tests run unchanged. Explicit test endpoints record ordered audit arguments, full SSH source/query/duration and observation-pool requests, then return immediately. They do not execute the remote Python bodies, production audit implementation, SSH sessions or asynchronous schedulers.
+
+Every new HIA input, full pre/post output and workspace is retained. The installed owner additionally records full borrowed input before/after. Independent byte readers bind all transitions, growth, complete query strings, exact error ordering, original optional values and all u64 values. The recorder never reads original outputs. The final query/effect plan remains a private transport boundary; no public handler or whole-runtime closure is claimed.
+
+Twenty-eight private caller ABI controls cover output/workspace sizing, growth with retained state, invalid frames and dirty-workspace reuse. Six physical complete-evidence mutants must be rejected, and two complete relocated copies must pass. All source and input domains are frozen in Git before any actual HIA or Rust execution. Ordinary producer processes are limited to 60 seconds; each actual installed config process has 45 seconds; byte-only readers have 180 seconds; builds have 900 seconds. Failure evidence is retained without relabeling or replaying UNKNOWN work.
+
+The archive preserves all files, modes and directory sets with content-addressed deduplication. Physical control copies share immutable regular-file inodes, and mutations use atomic replacement. Setup link-count changes precede every read-only snapshot; pure readers must preserve all observed bytes and metadata. Original root FAIL evidence is retained under its own exact pins; its later successful continuation and independent admission are separately identified in retained-root/FINAL_HANDOFF.json.
+
+No local Rust or HIA execution is required or authorized by this package. CI is the execution boundary. Native u64 composition values remain exact raw source bytes.

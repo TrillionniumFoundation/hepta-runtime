@@ -1,0 +1,210 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<24 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=DECODE_REQUEST or load(s,8)!=4 or load(s,16)!=0:
+        return INVALID
+    size=length(s)-24
+    if utf8(s,24,size)==0:
+        return INVALID
+    code=0
+    number=0
+    at=0
+    while at<size:
+        if byte(s,24+at)>=128:
+            code=7
+        at=at+1
+    if code==0:
+        scanned=base64_scan(s,o,0)
+        code=scanned>>32
+        number=scanned&4294967295
+    if code!=0:
+        return emit_error(o,code,number)
+    if length(o)<64+number:
+        return CAPACITY
+    fill_range(o,0,64,0)
+    put(o,0,DECODE_RESPONSE)
+    put(o,56,number)
+    base64_scan(s,o,1)
+    return 64+number
+
+def alphabet(value:u64) -> u64:
+    if value>=65 and value<=90:
+        return value-65
+    if value>=97 and value<=122:
+        return value-71
+    if value>=48 and value<=57:
+        return value+4
+    if value==43:
+        return 62
+    if value==47:
+        return 63
+    return 64
+
+def base64_scan(s:readbuf,o:mutbuf,emit:u64) -> u64:
+    size=length(s)-24
+    if size!=0:
+        if byte(s,24)==61:
+            return 4294967296
+    quad=0
+    left=0
+    pads=0
+    padding=0
+    produced=0
+    characters=0
+    at=0
+    while at<size:
+        value=byte(s,24+at)
+        if value==61:
+            padding=1
+            if quad>=2:
+                pads=pads+1
+                if quad+pads>=4:
+                    if at+1<size:
+                        return 8589934592
+                    return produced
+        else:
+            value=alphabet(value)
+            if value>=64:
+                return 12884901888
+            if padding!=0:
+                return 17179869184
+            pads=0
+            characters=characters+1
+            if quad==0:
+                quad=1
+                left=value
+            else:
+                if quad==1:
+                    if emit!=0:
+                        store(o,64+produced,(left<<2)|(value>>4))
+                    produced=produced+1
+                    left=value&15
+                    quad=2
+                else:
+                    if quad==2:
+                        if emit!=0:
+                            store(o,64+produced,(left<<4)|(value>>2))
+                        produced=produced+1
+                        left=value&3
+                        quad=3
+                    else:
+                        if emit!=0:
+                            store(o,64+produced,(left<<6)|value)
+                        produced=produced+1
+                        left=0
+                        quad=0
+        at=at+1
+    if quad==1:
+        return 21474836480+characters
+    if quad!=0:
+        return 25769803776
+    return produced
+
+def decimal_power(value:u64) -> u64:
+    if value>=1000000000:
+        return 1000000000
+    if value>=100000000:
+        return 100000000
+    if value>=10000000:
+        return 10000000
+    if value>=1000000:
+        return 1000000
+    if value>=100000:
+        return 100000
+    if value>=10000:
+        return 10000
+    if value>=1000:
+        return 1000
+    if value>=100:
+        return 100
+    if value>=10:
+        return 10
+    return 1
+
+def next_power(value:u64) -> u64:
+    if value==1000000000:
+        return 100000000
+    if value==100000000:
+        return 10000000
+    if value==10000000:
+        return 1000000
+    if value==1000000:
+        return 100000
+    if value==100000:
+        return 10000
+    if value==10000:
+        return 1000
+    if value==1000:
+        return 100
+    if value==100:
+        return 10
+    if value==10:
+        return 1
+    return 0
+
+def decimal_size(value:u64) -> u64:
+    power=decimal_power(value)
+    count=0
+    while power!=0:
+        count=count+1
+        power=next_power(power)
+    return count
+
+def append_decimal(o:mutbuf,at:u64,value:u64) -> u64:
+    power=decimal_power(value)
+    while power!=0:
+        digit=0
+        while value>=power:
+            value=value-power
+            digit=digit+1
+        store(o,at,48+digit)
+        at=at+1
+        power=next_power(power)
+    return at
+
+def emit_error(o:mutbuf,code:u64,number:u64) -> u32:
+    size=0
+    if code==1:
+        size=LEADING_LENGTH
+    if code==2:
+        size=EXCESS_LENGTH
+    if code==3:
+        size=ALPHABET_LENGTH
+    if code==4:
+        size=DISCONTINUOUS_LENGTH
+    if code==5:
+        size=LENGTH_PREFIX_LENGTH+decimal_size(number)+LENGTH_SUFFIX_LENGTH
+    if code==6:
+        size=PADDING_LENGTH
+    if code==7:
+        size=ASCII_LENGTH
+    if size==0:
+        return INVALID
+    if length(o)<64+size:
+        return CAPACITY
+    fill_range(o,0,64,0)
+    put(o,0,DECODE_RESPONSE)
+    put(o,8,3)
+    klass=15
+    if code==7:
+        klass=1
+    put(o,24,klass)
+    put(o,40,size)
+    put(o,56,size)
+    if code==1:
+        literal_leading(o,64)
+    if code==2:
+        literal_excess(o,64)
+    if code==3:
+        literal_alphabet(o,64)
+    if code==4:
+        literal_discontinuous(o,64)
+    if code==5:
+        end=literal_length_prefix(o,64)
+        end=append_decimal(o,end,number)
+        literal_length_suffix(o,end)
+    if code==6:
+        literal_padding(o,64)
+    if code==7:
+        literal_ascii(o,64)
+    return 64+size

@@ -1,0 +1,9 @@
+# Remaining frozen native SSH lifecycle inputs
+
+The production HIA and native assembly remain exactly the V2 build dd17b0e5403fa53f0d009d9547393850129eea51. This source executes only already frozen but previously unexecuted case IDs 105 through 113, once for each original/native side, at most 60 seconds per process. The first 101–104 group remains completed in 44215075110, with independent uploaded full-byte and kernel verification in 44216532011; none is selected here. The original twenty tests are not selected.
+
+This group covers 37 simultaneously owned original children and physical registry-page growth, final Entry denial, real kernel ENOENT spawn failure and original-child reaping before guard drop, each missing pipe, each 8 MiB plus one output failure, and exact dual 8 MiB outputs with nonzero exit status. All thirteen domain records are unchanged from the zero-application fixture build.
+
+Capture retains the exact invoked ELF, helper, tool and both complete uploaded zero-application build archives. The independent reader verifies every HIA input/work/output byte, full pipe data, actual original child descriptors and pipe inodes, exact kernel exec arguments, actual monotonic clocks, cleanup signals and waits, and persistent original owner/join identity. The earlier pure-reader failure is retained; the decoder now decodes hexadecimal FD labels before binding pipe identity and recognizes strace structure-transition arrows.
+
+Private-owner qualification still does not install public SSH command/configuration wiring, remote HIA helper distribution, observation-pool transport, public binary routes, the whole SDK, or removal of old runtime files. Physical evidence controls and uploaded archive qualification remain explicit subsequent gates. No completed or unknown application is replayed.

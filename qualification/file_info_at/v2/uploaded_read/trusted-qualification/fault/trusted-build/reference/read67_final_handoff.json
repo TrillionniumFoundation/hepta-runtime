@@ -1,0 +1,307 @@
+{
+  "schema": "hepta.runtime.binary-read-orphans.final-handoff.v1",
+  "status": "QUALIFIED_PRIVATE_READ67_FIRST_FSTAT_ORPHAN_DOMAIN",
+  "production": {
+    "commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+    "tree": "26775947b785d5e98f7767935e8b3362f5a33ee6",
+    "prefix": "qualification/binary_read_orphans/v1/native_build",
+    "source_manifest_sha256": "967f311a266302966922ec67aff21ceaffe105f5c03c639bc15b8b6ab7f7f6b4",
+    "rebuild_files": 52,
+    "hias": 3,
+    "fresh_compiler_invocations": 5,
+    "body": {
+      "path": "native/binary_read_body.hepta",
+      "mode": "100644",
+      "git_blob": "13cf0c74b10279c419c19ce40baa49e98ea735d8",
+      "bytes": 223207,
+      "sha256": "0ff27a8ba9a8a53ca7cd97054a8394c04023fd7cb84fe2406bf8d2b7e867f4ba"
+    },
+    "composition": {
+      "path": "native/binary_read_body_composition.json",
+      "mode": "100644",
+      "git_blob": "48349fa039c5333d8bb9b18f8128facf27840dbd",
+      "bytes": 14242,
+      "sha256": "cf570ffc2ed2ada878b30c53f8685c4e8b24f0779bb3a9352de9bfe0fa9e4945"
+    },
+    "native_boundary": {
+      "path": "asm/binary_read_body_callable.S",
+      "mode": "100644",
+      "git_blob": "80fd9586876da32a7adf43cfdf67805a3a090654",
+      "bytes": 22048,
+      "sha256": "07177c2a6861f88916bc47e89c462e28dd2dcc3a1ffaa101d1594be5b100274b"
+    },
+    "shared_pool": {
+      "path": "asm/process_orphans.S",
+      "mode": "100644",
+      "git_blob": "92461ce73f40377f9185ee81c5fcc8c01b76c8c7",
+      "bytes": 4691,
+      "sha256": "f1d4e92b9d2ce68c68dcbc730950eaddaf3aa1093f143d34924c3eafc302e050"
+    },
+    "elf": {
+      "bytes": 421888,
+      "sha256": "d28bcb963b8b7f66c2c1c82f4e05a1bc8be195a4cf41118cd41a314dab3e689f"
+    },
+    "body_functions": 67,
+    "body_instructions": 4063,
+    "changed_function": "f20/open_source",
+    "unchanged_functions_exact_ir": 66,
+    "production_unchanged_after_build": true
+  },
+  "target": {
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "path": "src/mcp/runtime/binary_file.py",
+    "blob": "e5dddd844cb9ab869f4784a93f228a8a5ac91a74",
+    "bytes": 12196,
+    "sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12",
+    "functions": "unchanged parent/regular/fingerprint/main and exact AST-preserved private-read branch",
+    "original_runtime": "CPython on Linux x86_64; actual filesystem and actual seccomp kernel EIO"
+  },
+  "semantics": {
+    "first_regular_fstat": "EINTR retains existing retry; other failures keep the original error and transfer the actual opened FD to the unchanged c811 process-lifetime pool before ordinary cleanup.",
+    "tested_fault_errno": 5,
+    "orphan_request": {
+      "magic": "HBRDS001",
+      "kind": 1,
+      "op": 4,
+      "bytes": 64,
+      "sequence_offset": 16,
+      "owned_fd_offset": 32,
+      "zero_words": [
+        40,
+        48,
+        56
+      ],
+      "successful_ack_result": 0,
+      "successful_ack_payload_bytes": 0
+    },
+    "native_transfer_order": "validate actual owned non-borrowed 0..INT_MAX FD; append(pool,fd,context,generation); on append success retire operable owned token and increment transfer count; never close or duplicate",
+    "pool_lifetime": "trusted graph passes one process-wide pool to all contexts; release, context destruction and ordinary EOF leave orphan records and FDs live; only OS process exit reclaims",
+    "unchanged_paths": [
+      "later fstat cleanup",
+      "invalid regular/private-file cleanup",
+      "normal read/fingerprint/private result",
+      "borrowed-parent no-dup/no-close",
+      "owned path-parent cleanup"
+    ],
+    "constructor": "binary_read_body_create(callback, callback_context, shared_process_pool)",
+    "constructor_change_requires_explicit_consumer_rebind": true
+  },
+  "qualification": {
+    "author": {
+      "commit": "611dcad6274d3640f7a2f4924d59fc4379eeb6fc",
+      "run": 44126911475,
+      "job": 134193087116,
+      "status": "SUCCESS",
+      "application_calls": 0
+    },
+    "native_build": {
+      "run": 44129301920,
+      "job": 134201623490,
+      "status": "SUCCESS",
+      "physical_refusals": 4,
+      "relocations": 2,
+      "application_calls": 0
+    },
+    "build_independent": {
+      "commit": "d8e563fb772bfe002ff1cf46c1f838376eae04c8",
+      "run": 44129762918,
+      "job": 134203274766,
+      "status": "SUCCESS",
+      "report": "NATIVE_BUILD_INDEPENDENT.json"
+    },
+    "actual_capture": {
+      "commit": "7ac93962dffebb51f04a5cd24c5319f5c55d2161",
+      "run": 44132298233,
+      "original_run_status": "FAILURE_RETAINED",
+      "all_original_and_native_applications_completed": true,
+      "original_reader_groups_passed": 7,
+      "original_reader_groups_failed": 6,
+      "all_application_captures_reused": true
+    },
+    "pure_diagnostic": {
+      "commit": "8609f86f417015925a61dcf0641a52a91adaffd3",
+      "run": 44133832660,
+      "status": "SUCCESS",
+      "groups": 6,
+      "new_application_calls": 0
+    },
+    "complete_recovery": {
+      "commit": "2020d5da34ebcfae043d96bb1eeac63943c0c525",
+      "run": 44135210660,
+      "status": "SUCCESS",
+      "groups": 13,
+      "physical_refusals": 104,
+      "complete_relocations": 26,
+      "new_application_calls": 0,
+      "reader_sha256": "67599cdc0dd0aadeca356a35f8ed5640d164a26c6905ad4f6174774328ed796c"
+    },
+    "uploaded_independent": {
+      "commit": "9a80fee6d6d61739ac5ab79bb7ce5e801b86663d",
+      "run": 44136906550,
+      "final_attempt": 2,
+      "status": "SUCCESS",
+      "successful_original_attempt_lanes_carried_forward": 12,
+      "only_retried_lane": "unicode",
+      "retried_job": 134232425283,
+      "reason": "known terminal 60-second upstream ZIP download timeout; same frozen pure reader and budgets",
+      "complete_prior_job_logs_verified_identical": true,
+      "groups": 13,
+      "logical_files": 64022,
+      "logical_bytes": 720828926,
+      "directories": 4886,
+      "entries": 126859,
+      "guard_probes": 143,
+      "maximum_read_seconds": 30.242475533000004,
+      "application_replays": 0,
+      "physical_control_replays": 0,
+      "successful_previous_lanes_replayed": 0
+    }
+  },
+  "domain": {
+    "inputs": 45,
+    "original_entry_calls": 49,
+    "native_entry_calls": 49,
+    "observed_inputs": 40,
+    "observed_entry_calls": 44,
+    "observer_off_inputs": 5,
+    "observer_off_entry_calls": 5,
+    "first_regular_fstat_kernel_EIO_calls": 25,
+    "later_fstat_cleanup_inputs": 10,
+    "fd_zero_or_one_free_fd_inputs": 6,
+    "sharing_inputs": 4,
+    "eof_inputs": 4,
+    "private_protocol_refusals": 11,
+    "actual_orphan_transfers": 25,
+    "observed_hia_body_calls": 501,
+    "observed_hia_child_calls": 20,
+    "observed_hia_calls": 521,
+    "observed_capability_requests": 395,
+    "observed_full_buffer_bytes": 1327854717,
+    "observed_journal_events": 3499,
+    "observed_journal_bytes": 1328302589,
+    "complete_original_native_effects_and_results": true,
+    "complete_fd_and_shared_pool_inventories": true,
+    "complete_pre_exit_EOF_witness": true
+  },
+  "budgets": {
+    "exchange_seconds": 60,
+    "fetch_seconds": 60,
+    "application_lane_seconds": 180,
+    "pure_reader_seconds": 180,
+    "compile_seconds": 900,
+    "job_minutes": 15,
+    "changed": false
+  },
+  "scope": {
+    "private_callable_closed": true,
+    "process_shared_context_and_generation_domain": true,
+    "pool_page_growth_concurrent_append_OOM_or_signal_interrupt": false,
+    "original_immutable_or_borrowed_mutation_domains_not_reexecuted": true,
+    "prior_captures_and_qualification_scope_retained": true,
+    "file_info_fingerprint_child_rebound": false,
+    "stdio_rebound": false,
+    "public_route_registered": false,
+    "remote_ssh": false,
+    "full_sdk": false,
+    "default_graph_changed": false,
+    "whole_runtime_replaced": false,
+    "old_runtime_removed": false
+  },
+  "required_followups": [
+    "Use INSTALL_ROWS.json for the unique read/codec/stat/pool production source set; link c811 once in each process image and supply the graph's one shared pool.",
+    "Implement the original read_multiple_files batch body in a separate HIA owner using the qualified parent, codec/stat and process pool primitives; old native-local/synthetic IO is not configured Remote parity.",
+    "Explicitly rebind file_info_at's fingerprint child and constructor third argument, then capture actual fingerprint-first-regular-fstat fault through the composed info callable; preserve the independent outer info EIO qualification.",
+    "Explicitly rebind the read stdio helper constructor/pool and capture the composed first-fstat failure/EOF contract.",
+    "Public/default graph and Remote/SSH installation require their own graph qualification; this private handoff changes no installed route."
+  ],
+  "artifacts": {
+    "source_rows": "SOURCE_ROWS.json",
+    "unique_production_install_rows": "INSTALL_ROWS.json",
+    "dependency_impact": "DEPENDENCY_IMPACT.json",
+    "actual_archives": "ACTUAL_ARCHIVES.json",
+    "recovery_archives": "RECOVERY_ARCHIVES.json",
+    "independent_reads": "INDEPENDENT_READS.json",
+    "all_failures_and_retry": "READER_HISTORY.json",
+    "native_build": "NATIVE_BUILD.json",
+    "native_build_independent": "NATIVE_BUILD_INDEPENDENT.json",
+    "abi": "NATIVE_ABI.md"
+  },
+  "files": {
+    "SOURCE_ROWS.json": {
+      "bytes": 165723,
+      "sha256": "ea46db65461c0aace0d6f5a3c60d205439b3336ce4296ed40a03eac88e7eb8dc"
+    },
+    "ACTUAL_ARCHIVES.json": {
+      "bytes": 31759,
+      "sha256": "7425558d2d748813630681a7b868316a47b5814edde65f64e99572a788a9c33f"
+    },
+    "RECOVERY_ARCHIVES.json": {
+      "bytes": 46617,
+      "sha256": "d3a43ef1054b7f2ad4f21c592a5848836f881b654ef79641ae4f6f0a2248db38"
+    },
+    "COUNTS.json": {
+      "bytes": 551,
+      "sha256": "ffe254a0426f6e1eb9d8cef95f2ebd7a988b564ce21144cb8a70a43df10dab5c"
+    },
+    "NATIVE_BUILD.json": {
+      "bytes": 827,
+      "sha256": "c7f6b96906671c2ae3d5b3aea04bacbe494860d022deb68c3a2b8d27a688f0fc"
+    },
+    "NATIVE_BUILD_INDEPENDENT.json": {
+      "bytes": 3905,
+      "sha256": "dc35e0c1538a933bc522203a445784271cde8976d0ec160d7b99dbe37b249f3a"
+    },
+    "TARGET_AND_NATIVE_PROVENANCE.json": {
+      "bytes": 2736,
+      "sha256": "f8b126b3b217850fae921f16904848423067912b72f51080a2290f9bad3cee35"
+    },
+    "NATIVE_ABI.md": {
+      "bytes": 4217,
+      "sha256": "4a741a2e768ebbe062cc99453f5f9fb9bde544e37d5360c28fe9043b9a54e8fe"
+    },
+    "DEPENDENCY_IMPACT.json": {
+      "bytes": 3369,
+      "sha256": "8727d7e27a0ef32abdcd28fa11cfd670917da046ca072572093ae157c8e79591"
+    },
+    "READER_DERIVATION.json": {
+      "bytes": 4403,
+      "sha256": "847072e1c77bba7c3a5f92ed9caecf49df2eda7bbe026f9609d177b8a6d9acf1"
+    },
+    "READER_HISTORY.json": {
+      "bytes": 255982,
+      "sha256": "3394371c40a798eb17dbb6e1de8dd8249c339648e9a7e8f566e632ca7ed6d3aa"
+    },
+    "INSTALL_ROWS.json": {
+      "bytes": 5567,
+      "sha256": "6f6e66d8ab8c9703af9334998f6a3645c379dbd910d17ab217e6e5c5b0d1f3df"
+    },
+    "README.md": {
+      "bytes": 2815,
+      "sha256": "45a3ad8eb8e184cdc9f175551cd0d374491eb1aed0edf4cc535b6d9e442a43e5"
+    },
+    "INDEPENDENT_READS.json": {
+      "bytes": 232924,
+      "sha256": "928e7961651b1b44e46a29d7eb88d184946f62fcc473263c841b7f39f56c5a93"
+    },
+    "TERMINAL_RUN.json": {
+      "bytes": 15599,
+      "sha256": "b1d867d1c9fc9adb54fd209b0fb9b99a06c0c5571ef181c3ef8f07d75ccc8630"
+    },
+    "history/unicode-first-fetch-timeout.log": {
+      "bytes": 25473,
+      "sha256": "b117efe4952e6ba83ca3df9faff3b535f2fa26dd5cdd32813b792f251b620753"
+    },
+    "history/original-path-reader-failure.log": {
+      "bytes": 25988,
+      "sha256": "beb38cfde0018cc071243a34322d9eb9e879019e55d91d5a8bd33194da1a8c89"
+    },
+    "history/first-recovery-opcode-failure.log": {
+      "bytes": 27432,
+      "sha256": "1cf52b4e4c50e7d29b18232961df1ec1c8436a2401242b0daf9bd7b71452e469"
+    },
+    "history/first-independent-guard-root-failure.log": {
+      "bytes": 26959,
+      "sha256": "1005e4eadab664b541a583aec378c3028dad894a186252d15edac0595f0f6dc2"
+    }
+  }
+}

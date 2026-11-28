@@ -1,0 +1,241 @@
+def admission(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 128 or read64(s, 0) != REQUEST_MAGIC:
+        return 4294967295
+    op = read64(s, 8)
+    capability = read64(s, 16)
+    generation = read64(s, 24)
+    a = read64(s, 32)
+    b = read64(s, 40)
+    c = read64(s, 48)
+    lo = read64(s, 56)
+    hi = read64(s, 64)
+    seq = read64(s, 72)
+    at = 80
+    while at < 128:
+        if read64(s, at) != 0:
+            return 4294967295
+        at = at + 8
+    if op > 10 or capability == 0 or generation == 0:
+        return 4294967295
+    if op != 0 and op != 1 and op != 4:
+        if lo != 0 or hi != 0:
+            return 4294967295
+    if length(o) < 320 or length(w) < 256:
+        return 4294967294
+    if op == 0:
+        if a > 1 or b != 0 or c != 0 or seq != 0:
+            return 4294967295
+        at = 0
+        while at < 256:
+            if get(w, at) != 0:
+                return 4294967295
+            at = at + 8
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, capability)
+        put(w, 16, generation)
+        put(w, 40, lo)
+        put(w, 48, hi)
+        put(w, 56, a)
+        return reply(o, w, op, 0, 0)
+    if valid(w) == False or get(w, 8) != capability or get(w, 16) != generation:
+        return 4294967295
+    if op == 6 or op == 7 or op == 8:
+        if seq == 0 or seq != get(w, 104):
+            return 4294967295
+        return acknowledge(o, w, op, a, b, c)
+    if seq != 0:
+        return 4294967295
+    if op == 1:
+        if a > 1 or b != 0 or c != 0:
+            return 4294967295
+        if clock_valid(w, lo, hi) == False:
+            return 4294967295
+        save_clock(w, lo, hi)
+        if a == 1 or get(w, 32) == 1 or before(lo, hi, get(w, 40), get(w, 48)) == False:
+            return reply(o, w, op, 3, 1)
+        return reply(o, w, op, 0, 0)
+    if op == 4:
+        if a > 1 or b > 2 or c == 0 or c == 18446744073709551615:
+            return 4294967295
+        if get(w, 160) != 0 or get(w, 80) != 0:
+            return 4294967295
+        if clock_valid(w, lo, hi) == False:
+            return 4294967295
+        save_clock(w, lo, hi)
+        if b == 2:
+            return reply(o, w, op, 3, 6)
+        if b == 0:
+            return reply(o, w, op, 3, 3)
+        if a == 1 or get(w, 32) == 1 or before(lo, hi, get(w, 40), get(w, 48)) == False:
+            return reply(o, w, op, 3, 1)
+        if get(w, 24) != 0:
+            return reply(o, w, op, 3, 2)
+        put(w, 24, 2)
+        put(w, 160, c)
+        return reply(o, w, op, 0, 0)
+    if a != 0 or b != 0 or c != 0:
+        return 4294967295
+    if op == 2:
+        if get(w, 24) == 0:
+            put(w, 24, 1)
+        return reply(o, w, op, 0, 0)
+    if op == 3:
+        put(w, 32, 1)
+        return reply(o, w, op, 0, 0)
+    if op == 5:
+        if get(w, 24) != 2 or get(w, 80) != 0 or get(w, 104) == 18446744073709551615:
+            return 4294967295
+        if get(w, 56) == 1:
+            put(w, 64, 1)
+            put(w, 80, 1)
+            return issue(o, w, op, 1)
+        put(w, 80, 2)
+        return issue(o, w, op, 2)
+    if op == 9:
+        return reply(o, w, op, 0, 0)
+    if op == 10:
+        if get(w, 80) != 3 and get(w, 80) != 4 and get(w, 80) != 7:
+            return 4294967295
+        if get(w, 72) != 0 or get(w, 112) != 0:
+            return 4294967295
+        at = 0
+        while at < 256:
+            put(w, at, 0)
+            at = at + 8
+        return reply(o, w, op, 0, 0)
+    return 4294967295
+
+def acknowledge(o:mutbuf, w:mutbuf, op:u64, a:u64, b:u64, c:u64) -> u32:
+    pending = get(w, 112)
+    if op == 6:
+        if pending != 1 or a > 1 or c != 0:
+            return 4294967295
+        if a == 1:
+            if b == 0:
+                return 4294967295
+            put(w, 112, 0)
+            put(w, 80, 4)
+            put(w, 120, b)
+            return reply(o, w, op, 3, 4)
+        if b != 0 or get(w, 104) == 18446744073709551615:
+            return 4294967295
+        put(w, 72, 1)
+        put(w, 80, 2)
+        return issue(o, w, op, 2)
+    if op == 7:
+        if pending != 2 or a > 1:
+            return 4294967295
+        if a == 0:
+            if b == 0 or c != get(w, 160):
+                return 4294967295
+            put(w, 88, b)
+            put(w, 96, c)
+            put(w, 72, 0)
+            put(w, 80, 3)
+            put(w, 112, 0)
+            return reply(o, w, op, 0, 0)
+        if b == 0 or b > 4095 or c != 0:
+            return 4294967295
+        if get(w, 72) == 1 and get(w, 104) == 18446744073709551615:
+            return 4294967295
+        put(w, 120, b)
+        if get(w, 72) == 1:
+            put(w, 80, 6)
+            return issue(o, w, op, 3)
+        put(w, 80, 7)
+        put(w, 112, 0)
+        return reply(o, w, op, 3, 5)
+    if op == 8:
+        if pending != 3 or a != 0 or b != 0 or c != 0:
+            return 4294967295
+        put(w, 72, 0)
+        put(w, 80, 7)
+        put(w, 112, 0)
+        return reply(o, w, op, 3, 5)
+    return 4294967295
+
+def issue(o:mutbuf, w:mutbuf, op:u64, pending:u64) -> u32:
+    put(w, 104, get(w, 104) + 1)
+    put(w, 112, pending)
+    return reply(o, w, op, 1, 0)
+
+def reply(o:mutbuf, w:mutbuf, op:u64, status:u64, reason:u64) -> u32:
+    if get(w, 0) == STATE_MAGIC:
+        put(w, 128, reason)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, 320)
+    put(o, 16, op)
+    put(o, 24, status)
+    put(o, 32, get(w, 112))
+    put(o, 40, get(w, 104))
+    put(o, 48, reason)
+    put(o, 56, get(w, 120))
+    copy_range(o, w, 64, 0, 256)
+    return 320
+
+def before(al:u64, ah:u64, bl:u64, bh:u64) -> bool:
+    return ah < bh or (ah == bh and al < bl)
+
+def clock_valid(w:mutbuf, lo:u64, hi:u64) -> bool:
+    if get(w, 152) == 1 and before(lo, hi, get(w, 136), get(w, 144)):
+        return False
+    return True
+
+def save_clock(w:mutbuf, lo:u64, hi:u64) -> u64:
+    put(w, 136, lo)
+    put(w, 144, hi)
+    put(w, 152, 1)
+    return 0
+
+def valid(w:mutbuf) -> bool:
+    if get(w, 0) != STATE_MAGIC or get(w, 8) == 0 or get(w, 16) == 0:
+        return False
+    if get(w, 24) > 2 or get(w, 32) > 1 or get(w, 56) > 1 or get(w, 64) > 1 or get(w, 72) > 1:
+        return False
+    state = get(w, 80)
+    pending = get(w, 112)
+    if state > 7 or state == 5 or pending > 3 or get(w, 128) > 6 or get(w, 152) > 1:
+        return False
+    if get(w, 64) > get(w, 56) or get(w, 72) > get(w, 64):
+        return False
+    if state == 0:
+        if get(w, 64) != 0 or pending != 0:
+            return False
+    if state == 1:
+        if pending != 1 or get(w, 64) != 1 or get(w, 72) != 0:
+            return False
+    if state == 2 and pending != 2:
+        return False
+    if state == 6:
+        if pending != 3 or get(w, 72) != 1:
+            return False
+    if state == 3 or state == 4 or state == 7:
+        if pending != 0 or get(w, 72) != 0:
+            return False
+    if state != 0 and (get(w, 24) != 2 or get(w, 160) == 0):
+        return False
+    if get(w, 24) == 2:
+        if get(w, 160) == 0:
+            return False
+    elif get(w, 160) != 0:
+        return False
+    if pending != 0 and get(w, 104) == 0:
+        return False
+    if state == 3:
+        if get(w, 88) == 0 or get(w, 96) != get(w, 160):
+            return False
+    elif get(w, 88) != 0 or get(w, 96) != 0:
+        return False
+    if state == 4 or state == 6 or state == 7:
+        if get(w, 120) == 0:
+            return False
+    elif get(w, 120) != 0:
+        return False
+    if get(w, 152) == 0 and (get(w, 136) != 0 or get(w, 144) != 0):
+        return False
+    at = 168
+    while at < 256:
+        if get(w, at) != 0:
+            return False
+        at = at + 8
+    return True

@@ -16,7 +16,8 @@ it does not add a complete Rust transformer or Hepta Neuron graph interpreter.
 ## Separate the mathematical claims
 
 For fixed features X, initial head theta0, targets y and nonnegative sample
-weights D, the planner solves each output head independently:
+weights D, the planner without a hard update radius solves each output head
+independently:
 
 \[
 \min_\theta (X\theta-y)^T D(X\theta-y)
@@ -34,6 +35,14 @@ finite F32 conversion check bound what the tool claims numerically. This is
 establish that an agent understands an arbitrary network's internal circuit.
 The unique minimum of this quadratic is not a global minimum of task loss or a
 globally optimal NDU policy.
+
+The optional `max_update_l2_norm` adds one joint L2/Frobenius ball across all
+output heads. The existing trust-region planner solves for a shared multiplier,
+lowers each proposal toward its exact F32 anchor, and checks the actual represented
+F32 differences using the native 576-bit integer norm calculation. The F64 KKT
+and residual diagnostics do not establish discrete F32 optimality. Details and
+the original qualification remain in
+[the trust-region package](../experiments/weight/native_trust_region_20261105/README.md).
 
 The planner accepts caller-supplied numeric matrices. Its exact-edit bytes use
 the F32 conversion of the supplied initial weights. It does not authenticate
@@ -53,6 +62,9 @@ boundary rather than treat a mathematical plan as an authenticated model edit.
   action heads. There is no implicit normalization.
 - `base_weights`: o by p initial parameters.
 - `lambda`: the positive proximal regularizer.
+- Optional `max_update_l2_norm`: a finite nonnegative joint radius around the
+  exact F32 anchor. Omission or null retains the original unconstrained request
+  commitment. A constrained plan requires exactly represented F32 anchors.
 
 The operator bounds dimensions and arithmetic work, validates finite inputs and
 nonnegative sample weights, and uses a bounded blocking-worker admission. Its
@@ -66,7 +78,10 @@ the caller's declared objective.
 
 `weight_guarded_linear_patch` accepts the existing `PatchTensorParams` under
 `patch`, fixed `inputs`, optional explicit `bias`, an `objective`, nonnegative
-`minimum_gain`, and up to 32 `constraints`.
+`minimum_gain`, up to 32 `constraints`, and optional `max_update_l2_norm`.
+When supplied, the radius is independently enforced on authenticated original
+and replacement F32 bytes before publication. It does not cover explicit bias,
+environment changes or drift accumulated through separate requests.
 
 The `squared_error` objective uses a `targets` matrix matching the supplied rows
 and all output columns. Its score is negative mean squared error, averaged over
@@ -121,9 +136,10 @@ All checks in this tool are finite-row checks. Analytic parameterization of a
 valid CTMC generator, reset kernel or probability distribution can guarantee
 properties over a broader domain, but no such graph-level compiler is added
 here. Constraints must match the actual model semantics and units.
-The guard does not have a parameter-norm or trust-region constraint. An
-experiment requiring either must independently verify it on the exact candidate
-bytes before using this tool; output constraints are not a substitute.
+The optional exact parameter-update radius and these output constraints check
+different properties. A small parameter change can still violate an output
+constraint, and passing a finite set of output checks does not bound parameter
+drift. Both checks apply when declared in the same request.
 
 ## Artifacts, recovery and interruption
 
@@ -148,21 +164,33 @@ retained interrupted stages can leave room for a candidate but no room for its
 reverse artifact. Tests exercise this exact quota boundary.
 
 These artifacts are isolated replicas. The term recovery does not mean a live
-model was changed and subsequently rolled back. The evaluator also has **no
-durable evaluation journal**. Request cancellation, process death or timeout
-after publication can leave a candidate without a final evaluation receipt.
-The source is still untouched, but the evaluation outcome is unknown. Reconcile
-the identical source, exact patch and complete evaluation request; never infer
-acceptance from an artifact's existence. Existing artifact idempotency supports
-that reconciliation, but restart/cancellation recovery is not qualified here.
+model was changed and subsequently rolled back. The public `evaluate` entry now
+delegates to the existing Linux `weight_guard_journal` owner. It durably records
+intent before edits and revalidates completed retries through the full guard.
+After an interrupted request, explicit reentry with the identical source, exact
+patch and complete evaluation request verifies restoration of the complete
+parent artifact and returns `interrupted_rejected_and_restored` on successful
+recovery. An interrupted request is not newly accepted even if its replay would
+improve the supplied score.
+
+Recovery is explicit same-request reconciliation, not a background process.
+Missing or altered source, model, manifest or journal evidence fails closed;
+incomplete recovery remains an explicit failure. The original
+[journal design and qualification](../experiments/weight/native_guard_journal_20261105/DESIGN.md)
+retain the actual SIGKILL/restart tests and original failed attempts. They do not
+qualify arbitrary power loss, distributed recovery or live-pointer adoption.
 
 The deterministic evaluation ID hashes the complete serialized request,
 including labels and constraints. It does not certify independent data origin,
 prevent an adaptive agent from reusing validation labels, or prove that a
 claimed holdout was unseen. The receipt explicitly reports
-`independent_holdout_verified=false`, `production_eligible=false`,
-`end_to_end_cost_known=false`, `interruption_recovery_verified=false` and
-`durable_evaluation_receipt=false`.
+`independent_holdout_verified=false`, `production_eligible=false` and
+`end_to_end_cost_known=false`. A successfully completed public journal receipt
+sets `durable_evaluation_receipt=true` and `current_durable_completion=true`.
+`interruption_recovery_verified=true` is reported only when the corresponding
+restoration path actually verifies it. The lower-level guard's initial false
+fields are not the final public journal receipt. Error paths retain their own
+explicit completion and restoration status.
 
 ## Resource and numerical boundaries
 
@@ -244,6 +272,7 @@ evaluation and matched baselines before making those claims.
 
 A future full system needs a graph-to-mechanism map, causal interventions,
 identifiable parameterization, feature/label provenance, independent evaluation
-budgets, durable request reconciliation and complete task-cost accounting.
+budgets and complete task-cost accounting. Durable same-request reconciliation
+already belongs to the existing journal described above.
 This extension supplies a narrow executable component of that system while
 keeping those unimplemented capabilities explicit.

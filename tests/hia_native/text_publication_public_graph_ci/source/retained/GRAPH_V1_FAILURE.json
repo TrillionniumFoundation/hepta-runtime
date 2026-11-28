@@ -1,0 +1,29 @@
+{
+  "schema": "hepta.runtime.publication.public-graph-build-failure.v1",
+  "commit": "0b683c204c8068e0ccbd8d656bbe5120c9a0f456",
+  "run": 44045448825,
+  "job": 133909880598,
+  "status": "FAIL_PRESERVED",
+  "phase": "second entry packs the linker into the first entry's fresh module directory",
+  "error": "FileExistsError: native-build/build/modules/wide-elf-linker",
+  "source_composition": {
+    "bytes": 110954,
+    "sha256": "63e5974cfd4d0569ff0443df78de9d433e673c1010e7c05104b8c21849912e2e",
+    "files": 486
+  },
+  "artifact": {
+    "id": 14310269586,
+    "zip": {
+      "bytes": 134903747,
+      "sha256": "f8158d982578cec90caf7b22e2571dc243634b69f5b1b7a3e08c09f37f0c8587"
+    },
+    "tar": {
+      "bytes": 133659472,
+      "sha256": "334ccbb0117d9d201494139c29c2af73a964fbf68bf599522308a60a6cfa3940"
+    },
+    "files": 5335,
+    "logical_bytes": 512240961
+  },
+  "fix": "Each entry owns its build/linker namespace; filesystem and trace continue strict reuse of the same public leaf manifests. Native sources, inputs, ownership/WAIT, source binding and budgets unchanged.",
+  "runtime_qualified": false
+}

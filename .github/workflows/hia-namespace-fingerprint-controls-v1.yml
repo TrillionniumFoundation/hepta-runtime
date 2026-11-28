@@ -1,0 +1,58 @@
+name: Namespace fingerprint native ABI controls
+on:
+  push:
+    branches: [hia-namespace-fingerprint-controls-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_fingerprint_controls_v1
+      - name: Admit the whole frozen additive source before execution
+        run: |
+          mkdir "$RUNNER_TEMP/fingerprint-controls"
+          cp -a tests/hia_native/namespace_fingerprint_controls_v1 "$RUNNER_TEMP/fingerprint-controls/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"fingerprint-controls/source"
+          raw=(root/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="d2f3509e90b4fed41e3769430ff54d143fc698c43598ac55ff2bd07a4c9c6762"
+          for name,pin in json.loads(raw)["files"].items():
+              body=(root/name).read_bytes()
+              assert len(body)==pin["bytes"] and hashlib.sha256(body).hexdigest()==pin["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(body)).encode()+b"\0"+body).hexdigest()==pin["git_blob"]
+              if name.endswith(".py"):compile(body,str(root/name),"exec")
+          PY
+      - name: Download only the complete unchanged native and original producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14340924600/zip > "$RUNNER_TEMP/fingerprint-controls/original.zip"
+      - name: Restore every original source, code, process, buffer and filesystem byte
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-controls/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-controls/original.zip" --output "$RUNNER_TEMP/fingerprint-controls/restored"
+      - name: Complete new direct HIA controls at the original 60 second limit
+        run: python3 -I -B "$RUNNER_TEMP/fingerprint-controls/source/run.py" --prior "$RUNNER_TEMP/fingerprint-controls/restored/prior" --output "$RUNNER_TEMP/fingerprint-controls/output" --phase owner
+      - name: Complete new real exported admission and recovery controls at 60 seconds
+        run: python3 -I -B "$RUNNER_TEMP/fingerprint-controls/source/run.py" --prior "$RUNNER_TEMP/fingerprint-controls/restored/prior" --output "$RUNNER_TEMP/fingerprint-controls/output" --phase transport
+      - name: Complete all retained original and new buffers under the read-only guard
+        run: python3 -I -B "$RUNNER_TEMP/fingerprint-controls/source/run.py" --prior "$RUNNER_TEMP/fingerprint-controls/restored/prior" --output "$RUNNER_TEMP/fingerprint-controls/output" --phase verify
+      - name: Preserve all successful or failed physical evidence without replay
+        if: always()
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-controls/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-controls" --archive "$RUNNER_TEMP/fingerprint-controls.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-fingerprint-controls-v1
+          path: |
+            ${{ runner.temp }}/fingerprint-controls.tar.gz
+            ${{ runner.temp }}/fingerprint-controls.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

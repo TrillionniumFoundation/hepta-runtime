@@ -87,7 +87,7 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 	let request = Request {
 		host: "fixture".into(),
 		command: "NEVER_DISPATCH".into(),
-		input: vec![],
+		input: ObservationInput::Legacy(vec![]),
 		deadline: Instant::now() + Duration::from_millis(500),
 		cancel: CancellationToken::new(),
 		reply,

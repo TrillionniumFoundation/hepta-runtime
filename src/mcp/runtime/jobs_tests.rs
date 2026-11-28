@@ -1996,7 +1996,7 @@ async fn confirmed_reuse_status_wait_releases_same_host_start_lock() {
 	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
 	for unavailable in [false, true] {
 		let mut guard = Some(lock.lock().await);
-		let status = read_reuse_status(&record, false, &mut guard, async {
+		let status = read_reuse_status(&record.id, true, &mut guard, async {
 			tokio::task::yield_now().await;
 			let admitted = lock
 				.try_lock()
@@ -2007,7 +2007,8 @@ async fn confirmed_reuse_status_wait_releases_same_host_start_lock() {
 			}
 			Ok(json!({"job_id":record.id,"state":"exited"}))
 		})
-		.await;
+		.await
+		.unwrap();
 		assert!(guard.is_none());
 		assert_eq!(status["job_id"], record.id);
 		if unavailable {
@@ -2023,15 +2024,10 @@ async fn confirmed_reuse_status_wait_releases_same_host_start_lock() {
 #[tokio::test]
 async fn uncertain_or_retried_reuse_keeps_start_lock_during_status_wait() {
 	let lock = start_lock("hepta-fixture-uncertain-reuse", Some("same-key")).unwrap();
-	for (state, retry) in [
-		("pending", false),
-		("unknown", false),
-		("launch_failed", true),
-		("launched", true),
-	] {
+	for state in ["pending", "unknown", "launch_failed", "launched"] {
 		let record = outcome_fixture(ExecutionMode::Operator, false, state);
 		let mut guard = Some(lock.lock().await);
-		read_reuse_status(&record, retry, &mut guard, async {
+		read_reuse_status(&record.id, false, &mut guard, async {
 			tokio::task::yield_now().await;
 			assert!(
 				lock.try_lock().is_err(),
@@ -2039,9 +2035,51 @@ async fn uncertain_or_retried_reuse_keeps_start_lock_during_status_wait() {
 			);
 			Ok(json!({"job_id":record.id,"state":"observed"}))
 		})
-		.await;
+		.await
+		.unwrap();
 		assert!(guard.is_some());
 	}
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn selected_hia_poll_refusal_is_not_an_ordinary_missing_status() {
+	let mut guard = None::<()>;
+	let result = read_reuse_status("original-job", true, &mut guard, async {
+		Err(crate::mcp::hia_request_prepare::JobStatusUnavailable::Poll.into())
+	})
+	.await;
+	assert_eq!(
+		result.unwrap_err().to_string(),
+		"HIA job observation unavailable"
+	);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn selected_hia_terminal_projection_requires_the_bound_typed_snapshot() {
+	let ordinary = json!({"job_id":"original-job","state":"running","backend":"systemd"});
+	assert_eq!(
+		project_terminal_status(ordinary.clone(), "original-job")
+			.await
+			.unwrap(),
+		ordinary
+	);
+	let mut mismatched = json!({"job_id":"different-job","_hia_terminal":{
+		"receipt":{"job_id":"original-job"},"facts":[0,0,0,1,1,1],"confirmed":true,
+	}});
+	assert!(project_terminal_status(mismatched.clone(), "original-job")
+		.await
+		.is_err());
+	mismatched["job_id"] = json!("original-job");
+	mismatched["_hia_terminal"]["facts"][0] = json!(false);
+	assert_eq!(
+		project_terminal_status(mismatched, "original-job")
+			.await
+			.unwrap_err()
+			.to_string(),
+		"HIA terminal job state unavailable"
+	);
 }
 
 #[cfg(unix)]

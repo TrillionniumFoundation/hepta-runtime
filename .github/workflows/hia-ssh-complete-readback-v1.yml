@@ -1,0 +1,59 @@
+name: Read SSH success and installed bytes failure without replay
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-ssh-complete-readback-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: runtime
+            artifact: '14373582452'
+          - role: reference
+            artifact: '14373672731'
+          - role: installed-bytes
+            artifact: '14375126162'
+    steps:
+      - name: Set actual paths
+        run: |
+          printf '%s\n' "SR_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/complete_readback" "SR_ZIP=$RUNNER_TEMP/retained.zip" "SR_OUTPUT=$RUNNER_TEMP/readback" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/complete_readback
+      - name: Bind exact readers and compile syntax only
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SR_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = e5a647e1e685009a48a71e5791c25c1238f9331b6a325fc1bca0087d0e5492de
+          test "$(sha256sum "$SR_SOURCE/inspect_archive.py" | cut -d' ' -f1)" = 9fa2f51a34e28bb3d2f5590d62a8ea7fc9efb1a88031d5859ffa9e00222b17a9
+          test "$(sha256sum "$SR_SOURCE/read_failure.py" | cut -d' ' -f1)" = a4e3b4cf3e59a492969616cd448a38caeb144b980bf937de72ae40a7a2face18
+          python3 -I -S -B -c 'import pathlib,sys; [compile(p.read_bytes(),str(p),"exec") for p in pathlib.Path(sys.argv[1]).glob("*.py")]' "$SR_SOURCE"
+      - name: Fetch only exact completed artifact bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.artifact }}/zip > "$SR_ZIP"
+      - name: Read complete uploaded ZIP and TAR
+        run: |
+          if [ "${{ matrix.role }}" = installed-bytes ]; then
+            python3 -I -S -B "$SR_SOURCE/read_failure.py" --archive "$SR_ZIP" --output "$SR_OUTPUT"
+          else
+            python3 -I -S -B "$SR_SOURCE/inspect_archive.py" --archive "$SR_ZIP" --output "$SR_OUTPUT" --role "${{ matrix.role }}"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-complete-pure-read-${{ matrix.role }}-${{ github.sha }}
+          path: |
+            ${{ env.SR_OUTPUT }}/*.json
+            ${{ env.SR_OUTPUT }}/selected-*
+          compression-level: 0
+          if-no-files-found: error

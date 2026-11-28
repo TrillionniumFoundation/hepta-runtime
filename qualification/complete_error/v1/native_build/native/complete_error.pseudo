@@ -1,0 +1,19 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)>=8:
+        if load(s,0)==3544386036648919880:
+            if length(s)<64 or length(s)>=4294901760 or length(w)<12288:
+                return 4294967295
+            if load(s,8)!=3 or load(s,16)!=0 or load(s,24)!=0:
+                return 4294967295
+            if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0:
+                return 4294967295
+            size=load(s,56)
+            if size==0 or size!=length(s)-64:
+                return 4294967295
+            if utf8(s,64,size)==0:
+                return 4294967295
+            if length(o)<size:
+                return 4294967294
+            copy_in(s,o,64,0,size)
+            return size
+    return previous_formatter(s,o,w)

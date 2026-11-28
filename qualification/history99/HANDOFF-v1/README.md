@@ -1,0 +1,11 @@
+# Main99 filesystem and configuration/regex evidence controls closed
+
+The original main99 run 44023379853 remains FAILURE. Its aggregate had already passed 405 checks and 81 recipes; the later filesystem control timed out at its original 180 seconds and the configuration/regex control was skipped. This handoff closes those two evidence-control obligations by new pure continuations over the exact retained original bytes. No HIA or Rust semantics were repeated and no main-branch file was changed.
+
+The entire original 4,393,597,000-byte ZIP and 27,711,549,440-byte TAR were checked, including all 180,288 indexed entries. Both continuations independently reread the full original archive and used complete source-bound subsets. Filesystem completed all 11 refusals, two physical relocations, 12 producer/foreign-copy refusals and 80 original reader calls in 103.993 seconds. Configuration/regex completed all 14 refusals and six complete admissions in 45.624 seconds. Each retained its original 180-second process limit.
+
+A new independent workflow then reopened both uploaded ZIPs, whole gzip/TAR streams and full physical sources/artifacts. Its guarded readers passed all checks with 12 no-write/no-execution probes each. The two archives contain 9,234 logical regular files / 1,650,116,669 bytes. All before/after metadata and permitted configuration-mutation restoration checks are retained in the proof artifacts.
+
+The proposed one-file change under proposed/ is exactly the 13,736-byte script actually executed in the filesystem continuation. It replaces only the nested relocation path guard, preserving every other AST node, every original reader/refusal and every file-byte comparison. It is a reviewable installation candidate, not an installed change. Check its full before/after identities in proposed/BINDING.json before applying it and include it in the next source closure. The original report, source pins, failed workflow and all historical failures remain unchanged.
+
+HANDOFF.json records every immutable source, workflow, artifact, inner archive, executed process, independent reader and complete log identity. Existing actual request_audit record-I/O qualification is separately closed at 581b8e4d31dc9a7bb2e63ca8f8e2b79eea04989b; broader audit persistence/caller composition remains a separate successor task.

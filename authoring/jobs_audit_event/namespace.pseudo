@@ -1,0 +1,276 @@
+def namespace_entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(w)<8192 or read64(w,0)!=OWNER:
+        return FAULT
+    result=AGAIN
+    while result==AGAIN:
+        phase=read64(w,8)
+        if phase<100 or phase>=500:
+            return AGAIN
+        if read64(w,ACTION+64)!=read64(w,16):
+            return FAULT
+        if phase==100:
+            result=namespace_start(w)
+        else:
+            result=namespace_step(s,o,w,phase)
+    return result
+
+def namespace_start(w:mutbuf) -> u64:
+    if read64(w,168)==0:
+        return effect(w,101,12,526336,0,0,0,0)
+    return namespace_drain_begin(w)
+
+def namespace_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase<200:
+        return watch_step(w,phase)
+    return fingerprint_step(w,phase)
+
+def watch_step(w:mutbuf,phase:u64) -> u64:
+    if phase==101:
+        if io_error(w)!=0:
+            return fingerprint_begin(w)
+        put(w,168,io_result(w))
+        return namespace_drain_begin(w)
+    if phase==103:
+        err=io_error(w)
+        if err==11:
+            return effect(w,104,5,read64(w,960),STAT,0,0,0)
+        if err==0:
+            count=io_result(w)
+            if count==0 or count>16384 or drain_events(w,count)==0:
+                return namespace_drain_failure(w)
+        else:
+            if err!=4:
+                return namespace_drain_failure(w)
+        if read64(w,920)==64:
+            return namespace_drain_failure(w)
+        return namespace_read(w)
+    if phase==104:
+        if io_error(w)!=0 or (read64(w,STAT+24)&61440)!=16384:
+            return fingerprint_begin(w)
+        copy_range(w,w,TEMP_WATCH,STAT,16)
+        index=find_watch(w)
+        if index<read64(w,896):
+            at=WATCHES+index*48
+            if read64(w,at+40)<9223372036854775808:
+                copy_range(w,w,TEMP_WATCH,at,48)
+                remove_watch_row(w,index)
+                append_watch_row(w)
+                return namespace_return_watch(w)
+            put(w,904,index)
+            put(w,624,0)
+            return effect(w,107,15,read64(w,168),read64(w,at+24),0,0,0)
+        return effect(w,105,20,read64(w,960),0,0,0,0)
+    if phase==105:
+        if io_error(w)!=0:
+            return fingerprint_begin(w)
+        put(w,TEMP_WATCH+16,io_result(w))
+        return effect(w,106,13,read64(w,168),io_result(w),16781248,0,0)
+    if phase==106:
+        if io_error(w)!=0:
+            return effect(w,109,11,read64(w,TEMP_WATCH+16),0,0,0,0)
+        serial=namespace_serial(w)
+        if serial==0:
+            return effect(w,109,11,read64(w,TEMP_WATCH+16),0,0,0,0)
+        put(w,TEMP_WATCH+24,io_result(w))
+        put(w,TEMP_WATCH+32,serial)
+        put(w,TEMP_WATCH+40,serial)
+        if read64(w,896)==128:
+            put(w,904,0)
+            put(w,624,1)
+            return effect(w,107,15,read64(w,168),read64(w,WATCHES+24),0,0,0)
+        append_watch_row(w)
+        return namespace_return_watch(w)
+    if phase==107:
+        index=read64(w,904)
+        handle=read64(w,WATCHES+index*48+16)
+        remove_watch_row(w,index)
+        return effect(w,108,11,handle,0,0,0,0)
+    if phase==108:
+        if read64(w,624)==1:
+            append_watch_row(w)
+            return namespace_return_watch(w)
+        return effect(w,105,20,read64(w,960),0,0,0,0)
+    if phase==109:
+        put(w,TEMP_WATCH+16,0)
+        return fingerprint_begin(w)
+    return FAULT
+
+def namespace_drain_begin(w:mutbuf) -> u64:
+    put(w,920,0)
+    put(w,928,0)
+    return namespace_read(w)
+
+def namespace_read(w:mutbuf) -> u64:
+    put(w,920,read64(w,920)+1)
+    return effect(w,103,14,read64(w,168),scratch_region(w),16384,0,0)
+
+def namespace_serial(w:mutbuf) -> u64:
+    serial=read64(w,176)
+    if serial>=9223372036854775807:
+        return 0
+    serial=serial+1
+    put(w,176,serial)
+    return serial
+
+def namespace_changed(w:mutbuf,wd:u64,mask:u64) -> u64:
+    serial=namespace_serial(w)
+    if serial==0:
+        return 0
+    i=0
+    while i<read64(w,896):
+        at=WATCHES+i*48
+        if (mask&16384)!=0 or read64(w,at+24)==wd:
+            dead=read64(w,at+40)&9223372036854775808
+            if (mask&58368)!=0:
+                dead=9223372036854775808
+            put(w,at+40,serial|dead)
+        i=i+1
+    return 1
+
+def drain_events(w:mutbuf,n:u64) -> u64:
+    base=scratch_region(w)
+    at=0
+    while at<n:
+        if read64(w,928)==16384 or n-at<16:
+            return 0
+        wd=read32(w,base+at)
+        mask=read32(w,base+at+4)
+        size=read32(w,base+at+12)
+        if size>n-at-16:
+            return 0
+        if namespace_changed(w,wd,mask)==0:
+            return 0
+        put(w,928,read64(w,928)+1)
+        at=at+16+size
+    return 1
+
+def namespace_drain_failure(w:mutbuf) -> u64:
+    namespace_changed(w,4294967295,16384)
+    return fingerprint_begin(w)
+
+def find_watch(w:mutbuf) -> u64:
+    i=0
+    n=read64(w,896)
+    while i<n:
+        at=WATCHES+i*48
+        if read64(w,at)==read64(w,TEMP_WATCH) and read64(w,at+8)==read64(w,TEMP_WATCH+8):
+            return i
+        i=i+1
+    return n
+
+def remove_watch_row(w:mutbuf,index:u64) -> u64:
+    count=read64(w,896)
+    if index>=count:
+        return 0
+    copy_range(w,w,WATCHES+index*48,WATCHES+(index+1)*48,(count-index-1)*48)
+    put(w,896,count-1)
+    return count-1
+
+def append_watch_row(w:mutbuf) -> u64:
+    count=read64(w,896)
+    copy_range(w,w,WATCHES+count*48,TEMP_WATCH,48)
+    put(w,896,count+1)
+    return count+1
+
+def namespace_return_watch(w:mutbuf) -> u64:
+    fill_range(w,TOKEN,48,0)
+    put(w,TOKEN,1)
+    put(w,TOKEN+8,read64(w,TEMP_WATCH+32))
+    put(w,TOKEN+16,read64(w,TEMP_WATCH+40))
+    put(w,8,read64(w,952))
+    return AGAIN
+
+def fingerprint_begin(w:mutbuf) -> u64:
+    return effect(w,200,18,read64(w,960),589824,0,0,0)
+
+def fingerprint_step(w:mutbuf,phase:u64) -> u64:
+    if phase==200:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        put(w,FINGERPRINT_FD,io_result(w))
+        return hash_effect(w,201,3,0)
+    if phase==201:
+        if io_error(w)!=0 or io_result(w)!=128:
+            return FAULT
+        copy_range(w,w,SHA_STATE,SHA_OUTPUT,128)
+        return effect(w,202,17,read64(w,FINGERPRINT_FD),scratch_region(w),16384,0,0)
+    if phase==202:
+        if io_error(w)!=0:
+            put(w,NAMESPACE_ERROR,io_error(w))
+            return effect(w,207,11,read64(w,FINGERPRINT_FD),0,0,0,0)
+        size=io_result(w)
+        if size>16384:
+            return FAULT
+        if size==0:
+            return hash_effect(w,205,5,128)
+        size=encode_directory_entries(w,size)
+        if size==INVALID:
+            return FAULT
+        return hash_effect(w,203,4,128+size)
+    if phase==203:
+        if io_error(w)!=0 or io_result(w)!=128:
+            return FAULT
+        copy_range(w,w,SHA_STATE,SHA_OUTPUT,128)
+        return effect(w,202,17,read64(w,FINGERPRINT_FD),scratch_region(w),16384,0,0)
+    if phase==205:
+        if io_error(w)!=0 or io_result(w)!=32:
+            return FAULT
+        fill_range(w,TOKEN,48,0)
+        put(w,TOKEN,2)
+        copy_range(w,w,TOKEN+8,SHA_OUTPUT,32)
+        return effect(w,206,11,read64(w,FINGERPRINT_FD),0,0,0,0)
+    if phase==206:
+        put(w,FINGERPRINT_FD,0)
+        put(w,8,read64(w,952))
+        return AGAIN
+    if phase==207:
+        put(w,FINGERPRINT_FD,0)
+        return fail_or_cold(w,0,read64(w,NAMESPACE_ERROR))
+    return FAULT
+
+def hash_effect(w:mutbuf,next:u64,op:u64,payload:u64) -> u64:
+    base=scratch_region(w)+16384
+    put(w,base,CODEC_REQUEST)
+    put(w,base+8,op)
+    put(w,base+16,0)
+    if payload>=128:
+        copy_range(w,w,base+24,SHA_STATE,128)
+    return effect(w,next,19,base,24+payload,SHA_OUTPUT,128,0)
+
+def encode_directory_entries(w:mutbuf,size:u64) -> u64:
+    base=scratch_region(w)
+    dst=base+16384+152
+    end=dst
+    at=0
+    while at<size:
+        if size-at<20:
+            return INVALID
+        record=byte(w,base+at+16)|(byte(w,base+at+17)<<8)
+        if record<20 or record>size-at:
+            return INVALID
+        n=0
+        while n<record-19 and byte(w,base+at+19+n)!=0:
+            n=n+1
+        if n==record-19:
+            return INVALID
+        skip=0
+        if n==1 and byte(w,base+at+19)==46:
+            skip=1
+        if n==2 and byte(w,base+at+19)==46 and byte(w,base+at+20)==46:
+            skip=1
+        if skip==0:
+            put(w,end,n)
+            end=end+8
+            copy_range(w,w,end,base+at+19,n)
+            end=end+n
+            put(w,end,read64(w,base+at))
+            store(w,end+8,byte(w,base+at+18))
+            end=end+9
+        at=at+record
+    return end-dst
+
+def scratch_region(w:mutbuf) -> u64:
+    return 8192+8*read64(w,64)
+
+def read32(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)

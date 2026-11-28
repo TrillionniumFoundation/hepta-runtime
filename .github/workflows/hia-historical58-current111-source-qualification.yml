@@ -1,0 +1,61 @@
+name: Historical58 source binding from installed111
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-historical58-current111-qualification-6780-*']
+permissions:
+  contents: read
+jobs:
+  complete-source-materialization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Set runtime paths
+        shell: bash
+        run: |
+          echo "SOURCE_ROOT=$RUNNER_TEMP/historical58-source" >> "$GITHUB_ENV"
+          echo "PROOF_ROOT=$RUNNER_TEMP/historical58-source-proof" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 3
+          path: qualification
+      - name: Check out the exact three-file candidate
+        shell: bash
+        run: |
+          test "$(git -C qualification rev-parse HEAD)" = '${{ github.sha }}'
+          git -C qualification worktree add --detach "$SOURCE_ROOT" 208ff61db1da78aadfeb8d7913af7ddf4b59d461
+          test "$(git -C "$SOURCE_ROOT" rev-parse HEAD)" = 208ff61db1da78aadfeb8d7913af7ddf4b59d461
+      - name: Complete source materialization and strict readback
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 -I -B qualification/qualification/historical58_current111_v1/source_only.py --source "$SOURCE_ROOT" --output "$PROOF_ROOT" 2>&1 | tee "$RUNNER_TEMP/historical58-source-process.log"
+      - name: Independent unchanged-capture read
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 -I -B qualification/qualification/historical58_current111_v1/source_only.py --read-only "$PROOF_ROOT/capture" 2>&1 | tee "$RUNNER_TEMP/historical58-source-readonly.log"
+      - name: Preserve an incomplete source attempt
+        if: failure()
+        shell: bash
+        run: |
+          if [ -d "$PROOF_ROOT" ]; then
+            tar -czf "$RUNNER_TEMP/historical58-source-failure.tar.gz" -C "$PROOF_ROOT" .
+          fi
+      - name: Upload complete source proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical58-current111-source-proof-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            ${{ env.PROOF_ROOT }}/source-proof.tar.gz
+            ${{ env.PROOF_ROOT }}/ARCHIVE.json
+            ${{ env.PROOF_ROOT }}/GATE.json
+            ${{ runner.temp }}/historical58-source-process.log
+            ${{ runner.temp }}/historical58-source-readonly.log
+            ${{ runner.temp }}/historical58-source-failure.tar.gz

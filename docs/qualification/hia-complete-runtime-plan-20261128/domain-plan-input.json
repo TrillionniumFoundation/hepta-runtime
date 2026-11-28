@@ -1,0 +1,488 @@
+{
+  "schema": "hepta.runtime.remaining-handler-ownership-plan.v1",
+  "runtime_target": "d3d75c30719db966b004756f610007a7c723729e",
+  "current_bridge_source": "ae1c7ea593da45f7299c692a2acd44605c35be09",
+  "imported_native_source": "c57a7fddfd9ed042b19e4d61f4f28603856340ea",
+  "registered_target_handlers": 136,
+  "qualified_route_names": [
+    "host_list",
+    "effective_config",
+    "execution_shadow_admit",
+    "view",
+    "workdir",
+    "directory_create",
+    "file_move",
+    "directory_move",
+    "text_editor",
+    "batch_edit",
+    "weight_bellman_plan",
+    "extract_lines",
+    "text_file_write"
+  ],
+  "qualification_scope": "Retained original 124-component Linux Local public profile only; imported 126-component binary owners remain unregistered. Source union is not a transferred qualification.",
+  "remaining_handlers": 123,
+  "domains": [
+    {
+      "id": "agent_tools",
+      "handlers": [
+        "hia_describe",
+        "hia_artifact",
+        "hia_read",
+        "hia_context",
+        "hia_inspect",
+        "hia_candidate",
+        "hia_verify",
+        "hia_emit",
+        "hia_evaluate",
+        "hia_adopt",
+        "hia_rollback"
+      ],
+      "original_test_patterns": [
+        "src/mcp/hia_*tests.rs",
+        "tests/hia_native_helper_mcp_integration.py",
+        "tests/hia_installed_public_jobs_integration.py"
+      ],
+      "prerequisites": [
+        "final_Hepta_native_worker_store",
+        "public_native_process_owner",
+        "MCP_request_reply_protocol"
+      ],
+      "contract": "Bind the same release, request, catalog, state and witness to the real HIA Worker; persist/reopen actual results without launching Python or Rust business handlers.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "file_bytes",
+      "handlers": [
+        "read_multiple_files",
+        "file_info",
+        "binary_read",
+        "binary_write",
+        "binary_upload",
+        "binary_patch_inode"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/binary*tests.rs",
+        "src/mcp/runtime/multi_read_tests.rs",
+        "tests/binary_file_tests.py",
+        "tests/multi_read_tests.py",
+        "tests/metadata_preservation_tests.py"
+      ],
+      "prerequisites": [
+        "immutable_host_configuration",
+        "descriptor_path_authority",
+        "typed_JSON",
+        "local_IO_owners"
+      ],
+      "contract": "Preserve complete parameter/error ordering, descriptor-relative no-follow custody, inode/version identity, limits, metadata and exact bytes; the local-only component profile does not substitute for configured-host routing.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "search",
+      "handlers": [
+        "search_start",
+        "search_results",
+        "search_list",
+        "search_stop"
+      ],
+      "original_test_patterns": [
+        "src/mcp/fs/search_tests.rs",
+        "src/mcp/runtime/search_jobs_tests.rs",
+        "tests/search_worker_tests.py",
+        "tests/search_effects_native_acceptance.py",
+        "tests/search_six_host_acceptance.py"
+      ],
+      "prerequisites": [
+        "file_bytes",
+        "durable_requests",
+        "process_owner",
+        "regex_owners"
+      ],
+      "contract": "Preserve actual asynchronous searches, cancellation, ordered result cursors, source effects and retained original-job identity.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "process_owner",
+      "handlers": [
+        "shell",
+        "shell_start",
+        "process_start",
+        "process_status",
+        "process_read",
+        "process_wait",
+        "process_cancel",
+        "process_list",
+        "process_list_page"
+      ],
+      "original_test_patterns": [
+        "src/mcp/fs/shell_tests.rs",
+        "src/mcp/runtime/jobs*tests.rs",
+        "src/mcp/runtime/native_jobs_tests.rs",
+        "tests/process_ops_tests.py",
+        "tests/operator_job_identity_tests.py",
+        "tests/native_library_process_canary.py",
+        "tests/hia_installed_public_jobs_integration.py"
+      ],
+      "prerequisites": [
+        "final_Hepta_native_job_bundle",
+        "immutable_host_configuration",
+        "descriptor_path_authority"
+      ],
+      "contract": "Run original START/STATUS/read/wait/cancel/inventory and restart/unknown-outcome witnesses through the complete native owner; preserve terminal type and byte/offset exactness, no replay, original budgets and one-child provenance.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "durable_requests",
+      "handlers": [
+        "request_archive",
+        "request_history",
+        "request_status",
+        "request_result",
+        "request_start",
+        "request_cancel",
+        "operation_start",
+        "operation_status",
+        "operation_result",
+        "operation_cancel"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/request*tests.rs",
+        "src/mcp/runtime/operation*tests.rs",
+        "tests/dc_functional_v9_request_async_real_ssh_six_host_acceptance.py"
+      ],
+      "prerequisites": [
+        "request_context",
+        "caller_authority",
+        "record_crypto",
+        "atomic_storage",
+        "process_owner"
+      ],
+      "contract": "Preserve encrypted/request records, original leases, indexes, retained history/archive, recovery, cancellation, incomplete states and exact request identity across restart.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "stream_handoff",
+      "handlers": [
+        "stream_handoff_prepare",
+        "stream_handoff_status",
+        "stream_handoff_read",
+        "stream_handoff_write",
+        "stream_handoff_close",
+        "stream_handoff_list"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/stream_tests.rs",
+        "tests/stream_broker_tests.py",
+        "tests/stream_handoff_tests.py",
+        "tests/stream_history_tests.py",
+        "tests/stream_native_acceptance.py",
+        "tests/stream_handoff_acceptance.py"
+      ],
+      "prerequisites": [
+        "process_owner",
+        "durable_requests",
+        "host_transport"
+      ],
+      "contract": "Preserve actual broker ownership, exact stream cursors and EOF, authenticated handoff, restart and no-restart continuation, cancellation and one-owner publication.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "pty",
+      "handlers": [
+        "pty_start",
+        "pty_read",
+        "pty_write",
+        "pty_close",
+        "pty_list"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/pty*tests.rs",
+        "tests/terminal_host_tests.py"
+      ],
+      "prerequisites": [
+        "host_transport",
+        "process_owner",
+        "platform_PTY_syscalls"
+      ],
+      "contract": "Preserve real controlling terminal, dimensions, binary writes, retained output archive, exact PID/boot identity, controller-loss reconnect and original process-group cleanup.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "host_control",
+      "handlers": [
+        "host_processes",
+        "host_signal",
+        "sudo_start",
+        "host_health",
+        "process_checkpoint",
+        "service_status",
+        "privileged_action",
+        "hardware_snapshot",
+        "network_inspect",
+        "usage_stats"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/inspect*tests.rs",
+        "src/mcp/runtime/inspection_result_tests.rs",
+        "src/mcp/runtime/config*tests.rs",
+        "src/mcp/runtime/request_usage*tests.rs",
+        "tests/checkpoint_lifecycle_tests.py",
+        "tests/native_checkpoint_acceptance.py",
+        "tests/operator_acceptance.py"
+      ],
+      "prerequisites": [
+        "immutable_host_configuration",
+        "host_transport",
+        "OS_inspection_syscalls",
+        "process_owner"
+      ],
+      "contract": "Preserve configured aliases and real machine/platform facts, allowlists and privilege scope, exact process/boot identity, separate stopped checkpoint restore/resume and bounded accounting. Never report a configured flag as an executed fact.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "documents",
+      "handlers": [
+        "document_read",
+        "image_read",
+        "document_write",
+        "document_edit",
+        "pdf_edit",
+        "worksheet_edit",
+        "document_render",
+        "worksheet_recalculate",
+        "pdf_security"
+      ],
+      "original_test_patterns": [
+        "src/mcp/runtime/documents_tests.rs",
+        "tests/document_local_tests.py",
+        "tests/document_extended_tests.py",
+        "tests/document_mcp_acceptance.py",
+        "tests/complex_worksheet_tests.py",
+        "tests/metadata_preservation_tests.py"
+      ],
+      "prerequisites": [
+        "file_bytes",
+        "process_owner",
+        "format_engines"
+      ],
+      "contract": "Preserve original document/PDF/image/worksheet behavior, security and metadata; each external engine is recorded explicitly and old Python business code remains a porting obligation.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "rea_evidence",
+      "handlers": [
+        "rea_inspect_analysis_view",
+        "rea_import_evidence_bundle",
+        "rea_export_evidence_bundle",
+        "rea_get_evidence_bundle",
+        "rea_read_evidence_bundle",
+        "rea_close_evidence_snapshot",
+        "rea_inspect_source_map",
+        "rea_evidence_session_checkpoint",
+        "rea_evidence_session_resume",
+        "rea_evidence_session_list",
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview"
+      ],
+      "original_test_patterns": [
+        "src/mcp/rea_evidence*tests.rs",
+        "src/mcp/rea_analysis_view*tests.rs",
+        "src/mcp/rea_source_map*tests.rs",
+        "src/mcp/rea_store_tests.rs",
+        "tests/rea_evidence_import_qualification_tests.py",
+        "tests/rea_evidence_checkpoint_upgrade_tests.py",
+        "tests/rea_evidence_checkpoint_http.py",
+        "tests/rea_multihost_recovery_tests.py",
+        "tests/rea_compatibility_ledger_tests.py"
+      ],
+      "prerequisites": [
+        "file_bytes",
+        "durable_requests",
+        "rea_typed_wire"
+      ],
+      "contract": "Preserve full evidence bytes/modes, immutable source identities, descriptor-based snapshots, source-map bounds, same-session restore and all original 229 ledger scopes without elevating a source mapping to behavior parity.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "rea_formats",
+      "handlers": [
+        "rea_inspect_artifact",
+        "rea_inspect_model",
+        "rea_read_model",
+        "rea_inspect_application",
+        "rea_inspect_archive",
+        "rea_inspect_asar",
+        "rea_read_asar_member",
+        "rea_inspect_elf_notes",
+        "rea_inspect_apk_signature_evidence",
+        "rea_inspect_apk_signature"
+      ],
+      "original_test_patterns": [
+        "src/mcp/rea_artifact*tests.rs",
+        "src/mcp/rea_asar*tests.rs",
+        "src/mcp/rea_elf*tests.rs",
+        "src/mcp/rea_apk*tests.rs",
+        "src/mcp/rea_model*tests.rs",
+        "src/mcp/rea_application_tests.rs",
+        "tests/rea_asar_qualification.py",
+        "tests/rea_apk_signature_mcp.py",
+        "tests/rea_compatibility_ledger_tests.py"
+      ],
+      "prerequisites": [
+        "file_bytes",
+        "rea_evidence",
+        "bounded_parsers",
+        "explicit_signature_engines"
+      ],
+      "contract": "Preserve complete format/parser controls, exact integer/extent checks, typed errors and signature evidence; keep external trust and parser authority boundaries explicit.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "rea_external_analysis",
+      "handlers": [
+        "rea_inspect_web_capture",
+        "rea_compare_web_captures",
+        "rea_replay_web_entry",
+        "rea_inspect_javascript_package",
+        "rea_inspect_javascript_graph",
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "original_test_patterns": [
+        "src/mcp/rea_browser*tests.rs",
+        "src/mcp/rea_web_tests.rs",
+        "src/mcp/rea_javascript*tests.rs",
+        "src/mcp/rea_static*tests.rs",
+        "src/mcp/rea_engine*tests.rs",
+        "src/mcp/rea_ghidra*tests.rs",
+        "tests/rea_browser_native_differential.py",
+        "tests/rea_browser_external.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_lifecycle_qualification_tests.py",
+        "tests/rea_compatibility_ledger_tests.py"
+      ],
+      "prerequisites": [
+        "rea_evidence",
+        "process_owner",
+        "host_transport",
+        "explicit_external_engines"
+      ],
+      "contract": "Preserve original real engine invocations, cancellation, deadlines, retained raw outputs, profile pins and exact typed evidence; no Rust/Python orchestration fallback may masquerade as HIA.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "rea_model_sessions",
+      "handlers": [
+        "rea_model_session_list",
+        "rea_model_session_open",
+        "rea_model_session_query",
+        "rea_model_session_read"
+      ],
+      "original_test_patterns": [
+        "src/mcp/rea_model_session*tests.rs",
+        "src/mcp/rea_worker*tests.rs",
+        "tests/rea_model_session_http.py",
+        "tests/rea_lifecycle_parallel_tests.py",
+        "tests/rea_compatibility_ledger_tests.py"
+      ],
+      "prerequisites": [
+        "rea_formats",
+        "durable_requests",
+        "process_owner",
+        "model_engine_boundary"
+      ],
+      "contract": "Preserve resident-model session identity, exact query/read bounds, lifecycle, typed model outputs and actual restoration.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "weight_artifacts",
+      "handlers": [
+        "weight_artifact_patch",
+        "weight_artifact_restore",
+        "weight_cohort_patch",
+        "weight_cohort_restore",
+        "weight_linear_forward",
+        "weight_linear_ridge_plan",
+        "weight_continuation_certificate",
+        "weight_semantic_replay",
+        "weight_semantic_certificate",
+        "weight_guarded_linear_patch"
+      ],
+      "original_test_patterns": [
+        "src/mcp/weight_artifact_tests.rs",
+        "src/mcp/weight_artifact_cohort_tests.rs",
+        "src/mcp/weight_forward_tests.rs",
+        "src/mcp/weight_ridge_tests.rs",
+        "src/mcp/weight_certificate_tests.rs",
+        "src/mcp/weight_guard_journal_tests.rs",
+        "src/mcp/weight_guard_tests.rs",
+        "src/mcp/weight_semantic*/**.rs",
+        "src/mcp/weight_semantic*tests.rs",
+        "src/mcp/weight_tensor_tests.rs",
+        "src/mcp/weight_tests.rs",
+        "tests/weight_forward_external.rs"
+      ],
+      "prerequisites": [
+        "file_bytes",
+        "durable_requests",
+        "exact_numeric_owners",
+        "admitted_custody"
+      ],
+      "contract": "Preserve original full tensor/format arithmetic, exact patch and restore, cohort transactions, continuation/proof scopes and independent actual original comparisons; do not turn research-only WSP outputs into production eligibility.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    },
+    {
+      "id": "weight_workers",
+      "handlers": [
+        "weight_profiles",
+        "weight_open",
+        "weight_call",
+        "weight_status",
+        "weight_read",
+        "weight_close"
+      ],
+      "original_test_patterns": [
+        "src/mcp/weight_tests.rs",
+        "tests/weight_mcp_external.rs",
+        "workers/weight/tests/test_*.py"
+      ],
+      "prerequisites": [
+        "process_owner",
+        "durable_requests",
+        "model_engine_boundary",
+        "weight_artifacts"
+      ],
+      "contract": "Preserve actual model worker protocol, profile/source pins, resident state, bounded outputs and independent engine effects; replacing its Python coordinator remains required.",
+      "status": "UNROUTED_IN_PURE_RUNTIME",
+      "original_behavior_pass_transferred": false
+    }
+  ],
+  "shared_required_gates": [
+    "Actual same-endpoint MCP negotiation/catalog/error order, complete typed request/reply and caller authority.",
+    "Original reference binaries and input rows remain immutable; current native executions have their own full raw receipts.",
+    "Full Runtime nextest in both feature configurations with one test thread and zero retries; full native original partition/caller gates.",
+    "Final matching Hepta cold/release/install/identical installed rebuild; original public19 and default03 Worker gate are distinct.",
+    "Real trace proves no Python/Rust business execution on admitted HIA routes; external system/engine ABI boundaries explicitly classified.",
+    "Original configured-host and platform behavior must be qualified; Linux-only components do not replace macOS/Windows or cross-host behavior.",
+    "Only after all routes, persistence/restart, active-job drain/reconcile and same-endpoint cutover pass may old runtime files/branches retire."
+  ],
+  "production_activated": false,
+  "old_stack_removal_qualified": false
+}

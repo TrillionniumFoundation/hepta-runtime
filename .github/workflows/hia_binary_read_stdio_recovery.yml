@@ -1,0 +1,47 @@
+name: Qualify retained HIA binary read stdio evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-stdio-recovery-proof-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_read_stdio/v1/recovery
+      BINARY_MANIFEST: 602d428e51366253c6964456e128df11ba5ae6d2d256b470e2e3427d4eb9998e
+    steps:
+      - name: Checkout frozen independent uploaded reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_stdio/v1/recovery
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Independently read all uploaded bytes without application execution
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" run \
+            --work "$RUNNER_TEMP/binary-read-stdio-recovery" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete evidence including any failed capture
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" export \
+            --work "$RUNNER_TEMP/binary-read-stdio-recovery" --output "$RUNNER_TEMP/binary-read-stdio-recovery-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-read-stdio-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-read-stdio-recovery-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

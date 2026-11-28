@@ -1,0 +1,10 @@
+[
+  {
+    "before": "    let fixture_sessions = if first_argument.as_deref() == Some(\"--fixture-single-session\") { 1 } else { 2 };\n    let fixture_config = if fixture_sessions == 1 { std::env::args().nth(2) } else { first_argument };",
+    "after": "    let stdio_mode = first_argument.as_deref() == Some(\"--stdio\");\n    let fixture_sessions = if first_argument.as_deref() == Some(\"--fixture-single-session\") || stdio_mode { 1 } else { 2 };\n    let fixture_config = if fixture_sessions == 1 { std::env::args().nth(2) } else { first_argument };"
+  },
+  {
+    "before": "    let mut sessions = executor.block_on(async {",
+    "after": "    if stdio_mode {\n        return executor.block_on(async {\n            let running = servers[0].clone().serve(rmcp::transport::stdio()).await?;\n            running.waiting().await?;\n            Ok(())\n        });\n    }\n    let mut sessions = executor.block_on(async {"
+  }
+]

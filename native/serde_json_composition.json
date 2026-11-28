@@ -1,0 +1,128 @@
+{
+  "adaptations": [
+    "HIA number lexer and serde i64/u64/f64 classification, including -0 and overflow-to-f64.",
+    "Pinned integer decimal-to-binary64 math receives a source span and returns private bits; no host floating-point or JSON runtime.",
+    "Pinned shortest-binary64 formatter keeps its integer core and adopts actual zmij fixed exponent range -5..15 and non-padded exponent digits.",
+    "Pinned UTF-8 decoder helpers are reused; generic Value uses 127-container admission, stable byte-key sort and final duplicate selection. Every numeric node is validated before duplicate selection.",
+    "Arena and parser storage are relocated into disjoint workspace spans; complete measurement precedes output. Per-invocation previous numeric lexeme and exact 64-bit float text reuse retain invalid-value admission and signed-zero distinction.",
+    "Owner/Legacy typed maps and arrays have separate direct parsing, duplicate-known bits and iterative IgnoredAny grammar; no generic Value precheck.",
+    "HIA filter packer emits the original closed syscall transport with explicit 16/64/256 MiB buffers and no interpreter or libc.",
+    "Locked raw_value first-key maps parse their string as independent complete Value contexts before duplicate selection, including numeric operation 2; private flattening and stackless decode retain each original 127-container depth budget.",
+    "Bounded and raw scalar serialization measure complete spans before one checked bulk copy; numeric, RawValue parser and workspace graphs retain their existing operations."
+  ],
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_repository": "TrillionniumFoundation/Hepta",
+  "compiler_tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+  "complete_runtime_replaced": false,
+  "derived_definitions": {
+    "LegacyJobKey": "22e0cc0e53318e08763bf3d6790a6754902ab328cea733e203bd673396454cfd",
+    "OwnerDocument": "19d5b83909739d2ac1c47a8f98ef258062c4053b066935ba6b76e9531430b67c"
+  },
+  "legacy_call_sites_replaced": false,
+  "native_sources": {
+    "native/fence_json.hepta": "48e5985c40e560a387e1607f40682671388317356af176daba4e9d2739e212d0",
+    "native/serde_filter_packer.hepta": "9f36fa06de096e0e49c97154528cdae2ad2f226b7b118617faea514ea8d5aa75",
+    "native/serde_json.hepta": "ef9dd3a567acf523257c4245c022b8cefa9b3ddb83075e826f129b1a1f341d18"
+  },
+  "original_runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+  "original_sources": {
+    "Cargo.lock": {
+      "blob": "dec7d4e88dbae3e9e2415e98a55400bc1f81f939",
+      "bytes": 90148,
+      "sha256": "7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43"
+    },
+    "Cargo.toml": {
+      "blob": "246f38e394de474fa0d55297b6b93cea40b77393",
+      "bytes": 4157,
+      "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f"
+    },
+    "src/mcp/runtime/effect_owner_fence.rs": {
+      "blob": "bbb7565103061b79e063e3aa5452ec74d04e4f34",
+      "bytes": 23890,
+      "sha256": "1e2f2cd32289cd93915076981436b79c04a2756dfc184fa219f043a88f907207"
+    }
+  },
+  "reference_registry_packages": [
+    {
+      "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+      "name": "itoa",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.18"
+    },
+    {
+      "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+      "name": "memchr",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "2.8.3"
+    },
+    {
+      "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+      "name": "proc-macro2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.107"
+    },
+    {
+      "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+      "name": "quote",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.47"
+    },
+    {
+      "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+      "name": "serde",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.229"
+    },
+    {
+      "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+      "name": "serde_core",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.229"
+    },
+    {
+      "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+      "name": "serde_derive",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.229"
+    },
+    {
+      "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+      "name": "serde_json",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.151"
+    },
+    {
+      "checksum": "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee",
+      "name": "syn",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "3.0.6"
+    },
+    {
+      "checksum": "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954",
+      "name": "unicode-ident",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.26"
+    },
+    {
+      "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+      "name": "zmij",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.23"
+    }
+  ],
+  "reference_sources": {
+    "tests/hia_native/serde_json_oracle/Cargo.lock": "a78daedaf1beebcd6d497e68c3f3838c6ac609f311dd1bd7923a486d1b4f1545",
+    "tests/hia_native/serde_json_oracle/Cargo.toml": "ec0178b0157505958e2c15e13b8b789429f9896f4777b2a6f45960c7374734e2",
+    "tests/hia_native/serde_json_oracle/oracle.rs": "269c09049f129b67ac85c9e53fa1b20051ca467032d0123464e03bc80e973213"
+  },
+  "schema": "hepta.runtime.serde-json-source-composition.v1",
+  "upstream_authoring_sources": {
+    "tools/generate_hia_agent_binary64.py": "22730e6632b04145a14b2d2d95e0c862b0da337ecf0364574c0829ab66f395e3",
+    "tools/generate_hia_agent_binary64_format.py": "dee2d6ec42dab0a09cba8e8e8917464d3a79cff9e217a5668833a56bf1b4f784",
+    "tools/generate_hia_elf_linker.py": "444e2073055450d3a60812cbc32f8a779e4b4226162a661c61ccecaff8753785",
+    "tools/generate_hia_json_canonical.py": "d85ab1e2865d9df5ad6e291d382e798e2903d2491c9e93f003ab559749b1a11c",
+    "tools/generate_hia_json_decode.py": "81ef6bd943b81dcb8e8637fb344a1906e205d81f019b805de58b011b1ea90fe2",
+    "tools/generate_hia_json_preflight.py": "ab47a55d755005f78277fc981062ff3512845a40a83fb5f5f52e8e5c602f20bc",
+    "tools/generate_hia_native_filter.py": "28ab8964f5ff1531cdf035abdc1eae1466b7297a563931f2925b602ca0aec480"
+  }
+}

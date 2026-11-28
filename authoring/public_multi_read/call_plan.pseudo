@@ -1,0 +1,293 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(o)<64:
+        return SHORT
+    if valid_frame(s)==0:
+        return INVALID
+    if length(w)<512:
+        return grow(o,1,512)
+    put(w,0,64)
+    put(w,8,0)
+    plan(s,o,w)
+    needed=get(w,0)
+    if needed>=LIMIT:
+        return INVALID
+    if needed>length(o):
+        return grow(o,2,needed)
+    fill_range(o,0,64,0)
+    put(w,0,64)
+    put(w,8,1)
+    plan(s,o,w)
+    put(o,0,RESPONSE)
+    put(o,8,get(w,16))
+    put(o,16,get(w,24))
+    put(o,24,get(w,32))
+    put(o,32,get(w,40))
+    put(o,40,get(w,48))
+    put(o,48,get(w,56))
+    put(o,56,get(w,64))
+    return get(w,0)
+
+def path_at(s:readbuf,index:u64) -> u64:
+    at=304+load(s,104)
+    item=0
+    while item<index:
+        at=at+8+load(s,at)
+        item=item+1
+    return at+8
+
+def root_at(s:readbuf,index:u64) -> u64:
+    at=48+load(s,24)
+    item=0
+    while item<index:
+        at=at+8+load(s,at)
+        item=item+1
+    return at+8
+
+def feedback_at(s:readbuf) -> u64:
+    return 48+load(s,24)+load(s,32)
+
+def valid_records(s:readbuf,at:u64,size:u64,count:u64) -> u64:
+    if count>size//8:
+        return 0
+    index=0
+    remaining=size
+    while index<count:
+        if remaining<8:
+            return 0
+        size=load(s,at)
+        if size>remaining-8:
+            return 0
+        if utf8(s,at+8,size)==0:
+            return 0
+        remaining=remaining-8-size
+        at=at+8+size
+        index=index+1
+    return choose(remaining==0,1,0)
+
+def valid_typed(s:readbuf,size:u64) -> u64:
+    if size<256 or load(s,48)!=TYPED or load(s,56)!=0 or load(s,64)!=1:
+        return 0
+    mask=load(s,72)
+    if mask>3 or load(s,120)!=0 or load(s,128)!=0:
+        return 0
+    if (mask&1)==0 and load(s,80)!=0:
+        return 0
+    if (mask&2)==0 and load(s,88)!=0:
+        return 0
+    at=136
+    while at<304:
+        if byte(s,at)!=0:
+            return 0
+        at=at+1
+    host_size=load(s,104)
+    if host_size>size-256:
+        return 0
+    record_size=load(s,112)
+    if record_size!=size-256-host_size or utf8(s,304,host_size)==0:
+        return 0
+    return valid_records(s,304+host_size,record_size,load(s,96))
+
+def valid_feedback(s:readbuf,at:u64,size:u64,phase:u64) -> u64:
+    if size<32 or load(s,at)!=CONFIG_RESULT:
+        return 0
+    status=load(s,at+8)
+    if status>1 or load(s,at+16)!=0 or load(s,at+24)!=size-32:
+        return 0
+    if phase==1 and status==0:
+        if size!=48 or load(s,at+32)!=MODE or load(s,at+40)>1:
+            return 0
+        return 1
+    return utf8(s,at+32,size-32)
+
+def valid_frame(s:readbuf) -> u64:
+    if length(s)<304 or length(s)>=LIMIT or load(s,0)!=REQUEST:
+        return 0
+    phase=load(s,8)
+    if phase>2:
+        return 0
+    typed_size=load(s,24)
+    if typed_size>length(s)-48 or valid_typed(s,typed_size)==0:
+        return 0
+    roots_size=load(s,32)
+    if roots_size>length(s)-48-typed_size:
+        return 0
+    feedback_size=load(s,40)
+    if feedback_size!=length(s)-48-typed_size-roots_size:
+        return 0
+    index=load(s,16)
+    if phase==0:
+        return choose(index==0 and roots_size==0 and feedback_size==0,1,0)
+    if phase==1:
+        if index!=0 or roots_size!=0:
+            return 0
+    else:
+        if index>=load(s,96):
+            return 0
+        if valid_records(s,48+typed_size,roots_size,index)==0:
+            return 0
+    return valid_feedback(s,feedback_at(s),feedback_size,phase)
+
+def file_limit(s:readbuf) -> u64:
+    if (load(s,72)&1)==0:
+        return 16384
+    return load(s,80)
+
+def response_limit(s:readbuf) -> u64:
+    if (load(s,72)&2)==0:
+        return 65536
+    return load(s,88)
+
+def valid_path(s:readbuf,at:u64,size:u64) -> u64:
+    if size<2 or size>4096 or byte(s,at)!=47:
+        return 0
+    cursor=1
+    start=1
+    while cursor<=size:
+        value=47
+        if cursor<size:
+            value=byte(s,at+cursor)
+            if value==0:
+                return 0
+        if value==47:
+            length_part=cursor-start
+            if length_part==0:
+                return 0
+            if length_part==1 and byte(s,at+start)==46:
+                return 0
+            if length_part==2 and byte(s,at+start)==46 and byte(s,at+start+1)==46:
+                return 0
+            start=cursor+1
+        cursor=cursor+1
+    return 1
+
+def same_span(s:readbuf,left:u64,right:u64,size:u64) -> u64:
+    at=0
+    while at<size:
+        if byte(s,left+at)!=byte(s,right+at):
+            return 0
+        at=at+1
+    return 1
+
+def precondition(s:readbuf) -> u64:
+    count=load(s,96)
+    if count<1 or count>16:
+        return 1
+    file=file_limit(s)
+    response=response_limit(s)
+    if file<1 or file>65536:
+        return 2
+    if response<1024 or response>262144:
+        return 3
+    index=0
+    while index<count:
+        at=path_at(s,index)
+        size=load(s,at-8)
+        if valid_path(s,at,size)==0:
+            return 4
+        previous=0
+        while previous<index:
+            other=path_at(s,previous)
+            if load(s,other-8)==size and same_span(s,at,other,size)!=0:
+                return 5
+            previous=previous+1
+        index=index+1
+    return 0
+
+def error_literal(o:mutbuf,w:mutbuf,code:u64) -> u64:
+    put(w,16,1)
+    literal(o,w,code)
+    put(w,56,get(w,0)-64)
+    return 0
+
+def error_feedback(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    put(w,16,1)
+    at=feedback_at(s)
+    emit_span(s,w,o,at+32,load(s,at+24))
+    put(w,56,get(w,0)-64)
+    return 0
+
+def config_request(s:readbuf,o:mutbuf,w:mutbuf,operation:u64,index:u64) -> u64:
+    put(w,16,2)
+    put(w,24,choose(operation==11,1,2))
+    put(w,32,index)
+    host_size=load(s,104)
+    path_size=0
+    path=0
+    if operation==12:
+        path=path_at(s,index)
+        path_size=load(s,path-8)
+    emit_word(w,o,CONFIG_REQUEST)
+    emit_word(w,o,operation)
+    emit_word(w,o,40+host_size+path_size)
+    emit_word(w,o,0)
+    emit_word(w,o,0)
+    emit_word(w,o,0)
+    emit_word(w,o,host_size)
+    emit_word(w,o,path_size)
+    emit_span(s,w,o,304,host_size)
+    if operation==12:
+        emit_span(s,w,o,path,path_size)
+    put(w,56,get(w,0)-64)
+    return 0
+
+def retain_roots(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    at=feedback_at(s)
+    size=load(s,at+24)
+    prior_size=load(s,32)
+    emit_span(s,w,o,48+load(s,24),prior_size)
+    emit_word(w,o,size)
+    emit_span(s,w,o,at+32,size)
+    put(w,64,prior_size+8+size)
+    return 0
+
+def plan(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    fill_range(w,16,64,0)
+    code=precondition(s)
+    if code!=0:
+        return error_literal(o,w,code)
+    put(w,40,file_limit(s))
+    put(w,48,response_limit(s))
+    phase=load(s,8)
+    if phase==0:
+        return config_request(s,o,w,11,0)
+    feedback=feedback_at(s)
+    if load(s,feedback+8)!=0:
+        return error_feedback(s,o,w)
+    if phase==1:
+        if load(s,feedback+40)!=1:
+            return error_literal(o,w,6)
+        return config_request(s,o,w,12,0)
+    index=load(s,16)
+    if index+1<load(s,96):
+        config_request(s,o,w,12,index+1)
+        return retain_roots(s,o,w)
+    put(w,16,3)
+    query_json(s,o,w)
+    put(w,56,get(w,0)-64)
+    return 0
+
+def query_json(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    literal(o,w,101)
+    index=0
+    count=load(s,96)
+    while index<count:
+        if index!=0:
+            emit(w,o,44)
+        literal(o,w,102)
+        path=path_at(s,index)
+        json_string(s,o,w,path,load(s,path-8))
+        literal(o,w,103)
+        if index+1<count:
+            root=root_at(s,index)
+            json_string(s,o,w,root,load(s,root-8))
+        else:
+            at=feedback_at(s)
+            json_string(s,o,w,at+32,load(s,at+24))
+        emit(w,o,125)
+        index=index+1
+    literal(o,w,104)
+    number(o,w,file_limit(s))
+    literal(o,w,105)
+    number(o,w,response_limit(s))
+    emit(w,o,125)
+    return 0

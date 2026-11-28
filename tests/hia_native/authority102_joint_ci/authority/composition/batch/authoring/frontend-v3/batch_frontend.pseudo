@@ -1,0 +1,14 @@
+def tool_kind(w:mutbuf, at:u64, size:u64) -> u64:
+    if size == 10:
+        if get(w, at) == BATCH_NAME_HEAD:
+            if byte(w, at + 8) == 105 and byte(w, at + 9) == 116:
+                return 10
+    return retained_batch_tool_kind(w, at, size)
+
+def prepare(s:readbuf, o:mutbuf, w:mutbuf, phase:u64) -> u32:
+    if phase == 6 and get(w, 112) == 10:
+        put(w, 8, 106)
+        if reserve(w, 1, 192) == 0:
+            return pending_grow(o, w)
+        return prepare_batch(s, o, w)
+    return retained_batch_prepare(s, o, w, phase)

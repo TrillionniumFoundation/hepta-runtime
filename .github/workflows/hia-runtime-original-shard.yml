@@ -1,0 +1,135 @@
+name: HIA Runtime Original Group
+
+on:
+  workflow_call:
+    inputs:
+      group:
+        required: true
+        type: string
+      runtime-sha:
+        required: true
+        type: string
+      invocation:
+        required: true
+        type: string
+      native-sha256:
+        required: true
+        type: string
+    outputs:
+      sha256:
+        description: Exact successful original shard seal
+        value: ${{ jobs.original.outputs.sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  original:
+    name: Complete original ${{ inputs.group }} group
+    runs-on: ubuntu-24.04
+    # Complete immutable native admission and complete post-original evidence
+    # re-reads are additional work outside each recipe's unchanged deadline.
+    timeout-minutes: 45
+    outputs:
+      sha256: ${{ steps.shard.outputs.sha256 }}
+    steps:
+      - name: Install original filesystem syscall trace observer
+        if: inputs.group == 'batch' || inputs.group == 'config'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y strace
+
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ inputs.runtime-sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            src
+            vendor
+            tests/hia_native
+            tests/oracles
+            .github
+
+            tests
+            qualification
+            asm
+      - name: Materialize explicit historical public58 qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r "$HIA_QUALIFICATION_SOURCE"/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source head
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ inputs.runtime-sha }}
+        run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+
+
+      - name: Download the exact admitted native source and corpus artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: hia-native-complete-${{ inputs.runtime-sha }}-${{ inputs.invocation }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+
+      - name: Execute every complete original recipe in this group
+        id: shard
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_rust_pipeline.py shard \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --invocation "${{ inputs.invocation }}" \
+            --native-sha256 "${{ inputs.native-sha256 }}" \
+            --group "${{ inputs.group }}" \
+            --export "$RUNNER_TEMP/hia-original-shard" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Retain complete successful original process and corpus evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-original-shard-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}
+          path: ${{ runner.temp }}/hia-original-shard/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Capture original failure bytes without live Cargo caches
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        run: |
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --output "$RUNNER_TEMP/hia-original-diagnostics"
+
+      - name: Retain immutable original failure diagnostics
+        if: ${{ always() && steps.shard.outcome != 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-original-diagnostics-${{ inputs.runtime-sha }}-${{ inputs.invocation }}-${{ inputs.group }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-original-diagnostics/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

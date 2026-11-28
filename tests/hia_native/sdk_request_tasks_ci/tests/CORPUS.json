@@ -1,0 +1,3147 @@
+[
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17,\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17.0}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17.0,\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17.0}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "integer_float-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":-29}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":-29,\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":-29}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":-29,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "negative-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":0}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":0,\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":0}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "zero-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"17\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"17\",\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"17\"}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "numeric_string-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"\",\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"\"}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "empty_string-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"普通请求☀️\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"普通请求☀️\",\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"普通请求☀️\"}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"普通请求☀️\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "unicode-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"quote\\\"slash\\\\line\\n\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"quote\\\"slash\\\\line\\n\",\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"quote\\\"slash\\\\line\\n\"}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"quote\\\"slash\\\\line\\n\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "escaped-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "success"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-success"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "tool_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-tool_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish",
+        "outcome": "protocol_error"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-protocol_error"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"reason\":\"ordinary request no longer needed\",\"_meta\":{\"protocolVersion\":\"2026-07-28\"}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-cancel_metadata"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"unrelated-request\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-unknown_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":null}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-no_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-absent_target"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\"}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-late_cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"request-abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "long_string-other_notification"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17.0}}"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "typed-numeric-and-string"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"17\",\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":\"17\"}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "typed-string-and-numeric"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "three-reverse-completions"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "label": "gamma",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "three-one-cancelled"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":17.0,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":17}}"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "sequential-id-reuse"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"shared\",\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"shared\",\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "sequential-string-reuse"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":1}}"
+      },
+      {
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "held-send-late-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "held-send-concurrent-request"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":1}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "ordinary-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "label": "beta",
+        "op": "finish"
+      },
+      {
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "held-send-other-cancel"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_drain"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "eof-early"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":7}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_drain"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "eof-cancelled-early"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_closed"
+      }
+    ],
+    "label": "eof-handler-deadline"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "eof-send-release"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "eof-send-deadline"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_drain"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "service_cancel-early"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":7}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_drain"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "service_cancel-cancelled-early"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "op": "await_close"
+      },
+      {
+        "label": "alpha",
+        "op": "finish_closed"
+      }
+    ],
+    "label": "service_cancel-handler-deadline"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "service_cancel-send-release"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "service_cancel-send-deadline"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_send_label": "beta",
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "await_closed": true,
+        "label": "beta",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-fifo"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": true,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-queued-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": true,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-old-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "eof"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-eof-cancelled-queued"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_send_label": "beta",
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "await_closed": true,
+        "label": "beta",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-fifo"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": true,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-queued-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "fail_send": true,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-old-send-failure"
+  },
+  {
+    "events": [
+      {
+        "label": "alpha",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"alpha\",\"arguments\":{}}}"
+      },
+      {
+        "label": "beta",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"beta\",\"arguments\":{}}}"
+      },
+      {
+        "label": "gamma",
+        "op": "request",
+        "wire": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"gamma\",\"arguments\":{}}}"
+      },
+      {
+        "op": "notify",
+        "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":2}}"
+      },
+      {
+        "fail_send": false,
+        "hold_send": true,
+        "label": "alpha",
+        "op": "finish"
+      },
+      {
+        "op": "begin_drain",
+        "reason": "service_cancel"
+      },
+      {
+        "fail_send": false,
+        "hold_send": false,
+        "label": "beta",
+        "op": "finish_queued"
+      },
+      {
+        "label": "gamma",
+        "op": "finish_queued"
+      },
+      {
+        "await_closed": true,
+        "label": "alpha",
+        "op": "release_send"
+      },
+      {
+        "op": "await_close"
+      }
+    ],
+    "label": "queue-service_cancel-cancelled-queued"
+  }
+]

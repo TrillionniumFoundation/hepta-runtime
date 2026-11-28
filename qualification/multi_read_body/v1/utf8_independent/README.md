@@ -1,0 +1,3 @@
+# Uploaded UTF-8 recovery read
+
+This package independently restores every byte and mode in the completed recovery, its original failed-capture archive, and its exact native build. It reuses the unchanged complete recovery reader, validates the original 76,414 CPython captures and 76,662 HIA captures, all 184 physical evidence refusals and 46 full relocations, all saved guards, and adds a new read-only guard. It executes no application, compiler, decoder, or native image. All original mode-admission FAIL evidence remains retained. This proves the private decoder only; multi-file body and public routing are separate gates.

@@ -1,0 +1,103 @@
+def future(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 128 or read64(s, 0) != REQUEST_MAGIC:
+        return 4294967295
+    op = read64(s, 8)
+    cap = read64(s, 16)
+    gen = read64(s, 24)
+    ready = read64(s, 32)
+    failed = read64(s, 40)
+    stopped = read64(s, 48)
+    lo = read64(s, 56)
+    hi = read64(s, 64)
+    cancelled = read64(s, 72)
+    at = 80
+    while at < 128:
+        if read64(s, at) != 0:
+            return 4294967295
+        at = at + 8
+    if op > 1 or cap == 0 or gen == 0 or ready > 1 or failed > 1 or stopped > 1 or cancelled > 1:
+        return 4294967295
+    if length(o) < 192 or length(w) < 128:
+        return 4294967294
+    if op == 0:
+        if ready != 0 or failed != 0 or stopped != 0 or cancelled != 0:
+            return 4294967295
+        at = 0
+        while at < 128:
+            if get(w, at) != 0:
+                return 4294967295
+            at = at + 8
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, cap)
+        put(w, 16, gen)
+        put(w, 24, lo)
+        put(w, 32, hi)
+        return reply(o, w, op)
+    if valid(w) == False or get(w, 8) != cap or get(w, 16) != gen:
+        return 4294967295
+    if get(w, 40) != 0:
+        return reply(o, w, op)
+    if get(w, 104) == 18446744073709551615:
+        return 4294967295
+    if get(w, 96) == 1 and before(lo, hi, get(w, 80), get(w, 88)):
+        return 4294967295
+    put(w, 48, ready)
+    put(w, 56, failed)
+    put(w, 64, stopped)
+    put(w, 72, cancelled)
+    put(w, 80, lo)
+    put(w, 88, hi)
+    put(w, 96, 1)
+    put(w, 104, get(w, 104) + 1)
+    expired = before(lo, hi, get(w, 24), get(w, 32)) == False
+    if ready == 0:
+        if expired:
+            put(w, 40, 3)
+    elif failed == 1:
+        put(w, 40, 1)
+    elif stopped == 1 or cancelled == 1 or expired:
+        put(w, 40, 4)
+    else:
+        put(w, 40, 2)
+    return reply(o, w, op)
+
+def before(al:u64, ah:u64, bl:u64, bh:u64) -> bool:
+    return ah < bh or (ah == bh and al < bl)
+
+def valid(w:mutbuf) -> bool:
+    if get(w, 0) != STATE_MAGIC or get(w, 8) == 0 or get(w, 16) == 0 or get(w, 40) > 4:
+        return False
+    if get(w, 48) > 1 or get(w, 56) > 1 or get(w, 64) > 1 or get(w, 72) > 1 or get(w, 96) > 1:
+        return False
+    if get(w, 112) != 0 or get(w, 120) != 0:
+        return False
+    if get(w, 96) == 0:
+        at = 40
+        while at < 112:
+            if get(w, at) != 0:
+                return False
+            at = at + 8
+    elif get(w, 104) == 0:
+        return False
+    phase = get(w, 40)
+    if phase == 1 and (get(w, 48) != 1 or get(w, 56) != 1):
+        return False
+    if phase == 2 and (get(w, 48) != 1 or get(w, 56) != 0 or get(w, 64) != 0 or get(w, 72) != 0):
+        return False
+    if phase == 3 and get(w, 48) != 0:
+        return False
+    if phase == 4 and (get(w, 48) != 1 or get(w, 56) != 0):
+        return False
+    return True
+
+def reply(o:mutbuf, w:mutbuf, op:u64) -> u32:
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, 192)
+    put(o, 16, op)
+    put(o, 24, get(w, 40))
+    put(o, 32, get(w, 104))
+    put(o, 40, 0)
+    put(o, 48, 0)
+    put(o, 56, 0)
+    copy_range(o, w, 64, 0, 128)
+    return 192

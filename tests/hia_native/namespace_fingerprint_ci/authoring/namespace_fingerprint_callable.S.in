@@ -1,0 +1,638 @@
+/* Copyright 2026 Muvon Un Limited
+ * SPDX-License-Identifier: Apache-2.0
+ * Fixed real-libc transport for the HIA namespace fingerprint.
+ * All hashing, dot filtering, continuation and error selection are HIA-owned.
+ */
+.equ NF_CONTEXT,32768
+.equ NF_INPUT,256
+.equ NF_OUTPUT,4608
+.equ NF_OBSERVE,4864
+.equ NF_WORK,8192
+.equ NF_STACK,72
+.text
+.globl namespace_fingerprint_callable_entry
+.type namespace_fingerprint_callable_entry,@function
+namespace_fingerprint_callable_entry:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $NF_STACK,%rsp
+    mov %rdi,%rbx
+    mov %rdx,%r13
+    mov %r8,%r12
+    cmp $64,%rsi
+    jne .NF_invalid
+    cmp $128,%rcx
+    jb .NF_capacity
+    cmp $NF_CONTEXT,%r9
+    jb .NF_capacity
+    test %rbx,%rbx
+    jz .NF_invalid
+    test %r13,%r13
+    jz .NF_invalid
+    test %r12,%r12
+    jz .NF_invalid
+    test $7,%r12
+    jnz .NF_invalid
+    lea 64(%rbx),%rax
+    cmp %rbx,%rax
+    jb .NF_invalid
+    lea 128(%r13),%rdx
+    cmp %r13,%rdx
+    jb .NF_invalid
+    lea NF_CONTEXT(%r12),%rcx
+    cmp %r12,%rcx
+    jb .NF_invalid
+    cmp %rdx,%rbx
+    jae .NF_range_input_context
+    cmp %rax,%r13
+    jb .NF_invalid
+.NF_range_input_context:
+    cmp %rcx,%rbx
+    jae .NF_range_output_context
+    cmp %rax,%r12
+    jb .NF_invalid
+.NF_range_output_context:
+    cmp %rcx,%r13
+    jae .NF_admit
+    cmp %rdx,%r12
+    jb .NF_invalid
+.NF_admit:
+    movabs $0x3130585443464e48,%rax
+    cmp %rax,(%r12)
+    jne .NF_invalid
+    cmpq $0,8(%r12)
+    jne .NF_busy
+    cmpq $0,48(%r12)
+    jne .NF_invalid
+    cmpq $-1,112(%r12)
+    jne .NF_invalid
+    cmpq $0,120(%r12)
+    jne .NF_invalid
+    cmpq $0,136(%r12)
+    jne .NF_invalid
+    cmpq $0,160(%r12)
+    jne .NF_invalid
+    cmpq $0x7fffffff,24(%r12)
+    ja .NF_invalid
+    lea 64(%r12),%r15
+    xor %ecx,%ecx
+.NF_admit_table:
+    cmpq $0,(%r15,%rcx)
+    je .NF_invalid
+    add $8,%ecx
+    cmp $48,%ecx
+    jb .NF_admit_table
+    mov $192,%ecx
+.NF_admit_reserved:
+    cmpq $0,(%r12,%rcx)
+    jne .NF_invalid
+    add $8,%ecx
+    cmp $256,%ecx
+    jb .NF_admit_reserved
+    cmpq $0,32(%r12)
+    jne .NF_admit_request
+    cmpq $0,40(%r12)
+    jne .NF_invalid
+.NF_admit_request:
+    movabs $0x3130305152464e48,%rax
+    cmp %rax,(%rbx)
+    jne .NF_invalid
+    cmpq $1,8(%rbx)
+    jne .NF_invalid
+    cmpq $1,24(%rbx)
+    jne .NF_invalid
+    mov 16(%rbx),%rax
+    test %rax,%rax
+    jz .NF_invalid
+    cmp 16(%r12),%rax
+    jbe .NF_invalid
+    mov $32,%ecx
+.NF_request_reserved:
+    cmpq $0,(%rbx,%rcx)
+    jne .NF_invalid
+    add $8,%ecx
+    cmp $64,%ecx
+    jb .NF_request_reserved
+    mov %rax,16(%r12)
+    movq $1,8(%r12)
+    movq $0,128(%r12)
+    call *40(%r15)
+    test %rax,%rax
+    jz .NF_failure
+    mov %rax,48(%r12)
+    mov (%rax),%edx
+    mov %rdx,136(%r12)
+    mov %rbx,%rsi
+    lea NF_INPUT(%r12),%rdi
+    mov $64,%ecx
+    rep movsb
+    movq $64,144(%r12)
+    lea NF_OUTPUT(%r12),%r14
+.NF_owner:
+    lea NF_INPUT(%r12),%rdi
+    add 144(%r12),%rdi
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    mov $2,%ecx
+    rep stosq
+    mov %r14,%rdi
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    mov $18,%ecx
+    rep stosq
+    lea NF_WORK+16384(%r12),%rdi
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    mov $2,%ecx
+    rep stosq
+    call .NF_record_owner
+    call .NF_observe
+    lea NF_INPUT(%r12),%rdi
+    mov 144(%r12),%rsi
+    mov %r14,%rdx
+    mov $128,%ecx
+    lea NF_WORK(%r12),%r8
+    mov $16384,%r9d
+    call .NF_owner_image
+    mov %eax,%eax
+    mov %rax,152(%r12)
+    incq 56(%r12)
+    mov %rax,16+NF_OBSERVE(%r12)
+    movq $1,8+NF_OBSERVE(%r12)
+    call .NF_observe
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    cmp %rax,128(%r14)
+    jne .NF_failure
+    cmp %rax,136(%r14)
+    jne .NF_failure
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    cmp %rax,NF_WORK+16384(%r12)
+    jne .NF_failure
+    cmp %rax,NF_WORK+16392(%r12)
+    jne .NF_failure
+    mov 144(%r12),%rcx
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    cmp %rax,NF_INPUT(%r12,%rcx)
+    jne .NF_failure
+    cmp %rax,NF_INPUT+8(%r12,%rcx)
+    jne .NF_failure
+    cmpq $128,152(%r12)
+    jne .NF_failure
+    movabs $0x3130305352464e48,%rax
+    cmp %rax,(%r14)
+    jne .NF_failure
+    mov 16(%r12),%rax
+    cmp %rax,24(%r14)
+    jne .NF_failure
+    mov 8(%r14),%rax
+    cmp $2,%rax
+    ja .NF_failure
+    jb .NF_terminal
+    mov 128(%r12),%rax
+    add $1,%rax
+    jc .NF_failure
+    cmp %rax,16(%r14)
+    jne .NF_failure
+    mov %rax,128(%r12)
+    mov $56,%ecx
+.NF_effect_reserved:
+    cmpq $0,(%r14,%rcx)
+    jne .NF_failure
+    add $8,%ecx
+    cmp $128,%ecx
+    jb .NF_effect_reserved
+    mov 32(%r14),%rax
+    cmp $1,%rax
+    jb .NF_failure
+    cmp $5,%rax
+    ja .NF_failure
+    cmp $1,%rax
+    je .NF_admit_open
+    cmpq $0,48(%r14)
+    jne .NF_failure
+    cmp $2,%rax
+    je .NF_admit_fd
+    cmp $4,%rax
+    je .NF_admit_fd
+    cmpq $3,40(%r14)
+    jne .NF_failure
+    cmpq $-1,112(%r12)
+    jne .NF_failure
+    cmpq $0,120(%r12)
+    je .NF_failure
+    jmp .NF_effect
+.NF_admit_fd:
+    cmpq $2,40(%r14)
+    jne .NF_failure
+    cmpq $0x7fffffff,112(%r12)
+    ja .NF_failure
+    cmpq $0,120(%r12)
+    jne .NF_failure
+    jmp .NF_effect
+.NF_admit_open:
+    cmpq $1,40(%r14)
+    jne .NF_failure
+    cmpq $589824,48(%r14)
+    jne .NF_failure
+    cmpq $-1,112(%r12)
+    jne .NF_failure
+    cmpq $0,120(%r12)
+    jne .NF_failure
+.NF_effect:
+    lea NF_INPUT(%r12),%rdi
+    xor %eax,%eax
+    mov $12,%ecx
+    rep stosq
+    movabs $0x31304b4341464e48,%rax
+    mov %rax,NF_INPUT(%r12)
+    mov 16(%r12),%rax
+    mov %rax,NF_INPUT+8(%r12)
+    mov 128(%r12),%rax
+    mov %rax,NF_INPUT+16(%r12)
+    mov 32(%r14),%rax
+    mov %rax,NF_INPUT+24(%r12)
+    movq $96,NF_INPUT+64(%r12)
+    movq $96,144(%r12)
+    movq $0,168(%r12)
+    movq $0,176(%r12)
+    call .NF_record_boundary
+    call .NF_observe
+    mov 32(%r14),%rax
+    cmp $1,%rax
+    je .NF_open
+    cmp $2,%rax
+    je .NF_fdopendir
+    cmp $3,%rax
+    je .NF_readdir
+    cmp $4,%rax
+    je .NF_close
+    jmp .NF_closedir
+
+/* Preserve real ambient errno over HIA and optional observation. */
+.macro NF_LIBCALL index,int32=0
+    mov 48(%r12),%rax
+    mov 136(%r12),%r10d
+    mov %r10d,(%rax)
+    xor %eax,%eax
+    call *(\index*8)(%r15)
+    .if \int32
+    movslq %eax,%rax
+    .endif
+    mov %rax,168(%r12)
+    mov 48(%r12),%rdx
+    mov (%rdx),%edx
+    mov %rdx,176(%r12)
+    mov %rdx,136(%r12)
+.endm
+.NF_open:
+    mov 24(%r12),%edi
+    lea .NF_dot(%rip),%rsi
+    mov $589824,%edx
+    xor %ecx,%ecx
+    NF_LIBCALL 0,1
+    test %rax,%rax
+    js .NF_os_error
+    cmp $0x7fffffff,%rax
+    ja .NF_failure
+    mov %rax,112(%r12)
+    movq $2,NF_INPUT+48(%r12)
+    jmp .NF_effect_done
+.NF_fdopendir:
+    mov 112(%r12),%edi
+    NF_LIBCALL 1,0
+    test %rax,%rax
+    jz .NF_os_error
+    mov %rax,120(%r12)
+    movq $-1,112(%r12)
+    movq $3,NF_INPUT+48(%r12)
+    jmp .NF_effect_done
+.NF_readdir:
+    movq $0,136(%r12)
+    mov 120(%r12),%rdi
+    NF_LIBCALL 3,0
+    test %rax,%rax
+    jnz .NF_dirent
+    cmpq $0,176(%r12)
+    jne .NF_os_error
+    movq $2,NF_INPUT+32(%r12)
+    jmp .NF_effect_done
+.NF_dirent:
+    movzwl 16(%rax),%ecx
+    cmp $20,%ecx
+    jb .NF_failure
+    cmp $4096,%ecx
+    ja .NF_failure
+    mov %rcx,NF_INPUT+48(%r12)
+    mov %rcx,NF_INPUT+56(%r12)
+    lea 96(%rcx),%rdx
+    mov %rdx,NF_INPUT+64(%r12)
+    mov %rdx,144(%r12)
+    mov %rax,%rsi
+    lea NF_INPUT+96(%r12),%rdi
+    rep movsb
+    jmp .NF_effect_done
+.NF_close:
+    mov 112(%r12),%edi
+    NF_LIBCALL 2,1
+    movq $-1,112(%r12)
+    jmp .NF_close_result
+.NF_closedir:
+    mov 120(%r12),%rdi
+    NF_LIBCALL 4,1
+    movq $0,120(%r12)
+.NF_close_result:
+    mov 176(%r12),%rdx
+    cmp $4095,%rdx
+    ja .NF_failure
+    mov %rdx,NF_INPUT+40(%r12)
+    test %rax,%rax
+    js .NF_os_error
+    test %rax,%rax
+    jnz .NF_failure
+    jmp .NF_effect_done
+.NF_os_error:
+    mov 176(%r12),%rax
+    test %rax,%rax
+    jz .NF_failure
+    cmp $4095,%rax
+    ja .NF_failure
+    movq $1,NF_INPUT+32(%r12)
+    mov %rax,NF_INPUT+40(%r12)
+.NF_effect_done:
+    incq 184(%r12)
+    call .NF_record_boundary
+    movq $1,8+NF_OBSERVE(%r12)
+    mov 168(%r12),%rax
+    mov %rax,16+NF_OBSERVE(%r12)
+    mov %rax,96+NF_OBSERVE(%r12)
+    mov 176(%r12),%rax
+    mov %rax,104+NF_OBSERVE(%r12)
+    call .NF_observe
+    jmp .NF_owner
+.NF_terminal:
+    mov 128(%r12),%rax
+    cmp %rax,16(%r14)
+    jne .NF_failure
+    cmpq $1,32(%r14)
+    jne .NF_failure
+    cmpq $-1,112(%r12)
+    jne .NF_failure
+    cmpq $0,120(%r12)
+    jne .NF_failure
+    mov $40,%ecx
+.NF_terminal_reserved:
+    cmpq $0,(%r14,%rcx)
+    jne .NF_failure
+    add $8,%ecx
+    cmp $80,%ecx
+    jb .NF_terminal_reserved
+    cmpq $0,8(%r14)
+    jne .NF_terminal_error
+    cmpq $0,80(%r14)
+    jne .NF_failure
+    cmpq $0,88(%r14)
+    jne .NF_failure
+    jmp .NF_deliver
+.NF_terminal_error:
+    cmpq $1,80(%r14)
+    jne .NF_failure
+    cmpq $4095,88(%r14)
+    ja .NF_failure
+    mov $96,%ecx
+.NF_error_digest_zero:
+    cmpq $0,(%r14,%rcx)
+    jne .NF_failure
+    add $8,%ecx
+    cmp $128,%ecx
+    jb .NF_error_digest_zero
+.NF_deliver:
+    mov %r13,%rdi
+    mov %r14,%rsi
+    mov $16,%ecx
+    rep movsq
+    mov 48(%r12),%rax
+    mov 136(%r12),%edx
+    mov %edx,(%rax)
+    movq $0,8(%r12)
+    movq $0,48(%r12)
+    movq $0,136(%r12)
+    mov $128,%eax
+    jmp .NF_return
+.macro NF_OBS_BASE
+    lea NF_OBSERVE(%r12),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    mov %r12,72+NF_OBSERVE(%r12)
+    mov 128(%r12),%rax
+    mov %rax,80+NF_OBSERVE(%r12)
+    mov 16(%r12),%rax
+    mov %rax,88+NF_OBSERVE(%r12)
+.endm
+.NF_record_owner:
+    NF_OBS_BASE
+    movq $1,NF_OBSERVE(%r12)
+    lea NF_INPUT(%r12),%rax
+    mov %rax,24+NF_OBSERVE(%r12)
+    mov 144(%r12),%rax
+    mov %rax,32+NF_OBSERVE(%r12)
+    mov %r14,40+NF_OBSERVE(%r12)
+    movq $128,48+NF_OBSERVE(%r12)
+    lea NF_WORK(%r12),%rax
+    mov %rax,56+NF_OBSERVE(%r12)
+    movq $16384,64+NF_OBSERVE(%r12)
+    ret
+.NF_record_boundary:
+    NF_OBS_BASE
+    movq $2,NF_OBSERVE(%r12)
+    mov %r14,24+NF_OBSERVE(%r12)
+    movq $128,32+NF_OBSERVE(%r12)
+    lea NF_INPUT(%r12),%rax
+    mov %rax,40+NF_OBSERVE(%r12)
+    movq $4192,48+NF_OBSERVE(%r12)
+    mov %r12,56+NF_OBSERVE(%r12)
+    movq $256,64+NF_OBSERVE(%r12)
+    ret
+.NF_observe:
+    mov 32(%r12),%rax
+    test %rax,%rax
+    jz .NF_observe_return
+    sub $8,%rsp
+    lea NF_OBSERVE(%r12),%rdi
+    mov 40(%r12),%rsi
+    call *%rax
+    add $8,%rsp
+.NF_observe_return:
+    ret
+.NF_cleanup:
+    push %rbx
+    cmpq $0,48(%r12)
+    je .NF_cleanup_return
+    mov 120(%r12),%rdi
+    test %rdi,%rdi
+    jz .NF_cleanup_fd
+    NF_LIBCALL 4,1
+    movq $0,120(%r12)
+.NF_cleanup_fd:
+    mov 112(%r12),%rdi
+    cmp $-1,%rdi
+    je .NF_cleanup_return
+    NF_LIBCALL 2,1
+    movq $-1,112(%r12)
+.NF_cleanup_return:
+    pop %rbx
+    ret
+.NF_failure:
+    movq $2,8(%r12)
+    movq $1,160(%r12)
+    call .NF_cleanup
+    movq $0,48(%r12)
+    movq $0,136(%r12)
+    mov $0xfffffffc,%eax
+    jmp .NF_return
+.NF_busy:
+    cmpq $1,8(%r12)
+    jne .NF_poisoned
+    mov $0xfffffffd,%eax
+    jmp .NF_return
+.NF_poisoned:
+    mov $0xfffffffc,%eax
+    jmp .NF_return
+.NF_invalid:
+    mov $0xffffffff,%eax
+    jmp .NF_return
+.NF_capacity:
+    mov $0xfffffffe,%eax
+.NF_return:
+    add $NF_STACK,%rsp
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %rbx
+    pop %rbp
+    ret
+.size namespace_fingerprint_callable_entry,.-namespace_fingerprint_callable_entry
+.NF_dot:
+    .asciz "."
+.balign 16,0x90
+.globl namespace_fingerprint_callable_initialize
+.type namespace_fingerprint_callable_initialize,@function
+namespace_fingerprint_callable_initialize:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $NF_STACK,%rsp
+    mov %rdi,%r12
+    mov %rcx,%rbx
+    mov %rdx,%r14
+    mov %r8,%rbp
+    mov %r9,%r13
+    cmp $NF_CONTEXT,%rsi
+    jb .NF_capacity
+    test %r12,%r12
+    jz .NF_invalid
+    test $7,%r12
+    jnz .NF_invalid
+    test %rbx,%rbx
+    jz .NF_invalid
+    test $7,%rbx
+    jnz .NF_invalid
+    cmp $0x7fffffff,%r14
+    ja .NF_invalid
+    lea NF_CONTEXT(%r12),%rax
+    cmp %r12,%rax
+    jb .NF_invalid
+    lea 56(%rbx),%rdx
+    cmp %rbx,%rdx
+    jb .NF_invalid
+    cmp %rdx,%r12
+    jae .NF_init_ranges
+    cmp %rax,%rbx
+    jb .NF_invalid
+.NF_init_ranges:
+    test %rbp,%rbp
+    jnz .NF_init_observer
+    test %r13,%r13
+    jnz .NF_invalid
+.NF_init_observer:
+    xor %ecx,%ecx
+.NF_init_table:
+    cmpq $0,(%rbx,%rcx)
+    je .NF_invalid
+    add $8,%ecx
+    cmp $48,%ecx
+    jb .NF_init_table
+    cmpq $0,48(%rbx)
+    jne .NF_invalid
+    mov %r12,%rdi
+    xor %eax,%eax
+    mov $(NF_CONTEXT/8),%ecx
+    repe scasq
+    jne .NF_invalid
+    lea 64(%r12),%rdi
+    mov %rbx,%rsi
+    mov $6,%ecx
+    rep movsq
+    mov %r14,24(%r12)
+    mov %rbp,32(%r12)
+    mov %r13,40(%r12)
+    movq $-1,112(%r12)
+    movabs $0x3130585443464e48,%rax
+    mov %rax,(%r12)
+    xor %eax,%eax
+    jmp .NF_return
+.size namespace_fingerprint_callable_initialize,.-namespace_fingerprint_callable_initialize
+.balign 16,0x90
+.globl namespace_fingerprint_callable_dispose
+.type namespace_fingerprint_callable_dispose,@function
+namespace_fingerprint_callable_dispose:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $NF_STACK,%rsp
+    mov %rdi,%r12
+    cmp $NF_CONTEXT,%rsi
+    jb .NF_capacity
+    test %r12,%r12
+    jz .NF_invalid
+    test $7,%r12
+    jnz .NF_invalid
+    lea NF_CONTEXT(%r12),%rax
+    cmp %r12,%rax
+    jb .NF_invalid
+    movabs $0x3130585443464e48,%rax
+    cmp %rax,(%r12)
+    jne .NF_invalid
+    cmpq $1,8(%r12)
+    je .NF_busy
+    cmpq $2,8(%r12)
+    ja .NF_invalid
+    cmpq $0,48(%r12)
+    jne .NF_invalid
+    cmpq $-1,112(%r12)
+    jne .NF_invalid
+    cmpq $0,120(%r12)
+    jne .NF_invalid
+    mov %r12,%rdi
+    xor %eax,%eax
+    mov $(NF_CONTEXT/8),%ecx
+    rep stosq
+    xor %eax,%eax
+    jmp .NF_return
+.size namespace_fingerprint_callable_dispose,.-namespace_fingerprint_callable_dispose
+.balign 16,0x90
+.globl namespace_fingerprint_callable_owner
+namespace_fingerprint_callable_owner:
+.NF_owner_image:
+    .zero @OWNER_BYTES@
+.globl namespace_fingerprint_callable_end
+namespace_fingerprint_callable_end:
+.section .note.GNU-stack,"",@progbits

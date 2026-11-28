@@ -1,0 +1,420 @@
+{
+  "schema": "hepta.runtime.parent-directory.qualified-handoff.v1",
+  "status": "LINUX_NATIVE_HELD_PARENT_DIRECTORY_QUALIFIED",
+  "production": {
+    "source_commit": "df5302d08fb20bd69c9803c9670a8cfce437a708",
+    "source_prefix": "qualification/parent_directory/v1/native_build",
+    "manifest_sha256": "d1457fc674b7a1ce9dcee76040f92eac71f1faa712fd19357052b44ee3c5a00a",
+    "source_files": 32,
+    "hia": {
+      "path": "native/parent_directory.hepta",
+      "mode": "100644",
+      "bytes": 119146,
+      "sha256": "d847b5e042a54daf97ff26c47aedd450783ec80215943f70db53c76b5411c5f6",
+      "git_blob": "62ee889ed12161afcf1bd91591fee1b7721175fb",
+      "functions": 39,
+      "instructions": 2125,
+      "blocks": 445
+    },
+    "composition": {
+      "path": "native/parent_directory_composition.json",
+      "mode": "100644",
+      "bytes": 6769,
+      "sha256": "8befd9703a84affbe792325340c794c26d435ddd5a094bc8891b774cabe451eb",
+      "git_blob": "52a7f5fc02ae41f229d6cb45b46820985af5cf73"
+    },
+    "native_boundary": {
+      "path": "asm/parent_directory_callable.S",
+      "mode": "100644",
+      "bytes": 17490,
+      "sha256": "392c968ecd0b4b96e05c94b8744f78f30807174eb7283286c7f9aa1adcaaffab",
+      "git_blob": "2a77bde9357a5239a125ee6c608ca0d7346a1286"
+    },
+    "fixture": {
+      "path": "asm/parent_directory_fixture.S",
+      "mode": "100644",
+      "bytes": 10930,
+      "sha256": "70973b9e5a8f9efcd9b177d833432c97e018e9f8ac8f5fbb6e7e7809fa9f6d58",
+      "git_blob": "c28da861d650c7fa1cbd8051e296b1fbe172b16f"
+    },
+    "elf": {
+      "bytes": 167936,
+      "sha256": "3d787806e2b154f37608990ad527b098b17e88e3ec6ca6d6e3af62d8b4e69dc5"
+    },
+    "build": {
+      "schema": "hepta.runtime.parent-directory.build-reuse-binding.v1",
+      "commit": "df5302d08fb20bd69c9803c9670a8cfce437a708",
+      "tree": "65c22ba779b4d4a5f02c6ae12a6d2cfe524c1c50",
+      "manifest_sha256": "d1457fc674b7a1ce9dcee76040f92eac71f1faa712fd19357052b44ee3c5a00a",
+      "run_id": 44110848666,
+      "job_id": 134135696014,
+      "status": "PASS",
+      "artifact": {
+        "id": 14340776817,
+        "bytes": 13221352,
+        "sha256": "e3c45d3c9b8722873b9d454b87ea581ee2e14a2ed2298b41104b53d134cdc19c"
+      },
+      "tar": {
+        "bytes": 13216440,
+        "sha256": "c176008895f76e0d03dfbf01e763ba6e5ff7d1ba0194a23df4434bbaeffdc467",
+        "logical_files": 1200,
+        "logical_bytes": 93053990,
+        "directories": 50,
+        "unique_objects": 1170,
+        "unique_bytes": 87005989
+      },
+      "elf": {
+        "bytes": 167936,
+        "sha256": "3d787806e2b154f37608990ad527b098b17e88e3ec6ca6d6e3af62d8b4e69dc5"
+      },
+      "actual_semantics_executed": 0
+    },
+    "baseline_reachable_functions_retained": 37,
+    "runtime_requires_python": false,
+    "runtime_requires_libc": false
+  },
+  "input_contract": {
+    "request": "HPRDQ001 96-byte header; cmd1 acquire, cmd2 exact outstanding resume, cmd3 release held loan and finish",
+    "result": "HBRDS001 kind6 grants the actual owned parent FD and basename bytes without reopening, duplicating or transferring ownership; kind0 final completion is an empty payload; kind3 original structured error",
+    "close": "Trusted parent_directory_close(context) constructs cmd3 from the recorded sequence; external inputs cannot choose an FD to close",
+    "lifetime": "Exactly one held loan per context. The parent context remains the sole owner while synchronous child operations borrow its numeric descriptor. Acquire, release, destruction and arbitrary resume refuse during the held state.",
+    "after_close": "All remaining cleanup follows original HIA policy; terminal response stays borrowed until release. Destroy requires an idle released context.",
+    "final_basename": "Final target need not exist and is not opened during parent acquisition. Final embedded NUL is preserved as basename data, matching original parent(); later file open must reject it.",
+    "ownership_ledger": "The native boundary records every actual opened descriptor, only closes owned entries, exposes no caller-selected OS effect and supports descriptor zero. EOF closes each held parent via the HIA close transition."
+  },
+  "qualification": {
+    "commit": "b455aa462eaa8e6963fe68d9f9b5e2b940b61b6f",
+    "run_id": 44117426096,
+    "job_id": 134159222309,
+    "conclusion": "SUCCESS",
+    "original_cases": 48,
+    "native_observed_cases": 48,
+    "observer_off_cases": 10,
+    "actual_mutation_pairs": 6,
+    "limited_fd_pairs": 2,
+    "held_context_pairs": 2,
+    "private_controls": 66,
+    "physical_controls": {
+      "controls": [
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "case-count",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "module-image",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "original-result",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "source-byte",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 3,
+          "name": "output-tail",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "resource-evidence",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "borrowed-parent",
+          "rejected": true
+        },
+        {
+          "admitted": false,
+          "changed_files": 1,
+          "name": "mutation-barrier",
+          "rejected": true
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-one",
+          "rejected": false
+        },
+        {
+          "admitted": true,
+          "changed_files": 0,
+          "name": "relocated-two",
+          "rejected": false
+        }
+      ],
+      "full_variant_bytes_modes_directories_checked": true,
+      "status": "PHYSICAL_READER_CONTROLS_PASS"
+    },
+    "statistics": {
+      "all_native_exchanges": 1270,
+      "full_journal_buffer_bytes": 397628222,
+      "journal_records": 4520,
+      "native_complete_buffer_bytes": 79342066,
+      "observed_body_calls": 668,
+      "observed_child_calls": 0,
+      "observed_os_effects": 571,
+      "original_complete_buffer_bytes": 1174932
+    },
+    "retained_completed_pairs": 42,
+    "newly_executed_remaining_pairs": 6,
+    "original_or_native_replay": false,
+    "source_frozen_before_application": true,
+    "binding": {
+      "schema": "hepta.runtime.parent-directory.uploaded-read-binding.v1",
+      "commit": "b455aa462eaa8e6963fe68d9f9b5e2b940b61b6f",
+      "tree": "4a97b808eeda48c833da9eba87127d7ce76d96fd",
+      "manifest_sha256": "94b045d075ec8f619de9a12895172461c6421171f4bda362704348d739803053",
+      "run_id": 44117426096,
+      "job_id": 134159222309,
+      "artifact": {
+        "id": 14342404447,
+        "bytes": 156566045,
+        "sha256": "f2c8e9cc398b57366fe64176c344aa0c20c740daedaf11f04ab8d11a226afe24"
+      },
+      "tar": {
+        "bytes": 156561185,
+        "sha256": "eff2782bbd04a33f2a5a0d895d3addf463351b6978d71672f802e0fc6671576e",
+        "logical_files": 81582,
+        "logical_bytes": 4908511588,
+        "directories": 1675,
+        "unique_objects": 2723,
+        "unique_bytes": 332114422
+      }
+    }
+  },
+  "independent_uploaded_read": {
+    "commit": "4b9e815183815419e11f7180b0bb9716e96a561f",
+    "source_prefix": "qualification/parent_directory/v1/archive_reader",
+    "manifest_sha256": "99c409d9d0b1511ee8bebdd515e301fecdd631acfead9ca421e477f647a213b9",
+    "run_id": 44118209285,
+    "job_id": 134162017428,
+    "conclusion": "SUCCESS",
+    "complete_files": 81582,
+    "complete_directories": 1675,
+    "logical_bytes": 4908511588,
+    "entries": 86074,
+    "guards": 11,
+    "read_seconds": 85.78898189600001,
+    "processes": [
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader/archive_reader.py",
+          "fetch",
+          "--work",
+          "/home/runner/work/_temp/parent-directory-uploaded",
+          "--source-manifest-sha256",
+          "99c409d9d0b1511ee8bebdd515e301fecdd631acfead9ca421e477f647a213b9"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader",
+        "elapsed_seconds": 3.1330511599999973,
+        "exit_code": 0,
+        "name": "fetch",
+        "parent_pid": 2431,
+        "pgid": 2433,
+        "pid": 2433,
+        "stderr": {
+          "bytes": 0,
+          "file": "fetch.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 150,
+          "file": "fetch.stdout",
+          "sha256": "9812147f011cf965283a92d82e868d709cf16c986f4be171aed3205340a7b010"
+        },
+        "timed_out": false,
+        "timeout_seconds": 60
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader/archive_reader.py",
+          "restore",
+          "--work",
+          "/home/runner/work/_temp/parent-directory-uploaded",
+          "--source-manifest-sha256",
+          "99c409d9d0b1511ee8bebdd515e301fecdd631acfead9ca421e477f647a213b9"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader",
+        "elapsed_seconds": 22.198239016,
+        "exit_code": 0,
+        "name": "restore",
+        "parent_pid": 2431,
+        "pgid": 2435,
+        "pid": 2435,
+        "stderr": {
+          "bytes": 0,
+          "file": "restore.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 1186,
+          "file": "restore.stdout",
+          "sha256": "8053901b764df555ced97d6996bf6c2646e40d6285c495077757e08280f6ca69"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-S",
+          "-B",
+          "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader/archive_reader.py",
+          "read",
+          "--work",
+          "/home/runner/work/_temp/parent-directory-uploaded",
+          "--source-manifest-sha256",
+          "99c409d9d0b1511ee8bebdd515e301fecdd631acfead9ca421e477f647a213b9"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/parent_directory/v1/archive_reader",
+        "elapsed_seconds": 85.78898189600001,
+        "exit_code": 0,
+        "name": "read",
+        "parent_pid": 2431,
+        "pgid": 2445,
+        "pid": 2445,
+        "stderr": {
+          "bytes": 0,
+          "file": "read.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 6702,
+          "file": "read.stdout",
+          "sha256": "f85b91006b3ec4de5f2bec1165b88c7c764af2d762257ccd9162941529c6d4c3"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      }
+    ],
+    "application_executions": 0,
+    "rust_executions": 0,
+    "complete_physical_variants_reread": true
+  },
+  "proof_artifact": {
+    "id": 14343338713,
+    "bytes": 14691362,
+    "sha256": "ec504369132a918273246c79eaf1c2a32b737754924d722b6c6a5cc3c9ea982b",
+    "expires_at": "2026-12-17T15:48:42Z",
+    "export": {
+      "all_logical_files_and_directories_bound": true,
+      "all_object_bytes_and_modes_reread": true,
+      "archive": "evidence.tar.gz",
+      "bytes": 14686983,
+      "directories": 14,
+      "gate_status": "PASS",
+      "logical_bytes": 66866337,
+      "logical_files": 76,
+      "mode": 420,
+      "no_new_application_execution_during_export": true,
+      "schema": "hepta.runtime.parent-directory-uploaded-read.complete-archive-read.v1",
+      "sha256": "581767b133315e31bdbd6a8d197383685e150fd639f0eeb41bbde7996c0e246c",
+      "unique_bytes": 66850554,
+      "unique_objects": 69,
+      "whole_runtime_replaced": false
+    },
+    "proof_export_in_same_successful_job": true,
+    "recursive_third_proof_read_claimed": false
+  },
+  "retained_failure": {
+    "schema": "hepta.runtime.parent-directory.failed-capture-binding.v1",
+    "commit": "41e1de2266e01f0f4b56ceadb011951e80abf48b",
+    "tree": "2633783a46d1b79317b5c764eb1dd7390d5c6abe",
+    "manifest_sha256": "d9b8bc74cab839ec64d10ca0953fb15ce686ba1284b77f6e9849b9dcd5e5c6ac",
+    "run_id": 44115073312,
+    "job_id": 134150805636,
+    "artifact": {
+      "id": 14341184611,
+      "bytes": 41138231,
+      "sha256": "546baa7c68a4673f7ef05b8c6ff2846ab53056470ed3ce81bc7bb7c57f8b49ab"
+    },
+    "tar": {
+      "bytes": 41133463,
+      "sha256": "bf898fd2ef2f65f22fbbe4a2f7e6c219393b3cb555170dbb3c9bfa0d0f0c8da8",
+      "logical_files": 4355,
+      "logical_bytes": 216454334,
+      "directories": 113,
+      "unique_objects": 2299,
+      "unique_bytes": 121874726
+    },
+    "status": "FAIL",
+    "reason": "Reference g06 preflight inspected descriptor baseline before interpreter startup had reserved FD3. All first42 pairs were fully captured and independently matched; failed g06 application inputs and streams were empty.",
+    "first_pure_diagnostic": {
+      "commit": "45a6dd7c52c116caf81d9ab1e25c8b239fbf92f0",
+      "run_id": 44116030381,
+      "job_id": 134154185836,
+      "status": "FAIL",
+      "reason": "Traceback lazily imported under read-only guard; no application execution"
+    },
+    "closed_pure_diagnostic": {
+      "commit": "0824cbe51f535ac208556ab8e7d7fc03c19f8aa5",
+      "run_id": 44116508473,
+      "job_id": 134155913826,
+      "status": "PASS",
+      "retained_pairs": 42,
+      "differences": 0,
+      "application_executions": 0
+    },
+    "continuation_change": "The reference carrier waits for actual /proc FD0..5 and /dev/null FD3 before setting limits or supplying input. Native production ELF and all first42 application captures are unchanged. Only the6 never-executed pairs and10 observer-off cases were executed."
+  },
+  "budgets": {
+    "author_seconds": 60,
+    "application_exchange_seconds": 60,
+    "build_seconds": 900,
+    "pure_reader_seconds": 180,
+    "workflow_minutes": 15
+  },
+  "scope": {
+    "actual_filesystem_mutation_barriers": true,
+    "file_info": false,
+    "host_runtime_libc_required": false,
+    "host_runtime_python_required": false,
+    "native_syscall_callable": true,
+    "private_linux_held_parent_directory": true,
+    "public_routes": false,
+    "publish_write_upload": false,
+    "whole_runtime_replaced": false
+  },
+  "not_yet_qualified": [
+    "Public file_info/read/write/upload wiring",
+    "Configured host/path authority",
+    "Remote/SSH transport",
+    "Atomic publication caller",
+    "Full SDK/all136 handlers",
+    "Darwin platform",
+    "Old stack removal"
+  ],
+  "whole_runtime_replaced": false,
+  "main_updated": false,
+  "main_head": "5a5a35b355b7b58a23da797acd0002a832fc919b"
+}

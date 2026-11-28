@@ -1,0 +1,85 @@
+name: Qualify file info with shared read67 pool and formatter34
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-info-read67-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/read67_qualification
+      INFO_MANIFEST: 626056bbfd1cb0d6b344b80ff9403534480d13ca4689f291e306273596faf63e
+    steps:
+      - name: Checkout exact frozen qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v2/read67_qualification
+          persist-credentials: false
+      - name: Check source and input-only domain without applications
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$INFO_SOURCE/scripts/domain_author_driver.py" \
+            --output "$RUNNER_TEMP/info-read67-source" --manifest "$INFO_MANIFEST"
+      - name: Retain source admission process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-read67-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-read67-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  qualify:
+    needs: source
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [ordinary, errors, child-orphans, outer-orphans, descriptor, mutation, shm, observer-off]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/read67_qualification
+      INFO_MANIFEST: 626056bbfd1cb0d6b344b80ff9403534480d13ca4689f291e306273596faf63e
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete frozen readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v2/read67_qualification
+          persist-credentials: false
+      - name: Compare actual original and native composition
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" qualify \
+            --work "$RUNNER_TEMP/info-read67-$INFO_GROUP" --group "$INFO_GROUP" \
+            --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Preserve complete evidence including initial failure
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/info-read67-$INFO_GROUP" --group "$INFO_GROUP" \
+            --output "$RUNNER_TEMP/info-read67-$INFO_GROUP-export" \
+            --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Upload complete original and native archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-read67-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-read67-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

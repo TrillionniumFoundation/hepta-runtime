@@ -45,6 +45,8 @@ def main(argv=None):
         if label == "artifacts":
             cmd.add_argument("--max-bytes", type=int, default=1024 ** 3)
             cmd.add_argument("--manifest-name", help="Require and verify this execution-generated SHA-256 manifest")
+            cmd.add_argument("--cache-root", type=Path, help="Import recovered payload bytes only after fresh original-version manifest verification")
+            cmd.add_argument("--cache-manifest-sha256", help="Prior exact SHA-256 of the execution-generated manifest required with --cache-root")
     try:
         a = p.parse_args(argv)
         if a.command == "call":
@@ -88,7 +90,8 @@ def main(argv=None):
             elif a.command == "resume": out = adapter.resume(a.request_id)
             elif a.command == "wait": out = adapter.wait(a.request_id, seconds=a.wait_seconds)
             elif a.command == "logs": out = adapter.logs(a.request_id, cursor=a.cursor, limit=a.limit)
-            elif a.command == "artifacts": out = adapter.artifacts(a.request_id, max_bytes=a.max_bytes, manifest_name=a.manifest_name)
+            elif a.command == "artifacts": out = adapter.artifacts(a.request_id, max_bytes=a.max_bytes, manifest_name=a.manifest_name,
+                                                                 cache_root=a.cache_root, cache_manifest_sha256=a.cache_manifest_sha256)
             elif a.command == "cancel": out = adapter.cancel(a.request_id, wait_seconds=a.wait_seconds)
             else:
                 with adapter.ledger.locked(a.request_id):

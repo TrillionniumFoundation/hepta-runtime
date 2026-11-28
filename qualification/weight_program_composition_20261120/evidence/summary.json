@@ -1,0 +1,124 @@
+{
+  "schema": "hepta.weight.program-composition.qualification.v1",
+  "status": "PASS_STANDALONE_RESEARCH_SCOPE",
+  "reference_repository": "TrillionniumFoundation/hepta-runtime",
+  "reference_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "rustfmt": "rustfmt 1.9.0-stable (59807616e1 2026-04-14)",
+    "cargo-clippy": "clippy 0.1.95 (59807616e1 2026-04-14)"
+  },
+  "sources": [
+    {
+      "path": "composition.rs",
+      "sha256": "49068798291a171c941179c2c6edddfa7cf9d5966eaaae38c9ca51cd40487830",
+      "bytes": 14540
+    },
+    {
+      "path": "composition_tests.rs",
+      "sha256": "be40fdcc7aadf6dce9a49ceb704d02c3962d0984369148c659b877477deba185",
+      "bytes": 16055
+    }
+  ],
+  "test_executable": {
+    "sha256": "15ee016298db19055f6ed91a9d770e826e4db4e00743c917c8edea52bf5e74ca",
+    "bytes": 1907144
+  },
+  "native_norm_source_byte_identical": true,
+  "native_norm_tests_byte_identical": true,
+  "literal_native_edit_type_and_unhex_extraction": true,
+  "sdk_or_arithmetic_shims": false,
+  "resolved_registry_packages": 28,
+  "all_resolved_versions_and_checksums_match_runtime_lock": true,
+  "tests": {
+    "passed": 29,
+    "failed": 0,
+    "ignored": 1,
+    "unchanged_native_norm_tests": 6,
+    "composition_tests_executed": 23
+  },
+  "gates": {
+    "fmt": {
+      "command": [
+        "/tmp/hepta_wsp_20261120/rust195_composition/toolchain/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.12355896399822086,
+      "scope": "standalone source extraction with exact runtime lock dependency versions/checksums"
+    },
+    "tests": {
+      "command": [
+        "/tmp/hepta_wsp_20261120/rust195_composition/toolchain/bin/cargo",
+        "test",
+        "--locked",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 5.576381170001696,
+      "scope": "standalone source extraction with exact runtime lock dependency versions/checksums"
+    },
+    "clippy": {
+      "command": [
+        "/tmp/hepta_wsp_20261120/rust195_composition/toolchain/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.8907511669967789,
+      "scope": "standalone source extraction with exact runtime lock dependency versions/checksums"
+    },
+    "synthetic-replay": {
+      "command": [
+        "/tmp/hepta_wsp_20261120/rust195_composition/toolchain/bin/cargo",
+        "test",
+        "--locked",
+        "--lib",
+        "mcp::weight_program_composition::tests::external_private_program",
+        "--",
+        "--exact",
+        "--ignored",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.07527540400042199,
+      "synthetic_input": true,
+      "actual_checkpoint_loaded": false
+    }
+  },
+  "synthetic_request_sha256": "5f05faead763e8e814636f3f7f9e324e6c6abf76b55c48d24cb3cd2f287d7528",
+  "synthetic_result_sha256": "4ea656744ffe67b623d6f0f076aaddb2edb83cb3c103303b1a75ebab7af9b8ab",
+  "review": {
+    "handoff_map_authentication_overclaim_corrected": true,
+    "actual_shape_multiplication_overflow_case_added": true,
+    "cross_tensor_1025_union_case_added": true
+  },
+  "retained_failures": [
+    "initial rustc installer: workspace ENOSPC before destination creation",
+    "initial standalone fmt: module ordering and extra trailing newline; no numerical-source change"
+  ],
+  "retained_dependency_history": "First successful standalone test used five newer transitive versions. Final qualification pins all 28 registry identities to the reference lockfile; both histories are retained.",
+  "actual_checkpoint_loaded": false,
+  "model_quality_evaluated": false,
+  "gradient_steps": 0,
+  "weights_modified": false,
+  "production_pointer_modified": false,
+  "full_runtime_compiled": false,
+  "full_runtime_tests_executed": false,
+  "mcp_transport_tested": false,
+  "file_admission_or_artifact_ownership_tested": false,
+  "descriptor_map_authentication_adapter_implemented": false,
+  "independent_holdout_custody_implemented": false,
+  "production_eligible": false,
+  "cost_scope": "Recorded command wall times include their shown builds; harness inner times are nested. CPU, energy, complete editor costs and model training comparison are not measured."
+}

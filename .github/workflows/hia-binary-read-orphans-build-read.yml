@@ -1,0 +1,44 @@
+name: Independently read uploaded complete binary-read orphan build
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-orphans-build-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  retained-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/build_uploaded_read
+      ORPHAN_MANIFEST: fc7bcb127bfbec37ccf4bbb9252ab14956f2c8f1ca67ea10822b104cc332aa5b
+    steps:
+      - name: Checkout exact source-owned reader and complete trusted build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_orphans/v1/build_uploaded_read
+          persist-credentials: false
+      - name: Read all uploaded archive bytes and seven retained guards without replay
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/driver.py" read \
+            --work "$RUNNER_TEMP/read-orphans-build-uploaded-read" --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Archive the complete reader evidence and original immutable capture
+        if: always()
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/read-orphans-build-uploaded-read" --output "$RUNNER_TEMP/read-orphans-build-uploaded-read-export" \
+            --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Upload complete independent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: read-orphans-build-uploaded-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/read-orphans-build-uploaded-read-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

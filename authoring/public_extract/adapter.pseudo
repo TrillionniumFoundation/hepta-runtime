@@ -1,0 +1,280 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if length(w) < 4096:
+        return request_grow(o, w, 1, 4096)
+    if valid_input(s) == False:
+        return INVALID
+    if get(w, 0) == 0:
+        fill_range(w, 0, 1024, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 384, 4096)
+    if get(w, 0) != STATE_MAGIC:
+        return INVALID
+    phase = get(w, PHASE)
+    if phase == 0:
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, 64, load(s, 8))
+        put(w, PHASE, 101)
+        return prepare(s, o, w)
+    if get(w, INPUT_LENGTH) != length(s) or get(w, 64) != load(s, 8):
+        return INVALID
+    if admit_growth(o, w) == False:
+        return INVALID
+    if phase == 101:
+        return prepare(s, o, w)
+    if phase != 1:
+        return INVALID
+    if get(w, ACTION) != ACTION_MAGIC or get(w, ACTION + 8) != get(w, SEQUENCE) or get(w, ACTION + 64) != get(w, SEQUENCE):
+        return INVALID
+    if get(w, ACTION + 16) != 0 or get(w, ACTION + 24) > 1 or get(w, ACTION + 32) != region(w, 0):
+        return INVALID
+    if get(w, ACTION + 40) != get(w, 56) or get(w, ACTION + 48) != region(w, 1) or get(w, ACTION + 56) != region_capacity(w, 1):
+        return INVALID
+    if get(w, ACTION + 80) != 0 or get(w, ACTION + 88) != 0 or get(w, ACTION + 104) != 0:
+        return INVALID
+    code = get(w, ACTION + 72)
+    if code == DELIVERY:
+        return delivery_again(o, w)
+    size = get(w, ACTION + 96)
+    if code == CANCELLED and size == 0:
+        put(w, PHASE, 0)
+        return CANCELLED
+    if code >= FIRST_ERROR:
+        put(w, PHASE, 0)
+        return code
+    at = region(w, 1)
+    if size > region_capacity(w, 1) or size < 32 or code != size:
+        return INVALID
+    if get(w, at) != BODY_RESULT or get(w, at + 8) != get(w, 64) or get(w, at + 16) > 1 or get(w, at + 24) != size - 32:
+        return INVALID
+    if size > length(o):
+        return request_grow(o, w, 2, size)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, get(w, at + 16))
+    put(o, 16, 0)
+    put(o, 24, size - 32)
+    copy_range(o, w, 32, at + 32, size - 32)
+    put(w, PHASE, 0)
+    return 32
+
+def valid_input(s: readbuf) -> bool:
+    if length(s) < 400 or load(s, 0) != REQUEST_MAGIC or load(s, 8) != 1 or load(s, 16) != 1:
+        return False
+    source = load(s, 24)
+    target = load(s, 32)
+    typed = load(s, 40)
+    if source < 96 or source > length(s) - 80 or target < 96 or target > length(s) - 80 - source or typed != length(s) - 80 - source - target:
+        return False
+    if load(s, 48) == 0 or load(s, 56) == 0 or load(s, 64) != 0 or load(s, 72) != 0:
+        return False
+    i = 0
+    while i < 2:
+        at = 80 + choose(i == 0, 0, source)
+        count = choose(i == 0, source, target)
+        if load(s, at) != PATH_RESULT or load(s, at + 8) != 0 or load(s, at + 40) != 0 or load(s, at + 48) != 0 or load(s, at + 56) != count - 96:
+            return False
+        j = 64
+        while j < 96:
+            if load(s, at + j) != 0:
+                return False
+            j = j + 8
+        i = i + 1
+    return valid_params(s, 80 + source + target, typed)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    source = load(s, 24)
+    target = load(s, 32)
+    typed = 80 + source + target
+    from_path = load(s, 136)
+    append_path = load(s, 136 + source)
+    raw = load(s, 40) - 128
+    if from_path > MAXIMUM - 128 or append_path > MAXIMUM - 128 - from_path or raw > MAXIMUM - 128 - from_path - append_path:
+        return request_grow(o, w, 3, 0)
+    size = 128 + from_path + append_path + raw
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 128, 0)
+    put(w, at, BODY_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 16, 1)
+    put(w, at + 24, load(s, 48))
+    put(w, at + 32, from_path)
+    put(w, at + 40, append_path)
+    put(w, at + 48, load(s, typed + 24))
+    put(w, at + 56, load(s, typed + 40))
+    put(w, at + 64, load(s, typed + 48))
+    put(w, at + 72, load(s, typed + 56))
+    put(w, at + 80, load(s, typed + 64))
+    copy_range(w, s, at + 128, 176, from_path)
+    copy_range(w, s, at + 128 + from_path, 176 + source, append_path)
+    copy_range(w, s, at + 128 + from_path + append_path, typed + 128, raw)
+    return child(w, 0, size, 1)
+
+def child(w:mutbuf, target:u64, size:u64, phase:u64) -> u32:
+    seq = get(w, SEQUENCE)
+    if seq == MAXIMUM:
+        return INVALID
+    seq = seq + 1
+    put(w, SEQUENCE, seq)
+    put(w, PHASE, phase)
+    put(w, 48, target)
+    put(w, 56, size)
+    fill_range(w, ACTION, 112, 0)
+    put(w, ACTION, ACTION_MAGIC)
+    put(w, ACTION + 8, seq)
+    put(w, ACTION + 16, target)
+    put(w, ACTION + 32, region(w, 0))
+    put(w, ACTION + 40, size)
+    put(w, ACTION + 48, region(w, 1))
+    put(w, ACTION + 56, region_capacity(w, 1))
+    return CALL
+
+
+def region(w:mutbuf, which:u64) -> u64:
+    return get(w, 512 + which * 32)
+
+
+def region_capacity(w:mutbuf, which:u64) -> u64:
+    return get(w, 520 + which * 32)
+
+
+def reserve(w:mutbuf, which:u64, needed:u64) -> u64:
+    row = 512 + which * 32
+    at = get(w, row)
+    capacity = get(w, row + 8)
+    used = get(w, row + 16)
+    high = get(w, 384)
+    if high < 4096 or high > length(w) or which > 7:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    if at != 0:
+        if at < 4096 or at > high or capacity > high - at or used > capacity:
+            put(w, 400, 3)
+            put(w, 392, 0)
+            return 0
+    elif capacity != 0 or used != 0:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    if at != 0 and needed <= capacity:
+        put(w, row + 16, needed)
+        return at
+    size = choose(needed < 64, 64, needed)
+    if capacity <= 9223372036854775807:
+        if size < capacity * 2:
+            size = capacity * 2
+    if size > 18446744073709551615 - high:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    required = high + size
+    if required > length(w):
+        put(w, 400, 1)
+        put(w, 392, required)
+        return 0
+    if used != 0:
+        copy_range(w, w, high, at, used)
+    put(w, row, high)
+    put(w, row + 8, size)
+    put(w, row + 16, needed)
+    put(w, 384, required)
+    return high
+
+
+def request_grow(o:mutbuf, w:mutbuf, kind:u64, required:u64) -> u32:
+    if length(w) >= 4096:
+        put(w, 400, kind)
+        put(w, 392, required)
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, required)
+    put(o, 24, 0)
+    return GROW
+
+
+def pending_grow(o:mutbuf, w:mutbuf) -> u32:
+    return request_grow(o, w, get(w, 400), get(w, 392))
+
+
+def admit_growth(o:mutbuf, w:mutbuf) -> bool:
+    old_work = get(w, WORK_LENGTH)
+    old_output = get(w, OUTPUT_LENGTH)
+    if old_work != length(w):
+        if get(w, 400) != 1 or get(w, 392) > length(w) or length(w) <= old_work:
+            return False
+    if old_output != length(o):
+        if get(w, 400) != 2 or get(w, 392) > length(o) or length(o) <= old_output:
+            return False
+    if old_work != length(w):
+        put(w, WORK_LENGTH, length(w))
+        put(w, 400, 0)
+    if old_output != length(o):
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, 400, 0)
+    return True
+
+
+def delivery_again(o:mutbuf, w:mutbuf) -> u32:
+    needed = get(w, ACTION + 96)
+    if needed <= region_capacity(w, 1) or needed < 32:
+        return INVALID
+    if reserve(w, 1, needed) == 0:
+        return pending_grow(o, w)
+    put(w, ACTION + 24, 1)
+    put(w, ACTION + 48, region(w, 1))
+    put(w, ACTION + 56, region_capacity(w, 1))
+    put(w, ACTION + 64, 0)
+    put(w, ACTION + 72, 0)
+    put(w, ACTION + 96, 0)
+    return CALL
+
+def valid_params(s: readbuf, base: u64, size: u64) -> bool:
+    if base > length(s) or size > length(s) - base or size < 128:
+        return False
+    if load(s, base) != PARAMS_RESULT or load(s, base + 8) != 0 or load(s, base + 16) != 1 or load(s, base + 32) != 0:
+        return False
+    i = 72
+    while i < 128:
+        if load(s, base + i) != 0:
+            return False
+        i = i + 8
+    source = load(s, base + 24)
+    target = load(s, base + 40)
+    start = load(s, base + 48)
+    end = load(s, base + 56)
+    append = load(s, base + 64)
+    left = size - 128
+    if source > left:
+        return False
+    left = left - source
+    if target > left:
+        return False
+    left = left - target
+    if start > left or start < 32:
+        return False
+    left = left - start
+    if end > left or (end != 0 and end < 32):
+        return False
+    left = left - end
+    if append != left or append < 32:
+        return False
+    at = base + 128 + source + target
+    i = 0
+    while i < 3:
+        count = choose(i == 0, start, choose(i == 1, end, append))
+        if count != 0:
+            if load(s, at) != ENDPOINT or load(s, at + 16) != count - 32:
+                return False
+            kind = load(s, at + 8)
+            if kind > 3 or (kind < 2 and count != 32) or (kind != 0 and load(s, at + 24) != 0):
+                return False
+        at = at + count
+        i = i + 1
+    return at == base + size

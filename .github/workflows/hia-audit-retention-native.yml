@@ -1,0 +1,96 @@
+name: Complete native HIA audit retention policy
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-retention-qualify-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  audit-retention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      RETENTION_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/audit_retention
+      RETENTION_SOURCE_SHA: 916899c7c2b5f82172fe47dafaa786dc5f4ceb3e0e0ef37a4b94633c29ab59ab
+    steps:
+      - name: Checkout frozen candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/audit_retention
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify immutable source and compiler before execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          root=Path(os.environ['RETENTION_SOURCE'])
+          sys.path.insert(0,str(root))
+          from common import source
+          from domain import cases
+          assert source()==os.environ['RETENTION_SOURCE_SHA'] and len(cases())==257
+          for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Install exact reference toolchain and compiler tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          printf 'RETENTION_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Execute complete paired native and original retention domain
+        run: |
+          python3 -I -B "$RETENTION_SOURCE/run_gate.py" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$RETENTION_RUST_BIN" --output "$RUNNER_TEMP/audit-retention-output" --source-manifest-sha256 "$RETENTION_SOURCE_SHA"
+      - name: Report exact failure without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          output=Path(os.environ['RUNNER_TEMP'])/'audit-retention-output'
+          for path in [output/'GATE.json',*sorted(output.rglob('*.stderr'))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:
+                      print(json.dumps({'file':str(path.relative_to(output)),'bytes':len(raw),
+                          'sha256':hashlib.sha256(raw).hexdigest(),'complete_utf8':raw.decode('utf-8',errors='replace')},sort_keys=True))
+          PY
+      - name: Export and reread complete success or failure evidence
+        if: always()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          root=Path(os.environ['RETENTION_SOURCE'])
+          sys.path.insert(0,str(root))
+          from process import Recorder
+          temporary=Path(os.environ['RUNNER_TEMP'])
+          capture=temporary/'audit-retention-output';capture.mkdir(exist_ok=True)
+          recorder=Recorder(root,temporary/'audit-retention-export-processes')
+          raw,row=recorder.run('complete-export',[sys.executable,'-I','-B',root/'export.py',
+              '--capture',capture,'--archive',temporary/'audit-retention.tar.gz'],timeout=180)
+          print(raw.decode(),end='')
+          PY
+      - name: Preserve full source and all physical evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-retention-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/audit-retention.tar.gz
+            ${{ runner.temp }}/audit-retention.tar.gz.json
+            ${{ runner.temp }}/audit-retention-export-processes
+          if-no-files-found: error
+          retention-days: 14

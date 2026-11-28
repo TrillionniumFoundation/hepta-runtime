@@ -1,0 +1,17 @@
+{
+  "schema": "hepta.runtime.binary-error.author-failure.v1",
+  "commit": "e8062d053cc096aea49fa5effeafeee32c83350b",
+  "run_id": 44078605051,
+  "job_id": 134022989765,
+  "status": "FAIL",
+  "reason": "The source author initially indexed all OSError errno-derived classes in the older 14-name binary wire table. Python returned ProcessLookupError for ESRCH, so generation stopped before HIA code assembly.",
+  "correction": "Keep the 14-class wire ABI; independently derive full Python diagnostic classes, adding ProcessLookupError for ESRCH and ChildProcessError for ECHILD to the generated data pool.",
+  "artifact": {
+    "id": 14326700108,
+    "bytes": 1324,
+    "sha256": "aa516c4b1f3e2800fb838e890066ab4c8bbabb27445e083fcbc91763821345ae"
+  },
+  "hia_native_compiles": 0,
+  "application_hia_executions": 0,
+  "rust_executions": 0
+}

@@ -1,0 +1,62 @@
+name: Audit pinned anchor pure reader recovery
+on:
+  push:
+    branches: [hia-audit-pinned-anchor-recovery-v2-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Admit the separate frozen pure-reader source
+        run: |
+          export ANCHOR_RECOVERY="$RUNNER_TEMP/audit-pinned-anchor-recovery-v2"
+          printf 'ANCHOR_RECOVERY=%s\n' "$ANCHOR_RECOVERY" >> "$GITHUB_ENV"
+          mkdir "$ANCHOR_RECOVERY"
+          cp -a tests/hia_native/audit_pinned_anchor_recovery_v2 "$ANCHOR_RECOVERY/source"
+          python3 -I -B - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          p=Path(os.environ["ANCHOR_RECOVERY"])/"source"
+          assert hashlib.sha256((p/"SOURCE.json").read_bytes()).hexdigest()=="d856b45b31483aab0c5a1f27a54b95adc5ac88c8e20314b918f956ef66b1a016"
+          for file in p.rglob("*.py"):compile(file.read_bytes(),str(file),"exec")
+          PY
+      - name: Recover every immutable original ZIP/TAR byte and mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14324122923/zip > "$RUNNER_TEMP/original-anchor-failure.zip"
+          timeout --signal=KILL 180 python3 -I -B "$ANCHOR_RECOVERY/source/restore.py" --archive "$RUNNER_TEMP/original-anchor-failure.zip" --output "$ANCHOR_RECOVERY/restored"
+      - name: Full semantic readback without HIA or Rust execution
+        run: |
+          python3 -I -B "$ANCHOR_RECOVERY/source/run.py" --prior "$ANCHOR_RECOVERY/restored/prior" --output "$ANCHOR_RECOVERY/output" --phase semantic
+      - name: All original physical refusals and full relocated admissions
+        run: |
+          python3 -I -B "$ANCHOR_RECOVERY/source/run.py" --prior "$ANCHOR_RECOVERY/restored/prior" --output "$ANCHOR_RECOVERY/output" --phase controls
+      - name: Independent guarded complete final read
+        run: |
+          python3 -I -B "$ANCHOR_RECOVERY/source/run.py" --prior "$ANCHOR_RECOVERY/restored/prior" --output "$ANCHOR_RECOVERY/output" --phase final
+      - name: Preserve every original and successor byte on success or failure
+        if: always()
+        run: |
+          if test -f "$ANCHOR_RECOVERY/source/export.py"; then
+            python3 -I -B "$ANCHOR_RECOVERY/source/export.py" --workspace "$ANCHOR_RECOVERY" --archive "$RUNNER_TEMP/audit-pinned-anchor-recovery-v2.tar.gz"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-pinned-anchor-recovery-v2
+          path: |
+            ${{ runner.temp }}/audit-pinned-anchor-recovery-v2.tar.gz
+            ${{ runner.temp }}/audit-pinned-anchor-recovery-v2.tar.gz.json
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30

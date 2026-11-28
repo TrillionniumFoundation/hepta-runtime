@@ -1,0 +1,45 @@
+name: HIA stdio passive observer original capture recovery
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-stdio-read67-observer-recovery-6780-20261118]
+    paths:
+      - 'qualification/binary_read_stdio/v2/read67_qualification/**'
+      - '.github/workflows/hia-stdio-read67-observer-recovery.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure-original-capture-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      STDIO_SOURCE: ${{ github.workspace }}/qualification/binary_read_stdio/v2/read67_qualification
+      STDIO_MANIFEST: 1331ef6f2bf8ce2ce02eeaa0fa68f55bab737c0a6f4b98499e0bdedbfdcdaa5e
+    steps:
+      - name: Checkout frozen reader and complete retained source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            qualification/binary_read_stdio/v2/read67_qualification
+          persist-credentials: false
+      - name: Fetch and read both completed probes without replay
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/recover_preflight.py" --work "$RUNNER_TEMP/stdio-observer-recovery" --manifest "$STDIO_MANIFEST"
+      - name: Retain complete source and original uploaded evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/recover_preflight.py" --work "$RUNNER_TEMP/stdio-observer-recovery" --manifest "$STDIO_MANIFEST" --export-to "$RUNNER_TEMP/stdio-observer-recovery-export"
+      - name: Upload complete recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stdio-observer-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/stdio-observer-recovery-export
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,42 @@
+name: HIA Bellman unchanged typed parameter observations
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-bellman-params-qualification-6780-v1-20261116
+permissions:
+  contents: read
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      RUSTUP_TOOLCHAIN: '1.95.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install fixed original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Observe every complete typed original result
+        run: |
+          umask 077
+          python -I -S -B tests/hia_native/bellman_params_ci/observe_original.py \
+            --output "$RUNNER_TEMP/bellman-params-original"
+      - name: Preserve all complete and failed observations
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/bellman-params-original" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-params-original.tar.gz" bellman-params-original
+            sha256sum "$RUNNER_TEMP/bellman-params-original.tar.gz" > "$RUNNER_TEMP/bellman-params-original.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-params-original-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bellman-params-original.tar.gz
+            ${{ runner.temp }}/bellman-params-original.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error

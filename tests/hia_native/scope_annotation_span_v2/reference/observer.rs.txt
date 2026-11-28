@@ -1,0 +1,131 @@
+
+#[derive(Clone, Default)]
+struct WarningCapture(Arc<Mutex<Vec<String>>>);
+
+impl tracing::Subscriber for WarningCapture {
+    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool { true }
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event<'_>) {
+        struct Visitor(Option<String>);
+        impl tracing::field::Visit for Visitor {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                assert_eq!(field.name(), "message");
+                assert!(self.0.is_none());
+                self.0 = Some(format!("{value:?}"));
+            }
+        }
+        assert_eq!(*event.metadata().level(), tracing::Level::WARN);
+        let mut visitor = Visitor(None);
+        event.record(&mut visitor);
+        self.0.lock().unwrap().push(visitor.0.unwrap());
+    }
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+fn word(raw: &[u8], at: usize) -> u64 {
+    u64::from_le_bytes(raw[at..at + 8].try_into().unwrap())
+}
+
+fn number(raw: &mut Vec<u8>, value: u64) {
+    raw.extend_from_slice(&value.to_le_bytes());
+}
+
+fn observed(raw: &[u8]) -> Vec<u8> {
+    assert!(raw.len() >= 48);
+    assert_eq!(&raw[..8], b"HSCANS02");
+    let operation = word(raw, 8);
+    assert!(operation == 1 || operation == 2);
+    assert!(word(raw, 16) <= 1 && word(raw, 24) <= 1);
+    assert!(operation != 2 || word(raw, 24) == 1);
+    assert_eq!(word(raw, 32) as usize, raw.len() - 48);
+    assert_eq!(word(raw, 40), 0);
+    let text = std::str::from_utf8(&raw[48..]).unwrap().to_owned();
+    let scope = OwnerScope { owner: String::new(), authenticated: word(raw, 16) == 1 };
+    let search = word(raw, 24) == 1;
+    let warning_capture = WarningCapture::default();
+    // This is the actual unchanged effect method, including its own annotate
+    // call, second parse, field filters, warning and original-text recovery.
+    let effect = if operation == 2 {
+        Some(tracing::subscriber::with_default(warning_capture.clone(), || {
+            scope.annotate_search_effect(text.clone())
+        }))
+    } else {
+        None
+    };
+    // Independently retain annotate's complete primary result and the entire
+    // original serialization prefix, including a rejected over-budget wire.
+    let primary = scope.annotate(text.clone(), search);
+    let failed = primary.is_err();
+    let prefix = scope.observe_serialized_prefix(text.clone(), search);
+    let (annotate_kind, category, annotate_answer, annotation, wire) = match (primary, prefix) {
+        (Ok(actual), Ok((annotation, wire))) => {
+            assert_eq!(actual, annotation);
+            assert!(wire.len() <= 65536);
+            (0u64, 0u64, actual, annotation, wire)
+        }
+        (Err(error), Ok((annotation, wire))) => {
+            let error = error.to_string();
+            assert_eq!(error, "scoped metadata wire response exceeds 64 KiB; reduce result page limit");
+            assert!(wire.len() > 65536);
+            (1, 3, error, annotation, wire)
+        }
+        (Err(error), Err(prefix_error)) => {
+            let error = error.to_string();
+            assert_eq!(error, prefix_error.to_string());
+            let category = if error == "metadata response unavailable" { 2 } else { 1 };
+            (1, category, error, String::new(), Vec::new())
+        }
+        _ => panic!("unchanged primary and separate original-prefix observer disagree"),
+    };
+    let warnings = warning_capture.0.lock().unwrap();
+    assert_eq!(warnings.len(), usize::from(operation == 2 && failed));
+    let warning = warnings.first().cloned().unwrap_or_default();
+    if !warning.is_empty() {
+        assert_eq!(warning, "search scope annotation unavailable; existing identity retained");
+    }
+    let (kind, answer, fallback) = if let Some(answer) = effect {
+        let fallback = if !failed { 0 } else if answer == text { 2 } else { 1 };
+        (0, answer, fallback)
+    } else {
+        (annotate_kind, annotate_answer, 0)
+    };
+    let mut response = b"HSCAR002".to_vec();
+    for value in [kind, answer.len() as u64, wire.len() as u64, category,
+                  annotation.len() as u64, fallback, warnings.len() as u64] {
+        number(&mut response, value);
+    }
+    response.extend_from_slice(answer.as_bytes());
+    let mut result = b"HSCASR02".to_vec();
+    for value in [response.len() as u64, annotation.len() as u64, wire.len() as u64, warning.len() as u64] {
+        number(&mut result, value);
+    }
+    result.extend(response);
+    result.extend_from_slice(annotation.as_bytes());
+    result.extend(wire);
+    result.extend_from_slice(warning.as_bytes());
+    result
+}
+
+fn main() {
+    let mut input = io::stdin().lock();
+    let mut output = io::stdout().lock();
+    loop {
+        let mut head = [0u8; 8];
+        let count = input.read(&mut head[..1]).unwrap();
+        if count == 0 { break; }
+        input.read_exact(&mut head[1..]).unwrap();
+        let size = usize::try_from(u64::from_le_bytes(head)).unwrap();
+        assert!(size >= 48);
+        let mut raw = vec![0u8; size];
+        input.read_exact(&mut raw).unwrap();
+        let result = observed(&raw);
+        output.write_all(&(result.len() as u64).to_le_bytes()).unwrap();
+        output.write_all(&result).unwrap();
+    }
+    output.flush().unwrap();
+}

@@ -1,0 +1,138 @@
+name: TextEditor isolated ninth catalog candidate
+
+on:
+  push:
+    branches: [hia-ninth-qualification-6780-20261116]
+
+permissions:
+  contents: read
+
+jobs:
+  ninth-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LC_ALL: C.UTF-8
+      RUSTUP_TOOLCHAIN: 1.95.0
+      SDK_NINTH_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/sdk_ninth_catalog_ci
+    steps:
+      - name: Set isolated working directories from the runner environment
+        run: |
+          printf '%s\n' \
+            "CARGO_HOME=$RUNNER_TEMP/sdk-ninth-cargo-cache" \
+            "SDK_NINTH_OUTPUT=$RUNNER_TEMP/sdk-ninth-qualified-output" \
+            "SDK_NINTH_CACHE_PREPARATION=$RUNNER_TEMP/sdk-ninth-cache-preparation" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout this exact recipe revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout pinned Hepta source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Checkout exact original target metadata source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/server.rs
+
+      - name: Check complete source closure and immutable upstream identities
+        run: |
+          python3 -I -B "$SDK_NINTH_SOURCE/scripts/run_ninth_catalog_recipe.py" --source "$SDK_NINTH_SOURCE" --check-only
+          python3 -I -B - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          workspace = Path(os.environ['GITHUB_WORKSPACE'])
+          source = Path(os.environ['SDK_NINTH_SOURCE'])
+          def revision(path, expression):
+              return subprocess.check_output(['git', '-C', str(path), 'rev-parse', expression], text=True).strip()
+          assert revision(workspace/'runtime', 'HEAD') == os.environ['GITHUB_SHA']
+          assert revision(workspace/'compiler', 'HEAD') == 'd3e2c90173cf733e42b299d0c4274df4b593a12f'
+          assert revision(workspace/'compiler', 'HEAD^{tree}') == '8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49'
+          assert revision(workspace/'original-target', 'HEAD') == 'd3d75c30719db966b004756f610007a7c723729e'
+          for rel in ['Cargo.toml', 'Cargo.lock', 'src/mcp/server.rs']:
+              assert (workspace/'original-target'/rel).read_bytes() == (source/'target'/rel).read_bytes(), rel
+          PY
+
+      - name: Install native build dependencies and exact Rust toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Populate cache and verify every retained target package
+        run: |
+          sdk_ninth_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$SDK_NINTH_SOURCE/scripts/prepare_ci_cargo_cache.py" \
+            --source "$SDK_NINTH_SOURCE" \
+            --output "$SDK_NINTH_CACHE_PREPARATION" \
+            --rust-bin "$sdk_ninth_rust_bin"
+
+      - name: Fresh original macro, native catalog, and retained operation comparisons
+        run: |
+          sdk_ninth_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$SDK_NINTH_SOURCE/scripts/run_ninth_catalog_recipe.py" \
+            --source "$SDK_NINTH_SOURCE" \
+            --output "$SDK_NINTH_OUTPUT" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --rust-bin "$sdk_ninth_rust_bin"
+
+      - name: Require only the declared metadata and catalog boundary
+        run: |
+          python3 -I -B - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['SDK_NINTH_OUTPUT'])/'evidence/recipe-summary.json').read_bytes())
+          assert report['status'] == 'PASS'
+          for key in ['actual_macro_metadata', 'ninth_schema_generated', 'native_catalog_compiled',
+                      'native_catalog_metadata_boundary_qualified', 'fresh_development_fixed_point']:
+              assert report[key] is True, key
+          assert report['ordinary_typed_policy_cases'] == 3
+          assert report['ordinary_constructor_policy_cases'] == 3
+          assert report['actual_list_constructor_executed'] is True
+          assert report['catalog_list_modes'] == 2
+          assert report['retained_non_list_operations'] == 18
+          assert report['native_invocations'] == 52
+          for key in ['original_tool_handler_executed', 'public_route_registered',
+                      'public_text_editor_body_qualified', 'existing_binary_inputs',
+                      'historical_3_4_evidence_promoted', 'fresh_cold_qualified',
+                      'full_sdk_qualified', 'full_async_runtime_qualified',
+                      'native_task_registry_qualified', 'native_future_cancellation_qualified',
+                      'full_136_route_qualified', 'production_activated', 'old_path_removed']:
+              assert report[key] is False, key
+          PY
+
+      - name: Archive source, generated catalog, binaries, and successful or failed observations
+        if: always()
+        run: |
+          python3 -I -B "$SDK_NINTH_SOURCE/scripts/export_ci_evidence.py" \
+            --source "$SDK_NINTH_SOURCE" \
+            --output "$SDK_NINTH_OUTPUT" \
+            --cache-preparation "$SDK_NINTH_CACHE_PREPARATION" \
+            --archive-directory "$RUNNER_TEMP/sdk-ninth-evidence"
+
+      - name: Retain complete bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-ninth-catalog-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-ninth-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,69 @@
+name: Author native audit record callable
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-callable-author-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_callable_author
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Verify complete source and author the fixed native adapter
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,json,os,shutil,sys
+          from pathlib import Path
+          original=Path('runtime/tests/hia_native/audit_record_callable_author').resolve()
+          package=Path(os.environ['RUNNER_TEMP'])/'audit-record-callable-author'
+          package.mkdir(exist_ok=False)
+          source=package/'source'
+          shutil.copytree(original,source)
+          raw_manifest=(source/'SOURCE.json').read_bytes()
+          assert hashlib.sha256(raw_manifest).hexdigest()=='ef90daa297cbcc58f04c7a06d3c47d3b2109a071d1a9f7b668a57f80cf7e94c1'
+          manifest=json.loads(raw_manifest)
+          assert {p.relative_to(source).as_posix() for p in source.rglob('*') if p.is_file()}==set(manifest['files'])|{'SOURCE.json'}
+          for name,pin in manifest['files'].items():
+              raw=(source/name).read_bytes()
+              assert len(raw)==pin['bytes'] and hashlib.sha256(raw).hexdigest()==pin['sha256'],name
+              assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==pin['git_blob'],name
+          compiler=Path('compiler').resolve()
+          compiler_identity=json.loads((source/'COMPILER_IDENTITY.json').read_bytes())
+          for name,digest in compiler_identity['files'].items():
+              assert hashlib.sha256((compiler/name).read_bytes()).hexdigest()==digest,name
+          for path in source.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          recorder=Recorder(source,package/'processes')
+          try:
+              raw,row=recorder.run('source-author',[sys.executable,'-I','-B',source/'authoring/author_callable.py',
+                  '--root',source,'--hepta',compiler,'--output',package/'authoring'],timeout=60)
+              print(raw.decode(),end='')
+          finally:
+              error=recorder.directory/'source-author.stderr'
+              if error.is_file():sys.stderr.write(error.read_text())
+          PY
+      - name: Preserve complete frozen source and assembly process
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-author-${{ github.sha }}
+          path: ${{ runner.temp }}/audit-record-callable-author
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14

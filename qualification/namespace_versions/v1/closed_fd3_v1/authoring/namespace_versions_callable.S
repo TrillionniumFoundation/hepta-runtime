@@ -1,0 +1,1363 @@
+/* Copyright 2026 Muvon Un Limited
+ * SPDX-License-Identifier: Apache-2.0
+ * Native custody for HIA namespace globals and ContentWatchSet.
+ * No watcher/fallback/serial-allocation policy is implemented here.
+ * Qualified HIA selects every effect. This boundary owns real pthread mutexes,
+ * the one process atomic, actual child mappings, File pins and libc calls.
+ */
+.intel_syntax noprefix
+.equ NV_ENV_BYTES,4096
+.equ NV_OBJECT_BYTES,256
+.equ NV_SET_BYTES,4096
+.equ NV_CONTEXT_BYTES,131072
+.equ NV_INPUT,2048
+.equ NV_OUTPUT,68096
+.equ NV_WORK,69632
+.equ NV_RECORD,256
+.equ NV_CHILD_REQUEST,512
+.equ NV_CHILD_RESPONSE,640
+.equ NV_FP_REQUEST,768
+.equ NV_FP_RESPONSE,896
+.equ NV_STACK,120
+.equ NV_ENV_MAGIC,0x3130564e45564e48
+.equ NV_OBJ_MAGIC,0x31304a424f564e48
+.equ NV_CTX_MAGIC,0x3130585443564e48
+.equ NV_RECORD_MAGIC,0x313053424f564e48
+.equ NV_RESPONSE_MAGIC,0x3130305253564e48
+.equ NV_ACK_MAGIC,0x31304b4153564e48
+.equ NV_GLOBAL_MAGIC,0x3130305347564e48
+.equ NW_REQUEST_MAGIC,0x3130303051574e48
+.equ NF_REQUEST_MAGIC,0x3130305152464e48
+.macro NV_SAVE
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp,NV_STACK
+.endm
+.macro NV_RESTORE
+    add rsp,NV_STACK
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+.text
+.global namespace_versions_entry
+.type namespace_versions_entry,@function
+namespace_versions_entry:
+    NV_SAVE
+    mov [rsp],rdi
+    mov [rsp+8],rsi
+    mov [rsp+16],rdx
+    mov [rsp+24],rcx
+    mov [rsp+32],r8
+    mov [rsp+40],r9
+    xor r12d,r12d
+    cmp rsi,96
+    jb nv_entry_invalid
+    cmp rsi,4224
+    ja nv_entry_invalid
+    cmp rcx,192
+    jb nv_entry_capacity
+    cmp r9,NV_OBJECT_BYTES
+    jb nv_entry_capacity
+    test rdi,rdi
+    jz nv_entry_invalid
+    test rdx,rdx
+    jz nv_entry_invalid
+    test r8,r8
+    jz nv_entry_invalid
+    test r8,7
+    jnz nv_entry_invalid
+    mov r13,r8
+    mov rax,NV_OBJ_MAGIC
+    cmp [r13],rax
+    jne nv_entry_invalid
+    cmp qword ptr [r13+32],1
+    jne nv_entry_invalid
+    cmp qword ptr [r13+40],1
+    ja nv_entry_invalid
+    cmp qword ptr [r13+184],0
+    jne nv_entry_private
+    mov rbp,[r13+8]
+    test rbp,rbp
+    jz nv_entry_invalid
+    test rbp,7
+    jnz nv_entry_invalid
+    mov rax,NV_ENV_MAGIC
+    cmp [rbp],rax
+    jne nv_entry_invalid
+    cmp qword ptr [rbp+16],1
+    jne nv_entry_invalid
+    mov eax,39
+    syscall
+    cmp [r13+16],rax
+    jne nv_entry_invalid
+    cmp [rbp+8],rax
+    jne nv_entry_invalid
+    mov rax,[r13+24]
+    cmp rax,1
+    jb nv_entry_invalid
+    cmp rax,3
+    ja nv_entry_invalid
+    mov rdi,[rsp]
+    cmp [rdi+24],rax
+    jne nv_entry_invalid
+    cmp rax,3
+    je nv_entry_set
+    lea rdx,[rbp+256]
+    cmp rax,1
+    je nv_entry_global_pointer
+    lea rdx,[rbp+512]
+nv_entry_global_pointer:
+    cmp r13,rdx
+    jne nv_entry_invalid
+    mov qword ptr [rsp+48],NV_OBJECT_BYTES
+    jmp nv_entry_ranges
+nv_entry_set:
+    cmp qword ptr [rsp+40],NV_SET_BYTES
+    jb nv_entry_capacity
+    mov qword ptr [rsp+48],NV_SET_BYTES
+    mov rdi,r13
+    mov esi,NV_SET_BYTES
+    mov rdx,rbp
+    mov ecx,NV_ENV_BYTES
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+nv_entry_ranges:
+    mov rdi,[rsp]
+    mov rsi,[rsp+8]
+    mov rdx,[rsp+16]
+    mov ecx,192
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+    mov rdi,[rsp]
+    mov rsi,[rsp+8]
+    mov rdx,rbp
+    mov ecx,NV_ENV_BYTES
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+    mov rdi,[rsp+16]
+    mov esi,192
+    mov rdx,rbp
+    mov ecx,NV_ENV_BYTES
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+    mov rdi,[rsp]
+    mov rsi,[rsp+8]
+    mov rdx,r13
+    mov rcx,[rsp+48]
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+    mov rdi,[rsp+16]
+    mov esi,192
+    mov rdx,r13
+    mov rcx,[rsp+48]
+    call nv_disjoint
+    test eax,eax
+    jz nv_entry_invalid
+    mov eax,9
+    xor edi,edi
+    mov esi,NV_CONTEXT_BYTES
+    mov edx,3
+    mov r10d,0x22
+    mov r8,-1
+    xor r9d,r9d
+    syscall
+    cmp rax,-4095
+    jae nv_entry_allocation
+    test rax,rax
+    jz nv_entry_zero_mapping
+    mov r12,rax
+    mov rax,NV_CTX_MAGIC
+    mov [r12],rax
+    mov [r12+8],r13
+    mov [r12+16],rbp
+    mov rax,[rsp+16]
+    mov [r12+24],rax
+    mov rax,[rsp+24]
+    mov [r12+32],rax
+    mov rsi,[rsp]
+    mov rax,[rsi+16]
+    mov [r12+40],rax
+    mov rax,[rsi+8]
+    mov [r12+48],rax
+    mov rcx,[rsp+8]
+    mov [r12+56],rcx
+    lea rdi,[r12+NV_INPUT]
+    rep movsb
+    call qword ptr [rbp+120]
+    test rax,rax
+    jz nv_fatal
+    mov [r12+96],rax
+    mov eax,[rax]
+    mov [r12+104],rax
+    lea r14,[r12+NV_OUTPUT]
+    lea r15,[r12+NV_INPUT]
+
+nv_owner_loop:
+    call nv_owner
+    mov eax,[r12+160]
+    cmp eax,128
+    je nv_response
+    cmp eax,192
+    je nv_response
+    cmp qword ptr [r12+120],1
+    jne nv_fatal
+    cmp qword ptr [r12+144],0
+    jne nv_fatal
+    cmp eax,0xffffffff
+    je nv_preserve_return
+    cmp eax,0xfffffffe
+    je nv_preserve_return
+    jmp nv_fatal
+nv_response:
+    mov rax,NV_RESPONSE_MAGIC
+    cmp [r14],rax
+    jne nv_fatal
+    mov rax,[r12+40]
+    cmp [r14+16],rax
+    jne nv_fatal
+    mov rax,[r12+48]
+    cmp [r14+24],rax
+    jne nv_fatal
+    cmp qword ptr [r14+8],6
+    ja nv_fatal
+    jb nv_terminal
+    mov rax,[r12+64]
+    add rax,1
+    jc nv_fatal
+    cmp [r14+32],rax
+    jne nv_fatal
+    mov [r12+64],rax
+    mov ecx,96
+nv_pending_reserved:
+    cmp qword ptr [r14+rcx],0
+    jne nv_fatal
+    add ecx,8
+    cmp ecx,128
+    jb nv_pending_reserved
+    mov rax,[r14+40]
+    cmp rax,1
+    jb nv_fatal
+    cmp rax,8
+    ja nv_fatal
+    cmp rax,2
+    je nv_pending_unlock_extent
+    cmp qword ptr [r12+160],128
+    jne nv_fatal
+    cmp qword ptr [r14+80],0
+    jne nv_fatal
+    cmp qword ptr [r14+88],128
+    jne nv_fatal
+    jmp nv_pending_extent_good
+nv_pending_unlock_extent:
+    cmp qword ptr [r12+160],192
+    jne nv_fatal
+    cmp qword ptr [r14+80],64
+    jne nv_fatal
+    cmp qword ptr [r14+88],192
+    jne nv_fatal
+nv_pending_extent_good:
+    cmp qword ptr [r12+144],0
+    jne nv_pending_live
+    cmp rax,1
+    jne nv_fatal
+    cmp qword ptr [r12+64],1
+    jne nv_fatal
+    lock inc qword ptr [r13+176]
+    mov qword ptr [r12+144],1
+nv_pending_live:
+    mov rdi,r15
+    xor eax,eax
+    mov ecx,12
+    rep stosq
+    mov rax,NV_ACK_MAGIC
+    mov [r15],rax
+    mov rax,[r12+40]
+    mov [r15+8],rax
+    mov rax,[r12+64]
+    mov [r15+16],rax
+    mov rax,[r14+40]
+    mov [r15+24],rax
+    mov qword ptr [r15+72],96
+    mov qword ptr [r12+56],96
+    mov edi,2
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_parent
+    mov rax,[r14+40]
+    cmp rax,1
+    je nv_lock
+    cmp rax,6
+    je nv_fingerprint
+    cmp qword ptr [r12+72],1
+    jne nv_fatal
+    cmp [r13+56],r12
+    jne nv_fatal
+    cmp rax,2
+    je nv_unlock
+    cmp rax,3
+    je nv_child_new
+    cmp rax,4
+    je nv_child_version
+    cmp rax,5
+    je nv_child_drop
+    cmp rax,7
+    je nv_atomic_load
+    cmp rax,8
+    je nv_atomic_cas
+    jmp nv_fatal
+
+nv_lock:
+    cmp qword ptr [r12+72],0
+    jne nv_fatal
+    call nv_zero_arguments
+    test eax,eax
+    jz nv_fatal
+    lea rdi,[r13+128]
+    call qword ptr [rbp+192]
+    movsxd rdx,eax
+    mov [r12+152],rdx
+    test eax,eax
+    jnz nv_fatal
+    mov qword ptr [r12+72],1
+    cmp qword ptr [r13+56],0
+    jne nv_fatal
+    mov [r13+56],r12
+    cmp qword ptr [r13+184],0
+    jne nv_fatal
+    mov rax,[r13+48]
+    cmp [r13+80],rax
+    jne nv_fatal
+    mov rax,[r13+40]
+    cmp rax,1
+    ja nv_fatal
+    mov [r15+32],rax
+    lea rsi,[r13+64]
+    lea rdi,[r15+96]
+    mov ecx,8
+    rep movsq
+    mov qword ptr [r15+64],64
+    mov qword ptr [r15+72],160
+    mov qword ptr [r12+56],160
+    jmp nv_effect_done
+
+nv_unlock:
+    call nv_zero_arguments
+    test eax,eax
+    jz nv_fatal
+    mov rax,[r14+144]
+    cmp [r13+48],rax
+    jne nv_fatal
+    mov rax,[r14+128]
+    test rax,rax
+    jz nv_unlock_empty
+    mov rdx,NV_GLOBAL_MAGIC
+    cmp rax,rdx
+    jne nv_fatal
+    mov rax,[r13+24]
+    cmp [r14+136],rax
+    jne nv_fatal
+    cmp qword ptr [r14+160],1
+    ja nv_fatal
+    cmp qword ptr [r14+168],1
+    ja nv_fatal
+    cmp qword ptr [r14+176],0
+    jne nv_fatal
+    cmp qword ptr [r14+184],0
+    jne nv_fatal
+    jmp nv_unlock_copy
+nv_unlock_empty:
+    mov ecx,136
+nv_unlock_empty_loop:
+    cmp qword ptr [r14+rcx],0
+    jne nv_fatal
+    add ecx,8
+    cmp ecx,192
+    jb nv_unlock_empty_loop
+nv_unlock_copy:
+    lea rsi,[r14+128]
+    lea rdi,[r13+64]
+    mov ecx,8
+    rep movsq
+    mov qword ptr [r13+56],0
+    mov qword ptr [r12+72],0
+    lea rdi,[r13+128]
+    call qword ptr [rbp+200]
+    movsxd rdx,eax
+    mov [r12+152],rdx
+    test eax,eax
+    jnz nv_fatal
+    jmp nv_effect_done
+
+nv_atomic_load:
+    call nv_zero_arguments
+    test eax,eax
+    jz nv_fatal
+    cmp qword ptr [r13+24],3
+    jne nv_fatal
+    mov rax,[rbp+24]
+    mov [r15+48],rax
+    jmp nv_effect_done
+
+nv_atomic_cas:
+    cmp qword ptr [r13+24],3
+    jne nv_fatal
+    cmp qword ptr [r14+64],0
+    jne nv_fatal
+    cmp qword ptr [r14+72],0
+    jne nv_fatal
+    mov rax,[r14+48]
+    mov rdx,[r14+56]
+    lock cmpxchg [rbp+24],rdx
+    sete dl
+    mov [r15+48],rax
+    movzx edx,dl
+    mov [r15+56],rdx
+    jmp nv_effect_done
+
+nv_child_new:
+    cmp qword ptr [r13+48],0
+    jne nv_fatal
+    cmp qword ptr [r14+64],0
+    jne nv_fatal
+    cmp qword ptr [r14+72],0
+    jne nv_fatal
+    mov eax,9
+    xor edi,edi
+    mov esi,131072
+    mov edx,3
+    mov r10d,0x22
+    mov r8,-1
+    xor r9d,r9d
+    syscall
+    cmp rax,-4095
+    jae nv_fatal
+    test rax,rax
+    jz nv_child_zero
+    mov [r12+80],rax
+    mov rbx,rax
+    mov edi,6
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_child
+    mov rdi,rbx
+    mov esi,131072
+    lea rdx,[rbp+64]
+    xor ecx,ecx
+    xor r8d,r8d
+    cmp qword ptr [rbp+216],0
+    je nv_child_initialize
+    lea rcx,[rip+nv_watch_observer]
+    mov r8,r13
+nv_child_initialize:
+    call .NV_watcher_image+5072
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,6
+    mov esi,1
+    call nv_observe_child
+    mov rax,[r12+152]
+    test eax,eax
+    jnz nv_fatal
+    mov [r13+48],rbx
+    call nv_child_request
+    mov qword ptr [r12+NV_CHILD_REQUEST+8],1
+    mov qword ptr [r12+NV_CHILD_REQUEST+16],1
+    mov rax,[r14+48]
+    mov [r12+NV_CHILD_REQUEST+40],rax
+    mov rax,[r14+56]
+    mov [r12+NV_CHILD_REQUEST+48],rax
+    call nv_child_call
+    cmp eax,128
+    jne nv_fatal
+    call nv_child_snapshot
+    cmp qword ptr [r12+NV_CHILD_RESPONSE+8],0
+    je nv_child_new_success
+    cmp qword ptr [r12+NV_CHILD_RESPONSE+8],1
+    jne nv_fatal
+    call nv_child_release
+    test eax,eax
+    jnz nv_fatal
+    mov qword ptr [r15+48],0
+    jmp nv_effect_done
+nv_child_new_success:
+    mov qword ptr [r12+80],0
+    jmp nv_effect_done
+
+nv_child_version:
+    mov rbx,[r13+48]
+    test rbx,rbx
+    jz nv_fatal
+    cmp [r14+48],rbx
+    jne nv_fatal
+    mov rax,[r14+56]
+    cmp rax,2
+    je nv_child_bind_directory
+    cmp rax,3
+    jne nv_fatal
+    cmp qword ptr [r14+64],0
+    jne nv_fatal
+    cmp qword ptr [r14+72],0
+    jne nv_fatal
+    mov rdx,-1
+    xor ecx,ecx
+    jmp nv_child_bind
+nv_child_bind_directory:
+    mov rdx,[r14+64]
+    mov rcx,[r14+72]
+nv_child_bind:
+    mov rdi,rbx
+    mov esi,131072
+    call .NV_watcher_image+5280
+    test eax,eax
+    jnz nv_fatal
+    call nv_child_request
+    mov rax,[r14+56]
+    mov [r12+NV_CHILD_REQUEST+8],rax
+    cmp rax,2
+    jne nv_child_next_generation
+    mov qword ptr [r12+NV_CHILD_REQUEST+24],1
+    cmp qword ptr [r14+72],0
+    je nv_child_next_generation
+    mov qword ptr [r12+NV_CHILD_REQUEST+32],3
+nv_child_next_generation:
+    mov rax,[rbx+16]
+    add rax,1
+    jc nv_fatal
+    mov [r12+NV_CHILD_REQUEST+16],rax
+    call nv_child_call
+    cmp eax,128
+    jne nv_fatal
+    call nv_child_snapshot
+    jmp nv_effect_done
+
+nv_child_drop:
+    mov rbx,[r13+48]
+    test rbx,rbx
+    jz nv_fatal
+    cmp [r14+48],rbx
+    jne nv_fatal
+    cmp qword ptr [r14+56],0
+    jne nv_fatal
+    cmp qword ptr [r14+64],0
+    jne nv_fatal
+    cmp qword ptr [r14+72],0
+    jne nv_fatal
+    mov rdi,rbx
+    mov esi,131072
+    mov rdx,-1
+    xor ecx,ecx
+    call .NV_watcher_image+5280
+    test eax,eax
+    jnz nv_fatal
+    call nv_child_request
+    mov qword ptr [r12+NV_CHILD_REQUEST+8],4
+    mov rax,[rbx+16]
+    add rax,1
+    jc nv_fatal
+    mov [r12+NV_CHILD_REQUEST+16],rax
+    call nv_child_call
+    cmp eax,128
+    jne nv_fatal
+    cmp qword ptr [r12+NV_CHILD_RESPONSE+8],0
+    jne nv_fatal
+    call nv_child_snapshot
+    call nv_child_release
+    test eax,eax
+    jnz nv_fatal
+    jmp nv_effect_done
+
+nv_fingerprint:
+    cmp qword ptr [r12+72],0
+    jne nv_fatal
+    cmp qword ptr [r14+56],0
+    jne nv_fatal
+    cmp qword ptr [r14+64],0
+    jne nv_fatal
+    cmp qword ptr [r14+72],0
+    jne nv_fatal
+    mov eax,9
+    xor edi,edi
+    mov esi,32768
+    mov edx,3
+    mov r10d,0x22
+    mov r8,-1
+    xor r9d,r9d
+    syscall
+    cmp rax,-4095
+    jae nv_fatal
+    test rax,rax
+    jz nv_fp_zero
+    mov rbx,rax
+    mov [r12+88],rax
+    mov edi,9
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_fingerprint
+    mov rdi,rbx
+    mov esi,32768
+    mov rdx,[r14+48]
+    lea rcx,[rbp+128]
+    xor r8d,r8d
+    xor r9d,r9d
+    cmp qword ptr [rbp+216],0
+    je nv_fp_initialize
+    lea r8,[rip+nv_fp_observer]
+    mov r9,r12
+nv_fp_initialize:
+    call .NV_fingerprint_image+2880
+    mov eax,eax
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,9
+    mov esi,1
+    call nv_observe_fingerprint
+    mov rax,[r12+152]
+    test eax,eax
+    jnz nv_fatal
+    lea rdi,[r12+NV_FP_REQUEST]
+    xor eax,eax
+    mov ecx,8
+    rep stosq
+    mov rax,NF_REQUEST_MAGIC
+    mov [r12+NV_FP_REQUEST],rax
+    mov qword ptr [r12+NV_FP_REQUEST+8],1
+    mov qword ptr [r12+NV_FP_REQUEST+16],1
+    mov qword ptr [r12+NV_FP_REQUEST+24],1
+    mov edi,10
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_fingerprint
+    lea rdi,[r12+NV_FP_REQUEST]
+    mov esi,64
+    lea rdx,[r12+NV_FP_RESPONSE]
+    mov ecx,128
+    mov r8,rbx
+    mov r9d,32768
+    call .NV_fingerprint_image
+    mov eax,eax
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,10
+    mov esi,1
+    call nv_observe_fingerprint
+    mov rax,[r12+152]
+    cmp eax,128
+    jne nv_fatal
+    lea rsi,[r12+NV_FP_RESPONSE]
+    lea rdi,[r15+96]
+    mov ecx,16
+    rep movsq
+    mov qword ptr [r15+64],128
+    mov qword ptr [r15+72],224
+    mov qword ptr [r12+56],224
+    mov edi,11
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_fingerprint
+    mov rdi,rbx
+    mov esi,32768
+    call .NV_fingerprint_image+3136
+    mov eax,eax
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,11
+    mov esi,1
+    call nv_observe_fingerprint
+    mov rax,[r12+152]
+    test eax,eax
+    jnz nv_fatal
+    mov rdi,rbx
+    mov esi,32768
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz nv_fatal
+    mov qword ptr [r12+88],0
+    jmp nv_effect_done
+
+nv_effect_done:
+    mov edi,2
+    mov esi,1
+    xor edx,edx
+    call nv_observe_parent
+    jmp nv_owner_loop
+
+nv_terminal:
+    cmp qword ptr [r12+160],128
+    jne nv_fatal
+    cmp qword ptr [r12+72],0
+    jne nv_fatal
+    cmp qword ptr [r12+144],1
+    jne nv_fatal
+    mov rax,[r12+64]
+    cmp [r14+32],rax
+    jne nv_fatal
+    cmp qword ptr [r14+112],0
+    jne nv_fatal
+    cmp qword ptr [r14+120],0
+    jne nv_fatal
+    mov rsi,r14
+    mov rdi,[r12+24]
+    mov ecx,16
+    rep movsq
+    mov eax,128
+nv_preserve_return:
+    mov [r12+112],rax
+    jmp nv_release_invocation
+
+/* Unexpected transport corruption is quarantined, never an original error ACK.
+ * Preserve owned child/FP storage for custody rather than replaying a completed
+ * command or guessing which native resources a failed child has already closed.
+ */
+nv_fatal:
+    test r12,r12
+    jz nv_entry_private
+    mov eax,0xfffffffc
+    mov [r12+112],rax
+    mov qword ptr [r13+40],1
+    mov qword ptr [r13+184],1
+    cmp qword ptr [r12+72],1
+    jne nv_fatal_observe
+    mov qword ptr [r13+56],0
+    mov qword ptr [r12+72],0
+    lea rdi,[r13+128]
+    call qword ptr [rbp+200]
+    movsxd rax,eax
+    mov [r12+152],rax
+nv_fatal_observe:
+    mov edi,5
+    mov esi,1
+    mov edx,0xfffffffc
+    call nv_observe_parent
+    /* A complete fatal context remains owned by the object for diagnosis. */
+    mov [r13+192],r12
+    cmp qword ptr [r12+144],0
+    je nv_fatal_return
+    lock dec qword ptr [r13+176]
+    mov qword ptr [r12+144],0
+nv_fatal_return:
+    mov eax,0xfffffffc
+    NV_RESTORE
+
+nv_release_invocation:
+    cmp qword ptr [r12+144],0
+    je nv_release_errno
+    lock dec qword ptr [r13+176]
+    mov qword ptr [r12+144],0
+nv_release_errno:
+    mov rax,[r12+96]
+    test rax,rax
+    jz nv_release_unmap
+    mov edx,[r12+104]
+    mov [rax],edx
+nv_release_unmap:
+    mov rbx,[r12+112]
+    mov rdi,r12
+    mov esi,NV_CONTEXT_BYTES
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz nv_entry_private
+    mov rax,rbx
+    NV_RESTORE
+
+nv_child_zero:
+    xor edi,edi
+    mov esi,131072
+    mov eax,11
+    syscall
+    jmp nv_fatal
+nv_fp_zero:
+    xor edi,edi
+    mov esi,32768
+    mov eax,11
+    syscall
+    jmp nv_fatal
+nv_entry_zero_mapping:
+    xor edi,edi
+    mov esi,NV_CONTEXT_BYTES
+    mov eax,11
+    syscall
+nv_entry_allocation:
+    mov eax,0xfffffff9
+    NV_RESTORE
+nv_entry_invalid:
+    mov eax,0xffffffff
+    NV_RESTORE
+nv_entry_capacity:
+    mov eax,0xfffffffe
+    NV_RESTORE
+nv_entry_private:
+    mov eax,0xfffffffc
+    NV_RESTORE
+.size namespace_versions_entry,.-namespace_versions_entry
+
+/* Disjoint valid ranges. Inputs remain trusted, live private capabilities. */
+nv_disjoint:
+    lea r8,[rdi+rsi]
+    cmp r8,rdi
+    jb nv_disjoint_bad
+    lea r9,[rdx+rcx]
+    cmp r9,rdx
+    jb nv_disjoint_bad
+    cmp rdi,r9
+    jae nv_disjoint_good
+    cmp rdx,r8
+    jae nv_disjoint_good
+nv_disjoint_bad:
+    xor eax,eax
+    ret
+nv_disjoint_good:
+    mov eax,1
+    ret
+
+nv_zero_arguments:
+    xor eax,eax
+    cmp qword ptr [r14+48],0
+    jne nv_zero_return
+    cmp qword ptr [r14+56],0
+    jne nv_zero_return
+    cmp qword ptr [r14+64],0
+    jne nv_zero_return
+    cmp qword ptr [r14+72],0
+    jne nv_zero_return
+    mov eax,1
+nv_zero_return:
+    ret
+
+nv_owner:
+    sub rsp,8
+    mov rcx,[r12+56]
+    lea rdi,[r15+rcx]
+    mov rax,0xc3c3c3c3c3c3c3c3
+    mov ecx,2
+    rep stosq
+    mov rdi,r14
+    mov rax,0xa5a5a5a5a5a5a5a5
+    mov ecx,26
+    rep stosq
+    lea rdi,[r12+NV_WORK+8192]
+    mov rax,0x5a5a5a5a5a5a5a5a
+    mov ecx,2
+    rep stosq
+    mov edi,1
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_parent
+    mov rdi,r15
+    mov rsi,[r12+56]
+    mov rdx,r14
+    mov ecx,192
+    lea r8,[r12+NV_WORK]
+    mov r9d,8192
+    call .NV_policy_image
+    mov eax,eax
+    mov [r12+160],rax
+    inc qword ptr [r12+120]
+    mov rdx,rax
+    mov edi,1
+    mov esi,1
+    call nv_observe_parent
+    mov rax,0xa5a5a5a5a5a5a5a5
+    cmp [r14+192],rax
+    jne nv_owner_guard_failure
+    cmp [r14+200],rax
+    jne nv_owner_guard_failure
+    mov rax,0x5a5a5a5a5a5a5a5a
+    cmp [r12+NV_WORK+8192],rax
+    jne nv_owner_guard_failure
+    cmp [r12+NV_WORK+8200],rax
+    jne nv_owner_guard_failure
+    mov rcx,[r12+56]
+    mov rax,0xc3c3c3c3c3c3c3c3
+    cmp [r15+rcx],rax
+    jne nv_owner_guard_failure
+    cmp [r15+rcx+8],rax
+    jne nv_owner_guard_failure
+    add rsp,8
+    ret
+nv_owner_guard_failure:
+    mov eax,0xfffffffc
+    mov [r12+160],rax
+    add rsp,8
+    ret
+
+nv_child_request:
+    lea rdi,[r12+NV_CHILD_REQUEST]
+    xor eax,eax
+    mov ecx,12
+    rep stosq
+    mov rax,NW_REQUEST_MAGIC
+    mov [r12+NV_CHILD_REQUEST],rax
+    ret
+
+nv_child_call:
+    sub rsp,8
+    mov edi,7
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_child
+    lea rdi,[r12+NV_CHILD_REQUEST]
+    mov esi,96
+    lea rdx,[r12+NV_CHILD_RESPONSE]
+    mov ecx,128
+    mov r8,rbx
+    mov r9d,131072
+    call .NV_watcher_image
+    mov eax,eax
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,7
+    mov esi,1
+    call nv_observe_child
+    mov rax,[r12+152]
+    add rsp,8
+    ret
+
+nv_child_snapshot:
+    mov [r15+48],rbx
+    mov rax,[r12+NV_CHILD_REQUEST+16]
+    mov [r15+56],rax
+    lea rsi,[r12+NV_CHILD_RESPONSE]
+    lea rdi,[r15+96]
+    mov ecx,16
+    rep movsq
+    lea rsi,[rbx+32768]
+    lea rdi,[r15+224]
+    mov ecx,8192
+    rep movsq
+    mov qword ptr [r15+64],65664
+    mov qword ptr [r15+72],65760
+    mov qword ptr [r12+56],65760
+    ret
+
+nv_child_release:
+    sub rsp,8
+    mov edi,8
+    xor esi,esi
+    xor edx,edx
+    call nv_observe_child
+    mov rdi,rbx
+    mov esi,131072
+    call .NV_watcher_image+5536
+    mov eax,eax
+    mov [r12+152],rax
+    mov rdx,rax
+    mov edi,8
+    mov esi,1
+    call nv_observe_child
+    mov rax,[r12+152]
+    test eax,eax
+    jnz nv_child_release_return
+    mov rdi,rbx
+    mov esi,131072
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz nv_child_release_return
+    mov qword ptr [r13+48],0
+    mov qword ptr [r12+80],0
+nv_child_release_return:
+    add rsp,8
+    ret
+
+/* Complete lifecycle borrows precede initialization and follow disposal while
+ * the actual mapping remains live. No callback can provide an effect result.
+ */
+nv_observe_child:
+    mov rcx,rbx
+    mov r8d,131072
+    jmp nv_observe_mapping
+nv_observe_fingerprint:
+    mov rcx,rbx
+    mov r8d,32768
+nv_observe_mapping:
+    mov r9,r12
+    mov r10d,NV_CONTEXT_BYTES
+    mov r11,r13
+    mov eax,NV_OBJECT_BYTES
+    cmp qword ptr [r13+24],3
+    jne nv_observe
+    mov eax,NV_SET_BYTES
+    jmp nv_observe
+
+/* Parent records retain the entire invocation, object and environment. */
+nv_observe_parent:
+    mov rcx,r12
+    mov r8d,NV_CONTEXT_BYTES
+    mov r9,r13
+    mov r10d,NV_OBJECT_BYTES
+    cmp qword ptr [r13+24],3
+    jne nv_observe_parent_global
+    mov r10d,NV_SET_BYTES
+nv_observe_parent_global:
+    mov r11,rbp
+    mov eax,NV_ENV_BYTES
+    jmp nv_observe
+
+/* rdi=stage,rsi=phase,rdx=return,rcx/p8 first,r9/r10 second,r11/rax third. */
+nv_observe:
+    cmp qword ptr [rbp+216],0
+    je nv_observe_return
+    sub rsp,24
+    mov [r12+NV_RECORD+8],rdi
+    mov [r12+NV_RECORD+16],rsi
+    mov [r12+NV_RECORD+24],rdx
+    mov [r12+NV_RECORD+80],rcx
+    mov [r12+NV_RECORD+88],r8
+    mov [r12+NV_RECORD+96],r9
+    mov [r12+NV_RECORD+104],r10
+    mov [r12+NV_RECORD+112],r11
+    mov [r12+NV_RECORD+120],rax
+    mov rax,NV_RECORD_MAGIC
+    mov [r12+NV_RECORD],rax
+    mov [r12+NV_RECORD+40],r12
+    mov [r12+NV_RECORD+48],r13
+    mov rax,[r12+40]
+    mov [r12+NV_RECORD+56],rax
+    mov rax,[r12+64]
+    mov [r12+NV_RECORD+64],rax
+    mov rax,[r12+NV_OUTPUT+40]
+    mov [r12+NV_RECORD+72],rax
+    xor eax,eax
+    mov rdx,[r12+96]
+    test rdx,rdx
+    jz nv_observe_no_errno
+    mov eax,[rdx]
+nv_observe_no_errno:
+    mov [rsp],rax
+    mov [r12+NV_RECORD+32],rax
+    mov rdi,[rbp+224]
+    lea rsi,[r12+NV_RECORD]
+    mov edx,128
+    call qword ptr [rbp+216]
+    mov rdx,[r12+96]
+    test rdx,rdx
+    jz nv_observe_restore_done
+    mov eax,[rsp]
+    mov [rdx],eax
+nv_observe_restore_done:
+    add rsp,24
+nv_observe_return:
+    ret
+
+/* Actual child callbacks are forwarded without controlling a return or ACK. */
+nv_watch_observer:
+    NV_SAVE
+    mov r13,rdi
+    mov r12,[r13+56]
+    test r12,r12
+    jz nv_watch_observer_done
+    mov rbp,[r13+8]
+    mov r9,rcx
+    mov r10,r8
+    mov rcx,rsi
+    mov r8,rdx
+    mov edi,3
+    mov rsi,[r9+8]
+    mov rdx,[r9+16]
+    mov r11,rbp
+    mov eax,NV_ENV_BYTES
+    call nv_observe
+nv_watch_observer_done:
+    NV_RESTORE
+
+nv_fp_observer:
+    NV_SAVE
+    mov r9,rdi
+    mov r12,rsi
+    mov r13,[r12+8]
+    mov rbp,[r12+16]
+    mov rcx,[r9+72]
+    mov r8d,32768
+    mov r10d,128
+    mov edi,4
+    mov rsi,[r9+8]
+    mov rdx,[r9+16]
+    mov r11,rbp
+    mov eax,NV_ENV_BYTES
+    call nv_observe
+    NV_RESTORE
+
+.p2align 4
+.global namespace_versions_initialize
+.type namespace_versions_initialize,@function
+namespace_versions_initialize:
+    NV_SAVE
+    mov r12,rdi
+    mov rbx,rdx
+    mov [rsp],rcx
+    mov [rsp+8],r8
+    cmp rsi,NV_ENV_BYTES
+    jb nv_initialize_capacity
+    test r12,r12
+    jz nv_initialize_invalid
+    test r12,7
+    jnz nv_initialize_invalid
+    test rbx,rbx
+    jz nv_initialize_invalid
+    mov rax,NV_ENV_MAGIC
+    cmp [r12],rax
+    je nv_initialize_invalid
+    mov rdi,r12
+    mov esi,NV_ENV_BYTES
+    mov rdx,rbx
+    mov ecx,152
+    call nv_disjoint
+    test eax,eax
+    jz nv_initialize_invalid
+    xor ecx,ecx
+nv_initialize_table:
+    cmp ecx,112
+    je nv_initialize_table_zero
+    cmp qword ptr [rbx+rcx],0
+    je nv_initialize_invalid
+    jmp nv_initialize_table_next
+nv_initialize_table_zero:
+    cmp qword ptr [rbx+rcx],0
+    jne nv_initialize_invalid
+nv_initialize_table_next:
+    add ecx,8
+    cmp ecx,152
+    jb nv_initialize_table
+    cmp qword ptr [rsp],0
+    jne nv_initialize_clear
+    cmp qword ptr [rsp+8],0
+    jne nv_initialize_invalid
+nv_initialize_clear:
+    mov rdi,r12
+    xor eax,eax
+    mov ecx,NV_ENV_BYTES/8
+    rep stosq
+    mov rsi,rbx
+    lea rdi,[r12+64]
+    mov ecx,19
+    rep movsq
+    mov rax,[rsp]
+    mov [r12+216],rax
+    mov rax,[rsp+8]
+    mov [r12+224],rax
+    mov eax,39
+    syscall
+    mov [r12+8],rax
+    mov qword ptr [r12+24],1
+    lea rdi,[r12+256]
+    mov esi,1
+    mov rdx,r12
+    call nv_object_initialize
+    test eax,eax
+    jnz nv_initialize_private
+    lea rdi,[r12+512]
+    mov esi,2
+    mov rdx,r12
+    call nv_object_initialize
+    test eax,eax
+    jz nv_initialize_publish
+    lea rdi,[r12+256+128]
+    call qword ptr [r12+208]
+    jmp nv_initialize_private
+nv_initialize_publish:
+    mov rax,NV_ENV_MAGIC
+    mov [r12],rax
+    mov qword ptr [r12+16],1
+    xor eax,eax
+    NV_RESTORE
+nv_initialize_invalid:
+    mov eax,0xffffffff
+    NV_RESTORE
+nv_initialize_capacity:
+    mov eax,0xfffffffe
+    NV_RESTORE
+nv_initialize_private:
+    mov eax,0xfffffffc
+    NV_RESTORE
+.size namespace_versions_initialize,.-namespace_versions_initialize
+
+/* rdi=already zero object,rsi=kind,rdx=environment. */
+nv_object_initialize:
+    push rbx
+    push rbp
+    sub rsp,8
+    mov rbx,rdi
+    mov rbp,rdx
+    mov [rbx+8],rdx
+    mov rax,[rdx+8]
+    mov [rbx+16],rax
+    mov [rbx+24],rsi
+    lea rdi,[rbx+128]
+    xor esi,esi
+    call qword ptr [rbp+184]
+    test eax,eax
+    jnz nv_object_initialize_return
+    mov rax,NV_OBJ_MAGIC
+    mov [rbx],rax
+    mov qword ptr [rbx+32],1
+    xor eax,eax
+nv_object_initialize_return:
+    add rsp,8
+    pop rbp
+    pop rbx
+    ret
+
+.p2align 4
+.global namespace_versions_set_allocate
+.type namespace_versions_set_allocate,@function
+namespace_versions_set_allocate:
+    NV_SAVE
+    mov rbp,rdi
+    test rbp,rbp
+    jz nv_allocate_invalid
+    test rbp,7
+    jnz nv_allocate_invalid
+    mov rax,NV_ENV_MAGIC
+    cmp [rbp],rax
+    jne nv_allocate_invalid
+    cmp qword ptr [rbp+16],1
+    jne nv_allocate_invalid
+    mov eax,39
+    syscall
+    cmp [rbp+8],rax
+    jne nv_allocate_invalid
+    mov eax,9
+    xor edi,edi
+    mov esi,NV_SET_BYTES
+    mov edx,3
+    mov r10d,0x22
+    mov r8,-1
+    xor r9d,r9d
+    syscall
+    cmp rax,-4095
+    jae nv_allocate_return
+    test rax,rax
+    jz nv_allocate_zero
+    mov rbx,rax
+    mov rdi,rax
+    mov esi,3
+    mov rdx,rbp
+    call nv_object_initialize
+    test eax,eax
+    jnz nv_allocate_init_failed
+    mov rax,rbx
+nv_allocate_return:
+    NV_RESTORE
+nv_allocate_init_failed:
+    mov [rsp],eax
+    mov rdi,rbx
+    mov esi,NV_SET_BYTES
+    mov eax,11
+    syscall
+    mov eax,[rsp]
+    neg eax
+    movsxd rax,eax
+    NV_RESTORE
+nv_allocate_zero:
+    xor edi,edi
+    mov esi,NV_SET_BYTES
+    mov eax,11
+    syscall
+    mov rax,-12
+    NV_RESTORE
+nv_allocate_invalid:
+    mov rax,-22
+    NV_RESTORE
+.size namespace_versions_set_allocate,.-namespace_versions_set_allocate
+
+.p2align 4
+.global namespace_versions_set_dispose
+.type namespace_versions_set_dispose,@function
+namespace_versions_set_dispose:
+    NV_SAVE
+    mov r13,rdi
+    cmp rsi,NV_SET_BYTES
+    jb nv_set_dispose_capacity
+    test r13,r13
+    jz nv_set_dispose_invalid
+    test r13,4095
+    jnz nv_set_dispose_invalid
+    mov rax,NV_OBJ_MAGIC
+    cmp [r13],rax
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+24],3
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+32],1
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+48],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+56],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+80],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+104],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+176],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+184],0
+    jne nv_set_dispose_invalid
+    cmp qword ptr [r13+192],0
+    jne nv_set_dispose_invalid
+    mov rbp,[r13+8]
+    test rbp,rbp
+    jz nv_set_dispose_invalid
+    mov rax,NV_ENV_MAGIC
+    cmp [rbp],rax
+    jne nv_set_dispose_invalid
+    mov eax,39
+    syscall
+    cmp [r13+16],rax
+    jne nv_set_dispose_invalid
+    cmp [rbp+8],rax
+    jne nv_set_dispose_invalid
+    lea rdi,[r13+128]
+    call qword ptr [rbp+208]
+    test eax,eax
+    jnz nv_set_dispose_private
+    mov rdi,r13
+    mov esi,NV_SET_BYTES
+    mov eax,11
+    syscall
+    test rax,rax
+    jnz nv_set_dispose_private
+    xor eax,eax
+    NV_RESTORE
+nv_set_dispose_invalid:
+    mov eax,0xffffffff
+    NV_RESTORE
+nv_set_dispose_capacity:
+    mov eax,0xfffffffe
+    NV_RESTORE
+nv_set_dispose_private:
+    mov eax,0xfffffffc
+    NV_RESTORE
+.size namespace_versions_set_dispose,.-namespace_versions_set_dispose
+
+.p2align 4
+.global namespace_versions_owner
+namespace_versions_owner:
+.NV_policy_image:
+    .zero 160201
+.global namespace_versions_watcher
+namespace_versions_watcher:
+.NV_watcher_image:
+    .zero 144716
+.global namespace_versions_fingerprint
+namespace_versions_fingerprint:
+.NV_fingerprint_image:
+    .zero 104516
+.global namespace_versions_end
+namespace_versions_end:
+.section .note.GNU-stack,"",@progbits

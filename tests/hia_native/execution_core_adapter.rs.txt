@@ -1,0 +1,106 @@
+use std::io::{self, BufRead, Write};
+
+mod original {
+    use anyhow::{bail, Result};
+    use serde::{Deserialize, Serialize};
+    use sha2::{Digest, Sha256};
+    include!("exact_owner.rs");
+
+    pub fn evaluate(record: CanonicalExecutionRecordV1) -> (u64, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+        match validate_and_digest(&record) {
+            Err(error) => (1, vec![], vec![], vec![], error.to_string().into_bytes()),
+            Ok(record_digest) => {
+                let CanonicalExecutionRecordV1::ExecutionIntent(intent) = &record;
+                let response = ORIGINAL_PROJECTION_EXPRESSION;
+                (0, serde_json::to_vec(&record).unwrap(), record_digest.into_bytes(), response.into_bytes(), vec![])
+            }
+        }
+    }
+    #[cfg(test)]
+    #[path = "original_tests.rs"]
+    mod tests;
+}
+
+fn word(raw: &[u8], at: usize) -> Result<u64, ()> {
+    let part = raw.get(at..at.checked_add(8).ok_or(())?).ok_or(())?;
+    Ok(u64::from_le_bytes(part.try_into().map_err(|_| ())?))
+}
+fn decode(raw: &[u8]) -> Result<original::CanonicalExecutionRecordV1, ()> {
+    use original::*;
+    if raw.get(..8) != Some(b"HXSREC01") || word(raw, 8)? != 1 || word(raw, 56)? != 0 { return Err(()); }
+    let schema_version = u32::try_from(word(raw, 16)?).map_err(|_| ())?;
+    let generation = word(raw, 24)?;
+    let class = match word(raw, 32)? {
+        0 => CanonicalExecutionClassV1::ReadOnlyInspection,
+        1 => CanonicalExecutionClassV1::FileRead,
+        2 => CanonicalExecutionClassV1::NonDestructiveBuild,
+        3 => CanonicalExecutionClassV1::RestrictedFileWrite,
+        4 => CanonicalExecutionClassV1::DurableProcess,
+        5 => CanonicalExecutionClassV1::PrivilegedAction,
+        6 => CanonicalExecutionClassV1::CrossHostDevice,
+        _ => return Err(()),
+    };
+    let currentness = match word(raw, 40)? {
+        0 => CanonicalCurrentnessV1::Current,
+        1 => CanonicalCurrentnessV1::Stale,
+        2 => CanonicalCurrentnessV1::Unknown,
+        _ => return Err(()),
+    };
+    let options = word(raw, 48)?;
+    if options > 15 { return Err(()); }
+    let mut at = 64_usize;
+    let mut strings = Vec::new();
+    for index in 0..14 {
+        let size = usize::try_from(word(raw, at)?).map_err(|_| ())?;
+        at = at.checked_add(8).ok_or(())?;
+        let end = at.checked_add(size).ok_or(())?;
+        let value = String::from_utf8(raw.get(at..end).ok_or(())?.to_vec()).map_err(|_| ())?;
+        let optional = match index { 2 => 1, 3 => 2, 11 => 4, 12 => 8, _ => 0 };
+        if optional != 0 && options & optional == 0 && !value.is_empty() { return Err(()); }
+        strings.push(value);
+        at = end;
+    }
+    if at != raw.len() { return Err(()); }
+    let option = |index: usize, flag: u64| if options & flag == 0 { None } else { Some(strings[index].clone()) };
+    Ok(CanonicalExecutionRecordV1::ExecutionIntent(CanonicalExecutionIntentV1 {
+        binding: CanonicalExecutionBindingV1 {
+            schema_version, run_id: strings[0].clone(), turn_id: strings[1].clone(),
+            cell_id: option(2, 1), organ_id: option(3, 2), operation_id: strings[4].clone(),
+            principal: strings[5].clone(), objective_digest: strings[6].clone(),
+            policy_digest: strings[7].clone(), candidate_digest: strings[8].clone(), host: strings[9].clone(),
+            generation, idempotency_key: strings[10].clone(), predecessor: option(11, 4), currentness,
+            final_use: ShadowFinalUseV1::NotGranted, rollback_reference: option(12, 8),
+        }, class, payload_digest: strings[13].clone(),
+    }))
+}
+fn run(raw: &[u8]) -> Result<Vec<u8>, ()> {
+    let (tag, canonical, digest, response, error) = original::evaluate(decode(raw)?);
+    let mut result = b"HXSRSL01".to_vec();
+    for value in [tag, canonical.len() as u64, digest.len() as u64, response.len() as u64, error.len() as u64, 0, 0] {
+        result.extend_from_slice(&value.to_le_bytes());
+    }
+    result.extend(canonical); result.extend(digest); result.extend(response); result.extend(error);
+    Ok(result)
+}
+fn unhex(line: &str) -> Result<Vec<u8>, ()> {
+    if line.len() % 2 != 0 { return Err(()); }
+    line.as_bytes().chunks_exact(2).map(|pair| {
+        let a = (pair[0] as char).to_digit(16).ok_or(())?;
+        let b = (pair[1] as char).to_digit(16).ok_or(())?;
+        Ok((a * 16 + b) as u8)
+    }).collect()
+}
+fn main() {
+    let stdin = io::stdin(); let mut stdout = io::BufWriter::new(io::stdout().lock());
+    for line in stdin.lock().lines() {
+        let result = line.map_err(|_| ()).and_then(|line| unhex(&line)).and_then(|wire| run(&wire));
+        match result {
+            Ok(raw) => {
+                write!(stdout, "{:08x}:", raw.len()).unwrap();
+                for byte in raw { write!(stdout, "{byte:02x}").unwrap(); }
+                writeln!(stdout).unwrap();
+            }
+            Err(()) => writeln!(stdout, "ffffffff:").unwrap(),
+        }
+    }
+}

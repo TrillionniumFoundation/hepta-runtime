@@ -1,0 +1,44 @@
+name: Read retained read-orphan effect differences without application replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-read-orphans-diagnostic-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [ordinary, first-path, second-path, last-path, refusals, unicode]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/pure_diagnostic
+      ORPHAN_GROUP: ${{ matrix.group }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_orphans/v1/pure_diagnostic
+          persist-credentials: false
+      - name: Restore and read unchanged original and native evidence only
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/diagnostic_driver.py" --work "$RUNNER_TEMP/read-orphan-diagnostic" --group "$ORPHAN_GROUP" --manifest 746e646eaa1c0d7026a2f3f6ff75f86189607637bacd234590377b9efac2d84a
+      - name: Retain complete diagnostic source
+        if: always()
+        run: |
+          cp -a "$ORPHAN_SOURCE" "$RUNNER_TEMP/read-orphan-diagnostic/source"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: read-orphan-diagnostic-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/read-orphan-diagnostic
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

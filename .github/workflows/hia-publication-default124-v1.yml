@@ -1,0 +1,110 @@
+name: Actual default public124 entry and uploaded readback
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-default124-6780-v1-20261117']
+    paths: ['qualification/public124_default_entry_v1/**', '.github/workflows/hia-publication-default124-v1.yml', 'scripts/hia_native_runtime_mcp_build.py', 'native/runtime_mcp_sources.json']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  default:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/public124_default_entry_v1/source" "CAPTURE=$RUNNER_TEMP/publication-default124/capture" "EXPORT=$RUNNER_TEMP/publication-default124-export" "DRIVER=$RUNNER_TEMP/publication-default124-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact candidate and complete current source closure
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /qualification/public124_default_entry_v1/
+            /native/
+            /scripts/
+            /runtime_support/
+            /authoring/
+            /tests/constructor_cases.py
+            /tests/hia_native/runtime_mcp*
+            /tests/hia_native/test_runtime_mcp.py
+            /tests/hia_native/view_call_oracle/
+            /tests/hia_native/workdir_oracle/
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify fixed source and exact seven narrow entry edits
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 73a626fdc201bb4b0020101fef06c738141b609587038ca17485974a7254bcc8
+          python3 -I -S -B "$PACKAGE/entry.py" prepare --source "$GITHUB_WORKSPACE/candidate" --capture "$CAPTURE"
+      - name: Invoke the actual fresh default build command
+        run: |
+          set +e
+          python3 -I -S -B "$CAPTURE/source/scripts/hia_native_runtime_mcp_build.py" --source "$CAPTURE/source" --hepta "$GITHUB_WORKSPACE/compiler" --output "$CAPTURE/default-build" > "$DRIVER.stdout" 2> "$DRIVER.stderr"
+          entry_status=$?
+          cat "$DRIVER.stderr"
+          test "$entry_status" -ne 0 || cat "$DRIVER.stdout"
+          exit "$entry_status"
+      - name: Guard the complete default entry read
+        run: python3 -I -S -B "$PACKAGE/entry.py" read --capture "$CAPTURE" --output "$CAPTURE-readonly.json"
+      - name: Preserve all source and actual build bytes including any failure
+        if: always()
+        run: python3 -I -S -B "$PACKAGE/archive.py" pack --source "$PACKAGE" --capture "$CAPTURE" --output "$EXPORT" --driver-prefix "$DRIVER"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public124-default-entry-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
+  uploaded-read:
+    needs: default
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PACKAGE=$GITHUB_WORKSPACE/candidate/qualification/public124_default_entry_v1/source" "WORK=$RUNNER_TEMP/publication-default124-read-work" "PROOF=$RUNNER_TEMP/publication-default124-proof" "EXPORT=$RUNNER_TEMP/publication-default124-read-export" "DRIVER=$RUNNER_TEMP/publication-default124-read-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact frozen pure reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/public124_default_entry_v1/source
+      - name: Read every uploaded byte and repeat guarded full graph validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          set +e
+          python3 -I -S -B "$PACKAGE/read_uploaded.py" --run "${{ github.run_id }}" --artifact-name "public124-default-entry-${{ github.sha }}-${{ github.run_attempt }}" --work "$WORK" --output "$PROOF" > "$DRIVER.stdout" 2> "$DRIVER.stderr"
+          read_status=$?
+          cat "$DRIVER.stderr"
+          test "$read_status" -ne 0 || cat "$DRIVER.stdout"
+          exit "$read_status"
+      - name: Preserve complete independent proof and any failure
+        if: always()
+        run: python3 -I -S -B "$PACKAGE/archive.py" pack --source "$PACKAGE" --capture "$PROOF" --output "$EXPORT" --driver-prefix "$DRIVER"
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public124-default-entry-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

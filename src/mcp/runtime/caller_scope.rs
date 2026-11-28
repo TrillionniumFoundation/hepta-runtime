@@ -11,6 +11,25 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
+/// Delegate just the exact token digest check, not the mandate to grant an
+/// operator scope. A broken explicitly selected verifier never selects Rust.
+#[cfg(target_os = "linux")]
+pub async fn verify_selected_hia_http_token(expected: &[u8; 32], candidate: &[u8]) -> Option<bool> {
+	use crate::mcp::hia_request_prepare;
+	if !hia_request_prepare::http_auth_selected() {
+		return None;
+	}
+	Some(
+		match hia_request_prepare::http_auth(expected, candidate).await {
+			Ok(true) => {
+				tracing::info!("Native HIA HTTP operator credential verified");
+				true
+			}
+			Ok(false) | Err(_) => false,
+		},
+	)
+}
+
 /// Only the verified HTTP middleware constructs this non-serialized extension.
 #[derive(Clone)]
 pub struct AuthenticatedOperatorScope {
@@ -194,6 +213,63 @@ impl SessionOwnerBinding {
 			context.extensions.get::<axum::http::request::Parts>(),
 			fallback,
 		)
+	}
+
+	pub(crate) async fn resolve_hia(
+		&self,
+		context: &RequestContext<RoleServer>,
+		fallback: Option<&str>,
+	) -> Result<OwnerScope> {
+		#[cfg(target_os = "linux")]
+		{
+			use crate::mcp::hia_request_prepare as hia;
+			if hia::session_scope_selected() {
+				let parts = context.extensions.get::<axum::http::request::Parts>();
+				let candidate = match parts {
+					Some(parts) => parts
+						.extensions
+						.get::<AuthenticatedOperatorScope>()
+						.map(|verified| verified.owner.as_str()),
+					None => fallback,
+				};
+				let http = parts.is_some();
+				for _ in 0..2 {
+					let previous = self
+						.0
+						.lock()
+						.map_err(|_| anyhow!("session authority unavailable"))?
+						.clone();
+					hia::session_scope(
+						http,
+						candidate,
+						previous
+							.as_ref()
+							.map(|scope| (scope.authenticated, scope.owner())),
+					)
+					.await?;
+					let mut current = self
+						.0
+						.lock()
+						.map_err(|_| anyhow!("session authority unavailable"))?;
+					// Another call can only change None into an immutable
+					// binding. Recheck that new binding without holding the lock
+					// across native execution; never commit a stale admission.
+					if *current != previous {
+						continue;
+					}
+					let owner =
+						candidate.ok_or_else(|| anyhow!("HIA authority admitted no owner"))?;
+					let scope = current.get_or_insert_with(|| OwnerScope {
+						owner: owner.into(),
+						authenticated: http,
+					});
+					tracing::info!("Native HIA session authority admitted");
+					return Ok(scope.clone());
+				}
+				bail!("session authority changed during native admission");
+			}
+		}
+		self.resolve(context, fallback)
 	}
 	fn resolve_parts(
 		&self,

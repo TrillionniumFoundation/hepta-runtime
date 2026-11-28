@@ -1,0 +1,28 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.dependency-impact.v2",
+  "qualified_binding": {
+    "stdio": "e7c1abb64973b314eaba1b6fd38672a5aef6887a",
+    "read67_final": "8bb4e020fc8a728ec7b06e8ffa510052d5e8fa64",
+    "read67_production": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+    "formatter34_final": "96a3ecccb3b054a9bf0059659040d4bb9e38e4a9",
+    "formatter34_production": "2464624eee505339adfd6b6297a7f7eb00672bd8",
+    "process_pool_source": "c8113282ace81deafdaa3eea1199fce3a44ac7c8"
+  },
+  "changed_boundary": "stdio constructs one actual process orphan pool after initial valid HBRDQ001 admission and passes it to the three-argument read67 create; observed-only EOF snapshots do not alter the production entry",
+  "other_final_consumers": {
+    "file_info_at": "ea0f3315022107ce494425b60c496f2bd35d41a5",
+    "multi_read_body": "f61df3b792366281048e8f925377fa6cf27db4e2",
+    "binary_write_body": "523633574ed4a5252938a2105deb25d1ddb18c85"
+  },
+  "caller_obligations": [
+    "Use the sole read67 pool ABI; never invoke its old two-argument create",
+    "Keep shared process-lifetime pool until OS exit; never close orphan descriptors on context release/destroy/EOF",
+    "Use qualified formatter34 with exact platform bytes and work extent",
+    "Production ELF excludes observed fixture entry and FD3/4/5 instrumentation",
+    "Body stdio success JSON is semantically compared; CPython default whitespace is not the native wire contract",
+    "Remote named-host policy, SSH transport, real observation pool and public SDK route require their own actual caller qualification"
+  ],
+  "legacy_scope": "Original v1 successful captures remain historical evidence; new v2 actual 16-input triples explicitly qualify the rebind and first-fstat fault path. Prior captures are not silently relabelled as v2.",
+  "production_install_executed": false,
+  "whole_runtime_replaced": false
+}

@@ -1,0 +1,554 @@
+﻿2026-11-17T06:02:25.0740815Z Current runner version: '2.338.2'
+2026-11-17T06:02:25.0763131Z ##[group]Runner Image Provisioner
+2026-11-17T06:02:25.0763905Z Hosted Compute Agent
+2026-11-17T06:02:25.0764461Z Version: 20261103.629
+2026-11-17T06:02:25.0765030Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-17T06:02:25.0765682Z Build Date: 2026-11-03T17:26:59Z
+2026-11-17T06:02:25.0766296Z Worker ID: {d017b231-914d-4832-ac8a-b02724490076}
+2026-11-17T06:02:25.0766913Z Region: centralus
+2026-11-17T06:02:25.0767377Z Cloud: Azure
+2026-11-17T06:02:25.0767944Z ##[endgroup]
+2026-11-17T06:02:25.0769253Z ##[group]Operating System
+2026-11-17T06:02:25.0769853Z Ubuntu
+2026-11-17T06:02:25.0770345Z 24.04.5
+2026-11-17T06:02:25.0770791Z LTS
+2026-11-17T06:02:25.0771345Z ##[endgroup]
+2026-11-17T06:02:25.0771831Z ##[group]Runner Image
+2026-11-17T06:02:25.0772360Z Image: ubuntu-24.04
+2026-11-17T06:02:25.0772890Z Version: 20261111.370.1
+2026-11-17T06:02:25.0774008Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-17T06:02:25.0775241Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+2026-11-17T06:02:25.0776061Z ##[endgroup]
+2026-11-17T06:02:25.0777119Z ##[group]GITHUB_TOKEN Permissions
+2026-11-17T06:02:25.0778949Z Actions: read
+2026-11-17T06:02:25.0779478Z Contents: read
+2026-11-17T06:02:25.0779987Z Metadata: read
+2026-11-17T06:02:25.0780565Z ##[endgroup]
+2026-11-17T06:02:25.0783266Z Secret source: Actions
+2026-11-17T06:02:25.0784472Z Cache mode: write
+2026-11-17T06:02:25.0785514Z Prepare workflow directory
+2026-11-17T06:02:25.1099089Z Prepare all required actions
+2026-11-17T06:02:25.1137314Z Getting action download info
+2026-11-17T06:02:25.3573315Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-17T06:02:25.5000977Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-17T06:02:25.8177796Z Complete job name: controllers
+2026-11-17T06:02:25.8779835Z ##[group]Run printf '%s\n' "TP_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_publication_controller_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-controller-build" "TP_EXPORT=$RUNNER_TEMP/text-publication-controller-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-controller-driver" >> "$GITHUB_ENV"
+2026-11-17T06:02:25.8782802Z [36;1mprintf '%s\n' "TP_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_publication_controller_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-controller-build" "TP_EXPORT=$RUNNER_TEMP/text-publication-controller-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-controller-driver" >> "$GITHUB_ENV"[0m
+2026-11-17T06:02:25.8804790Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:02:25.8805384Z env:
+2026-11-17T06:02:25.8805751Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:25.8806191Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:25.8806544Z ##[endgroup]
+2026-11-17T06:02:25.9067725Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-17T06:02:25.9068568Z with:
+2026-11-17T06:02:25.9068904Z   path: runtime
+2026-11-17T06:02:25.9069284Z   ref: 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3
+2026-11-17T06:02:25.9069760Z   persist-credentials: false
+2026-11-17T06:02:25.9070310Z   sparse-checkout: tests/hia_native/text_publication_controller_ci/source
+
+2026-11-17T06:02:25.9070951Z   repository: TrillionniumFoundation/hepta-runtime
+2026-11-17T06:02:25.9074159Z   token: ***
+2026-11-17T06:02:25.9074516Z   ssh-strict: true
+2026-11-17T06:02:25.9074869Z   ssh-user: git
+2026-11-17T06:02:25.9075205Z   clean: true
+2026-11-17T06:02:25.9075559Z   sparse-checkout-cone-mode: true
+2026-11-17T06:02:25.9075970Z   fetch-depth: 1
+2026-11-17T06:02:25.9076311Z   fetch-tags: false
+2026-11-17T06:02:25.9076665Z   show-progress: true
+2026-11-17T06:02:25.9077021Z   lfs: false
+2026-11-17T06:02:25.9077357Z   submodules: false
+2026-11-17T06:02:25.9077738Z   set-safe-directory: true
+2026-11-17T06:02:25.9078448Z   allow-unsafe-pr-checkout: false
+2026-11-17T06:02:25.9078850Z env:
+2026-11-17T06:02:25.9079185Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:25.9079567Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:25.9080282Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:25.9081183Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:25.9081859Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:25.9082556Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:25.9083237Z ##[endgroup]
+2026-11-17T06:02:26.1234786Z Syncing repository: TrillionniumFoundation/hepta-runtime
+2026-11-17T06:02:26.1237018Z ##[group]Getting Git version info
+2026-11-17T06:02:26.1238080Z Working directory is '/home/runner/work/hepta-runtime/hepta-runtime/runtime'
+2026-11-17T06:02:26.1239707Z [command]/usr/bin/git version
+2026-11-17T06:02:26.1309102Z git version 2.56.1
+2026-11-17T06:02:26.1328696Z ##[endgroup]
+2026-11-17T06:02:26.1338511Z Temporarily overriding HOME='/home/runner/work/_temp/bfc07325-4c58-4c42-b787-8e90323de324' before making global git config changes
+2026-11-17T06:02:26.1340564Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:02:26.1345042Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+2026-11-17T06:02:26.1417852Z ##[group]Determining repository object format
+2026-11-17T06:02:26.1419247Z ##[endgroup]
+2026-11-17T06:02:26.1420241Z ##[group]Initializing the repository
+2026-11-17T06:02:26.1424836Z [command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime/runtime
+2026-11-17T06:02:26.1515509Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-17T06:02:26.1516402Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-17T06:02:26.1517215Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-17T06:02:26.1517876Z hint: call:
+2026-11-17T06:02:26.1518536Z hint:
+2026-11-17T06:02:26.1519173Z hint: 	git config --global init.defaultBranch <name>
+2026-11-17T06:02:26.1519927Z hint:
+2026-11-17T06:02:26.1520613Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-17T06:02:26.1521717Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-17T06:02:26.1522643Z hint:
+2026-11-17T06:02:26.1523134Z hint: 	git branch -m <name>
+2026-11-17T06:02:26.1523698Z hint:
+2026-11-17T06:02:26.1524436Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-17T06:02:26.1525785Z Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/
+2026-11-17T06:02:26.1530682Z [command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-17T06:02:26.1576074Z ##[endgroup]
+2026-11-17T06:02:26.1577420Z ##[group]Disabling automatic garbage collection
+2026-11-17T06:02:26.1579264Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-17T06:02:26.1610055Z ##[endgroup]
+2026-11-17T06:02:26.1610990Z ##[group]Setting up auth
+2026-11-17T06:02:26.1611634Z Removing SSH command configuration
+2026-11-17T06:02:26.1615499Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:26.1650556Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:26.2544795Z Removing HTTP extra header
+2026-11-17T06:02:26.2550411Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:26.2588367Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:26.2797230Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:26.2801684Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:26.2839524Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:26.3068919Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-17T06:02:26.3111047Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path /home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:26.3294072Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:26.3332168Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git.path /github/runner_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:26.3369452Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git/worktrees/*.path /github/runner_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:26.3406462Z ##[endgroup]
+2026-11-17T06:02:26.3407334Z ##[group]Fetching the repository
+2026-11-17T06:02:26.3412826Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3
+2026-11-17T06:02:26.8019405Z From https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-17T06:02:26.8020880Z  * branch            434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3 -> FETCH_HEAD
+2026-11-17T06:02:26.8027829Z [command]/usr/bin/git rev-parse --verify --quiet 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3^{object}
+2026-11-17T06:02:26.8062194Z 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3
+2026-11-17T06:02:26.8066814Z ##[endgroup]
+2026-11-17T06:02:26.8068011Z ##[group]Determining the checkout info
+2026-11-17T06:02:26.8143534Z ##[endgroup]
+2026-11-17T06:02:26.8144891Z ##[group]Setting up sparse checkout
+2026-11-17T06:02:26.8146096Z [command]/usr/bin/git sparse-checkout set tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:26.8147983Z ##[endgroup]
+2026-11-17T06:02:26.8148777Z ##[group]Checking out the ref
+2026-11-17T06:02:26.8149522Z [command]/usr/bin/git checkout --progress --force 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3
+2026-11-17T06:02:27.9321587Z Updating files:   0% (1/752)
+2026-11-17T06:02:27.9325615Z Updating files:   1% (8/752)
+2026-11-17T06:02:27.9329543Z Updating files:   2% (16/752)
+2026-11-17T06:02:27.9335379Z Updating files:   3% (23/752)
+2026-11-17T06:02:27.9339272Z Updating files:   4% (31/752)
+2026-11-17T06:02:27.9344985Z Updating files:   5% (38/752)
+2026-11-17T06:02:27.9350839Z Updating files:   6% (46/752)
+2026-11-17T06:02:27.9356872Z Updating files:   7% (53/752)
+2026-11-17T06:02:27.9364285Z Updating files:   8% (61/752)
+2026-11-17T06:02:27.9371427Z Updating files:   9% (68/752)
+2026-11-17T06:02:27.9378831Z Updating files:  10% (76/752)
+2026-11-17T06:02:27.9388701Z Updating files:  11% (83/752)
+2026-11-17T06:02:27.9398657Z Updating files:  12% (91/752)
+2026-11-17T06:02:27.9406602Z Updating files:  13% (98/752)
+2026-11-17T06:02:27.9410397Z Updating files:  14% (106/752)
+2026-11-17T06:02:27.9417485Z Updating files:  15% (113/752)
+2026-11-17T06:02:27.9422004Z Updating files:  16% (121/752)
+2026-11-17T06:02:27.9426520Z Updating files:  17% (128/752)
+2026-11-17T06:02:27.9434611Z Updating files:  18% (136/752)
+2026-11-17T06:02:27.9439546Z Updating files:  19% (143/752)
+2026-11-17T06:02:27.9445886Z Updating files:  20% (151/752)
+2026-11-17T06:02:27.9457214Z Updating files:  21% (158/752)
+2026-11-17T06:02:27.9472592Z Updating files:  22% (166/752)
+2026-11-17T06:02:27.9488746Z Updating files:  23% (173/752)
+2026-11-17T06:02:27.9495639Z Updating files:  24% (181/752)
+2026-11-17T06:02:27.9500531Z Updating files:  25% (188/752)
+2026-11-17T06:02:27.9506495Z Updating files:  26% (196/752)
+2026-11-17T06:02:27.9510511Z Updating files:  27% (204/752)
+2026-11-17T06:02:27.9514895Z Updating files:  28% (211/752)
+2026-11-17T06:02:27.9522485Z Updating files:  29% (219/752)
+2026-11-17T06:02:27.9541868Z Updating files:  30% (226/752)
+2026-11-17T06:02:27.9545108Z Updating files:  31% (234/752)
+2026-11-17T06:02:27.9552726Z Updating files:  32% (241/752)
+2026-11-17T06:02:27.9557808Z Updating files:  33% (249/752)
+2026-11-17T06:02:27.9567993Z Updating files:  34% (256/752)
+2026-11-17T06:02:27.9573403Z Updating files:  35% (264/752)
+2026-11-17T06:02:27.9579738Z Updating files:  36% (271/752)
+2026-11-17T06:02:27.9583572Z Updating files:  37% (279/752)
+2026-11-17T06:02:27.9587511Z Updating files:  38% (286/752)
+2026-11-17T06:02:27.9592357Z Updating files:  39% (294/752)
+2026-11-17T06:02:27.9595599Z Updating files:  40% (301/752)
+2026-11-17T06:02:27.9615055Z Updating files:  41% (309/752)
+2026-11-17T06:02:27.9620127Z Updating files:  42% (316/752)
+2026-11-17T06:02:27.9624126Z Updating files:  43% (324/752)
+2026-11-17T06:02:27.9628540Z Updating files:  44% (331/752)
+2026-11-17T06:02:27.9633289Z Updating files:  45% (339/752)
+2026-11-17T06:02:27.9637569Z Updating files:  46% (346/752)
+2026-11-17T06:02:27.9642683Z Updating files:  47% (354/752)
+2026-11-17T06:02:27.9650708Z Updating files:  48% (361/752)
+2026-11-17T06:02:27.9662167Z Updating files:  49% (369/752)
+2026-11-17T06:02:27.9679004Z Updating files:  50% (376/752)
+2026-11-17T06:02:27.9688883Z Updating files:  51% (384/752)
+2026-11-17T06:02:27.9693749Z Updating files:  52% (392/752)
+2026-11-17T06:02:27.9700192Z Updating files:  53% (399/752)
+2026-11-17T06:02:27.9706440Z Updating files:  54% (407/752)
+2026-11-17T06:02:27.9712711Z Updating files:  55% (414/752)
+2026-11-17T06:02:27.9717546Z Updating files:  56% (422/752)
+2026-11-17T06:02:27.9723213Z Updating files:  57% (429/752)
+2026-11-17T06:02:27.9728449Z Updating files:  58% (437/752)
+2026-11-17T06:02:27.9734403Z Updating files:  59% (444/752)
+2026-11-17T06:02:27.9739988Z Updating files:  60% (452/752)
+2026-11-17T06:02:27.9745388Z Updating files:  61% (459/752)
+2026-11-17T06:02:27.9750966Z Updating files:  62% (467/752)
+2026-11-17T06:02:27.9754404Z Updating files:  63% (474/752)
+2026-11-17T06:02:27.9759289Z Updating files:  64% (482/752)
+2026-11-17T06:02:27.9763623Z Updating files:  65% (489/752)
+2026-11-17T06:02:27.9767786Z Updating files:  66% (497/752)
+2026-11-17T06:02:27.9776622Z Updating files:  67% (504/752)
+2026-11-17T06:02:27.9789173Z Updating files:  68% (512/752)
+2026-11-17T06:02:27.9793349Z Updating files:  69% (519/752)
+2026-11-17T06:02:27.9799703Z Updating files:  70% (527/752)
+2026-11-17T06:02:27.9808449Z Updating files:  71% (534/752)
+2026-11-17T06:02:27.9814230Z Updating files:  72% (542/752)
+2026-11-17T06:02:27.9820476Z Updating files:  73% (549/752)
+2026-11-17T06:02:27.9824746Z Updating files:  74% (557/752)
+2026-11-17T06:02:27.9830330Z Updating files:  75% (564/752)
+2026-11-17T06:02:27.9836128Z Updating files:  76% (572/752)
+2026-11-17T06:02:27.9842277Z Updating files:  77% (580/752)
+2026-11-17T06:02:27.9849077Z Updating files:  78% (587/752)
+2026-11-17T06:02:27.9855373Z Updating files:  79% (595/752)
+2026-11-17T06:02:27.9860711Z Updating files:  80% (602/752)
+2026-11-17T06:02:27.9873469Z Updating files:  81% (610/752)
+2026-11-17T06:02:27.9880691Z Updating files:  82% (617/752)
+2026-11-17T06:02:27.9885992Z Updating files:  83% (625/752)
+2026-11-17T06:02:27.9895124Z Updating files:  84% (632/752)
+2026-11-17T06:02:27.9900302Z Updating files:  85% (640/752)
+2026-11-17T06:02:27.9905446Z Updating files:  86% (647/752)
+2026-11-17T06:02:27.9911183Z Updating files:  87% (655/752)
+2026-11-17T06:02:27.9915527Z Updating files:  88% (662/752)
+2026-11-17T06:02:27.9920020Z Updating files:  89% (670/752)
+2026-11-17T06:02:27.9925590Z Updating files:  90% (677/752)
+2026-11-17T06:02:27.9932764Z Updating files:  91% (685/752)
+2026-11-17T06:02:27.9938570Z Updating files:  92% (692/752)
+2026-11-17T06:02:27.9944232Z Updating files:  93% (700/752)
+2026-11-17T06:02:27.9950379Z Updating files:  94% (707/752)
+2026-11-17T06:02:27.9955953Z Updating files:  95% (715/752)
+2026-11-17T06:02:27.9962717Z Updating files:  96% (722/752)
+2026-11-17T06:02:27.9967734Z Updating files:  97% (730/752)
+2026-11-17T06:02:27.9973708Z Updating files:  98% (737/752)
+2026-11-17T06:02:27.9978344Z Updating files:  99% (745/752)
+2026-11-17T06:02:27.9979692Z Updating files: 100% (752/752)
+2026-11-17T06:02:27.9981109Z Updating files: 100% (752/752), done.
+2026-11-17T06:02:28.0094538Z Note: switching to '434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3'.
+2026-11-17T06:02:28.0095633Z 
+2026-11-17T06:02:28.0096596Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-17T06:02:28.0099131Z changes and commit them, and you can discard any commits you make in this
+2026-11-17T06:02:28.0101579Z state without impacting any branches by switching back to a branch.
+2026-11-17T06:02:28.0102983Z 
+2026-11-17T06:02:28.0103884Z If you want to create a new branch to retain commits you create, you may
+2026-11-17T06:02:28.0106154Z do so (now or later) by using -c with the switch command. Example:
+2026-11-17T06:02:28.0107446Z 
+2026-11-17T06:02:28.0107971Z   git switch -c <new-branch-name>
+2026-11-17T06:02:28.0108773Z 
+2026-11-17T06:02:28.0109157Z Or undo this operation with:
+2026-11-17T06:02:28.0109739Z 
+2026-11-17T06:02:28.0110082Z   git switch -
+2026-11-17T06:02:28.0110655Z 
+2026-11-17T06:02:28.0111637Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-17T06:02:28.0112768Z 
+2026-11-17T06:02:28.0113581Z HEAD is now at 434fb84 Reuse exact Extract HIA author for publisher buffer movement
+2026-11-17T06:02:28.0117810Z ##[endgroup]
+2026-11-17T06:02:28.0163454Z [command]/usr/bin/git log -1 --format=%H
+2026-11-17T06:02:28.0196666Z 434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3
+2026-11-17T06:02:28.0207796Z ##[group]Removing auth
+2026-11-17T06:02:28.0209192Z Removing SSH command configuration
+2026-11-17T06:02:28.0211323Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:28.0250486Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:28.0478403Z Removing HTTP extra header
+2026-11-17T06:02:28.0481316Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:28.0519054Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:28.0741272Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:28.0744011Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:28.0777755Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+2026-11-17T06:02:28.0780389Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+2026-11-17T06:02:28.0782268Z includeif.gitdir:/github/workspace/runtime/.git.path
+2026-11-17T06:02:28.0783875Z includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+2026-11-17T06:02:28.0793329Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+2026-11-17T06:02:28.0824507Z /home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:28.0833124Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-f55a4569\-810d\-410c\-87a5\-85454c80e8b7\.config
+2026-11-17T06:02:28.0873021Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+2026-11-17T06:02:28.0901838Z /home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:28.0909753Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-f55a4569\-810d\-410c\-87a5\-85454c80e8b7\.config
+2026-11-17T06:02:28.0980138Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git.path
+2026-11-17T06:02:28.1034231Z /github/runner_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:28.1043198Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git.path \/github\/runner_temp\/git\-credentials\-f55a4569\-810d\-410c\-87a5\-85454c80e8b7\.config
+2026-11-17T06:02:28.1081677Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+2026-11-17T06:02:28.1110874Z /github/runner_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config
+2026-11-17T06:02:28.1117346Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-f55a4569\-810d\-410c\-87a5\-85454c80e8b7\.config
+2026-11-17T06:02:28.1154323Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:28.1376960Z Removing credentials config '/home/runner/work/_temp/git-credentials-f55a4569-810d-410c-87a5-85454c80e8b7.config'
+2026-11-17T06:02:28.1385067Z ##[endgroup]
+2026-11-17T06:02:28.1662280Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-17T06:02:28.1663563Z with:
+2026-11-17T06:02:28.1664357Z   repository: TrillionniumFoundation/Hepta
+2026-11-17T06:02:28.1665352Z   path: compiler
+2026-11-17T06:02:28.1666212Z   ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+2026-11-17T06:02:28.1667276Z   persist-credentials: false
+2026-11-17T06:02:28.1674872Z   token: ***
+2026-11-17T06:02:28.1675615Z   ssh-strict: true
+2026-11-17T06:02:28.1676379Z   ssh-user: git
+2026-11-17T06:02:28.1677150Z   clean: true
+2026-11-17T06:02:28.1677933Z   sparse-checkout-cone-mode: true
+2026-11-17T06:02:28.1678948Z   fetch-depth: 1
+2026-11-17T06:02:28.1679712Z   fetch-tags: false
+2026-11-17T06:02:28.1680491Z   show-progress: true
+2026-11-17T06:02:28.1681270Z   lfs: false
+2026-11-17T06:02:28.1681990Z   submodules: false
+2026-11-17T06:02:28.1682778Z   set-safe-directory: true
+2026-11-17T06:02:28.1683674Z   allow-unsafe-pr-checkout: false
+2026-11-17T06:02:28.1684586Z env:
+2026-11-17T06:02:28.1685364Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:28.1686244Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:28.1687854Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:28.1690044Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:28.1691623Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:28.1693195Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:28.1694457Z ##[endgroup]
+2026-11-17T06:02:28.2413793Z Syncing repository: TrillionniumFoundation/Hepta
+2026-11-17T06:02:28.2418425Z ##[group]Getting Git version info
+2026-11-17T06:02:28.2420541Z Working directory is '/home/runner/work/hepta-runtime/hepta-runtime/compiler'
+2026-11-17T06:02:28.2454189Z [command]/usr/bin/git version
+2026-11-17T06:02:28.2494072Z git version 2.56.1
+2026-11-17T06:02:28.2512508Z ##[endgroup]
+2026-11-17T06:02:28.2520238Z Temporarily overriding HOME='/home/runner/work/_temp/a0e9a4e3-b8f3-4edb-8063-cef2973eeb68' before making global git config changes
+2026-11-17T06:02:28.2523008Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:02:28.2526541Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/compiler
+2026-11-17T06:02:28.2560991Z ##[group]Determining repository object format
+2026-11-17T06:02:28.2562884Z ##[endgroup]
+2026-11-17T06:02:28.2564303Z ##[group]Initializing the repository
+2026-11-17T06:02:28.2566624Z [command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime/compiler
+2026-11-17T06:02:28.2610454Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-17T06:02:28.2613099Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-17T06:02:28.2615531Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-17T06:02:28.2617413Z hint: call:
+2026-11-17T06:02:28.2618296Z hint:
+2026-11-17T06:02:28.2619531Z hint: 	git config --global init.defaultBranch <name>
+2026-11-17T06:02:28.2620871Z hint:
+2026-11-17T06:02:28.2621902Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-17T06:02:28.2623564Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-17T06:02:28.2624855Z hint:
+2026-11-17T06:02:28.2625630Z hint: 	git branch -m <name>
+2026-11-17T06:02:28.2626947Z hint:
+2026-11-17T06:02:28.2628621Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-17T06:02:28.2631384Z Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/
+2026-11-17T06:02:28.2636130Z [command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/Hepta
+2026-11-17T06:02:28.2657637Z ##[endgroup]
+2026-11-17T06:02:28.2659551Z ##[group]Disabling automatic garbage collection
+2026-11-17T06:02:28.2661369Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-17T06:02:28.2692510Z ##[endgroup]
+2026-11-17T06:02:28.2693750Z ##[group]Setting up auth
+2026-11-17T06:02:28.2694875Z Removing SSH command configuration
+2026-11-17T06:02:28.2697834Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:28.2729664Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:28.2968931Z Removing HTTP extra header
+2026-11-17T06:02:28.2973524Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:28.3017634Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:28.3247165Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:28.3258684Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:28.3306156Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:28.3518012Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-17T06:02:28.3560870Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path /home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:28.3597220Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:28.3632897Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/compiler/.git.path /github/runner_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:28.3669814Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/compiler/.git/worktrees/*.path /github/runner_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:28.3703212Z ##[endgroup]
+2026-11-17T06:02:28.3708288Z ##[group]Fetching the repository
+2026-11-17T06:02:28.3711230Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin d3e2c90173cf733e42b299d0c4274df4b593a12f
+2026-11-17T06:02:30.2106183Z From https://github.com/TrillionniumFoundation/Hepta
+2026-11-17T06:02:30.2106847Z  * branch            d3e2c90173cf733e42b299d0c4274df4b593a12f -> FETCH_HEAD
+2026-11-17T06:02:30.2119006Z [command]/usr/bin/git rev-parse --verify --quiet d3e2c90173cf733e42b299d0c4274df4b593a12f^{object}
+2026-11-17T06:02:30.2147883Z d3e2c90173cf733e42b299d0c4274df4b593a12f
+2026-11-17T06:02:30.2151877Z ##[endgroup]
+2026-11-17T06:02:30.2152437Z ##[group]Determining the checkout info
+2026-11-17T06:02:30.2153122Z ##[endgroup]
+2026-11-17T06:02:30.2156935Z [command]/usr/bin/git sparse-checkout disable
+2026-11-17T06:02:30.2205468Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-17T06:02:30.2240782Z ##[group]Checking out the ref
+2026-11-17T06:02:30.2244903Z [command]/usr/bin/git checkout --progress --force d3e2c90173cf733e42b299d0c4274df4b593a12f
+2026-11-17T06:02:30.4754241Z Note: switching to 'd3e2c90173cf733e42b299d0c4274df4b593a12f'.
+2026-11-17T06:02:30.4754671Z 
+2026-11-17T06:02:30.4754862Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-17T06:02:30.4755287Z changes and commit them, and you can discard any commits you make in this
+2026-11-17T06:02:30.4755673Z state without impacting any branches by switching back to a branch.
+2026-11-17T06:02:30.4755891Z 
+2026-11-17T06:02:30.4756371Z If you want to create a new branch to retain commits you create, you may
+2026-11-17T06:02:30.4756778Z do so (now or later) by using -c with the switch command. Example:
+2026-11-17T06:02:30.4756991Z 
+2026-11-17T06:02:30.4757085Z   git switch -c <new-branch-name>
+2026-11-17T06:02:30.4757239Z 
+2026-11-17T06:02:30.4757349Z Or undo this operation with:
+2026-11-17T06:02:30.4757475Z 
+2026-11-17T06:02:30.4757551Z   git switch -
+2026-11-17T06:02:30.4757668Z 
+2026-11-17T06:02:30.4757837Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-17T06:02:30.4758078Z 
+2026-11-17T06:02:30.4758554Z HEAD is now at d3e2c90 Serialize complete selfhost evidence without indentation overhead
+2026-11-17T06:02:30.4774410Z ##[endgroup]
+2026-11-17T06:02:30.4824445Z [command]/usr/bin/git log -1 --format=%H
+2026-11-17T06:02:30.4857307Z d3e2c90173cf733e42b299d0c4274df4b593a12f
+2026-11-17T06:02:30.4865384Z ##[group]Removing auth
+2026-11-17T06:02:30.4865641Z Removing SSH command configuration
+2026-11-17T06:02:30.4869286Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:30.4909295Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:30.5114842Z Removing HTTP extra header
+2026-11-17T06:02:30.5117982Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:30.5156039Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:30.5366212Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:30.5366693Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:30.5396721Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path
+2026-11-17T06:02:30.5397649Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path
+2026-11-17T06:02:30.5398310Z includeif.gitdir:/github/workspace/compiler/.git.path
+2026-11-17T06:02:30.5398829Z includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path
+2026-11-17T06:02:30.5407241Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path
+2026-11-17T06:02:30.5438334Z /home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:30.5446493Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-4cbfed91\-192d\-4ee4\-8950\-9336097ae291\.config
+2026-11-17T06:02:30.5486605Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path
+2026-11-17T06:02:30.5515448Z /home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:30.5523481Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/compiler/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-4cbfed91\-192d\-4ee4\-8950\-9336097ae291\.config
+2026-11-17T06:02:30.5564188Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/compiler/.git.path
+2026-11-17T06:02:30.5594194Z /github/runner_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:30.5601026Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/compiler/.git.path \/github\/runner_temp\/git\-credentials\-4cbfed91\-192d\-4ee4\-8950\-9336097ae291\.config
+2026-11-17T06:02:30.5640785Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path
+2026-11-17T06:02:30.5669995Z /github/runner_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config
+2026-11-17T06:02:30.5676356Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/compiler/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-4cbfed91\-192d\-4ee4\-8950\-9336097ae291\.config
+2026-11-17T06:02:30.5716039Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:30.5923727Z Removing credentials config '/home/runner/work/_temp/git-credentials-4cbfed91-192d-4ee4-8950-9336097ae291.config'
+2026-11-17T06:02:30.5987543Z ##[endgroup]
+2026-11-17T06:02:30.6121891Z ##[group]Run test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3"
+2026-11-17T06:02:30.6122520Z [36;1mtest "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3"[0m
+2026-11-17T06:02:30.6123183Z [36;1mtest "$(sha256sum "$TP_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = b0adce18f8583331509f902de60b19ba01362623324d6f21a81f2c1dbf548ea3[0m
+2026-11-17T06:02:30.6123795Z [36;1mtest "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f[0m
+2026-11-17T06:02:30.6124343Z [36;1mtest "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49[0m
+2026-11-17T06:02:30.6124866Z [36;1mpython3 -I -S -B "$TP_SOURCE/scripts/build.py" check --source "$TP_SOURCE"[0m
+2026-11-17T06:02:30.6142597Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:02:30.6142804Z env:
+2026-11-17T06:02:30.6143031Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:30.6143239Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:30.6143637Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:30.6144132Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:30.6144494Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:30.6144845Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:30.6145124Z ##[endgroup]
+2026-11-17T06:02:30.6764027Z {"python_sources": 11, "source": {"files": 24, "manifest": {"bytes": 6353, "sha256": "b0adce18f8583331509f902de60b19ba01362623324d6f21a81f2c1dbf548ea3"}, "scope": {"actual_scope_cache_forget": false, "all_136_handlers": false, "async_task_lifecycle": false, "configured_path_authority": false, "controller_source_only": true, "full_sdk": false, "old_stack_removed": false, "production_installed": false, "public_route": false}}, "status": "SOURCE_ONLY_PASS"}
+2026-11-17T06:02:30.6854964Z ##[group]Run set +e
+2026-11-17T06:02:30.6855202Z [36;1mset +e[0m
+2026-11-17T06:02:30.6855761Z [36;1mpython3 -I -S -B "$TP_SOURCE/scripts/build.py" build --source "$TP_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$TP_OUTPUT" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"[0m
+2026-11-17T06:02:30.6856322Z [36;1mtp_status=$?[0m
+2026-11-17T06:02:30.6856520Z [36;1mcat "$TP_DRIVER.stderr"[0m
+2026-11-17T06:02:30.6856874Z [36;1mif [ "$tp_status" -ne 0 ] && [ -f "$TP_OUTPUT/author.stderr" ]; then cat "$TP_OUTPUT/author.stderr"; fi[0m
+2026-11-17T06:02:30.6857270Z [36;1mtest "$tp_status" -ne 0 || cat "$TP_DRIVER.stdout"[0m
+2026-11-17T06:02:30.6857546Z [36;1mexit "$tp_status"[0m
+2026-11-17T06:02:30.6892336Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:02:30.6892593Z env:
+2026-11-17T06:02:30.6892781Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:30.6892988Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:30.6893428Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:30.6893932Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:30.6894290Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:30.6894639Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:30.6894918Z ##[endgroup]
+2026-11-17T06:02:39.2776270Z Traceback (most recent call last):
+2026-11-17T06:02:39.2777057Z   File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source/scripts/build.py", line 81, in <module>
+2026-11-17T06:02:39.2777605Z     main()
+2026-11-17T06:02:39.2778400Z   File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source/scripts/build.py", line 78, in main
+2026-11-17T06:02:39.2778987Z     run(source, a.hepta.resolve(strict=True), a.output.absolute())
+2026-11-17T06:02:39.2779586Z   File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source/scripts/build.py", line 49, in run
+2026-11-17T06:02:39.2780187Z     manifest = native.compile(name, path, standalone=None, buffer_profile="history.v1")
+2026-11-17T06:02:39.2780540Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-17T06:02:39.2781115Z   File "/home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source/scripts/hia_native_build.py", line 220, in compile
+2026-11-17T06:02:39.2781704Z     image, compiled = compile_stage(folder, "module", compiler, source)
+2026-11-17T06:02:39.2782007Z                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-11-17T06:02:39.2782433Z   File "/home/runner/work/hepta-runtime/hepta-runtime/compiler/tools/qualify_hia_selfhost.py", line 215, in compile_stage
+2026-11-17T06:02:39.2782911Z     raise AssertionError({"compile_failed": label, "receipt": result})
+2026-11-17T06:02:39.2786610Z AssertionError: {'compile_failed': 'module', 'receipt': {'abi_status': 0, 'core_u32': 4294967295, 'forbidden_compiler_modules_loaded': [], 'image_sha256': 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0', 'limits': {'address_bytes': 268435456, 'core_dumpable': False, 'cpu_seconds': 10, 'output_capacity': 1048576, 'stack_bytes': 8388608, 'workspace_bytes': 1048576}, 'loader_operations': 'copy; sealed shared loader or RW-to-RX mmap; fixed ABI call', 'native_elapsed_ns': 95070016, 'output_sha256': '16c7f1d8a38b4b84560e558ab03b13c82e2ff374d87eaacb4df22f03604e7a4f', 'output_unchanged': True, 'result_u64': 4294967295, 'return_encoding': 'zero-extended-u32', 'source_sha256': 'a3ddcd26fbcd9bfcbbf47ad747cb0a6a46c422437ebc91fb5ddf0b3dc29588f2', 'source_unchanged': True, 'status': 'returned', 'workspace_header': {'0': 161291, '1024': 42, '104': 161291, '112': 2664, '16': 0, '224': 1, '24': 161291, '248': 43605, '40': 56, '48': 0, '56': 0, '64': 42, '72': 41, '8': 0, '80': 585, '88': 584, '96': 11}, 'case': 'module', 'input_sha256': 'a3ddcd26fbcd9bfcbbf47ad747cb0a6a46c422437ebc91fb5ddf0b3dc29588f2', 'input_bytes': 161291, 'artifact_sha256': 'bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0', 'format': 'flat-x86-64', 'runner_sha256': '1d298396e97b6d362bcd51121eff1d2f411305133fadb1c974477b2dd9052c29', 'wall_elapsed_ns': 127982808}}
+2026-11-17T06:02:39.2800574Z ##[error]Process completed with exit code 1.
+2026-11-17T06:02:39.2846121Z ##[group]Run python3 -I -S -B "$TP_SOURCE/scripts/read_retained_failure.py" --output "$TP_OUTPUT/retained-v1-failure"
+2026-11-17T06:02:39.2846728Z [36;1mpython3 -I -S -B "$TP_SOURCE/scripts/read_retained_failure.py" --output "$TP_OUTPUT/retained-v1-failure"[0m
+2026-11-17T06:02:39.2864853Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:02:39.2865054Z env:
+2026-11-17T06:02:39.2865232Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:39.2865433Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:39.2865820Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:39.2866316Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:39.2866686Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:39.2867055Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:39.2869271Z   GH_TOKEN: ***
+2026-11-17T06:02:39.2869483Z ##[endgroup]
+2026-11-17T06:02:40.0886331Z {"archive": {"bytes": 178771, "sha256": "915f4c2351a9480fefe4027c29de52bd0a61cbb987f108fcf95eb3c546fe8b4d"}, "executed_hia": false, "executed_rust": false, "files": 24, "job": 133851373687, "logical_bytes": 659696, "run": 44027538784, "source_commit": "5978605e89bf8b6b09b64c9c50da0f939711d3ed", "status": "COMPLETE_UPLOADED_FAILURE_ARCHIVE_BYTES_PASS", "zip": {"bytes": 183958, "sha256": "cef2b6b9ce77b50093e4e74215ef35057b6b786bc8da4d2c44030e24e8f07de1"}}
+2026-11-17T06:02:40.1019907Z ##[group]Run python3 -I -S -B "$TP_SOURCE/scripts/archive.py" pack --source "$TP_SOURCE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+2026-11-17T06:02:40.1020696Z [36;1mpython3 -I -S -B "$TP_SOURCE/scripts/archive.py" pack --source "$TP_SOURCE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"[0m
+2026-11-17T06:02:40.1038519Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:02:40.1038722Z env:
+2026-11-17T06:02:40.1038893Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:40.1039093Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:40.1039481Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:40.1039985Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:40.1040360Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:40.1040740Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:40.1041027Z ##[endgroup]
+2026-11-17T06:02:40.2943198Z {"archive": {"bytes": 2868053, "sha256": "d5f8b991372943da383948ccddc1542e87cc81fb48ce418ea4fe590fd7a883b2"}, "files": 84, "logical_bytes": 12872744, "status": "COMPLETE_ARCHIVE_BYTES_PASS"}
+2026-11-17T06:02:40.3077070Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-11-17T06:02:40.3077406Z with:
+2026-11-17T06:02:40.3077736Z   name: text-publication-controller-build-434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3-1
+2026-11-17T06:02:40.3078322Z   path: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:40.3078614Z   compression-level: 0
+2026-11-17T06:02:40.3078802Z   if-no-files-found: error
+2026-11-17T06:02:40.3078988Z   retention-days: 30
+2026-11-17T06:02:40.3079336Z   overwrite: false
+2026-11-17T06:02:40.3079515Z   include-hidden-files: false
+2026-11-17T06:02:40.3079702Z env:
+2026-11-17T06:02:40.3079865Z   PYTHONDONTWRITEBYTECODE: 1
+2026-11-17T06:02:40.3080057Z   LC_ALL: C.UTF-8
+2026-11-17T06:02:40.3080440Z   TP_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/tests/hia_native/text_publication_controller_ci/source
+2026-11-17T06:02:40.3080939Z   TP_OUTPUT: /home/runner/work/_temp/text-publication-controller-build
+2026-11-17T06:02:40.3081344Z   TP_EXPORT: /home/runner/work/_temp/text-publication-controller-export
+2026-11-17T06:02:40.3081698Z   TP_DRIVER: /home/runner/work/_temp/text-publication-controller-driver
+2026-11-17T06:02:40.3081971Z ##[endgroup]
+2026-11-17T06:02:40.4506795Z (node:2456) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-17T06:02:40.4507522Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-17T06:02:40.4557383Z With the provided path, there will be 3 files uploaded
+2026-11-17T06:02:40.4561418Z Artifact name is valid!
+2026-11-17T06:02:40.4561717Z Root directory input is valid!
+2026-11-17T06:02:40.7225273Z Beginning upload of artifact content to blob storage
+2026-11-17T06:02:40.7541071Z (node:2456) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-17T06:02:41.1791470Z Uploaded bytes 2885248
+2026-11-17T06:02:41.2383130Z Finished uploading artifact content to blob storage!
+2026-11-17T06:02:41.2383745Z SHA256 digest of uploaded artifact zip is be5e4b68b23e3a55f327e4f0f6604080047c7e18ee07ce8ea4b5fddc9a663069
+2026-11-17T06:02:41.2384717Z Finalizing artifact upload
+2026-11-17T06:02:41.6207106Z Artifact text-publication-controller-build-434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3-1.zip successfully finalized. Artifact ID 14303318986
+2026-11-17T06:02:41.6208501Z Artifact text-publication-controller-build-434fb8440d5c3e038b8f610ba5c3f5d16e48fcb3-1 has been successfully uploaded! Final size is 2885248 bytes. Artifact ID is 14303318986
+2026-11-17T06:02:41.6213782Z Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44028267121/artifacts/14303318986
+2026-11-17T06:02:41.6406077Z Post job cleanup.
+2026-11-17T06:02:41.7114448Z [command]/usr/bin/git version
+2026-11-17T06:02:41.7182407Z git version 2.56.1
+2026-11-17T06:02:41.7211097Z Temporarily overriding HOME='/home/runner/work/_temp/84b6f8c0-a386-4a96-b090-8b3ca62b8a3d' before making global git config changes
+2026-11-17T06:02:41.7212214Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:02:41.7214886Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/compiler
+2026-11-17T06:02:41.7245373Z Removing SSH command configuration
+2026-11-17T06:02:41.7250678Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:41.7283989Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:41.7517277Z Removing HTTP extra header
+2026-11-17T06:02:41.7530122Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:41.7577943Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:41.7873096Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:41.7881138Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:41.7935064Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:41.8391679Z Post job cleanup.
+2026-11-17T06:02:41.9081039Z [command]/usr/bin/git version
+2026-11-17T06:02:41.9150175Z git version 2.56.1
+2026-11-17T06:02:41.9179075Z Temporarily overriding HOME='/home/runner/work/_temp/d17de209-cdd8-4d66-be3d-96667b82423c' before making global git config changes
+2026-11-17T06:02:41.9180166Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:02:41.9183728Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+2026-11-17T06:02:41.9215364Z Removing SSH command configuration
+2026-11-17T06:02:41.9222020Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:02:41.9254529Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:02:41.9501004Z Removing HTTP extra header
+2026-11-17T06:02:41.9506539Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:02:41.9544324Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:02:41.9785712Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:02:41.9792464Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:02:41.9842737Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:02:42.0200577Z Cleaning up orphan processes
+2026-11-17T06:02:42.0504669Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

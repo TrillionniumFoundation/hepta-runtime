@@ -1,0 +1,7 @@
+# Strict UTF8 decoding diagnostic HIA owner
+
+Entry f0(readbuf,mutbuf,mutbuf) -> u32. Request HUTFQ001 is16 bytes: magic0, payload byte count8, exact raw bytes16. Total request must be less than0xffff0000. Malformed framing returns0xffffffff without mutation. Output requires256 bytes and private workspace512 bytes; insufficient buffers return0xfffffffe without mutation. The input is never changed.
+
+Success returns64 bytes HUTFD001: kind0 at8, zero16/24/32/40/56, original payload length48. Strict decoding rejects exactly the byte prefixes consumed by CPython UTF8 strict decoding. Error returns64+message bytes with kind3 at8, start16, exclusive end24, reason32 (1 invalid start,2 invalid continuation,3 unexpected end), complete diagnostic length40 and56, original input length48. Payload64 is the complete ASCII `UnicodeDecodeError: ` plus original exception string, without newline. The original full bytes remain in the input; offsets are byte offsets. U+0000, BOM, noncharacters and all Unicode scalar values are accepted when correctly encoded. Surrogate, overlong, out-of-range and invalid/truncated sequences are rejected with their exact consumed prefix.
+
+The workspace and complete output are private retained evidence. Output bytes beyond the returned extent are unchanged. No syscall, filesystem effect, host policy, transport or public tool is part of this owner. Source authoring is not qualification; actual original decode comparison and complete native-buffer/read-only controls follow in a separately frozen domain.

@@ -1,0 +1,39 @@
+name: Read and verify current text publication body retained evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-body-reader-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  full-bytes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime variables
+        run: |
+          printf '%s\n' "PB_READ=$RUNNER_TEMP/text-publication-body-reader-v2" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text_publication_body_reader_v2
+      - name: Complete ZIP, TAR and member verification without execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum qualification/text_publication_body_reader_v2/read_retained.py | cut -d' ' -f1)" = 2c01a145c90e1abe253396c50cf8c0c0d21396c59e602fe0d7d9552866b0c3d1
+          python3 -I -S -B qualification/text_publication_body_reader_v2/read_retained.py --output "$PB_READ"
+      - name: Preserve complete readback and selected exact original evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-body-retained-reader-${{ github.sha }}
+          path: ${{ env.PB_READ }}/proof
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

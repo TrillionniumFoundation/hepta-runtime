@@ -1,0 +1,13 @@
+    Updating crates.io index
+error: cannot update the lock file /home/runner/work/_temp/namespace-fingerprint-v1/run/semantic/reference/Cargo.lock because --locked was passed to prevent this
+help: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.
+Traceback (most recent call last):
+  File "/home/runner/work/_temp/namespace-fingerprint-v1/source/run_capture.py", line 53, in <module>
+    a=p.parse_args();capture(a.hepta.resolve(strict=True),a.output.absolute(),a.rust_bin.resolve(strict=True),a.temporary.absolute())
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/namespace-fingerprint-v1/source/run_capture.py", line 25, in capture
+    _,result=recorder.run(row["name"],row["argv"],cwd=row["cwd"],timeout=row["timeout"])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/namespace-fingerprint-v1/source/process.py", line 100, in run
+    raise RuntimeError("recorded command failed: "+name)
+RuntimeError: recorded command failed: rust-fetch

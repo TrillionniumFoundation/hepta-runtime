@@ -1,0 +1,190 @@
+{
+  "schema": "hepta.ssh.lifecycle.physical.v1",
+  "new_applications": 0,
+  "completed_applications_replayed": 0,
+  "unknown_applications_replayed": 0,
+  "groups": {
+    "probes": {
+      "ids": [
+        101,
+        102,
+        103,
+        104
+      ],
+      "native": {
+        "artifact": 14387434055,
+        "zip": {
+          "bytes": 174215150,
+          "sha256": "33c21e164e948a5e838ad0d641f1557c0b1c74053234b63e5d8d50c4c3b90941"
+        },
+        "tar": {
+          "bytes": 174173827,
+          "sha256": "969bf99ec064a5ca1922e71c58fc4c01b7e60790ea824ea317b64d483fb84efa"
+        }
+      },
+      "original": {
+        "artifact": 14388670406,
+        "zip": {
+          "bytes": 173918073,
+          "sha256": "33c3eb91fce4326d906b1cc17f5e4a6406471bdf6d36e4633e05cd8628f14149"
+        },
+        "tar": {
+          "bytes": 173877230,
+          "sha256": "f2de4753db7af849bb43a52fbb5ac069af3a9294778d9eaa403019d0779122ee"
+        }
+      },
+      "baseline": {
+        "artifact": 14389091103,
+        "zip": {
+          "bytes": 396977,
+          "sha256": "4046d03973322abc91cf781ccb5e51ebeb108462c1cdd2e8e8da3889198510c6"
+        },
+        "tar": {
+          "bytes": 380718,
+          "sha256": "55d04568a341522519123de3f9a592bbbddbd38be381d5d83bdfdf79b1872d99"
+        }
+      },
+      "source_manifest": {
+        "bytes": 12696,
+        "sha256": "579a7b929ef69512cfbb1c8ba5ffe113613687d4b328bb99de9ec384ecf91ba4"
+      },
+      "evidence": {
+        "bytes": 49672,
+        "sha256": "b2ab07b5cbcf50e19b6eacf04a479c8b36bed6e87cce3b50c448652818a0d996"
+      }
+    },
+    "remaining": {
+      "ids": [
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113
+      ],
+      "native": {
+        "artifact": 14389186724,
+        "zip": {
+          "bytes": 196285617,
+          "sha256": "574f05c942a6c43f635c6fef91a27f882aa7eb05293775926f73e7bf3830f6b8"
+        },
+        "tar": {
+          "bytes": 196181336,
+          "sha256": "c8ded652a44700408434dc3b4ffa8616e7986d4e355b9b30cded54c1d6c763ea"
+        }
+      },
+      "original": {
+        "artifact": 14387814012,
+        "zip": {
+          "bytes": 182486145,
+          "sha256": "7cd35099cf6a6ba17c00becec8cd7b73278e12f18a3109d658b3b2966d60830f"
+        },
+        "tar": {
+          "bytes": 182382485,
+          "sha256": "c688dd63c291610bbb5c373d227c284a243ff3e11675bac88ca149ac533c79a2"
+        }
+      },
+      "baseline": {
+        "artifact": 14389785396,
+        "zip": {
+          "bytes": 424829,
+          "sha256": "f31e2cdfcdc2ecb9c397a09d89d242226dcec7072c4380a0e98b9461a32d3d5e"
+        },
+        "tar": {
+          "bytes": 411612,
+          "sha256": "871bd19ab1256ff46d21fca151f73e0e7f356b3088f528f068a8b5cfc5b42fe8"
+        }
+      },
+      "source_manifest": {
+        "bytes": 12898,
+        "sha256": "82ec6c099724aed0f6564237a8d2175d44fb83ae2d1475b165c9140d7c0e3148"
+      },
+      "evidence": {
+        "bytes": 1125171,
+        "sha256": "4994c5827133287e97669a2bc1d4e93b6da38c62ab29a7939b35311803428bc7"
+      }
+    }
+  },
+  "controls": [
+    {
+      "name": "complete_process_ledger",
+      "group": "remaining",
+      "kind": "root",
+      "target": "LEDGER.json",
+      "expected": "no completed or UNKNOWN replay"
+    },
+    {
+      "name": "exact_raw_hia_source",
+      "group": "remaining",
+      "kind": "source",
+      "target": "generated/ssh_original_child.hepta",
+      "expected": "source bytes changed"
+    },
+    {
+      "name": "entire_readonly_input",
+      "group": "remaining",
+      "kind": "case",
+      "case": 106,
+      "target": "actual/HIA-JOURNAL.bin",
+      "expected": "full original input remains read-only"
+    },
+    {
+      "name": "entire_workspace_tail",
+      "group": "remaining",
+      "kind": "case",
+      "case": 106,
+      "target": "actual/HIA-JOURNAL.bin",
+      "expected": "every complete original workspace byte"
+    },
+    {
+      "name": "entire_output_tail",
+      "group": "remaining",
+      "kind": "case",
+      "case": 106,
+      "target": "actual/HIA-JOURNAL.bin",
+      "expected": "every complete output capacity byte"
+    },
+    {
+      "name": "actual_raw_hia_return",
+      "group": "remaining",
+      "kind": "case",
+      "case": 106,
+      "target": "actual/HIA-JOURNAL.bin",
+      "expected": "exact raw HIA return"
+    },
+    {
+      "name": "honestly_resealed_wrong_reaped_pid",
+      "group": "remaining",
+      "kind": "case",
+      "case": 107,
+      "target": "kernel",
+      "expected": "failed exec original OS child actually reaped"
+    },
+    {
+      "name": "last_byte_of_complete_stdout",
+      "group": "remaining",
+      "kind": "case",
+      "case": 113,
+      "target": "actual/stdout-0",
+      "expected": "complete stdin/stdout/stderr and child exit"
+    }
+  ],
+  "relocations": [
+    1,
+    2
+  ],
+  "bounds": {
+    "pure_seconds": 180,
+    "job_minutes": 15
+  },
+  "scope": {
+    "all_thirteen_actual_lifecycle_cases": true,
+    "full_public_ssh": false,
+    "full_sdk": false,
+    "all_136_handlers": false,
+    "old_stack_removed": false
+  }
+}

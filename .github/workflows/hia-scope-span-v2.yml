@@ -1,0 +1,113 @@
+name: Complete original annotation and search-effect span comparison, parallel complete read-only guard revision 9
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-scope-span-qualification-v2-6780-20261116]
+permissions:
+  contents: read
+jobs:
+  scope-span:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      SPAN_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/scope_annotation_span_v2
+      SPAN_SOURCE_SHA: 1dcb9f748c49ebaeaa3cf018ac22989cab615c73689a08449c05c89453372697
+    steps:
+      - name: Checkout frozen candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: tests/hia_native/scope_annotation_span_v2
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Checkout exact original target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/runtime/caller_scope.rs
+          persist-credentials: false
+      - name: Verify exact source and compiler identities
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(git -C original-target rev-parse HEAD)" = d3d75c30719db966b004756f610007a7c723729e
+          test "$(git -C original-target rev-parse 'HEAD^{tree}')" = 612e145513961556ac8844b5cc978f9b5175e4d4
+          python3 -I -B - <<'PY'
+          import os, sys
+          sys.path.insert(0,os.environ['SPAN_SOURCE'])
+          from build import verify_source
+          assert verify_source()==os.environ['SPAN_SOURCE_SHA']
+          from pathlib import Path
+          for source in Path(os.environ['SPAN_SOURCE']).rglob('*.py'):
+              compile(source.read_bytes(),str(source),'exec')
+          PY
+          cmp original-target/Cargo.lock "$SPAN_SOURCE/reference/target/Cargo.lock"
+          cmp original-target/Cargo.toml "$SPAN_SOURCE/reference/target/Cargo.toml"
+          cmp original-target/src/mcp/runtime/caller_scope.rs "$SPAN_SOURCE/reference/target/src/mcp/runtime/caller_scope.rs"
+      - name: Install exact original toolchain and native compiler tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+          printf 'SPAN_RUST_BIN=%s\n' "$(dirname "$(rustup which --toolchain 1.95.0 rustc)")" >> "$GITHUB_ENV"
+      - name: Execute complete frozen original and native domains
+        run: |
+          python3 -I -B "$SPAN_SOURCE/run_gate.py" --hepta "$GITHUB_WORKSPACE/compiler" --target "$GITHUB_WORKSPACE/original-target" --rust-bin "$SPAN_RUST_BIN" --output "$RUNNER_TEMP/annotation-output"
+      - name: Independently read all complete qualification evidence
+        run: |
+          python3 -I -B "$SPAN_SOURCE/verify_readonly.py" --output "$RUNNER_TEMP/annotation-output" --source-manifest-sha256 "$SPAN_SOURCE_SHA" --require-evidence-controls > "$RUNNER_TEMP/annotation-independent-reader.json"
+      - name: Report failure location without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "annotation-output"
+          for name in ("GATE.json", "native/CAPTURE.json", "controls/CAPTURE.json", "reader-controls/result.json", "original-reader-controls/result.json"):
+              path = root / name
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              value = json.loads(raw)
+              keys = ("status", "error", "cases", "native_calls", "elapsed_seconds", "source_unchanged", "source_manifest_sha256", "physical_buffer_bytes")
+              print(json.dumps({"file": name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "summary": {k: value[k] for k in keys if k in value}}, sort_keys=True))
+          for path in sorted(root.rglob("*.stderr")):
+              if not path.is_file():
+                  continue
+              raw = path.read_bytes()
+              if raw:
+                  print(json.dumps({"file": path.relative_to(root).as_posix(), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "tail_bytes": min(16384, len(raw)), "tail_utf8": raw[-16384:].decode("utf-8", errors="replace"), "complete_bytes_retained_in_archive": True}, sort_keys=True))
+          PY
+      - name: Preserve complete success or failure without replay
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/annotation-output"
+          python3 -I -B "$SPAN_SOURCE/export.py" --capture "$RUNNER_TEMP/annotation-output" --archive "$RUNNER_TEMP/annotation-span-v2.tar.gz" > "$RUNNER_TEMP/annotation-export.stdout" 2> "$RUNNER_TEMP/annotation-export.stderr"
+      - name: Upload complete source and physical evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scope-span-v2-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/annotation-span-v2.tar.gz
+            ${{ runner.temp }}/annotation-span-v2.tar.gz.json
+            ${{ runner.temp }}/annotation-independent-reader.json
+            ${{ runner.temp }}/annotation-export.stdout
+            ${{ runner.temp }}/annotation-export.stderr
+          if-no-files-found: error
+          retention-days: 14

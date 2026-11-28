@@ -1,0 +1,108 @@
+name: Main99 independent complete control readback
+on:
+  push:
+    branches: [hia-history99-controls-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readonly:
+    name: Independently read ${{ matrix.kind }} full continuation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: filesystem
+            artifact: 14310602170
+            bytes: 77934764
+            sha: 554dd0cb3bf18445a4ab0de0201f64bb7a881d5276cefcd6d253efaf2c990639
+          - kind: regex
+            artifact: 14310681503
+            bytes: 122445123
+            sha: f2950f4ea2e5fc550902ae36b8db7616bcfc9166fc51ce9a981f6df0e082ec1e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: qualification/history99/independent-v1
+      - name: Admit all exact pure reader source
+        run: |
+          mkdir -p "$RUNNER_TEMP/history99-independent/logs"
+          timeout --signal=KILL 60s python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('qualification/history99/independent-v1')
+          raw=(root/'SOURCE_MANIFEST.json').read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=='376d7daccc3bfdbebb1ca53f9bed3f7b42519dec6967805701b34e42b73dd534'
+          files=json.loads(raw)['files']
+          assert {p.name for p in root.iterdir()}==set(files)|{'SOURCE_MANIFEST.json'}
+          for name,row in files.items():
+              body=(root/name).read_bytes()
+              assert len(body)==row['bytes'] and hashlib.sha256(body).hexdigest()==row['sha256']
+              assert hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest()==row['git_blob']
+              if name.endswith('.py'):compile(body,str(root/name),'exec')
+          print('EXACT_INDEPENDENT_READER_SOURCES_PASS')
+          PY
+      - name: Download exact completed continuation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/"$ARTIFACT" > "$RUNNER_TEMP/history99-independent/ARTIFACT.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/"$ARTIFACT"/zip > "$RUNNER_TEMP/history99-input.zip"
+      - name: Verify actual API custody without executing captured programs
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          timeout --signal=KILL 60s python3 -I -S -B - <<'PY'
+          import json,os
+          from pathlib import Path
+          plan=json.loads(Path('qualification/history99/independent-v1/EXPECTED.json').read_bytes())
+          expected=plan['artifacts'][os.environ['KIND']]
+          row=json.loads((Path(os.environ['RUNNER_TEMP'])/'history99-independent/ARTIFACT.json').read_bytes())
+          assert row['id']==expected['id'] and row['workflow_run']['id']==plan['continuation_run']
+          assert row['workflow_run']['head_sha']==plan['continuation_source']
+          assert row['size_in_bytes']==expected['zip']['bytes'] and row['digest']=='sha256:'+expected['zip']['sha256']
+          assert row['expired'] is False
+          print('IMMUTABLE_CONTINUATION_API_CUSTODY_PASS')
+          PY
+      - name: Read every ZIP gzip TAR and file byte into independent copies
+        env:
+          KIND: ${{ matrix.kind }}
+          ZIP_BYTES: ${{ matrix.bytes }}
+          ZIP_SHA: ${{ matrix.sha }}
+        run: |
+          timeout --signal=KILL 900s python3 -I -S -B qualification/history99/independent-v1/read_continuation_archive.py --kind "$KIND" --zip "$RUNNER_TEMP/history99-input.zip" --zip-bytes "$ZIP_BYTES" --zip-sha256 "$ZIP_SHA" --source-manifest-sha256 e3529089f07568839f4a9867d7dc84a7d4dac156140d11682b8b39798a1bfe15 --output "$RUNNER_TEMP/history99-readback" > "$RUNNER_TEMP/history99-independent/logs/archive.stdout" 2> "$RUNNER_TEMP/history99-independent/logs/archive.stderr"
+          cp "$RUNNER_TEMP/history99-readback/COMPLETE_READBACK.json" "$RUNNER_TEMP/history99-independent/"
+          cp "$RUNNER_TEMP/history99-readback/COMPLETE_MEMBER_PINS.json" "$RUNNER_TEMP/history99-independent/"
+      - name: Verify full recorded control domains under unchanged strict readonly guard
+        env:
+          KIND: ${{ matrix.kind }}
+          ZIP_BYTES: ${{ matrix.bytes }}
+          ZIP_SHA: ${{ matrix.sha }}
+        run: |
+          if test "$KIND" = filesystem; then
+            timeout --signal=KILL 180s python3 -I -S -B qualification/history99/independent-v1/verify_filesystem.py --readback "$RUNNER_TEMP/history99-readback" --output "$RUNNER_TEMP/history99-independent/guarded" > "$RUNNER_TEMP/history99-independent/logs/verify.stdout" 2> "$RUNNER_TEMP/history99-independent/logs/verify.stderr"
+          else
+            timeout --signal=KILL 180s python3 -I -S -B qualification/history99/independent-v1/verify_regex.py --readback "$RUNNER_TEMP/history99-readback" --zip-bytes "$ZIP_BYTES" --zip-sha256 "$ZIP_SHA" --output "$RUNNER_TEMP/history99-independent/guarded" > "$RUNNER_TEMP/history99-independent/logs/verify.stdout" 2> "$RUNNER_TEMP/history99-independent/logs/verify.stderr"
+          fi
+      - name: Preserve every actual terminal diagnostic
+        if: always()
+        run: |
+          for path in "$RUNNER_TEMP/history99-independent"/logs/*.stdout "$RUNNER_TEMP/history99-independent"/logs/*.stderr; do
+            if test -f "$path"; then cat "$path"; fi
+          done
+      - name: Upload complete independent proof and fixed sources
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history99-${{ matrix.kind }}-independent-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/history99-independent/
+            qualification/history99/independent-v1/
+          compression-level: 1
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

@@ -1,5 +1,5 @@
 {
-  "catalog_sha256": "e2d6afe443a9f3e91b7ef36cd3628499548e01b7a56f96dce9081e8f04a9fa2e",
+  "catalog_sha256": "7272bd1d18578f5b9dcdf1c0b9c3794e4c062af5ec4dac059181dbfdfaebef7a",
   "execution_backend": "Pinned HIA worker through the existing native durable process owner",
   "name": "Hepta HIA Agent Native Tools",
   "schema": "hepta-native-tool-contract-v1",
@@ -5736,103 +5736,75 @@
                       "type": "object"
                     },
                     "checker": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "auxiliary_checker_sha256": {
-                          "anyOf": [
-                            {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "installation": {
+                      "oneOf": [
+                        {
                           "additionalProperties": false,
                           "properties": {
-                            "backend_sha256": {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
+                            "auxiliary_checker_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
-                            "catalog_sha256": {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
-                            },
-                            "native_helpers_sha256": {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
-                            },
-                            "worker_sha256": {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "worker_sha256",
-                            "backend_sha256",
-                            "catalog_sha256"
-                          ],
-                          "type": "object"
-                        },
-                        "method": {
-                          "enum": [
-                            "core_admission",
-                            "canonical_core_identity",
-                            "finite_domain",
-                            "compositional_scalar_effect",
-                            "context_budget_exhausted",
-                            "checked_explicit_machine_choices",
-                            "canonical_lowering_unsupported",
-                            "complete_native_rederivation",
-                            "independent_safe_core_machine_validation"
-                          ],
-                          "type": "string"
-                        },
-                        "name": {
-                          "maxLength": 256,
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        "native_selection_sha256": {
-                          "pattern": "^[0-9a-f]{64}$",
-                          "type": "string"
-                        },
-                        "python": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "implementation": {
-                              "maxLength": 64,
-                              "minLength": 1,
-                              "type": "string"
-                            },
-                            "version": {
-                              "maxLength": 64,
-                              "minLength": 1,
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "implementation",
-                            "version"
-                          ],
-                          "type": "object"
-                        },
-                        "solver": {
-                          "anyOf": [
-                            {
+                            "installation": {
                               "additionalProperties": false,
                               "properties": {
-                                "binding_sha256": {
+                                "backend_sha256": {
                                   "pattern": "^[0-9a-f]{64}$",
                                   "type": "string"
                                 },
-                                "library_sha256": {
+                                "catalog_sha256": {
                                   "pattern": "^[0-9a-f]{64}$",
                                   "type": "string"
                                 },
-                                "name": {
+                                "native_helpers_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "worker_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "worker_sha256",
+                                "backend_sha256",
+                                "catalog_sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "method": {
+                              "enum": [
+                                "core_admission",
+                                "canonical_core_identity",
+                                "finite_domain",
+                                "compositional_scalar_effect",
+                                "context_budget_exhausted",
+                                "checked_explicit_machine_choices",
+                                "canonical_lowering_unsupported",
+                                "complete_native_rederivation",
+                                "independent_safe_core_machine_validation"
+                              ],
+                              "type": "string"
+                            },
+                            "name": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "native_selection_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "python": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "implementation": {
                                   "maxLength": 64,
                                   "minLength": 1,
                                   "type": "string"
@@ -5844,29 +5816,197 @@
                                 }
                               },
                               "required": [
-                                "name",
-                                "version",
-                                "binding_sha256",
-                                "library_sha256"
+                                "implementation",
+                                "version"
                               ],
                               "type": "object"
                             },
-                            {
-                              "type": "null"
+                            "solver": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "binding_sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "library_sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "maxLength": 64,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "version": {
+                                      "maxLength": 64,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "version",
+                                    "binding_sha256",
+                                    "library_sha256"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
-                          ]
+                          },
+                          "required": [
+                            "name",
+                            "method",
+                            "installation",
+                            "native_selection_sha256",
+                            "auxiliary_checker_sha256",
+                            "solver",
+                            "python"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "auxiliary_checker_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "installation": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "backend_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "catalog_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "native_helpers_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "worker_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "worker_sha256",
+                                "backend_sha256",
+                                "catalog_sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "method": {
+                              "enum": [
+                                "core_admission",
+                                "canonical_core_identity",
+                                "finite_domain",
+                                "compositional_scalar_effect",
+                                "context_budget_exhausted",
+                                "checked_explicit_machine_choices",
+                                "canonical_lowering_unsupported",
+                                "complete_native_rederivation",
+                                "independent_safe_core_machine_validation",
+                                "checked_supplied_machine_bytes",
+                                "supplied_machine_outside_profile",
+                                "supplied_machine_deadline",
+                                "supplied_machine_incomplete"
+                              ],
+                              "type": "string"
+                            },
+                            "name": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "native": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "image_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "profile": {
+                                  "maxLength": 128,
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "profile",
+                                "image_sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "native_selection_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "solver": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "binding_sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "library_sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "maxLength": 64,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "version": {
+                                      "maxLength": 64,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "version",
+                                    "binding_sha256",
+                                    "library_sha256"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "method",
+                            "installation",
+                            "native_selection_sha256",
+                            "auxiliary_checker_sha256",
+                            "solver",
+                            "native"
+                          ],
+                          "type": "object"
                         }
-                      },
-                      "required": [
-                        "name",
-                        "method",
-                        "installation",
-                        "native_selection_sha256",
-                        "python",
-                        "auxiliary_checker_sha256",
-                        "solver"
-                      ],
-                      "type": "object"
+                      ]
                     },
                     "claim": {
                       "enum": [

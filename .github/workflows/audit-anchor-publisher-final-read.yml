@@ -1,0 +1,56 @@
+name: Independent complete archive publisher read
+on:
+  push:
+    branches: [hia-audit-anchor-publish-final-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          sparse-checkout: tests/hia_native/audit_anchor_publish_final_read
+      - name: Verify exact independent source and compile only Python
+        run: |
+          mkdir "$RUNNER_TEMP/publish-final"
+          cp -a tests/hia_native/audit_anchor_publish_final_read "$RUNNER_TEMP/publish-final/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"publish-final/source";raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="1be35dcd8f46379424351752c8c171c39bb1a344f264270622061f01cfece1b3"
+          for p,pin in json.loads(raw)["files"].items():
+              b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"]
+              if p.endswith(".py"):compile(b,str(r/p),"exec")
+          PY
+      - name: Download exact successful complete uploaded artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14335356603/zip > "$RUNNER_TEMP/publish-final/original.zip"
+      - name: Read every uploaded ZIP TAR logical byte mode and Git source
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-final/source/restore.py" --archive "$RUNNER_TEMP/publish-final/original.zip" --output "$RUNNER_TEMP/publish-final/restored" --pins "$RUNNER_TEMP/publish-final/source/PINS.json"
+          mkdir "$RUNNER_TEMP/publish-final/restoration-proof"
+          cp "$RUNNER_TEMP/publish-final/restored/RESTORE.json" "$RUNNER_TEMP/publish-final/restored/artifact-manifest.json" "$RUNNER_TEMP/publish-final/restored/exporter.json" "$RUNNER_TEMP/publish-final/restoration-proof/"
+      - name: Repeat exact frozen two-part pure reader after independent relocation
+        run: python3 -I -B "$RUNNER_TEMP/publish-final/restored/complete/source/run.py" --complete "$RUNNER_TEMP/publish-final/restored/complete/prior" --output "$RUNNER_TEMP/publish-final/output" --phase read
+      - name: Independently guard complete old and new proof join
+        run: python3 -I -B "$RUNNER_TEMP/publish-final/source/run_final.py" --restored "$RUNNER_TEMP/publish-final/restored" --output "$RUNNER_TEMP/publish-final/output"
+      - name: Preserve all originals failures and independent proof
+        if: always()
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-final/source/export.py" --workspace "$RUNNER_TEMP/publish-final" --archive "$RUNNER_TEMP/publish-final/audit-publisher-final-read.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-anchor-publisher-final-read
+          path: |
+            ${{ runner.temp }}/publish-final/audit-publisher-final-read.tar.gz
+            ${{ runner.temp }}/publish-final/audit-publisher-final-read.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

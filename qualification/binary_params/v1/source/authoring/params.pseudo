@@ -1,0 +1,200 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<26:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=length(s)-24 or load(s,16)!=KIND:
+        return INVALID
+    if byte(s,24)!=123 or byte(s,length(s)-1)!=125:
+        return INVALID
+    if length(o)<256:
+        return CAPACITY
+    if length(s)>MAXIMUM-65536:
+        return header(o,4,MAXIMUM,0)
+    needed=length(s)
+    if needed<512:
+        needed=512
+    needed=needed+65536
+    if length(w)<needed:
+        return header(o,2,needed,0)
+    fill_range(w,0,1024,0)
+    fill_range(w,META,512,0)
+    if skip_value(s,w,24)!=length(s):
+        return INVALID
+    status=project(s,w)
+    if status==MAXIMUM:
+        return INVALID
+    if status!=0:
+        unicode_table(w)
+        put(w,48,0)
+        put(w,112,0)
+        put(w,120,0)
+        error(s,w,o,status)
+        size=get(w,120)
+        if get(w,48)!=0 or size>MAXIMUM-256:
+            return header(o,4,MAXIMUM,0)
+        if size+256>length(o):
+            return header(o,3,size+256,0)
+        header(o,1,0,size)
+        put(w,112,1)
+        put(w,120,256)
+        error(s,w,o,status)
+        return 256
+    return success(s,w,o)
+
+def project(s:readbuf,w:mutbuf) -> u64:
+    at=25
+    present=0
+    while at<length(s)-1:
+        if byte(s,at)!=34:
+            return MAXIMUM
+        key=at
+        end=string_info(s,w,at)
+        if end==MAXIMUM or end>=length(s) or byte(s,end)!=58:
+            return MAXIMUM
+        field=field_key(s,key,end)
+        if field==0:
+            put(w,88,key)
+            return 200
+        bit=1<<field
+        if (present&bit)!=0:
+            return MAXIMUM
+        present=present|bit
+        start=end+1
+        end=skip_value(s,w,start)
+        if end==MAXIMUM or end>=length(s):
+            return MAXIMUM
+        result=typed_field(s,w,field,start,end)
+        if result!=0:
+            return result
+        if byte(s,end)==125:
+            if end!=length(s)-1:
+                return MAXIMUM
+            at=end
+        else:
+            if byte(s,end)!=44:
+                return MAXIMUM
+            at=end+1
+            if at>=length(s)-1:
+                return MAXIMUM
+    if at!=length(s)-1:
+        return MAXIMUM
+    return required(present)
+
+def typed_field(s:readbuf,w:mutbuf,field:u64,start:u64,end:u64) -> u64:
+    kind=field_type(field)
+    first=byte(s,start)
+    if (kind==2 or kind==3) and first==110:
+        return 0
+    put(w,88,start)
+    if kind==1 or kind==2:
+        put(w,96,5)
+        if first!=34:
+            return 10
+        if string_info(s,w,start)!=end:
+            return MAXIMUM
+        put(w,META+field*32,start)
+        put(w,META+field*32+8,get(w,16))
+    if kind==3:
+        put(w,96,17)
+        if (first<48 or first>57) and first!=45:
+            return 10
+        if integer(s,w,start,end)==0:
+            return 10
+        if get(w,16)!=0:
+            return 11
+        put(w,META+field*32+16,get(w,8))
+    if kind==4 or kind==5:
+        put(w,96,6)
+        if first!=116 and first!=102:
+            return 10
+        value=0
+        if first==116:
+            value=1
+        put(w,META+field*32+16,value)
+    if kind==6:
+        result=enum_project(s,w,start,end)
+        if result!=0:
+            return result
+    if kind==2 or kind==3:
+        put(w,808,get(w,808)|(1<<field))
+    return 0
+
+def enum_kind(s:readbuf,w:mutbuf,at:u64) -> u64:
+    kind=1
+    while kind<=ENUM_COUNT:
+        cursor=at+1
+        index=0
+        matching=1
+        while matching!=0:
+            value=unit(s,w,cursor)
+            cursor=get(w,0)
+            expected=enum_byte(kind,index)
+            if expected==256:
+                if value==1114112:
+                    return kind
+                matching=0
+            else:
+                if value!=expected:
+                    matching=0
+            index=index+1
+        kind=kind+1
+    return 0
+
+def error(s:readbuf,w:mutbuf,o:mutbuf,code:u64) -> u64:
+    if code>=100 and code<115:
+        return literal(w,o,code)
+    if code==200:
+        literal(w,o,14)
+        at=get(w,88)+1
+        while at<length(s):
+            value=unit(s,w,at)
+            at=get(w,0)
+            if value==1114112:
+                return literal(w,o,15)
+            raw_scalar(w,o,value)
+        return 0
+    if code==11:
+        literal(w,o,16)
+        unexpected(s,w,o,get(w,88))
+        literal(w,o,4)
+        literal(w,o,get(w,96))
+        return 0
+    return retained_error(s,w,o,code)
+
+def success(s:readbuf,w:mutbuf,o:mutbuf) -> u32:
+    total=256
+    field=1
+    while field<=8:
+        size=get(w,META+field*32+8)
+        if size>MAXIMUM-total:
+            return header(o,4,MAXIMUM,0)
+        total=total+size
+        field=field+1
+    if total>length(o):
+        return header(o,3,total,0)
+    header(o,0,0,0)
+    put(o,24,get(w,800))
+    put(o,32,get(w,808))
+    put(o,40,get(w,META+13*32+16)|(get(w,META+14*32+16)<<1))
+    put(o,48,get(w,META+9*32+16))
+    put(o,56,get(w,META+10*32+16))
+    put(o,64,get(w,META+11*32+16))
+    at=256
+    field=1
+    while field<=8:
+        start=get(w,META+field*32)
+        size=get(w,META+field*32+8)
+        put(o,88+(field-1)*8,size)
+        if start!=0:
+            copy_string(s,w,o,start,at)
+        at=at+size
+        field=field+1
+    return 256
+
+def header(o:mutbuf,status:u64,needed:u64,error_size:u64) -> u32:
+    fill_range(o,0,256,0)
+    put(o,0,RESPONSE)
+    put(o,8,status)
+    put(o,16,KIND)
+    put(o,72,error_size)
+    put(o,80,needed)
+    return 256

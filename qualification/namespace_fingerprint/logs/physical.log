@@ -1,0 +1,1240 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {2ea6a461-55c6-4cea-894a-7b395dfc8fa3}
+Region: westus3
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: physical
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  sparse-checkout: tests/hia_native/namespace_fingerprint_physical_v2
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/8308f248-c2ee-451b-9acd-9859b59592e9' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +76759efe3990908e84d89dded452cfe3c93f9de1:refs/remotes/origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * [new ref]         76759efe3990908e84d89dded452cfe3c93f9de1 -> origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+[command]/usr/bin/git branch --list --remote origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+  origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+[command]/usr/bin/git rev-parse refs/remotes/origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+76759efe3990908e84d89dded452cfe3c93f9de1
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set tests/hia_native/namespace_fingerprint_physical_v2
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B hia-namespace-fingerprint-physical-v2-6780-20261117 refs/remotes/origin/hia-namespace-fingerprint-physical-v2-6780-20261117
+Updating files:   0% (1/779)
+Updating files:   1% (8/779)
+Updating files:   2% (16/779)
+Updating files:   3% (24/779)
+Updating files:   4% (32/779)
+Updating files:   5% (39/779)
+Updating files:   6% (47/779)
+Updating files:   7% (55/779)
+Updating files:   8% (63/779)
+Updating files:   9% (71/779)
+Updating files:  10% (78/779)
+Updating files:  11% (86/779)
+Updating files:  12% (94/779)
+Updating files:  13% (102/779)
+Updating files:  14% (110/779)
+Updating files:  15% (117/779)
+Updating files:  16% (125/779)
+Updating files:  17% (133/779)
+Updating files:  18% (141/779)
+Updating files:  19% (149/779)
+Updating files:  20% (156/779)
+Updating files:  21% (164/779)
+Updating files:  22% (172/779)
+Updating files:  23% (180/779)
+Updating files:  24% (187/779)
+Updating files:  25% (195/779)
+Updating files:  26% (203/779)
+Updating files:  27% (211/779)
+Updating files:  28% (219/779)
+Updating files:  29% (226/779)
+Updating files:  30% (234/779)
+Updating files:  31% (242/779)
+Updating files:  32% (250/779)
+Updating files:  33% (258/779)
+Updating files:  34% (265/779)
+Updating files:  35% (273/779)
+Updating files:  36% (281/779)
+Updating files:  37% (289/779)
+Updating files:  38% (297/779)
+Updating files:  39% (304/779)
+Updating files:  40% (312/779)
+Updating files:  41% (320/779)
+Updating files:  42% (328/779)
+Updating files:  43% (335/779)
+Updating files:  44% (343/779)
+Updating files:  45% (351/779)
+Updating files:  46% (359/779)
+Updating files:  47% (367/779)
+Updating files:  48% (374/779)
+Updating files:  49% (382/779)
+Updating files:  50% (390/779)
+Updating files:  51% (398/779)
+Updating files:  52% (406/779)
+Updating files:  53% (413/779)
+Updating files:  54% (421/779)
+Updating files:  55% (429/779)
+Updating files:  56% (437/779)
+Updating files:  57% (445/779)
+Updating files:  58% (452/779)
+Updating files:  59% (460/779)
+Updating files:  60% (468/779)
+Updating files:  61% (476/779)
+Updating files:  62% (483/779)
+Updating files:  63% (491/779)
+Updating files:  64% (499/779)
+Updating files:  65% (507/779)
+Updating files:  66% (515/779)
+Updating files:  67% (522/779)
+Updating files:  68% (530/779)
+Updating files:  69% (538/779)
+Updating files:  70% (546/779)
+Updating files:  71% (554/779)
+Updating files:  72% (561/779)
+Updating files:  73% (569/779)
+Updating files:  74% (577/779)
+Updating files:  75% (585/779)
+Updating files:  76% (593/779)
+Updating files:  77% (600/779)
+Updating files:  78% (608/779)
+Updating files:  79% (616/779)
+Updating files:  80% (624/779)
+Updating files:  81% (631/779)
+Updating files:  82% (639/779)
+Updating files:  83% (647/779)
+Updating files:  84% (655/779)
+Updating files:  85% (663/779)
+Updating files:  86% (670/779)
+Updating files:  87% (678/779)
+Updating files:  88% (686/779)
+Updating files:  89% (694/779)
+Updating files:  90% (702/779)
+Updating files:  91% (709/779)
+Updating files:  92% (717/779)
+Updating files:  93% (725/779)
+Updating files:  94% (733/779)
+Updating files:  95% (741/779)
+Updating files:  96% (748/779)
+Updating files:  97% (756/779)
+Updating files:  98% (764/779)
+Updating files:  99% (772/779)
+Updating files: 100% (779/779)
+Updating files: 100% (779/779), done.
+Switched to a new branch 'hia-namespace-fingerprint-physical-v2-6780-20261117'
+branch 'hia-namespace-fingerprint-physical-v2-6780-20261117' set up to track 'origin/hia-namespace-fingerprint-physical-v2-6780-20261117'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+76759efe3990908e84d89dded452cfe3c93f9de1
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+/home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-96f633ec\-098c\-4399\-9eb6\-d67617f0a8c7\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-96f633ec\-098c\-4399\-9eb6\-d67617f0a8c7\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-96f633ec\-098c\-4399\-9eb6\-d67617f0a8c7\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-96f633ec\-098c\-4399\-9eb6\-d67617f0a8c7\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-96f633ec-098c-4399-9eb6-d67617f0a8c7.config'
+##[endgroup]
+##[group]Run mkdir "$RUNNER_TEMP/fingerprint-physical"
+[36;1mmkdir "$RUNNER_TEMP/fingerprint-physical"[0m
+[36;1mcp -a tests/hia_native/namespace_fingerprint_physical_v2 "$RUNNER_TEMP/fingerprint-physical/source"[0m
+[36;1mpython3 -I -B - <<'PY'[0m
+[36;1mimport hashlib,json,os[0m
+[36;1mfrom pathlib import Path[0m
+[36;1mr=Path(os.environ["RUNNER_TEMP"])/"fingerprint-physical/source";raw=(r/"SOURCE.json").read_bytes()[0m
+[36;1massert hashlib.sha256(raw).hexdigest()=="23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897"[0m
+[36;1mfor p,pin in json.loads(raw)["files"].items():[0m
+[36;1m    b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"][0m
+[36;1m    assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"][0m
+[36;1m    if p.endswith(".py"):compile(b,str(r/p),"exec")[0m
+[36;1mPY[0m
+[36;1mpython3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/source_check.py"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "native_or_rust_executions": 0,
+  "original_copy_and_read_body_unchanged": true,
+  "partitions": [
+    [
+      "one",
+      "hia-input",
+      "hia-workspace",
+      "syscall-capability",
+      "outer-context-tail",
+      "kernel-dirent-inode",
+      "packer-output-tail",
+      "original-result",
+      "transport-control-return"
+    ],
+    [
+      "nested/two",
+      "hia-output-tail",
+      "syscall-errno",
+      "missing-boundary",
+      "off-missing-operation",
+      "source-copy",
+      "process-parent",
+      "owner-control-return"
+    ]
+  ],
+  "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+  "status": "FROZEN_PURE_CONTROL_SOURCE_PASS",
+  "whole_parent_timeout_seconds": 180
+}
+##[group]Run gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14344284220/zip > "$RUNNER_TEMP/fingerprint-physical/original.zip"
+[36;1mgh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14344284220/zip > "$RUNNER_TEMP/fingerprint-physical/original.zip"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  GH_TOKEN: ***
+##[endgroup]
+##[group]Run timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-physical/original.zip" --output "$RUNNER_TEMP/fingerprint-physical/restored"
+[36;1mtimeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/restore.py" --archive "$RUNNER_TEMP/fingerprint-physical/original.zip" --output "$RUNNER_TEMP/fingerprint-physical/restored"[0m
+[36;1mmkdir "$RUNNER_TEMP/fingerprint-physical/restoration-proof"[0m
+[36;1mcp "$RUNNER_TEMP/fingerprint-physical/restored/RESTORE.json" "$RUNNER_TEMP/fingerprint-physical/restored/artifact-manifest.json" "$RUNNER_TEMP/fingerprint-physical/restored/original-export.json" "$RUNNER_TEMP/fingerprint-physical/restoration-proof/"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "logical_bytes": 295742756,
+  "logical_files": 3046,
+  "native_executions": 0,
+  "original_evidence_mutated": false,
+  "producer_status": "FINGERPRINT_SEMANTIC_AND_ABI_CONTROLS_PASS",
+  "rust_executions": 0,
+  "source_files": 34,
+  "source_manifest_sha256": "d2f3509e90b4fed41e3769430ff54d143fc698c43598ac55ff2bd07a4c9c6762",
+  "status": "COMPLETE_FINGERPRINT_CONTROL_ARCHIVE_RESTORE_PASS",
+  "tar": {
+    "bytes": 44900853,
+    "sha256": "66075963eed7f974cf851b3b07de8d5ed53f3fbb0e0d5ea386b8002a963ec971"
+  },
+  "unique_objects": 2677,
+  "zip": {
+    "bytes": 44901777,
+    "sha256": "2a6ae5b85d69b233ef5e7a30b9dbef6ef844b84628ab1bbb48ff47e08737da3e"
+  }
+}
+##[group]Run python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/run.py" --retained "$RUNNER_TEMP/fingerprint-physical/restored/retained" --output "$RUNNER_TEMP/fingerprint-physical/output" --phase physical
+[36;1mpython3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/run.py" --retained "$RUNNER_TEMP/fingerprint-physical/restored/retained" --output "$RUNNER_TEMP/fingerprint-physical/output" --phase physical[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "admissions": 2,
+  "guard_probes": 204,
+  "names": [
+    "hia-input",
+    "hia-output-tail",
+    "hia-workspace",
+    "syscall-errno",
+    "syscall-capability",
+    "missing-boundary",
+    "outer-context-tail",
+    "off-missing-operation",
+    "kernel-dirent-inode",
+    "source-copy",
+    "packer-output-tail",
+    "process-parent",
+    "original-result",
+    "owner-control-return",
+    "transport-control-return"
+  ],
+  "native_or_rust_executions": 0,
+  "refusals": 15,
+  "report": {
+    "bytes": 11054209,
+    "sha256": "bbeb13e44f343e1b50bc4d7f36f7c4e25c57add5ccc0e346adf1e19de14ad2b4"
+  },
+  "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+  "status": "COMPLETE_PHYSICAL_FINGERPRINT_CONTROLS_PASS"
+}
+##[group]Run python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/run.py" --retained "$RUNNER_TEMP/fingerprint-physical/restored/retained" --output "$RUNNER_TEMP/fingerprint-physical/output" --phase verify
+[36;1mpython3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/run.py" --retained "$RUNNER_TEMP/fingerprint-physical/restored/retained" --output "$RUNNER_TEMP/fingerprint-physical/output" --phase verify[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "evidence": {
+    "archive_store_qualified": false,
+    "begin_finish_caller_qualified": false,
+    "hot_cache_qualified": false,
+    "namespace_version_qualified": false,
+    "native_or_rust_executions": 0,
+    "physical": {
+      "admissions": 2,
+      "baseline": {
+        "control_processes": {
+          "owner": {
+            "argv": [
+              "/usr/bin/python3",
+              "-I",
+              "-B",
+              "/home/runner/work/_temp/fingerprint-controls/source/execute.py",
+              "--prior",
+              "/home/runner/work/_temp/fingerprint-controls/restored/prior",
+              "--output",
+              "/home/runner/work/_temp/fingerprint-controls/output/owner-controls",
+              "--phase",
+              "owner"
+            ],
+            "completed": true,
+            "cwd": "/home/runner/work/_temp/fingerprint-controls/source",
+            "elapsed_seconds": 2.0574969169999946,
+            "exit_code": 0,
+            "name": "fingerprint-owner",
+            "parent_pid": 2242,
+            "pgid": 2243,
+            "pid": 2243,
+            "stderr": {
+              "bytes": 0,
+              "file": "fingerprint-owner.stderr",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdin": null,
+            "stdout": {
+              "bytes": 1213,
+              "file": "fingerprint-owner.stdout",
+              "sha256": "0b516da8eb5d816f7f1c7f279587a287d11f37a7470680470e1829440601d244"
+            },
+            "timed_out": false,
+            "timeout_seconds": 60
+          },
+          "transport": {
+            "argv": [
+              "/usr/bin/python3",
+              "-I",
+              "-B",
+              "/home/runner/work/_temp/fingerprint-controls/source/execute.py",
+              "--prior",
+              "/home/runner/work/_temp/fingerprint-controls/restored/prior",
+              "--output",
+              "/home/runner/work/_temp/fingerprint-controls/output/transport-controls",
+              "--phase",
+              "transport"
+            ],
+            "completed": true,
+            "cwd": "/home/runner/work/_temp/fingerprint-controls/source",
+            "elapsed_seconds": 0.5789969120000009,
+            "exit_code": 0,
+            "name": "fingerprint-transport",
+            "parent_pid": 2247,
+            "pgid": 2248,
+            "pid": 2248,
+            "stderr": {
+              "bytes": 0,
+              "file": "fingerprint-transport.stderr",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdin": null,
+            "stdout": {
+              "bytes": 2370,
+              "file": "fingerprint-transport.stdout",
+              "sha256": "f618594b08ea9f6fc23ac47016ff4c6bcb04d161c0fad3b65eb9fc03af5d2af8"
+            },
+            "timed_out": false,
+            "timeout_seconds": 60
+          }
+        },
+        "control_source_sha256": "d2f3509e90b4fed41e3769430ff54d143fc698c43598ac55ff2bd07a4c9c6762",
+        "native_or_rust_executions": 0,
+        "owner_controls": {
+          "actual_calls": 4501,
+          "checkpoints": 65,
+          "complete_buffer_bytes": 150401059,
+          "native_or_rust_executions": 0,
+          "reader_writes": 0,
+          "refusals": 4241,
+          "replays": 260,
+          "status": "COMPLETE_DIRECT_FINGERPRINT_CONTROLS_PASS"
+        },
+        "reader_writes": 0,
+        "semantic": {
+          "actual_producer_processes": 19,
+          "actual_role_operations": 468,
+          "actual_role_processes": 30,
+          "archive_store_qualified": false,
+          "begin_finish_caller_qualified": false,
+          "boundary_calls": 4471,
+          "cases": 72,
+          "cohorts": [
+            {
+              "actual_boundary_calls": 305,
+              "actual_owner_calls": 350,
+              "cases": 13,
+              "complete_original_errors": [
+                {
+                  "case": 11,
+                  "chain": [
+                    "Permission denied (os error 13)"
+                  ],
+                  "debug": "Permission denied (os error 13)",
+                  "display": "Permission denied (os error 13)",
+                  "raw_os_error": 13,
+                  "step": 1
+                },
+                {
+                  "case": 12,
+                  "chain": [
+                    "Not a directory (os error 20)"
+                  ],
+                  "debug": "Not a directory (os error 20)",
+                  "display": "Not a directory (os error 20)",
+                  "raw_os_error": 20,
+                  "step": 0
+                },
+                {
+                  "case": 12,
+                  "chain": [
+                    "Not a directory (os error 20)"
+                  ],
+                  "debug": "Not a directory (os error 20)",
+                  "display": "Not a directory (os error 20)",
+                  "raw_os_error": 20,
+                  "step": 1
+                }
+              ],
+              "group": "ordinary",
+              "kernel_trace": {
+                "actual_turns": 135,
+                "kernel_effects": 295,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 19381264,
+              "observer_free_buffer_bytes": 4690848,
+              "operations": 45,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 672,
+              "actual_owner_calls": 768,
+              "cases": 48,
+              "complete_original_errors": [],
+              "group": "names",
+              "kernel_trace": {
+                "actual_turns": 288,
+                "kernel_effects": 672,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 44940688,
+              "observer_free_buffer_bytes": 12673560,
+              "operations": 96,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 3468,
+              "actual_owner_calls": 3476,
+              "cases": 4,
+              "complete_original_errors": [],
+              "group": "wide",
+              "kernel_trace": {
+                "actual_turns": 24,
+                "kernel_effects": 60,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 151425648,
+              "observer_free_buffer_bytes": 1056152,
+              "operations": 8,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 1,
+              "actual_owner_calls": 2,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 65,
+                  "chain": [
+                    "Permission denied (os error 13)"
+                  ],
+                  "debug": "Permission denied (os error 13)",
+                  "display": "Permission denied (os error 13)",
+                  "raw_os_error": 13,
+                  "step": 0
+                }
+              ],
+              "group": "open-eacces",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 1,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 274640,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 3,
+              "actual_owner_calls": 4,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 66,
+                  "chain": [
+                    "Operation not permitted (os error 1)"
+                  ],
+                  "debug": "Operation not permitted (os error 1)",
+                  "display": "Operation not permitted (os error 1)",
+                  "raw_os_error": 1,
+                  "step": 0
+                }
+              ],
+              "group": "fdopendir-eperm",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 4,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 361008,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 4,
+              "actual_owner_calls": 5,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 67,
+                  "chain": [
+                    "Input/output error (os error 5)"
+                  ],
+                  "debug": "Input/output error (os error 5)",
+                  "display": "Input/output error (os error 5)",
+                  "raw_os_error": 5,
+                  "step": 0
+                }
+              ],
+              "group": "readdir-eio",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 6,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 404192,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 4,
+              "actual_owner_calls": 5,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 68,
+                  "chain": [
+                    "Interrupted system call (os error 4)"
+                  ],
+                  "debug": "Interrupted system call (os error 4)",
+                  "display": "Interrupted system call (os error 4)",
+                  "raw_os_error": 4,
+                  "step": 0
+                }
+              ],
+              "group": "readdir-eintr",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 6,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 404192,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 7,
+              "actual_owner_calls": 8,
+              "cases": 1,
+              "complete_original_errors": [],
+              "group": "closedir-eio",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 7,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 533888,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 3,
+              "actual_owner_calls": 4,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 70,
+                  "chain": [
+                    "Input/output error (os error 5)"
+                  ],
+                  "debug": "Input/output error (os error 5)",
+                  "display": "Input/output error (os error 5)",
+                  "raw_os_error": 5,
+                  "step": 0
+                }
+              ],
+              "group": "fdopendir-eperm-close-eio",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 4,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 361008,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            },
+            {
+              "actual_boundary_calls": 4,
+              "actual_owner_calls": 5,
+              "cases": 1,
+              "complete_original_errors": [
+                {
+                  "case": 71,
+                  "chain": [
+                    "Input/output error (os error 5)"
+                  ],
+                  "debug": "Input/output error (os error 5)",
+                  "display": "Input/output error (os error 5)",
+                  "raw_os_error": 5,
+                  "step": 0
+                }
+              ],
+              "group": "readdir-eio-close-eacces",
+              "kernel_trace": {
+                "actual_turns": 3,
+                "kernel_effects": 6,
+                "three_actual_signatures_identical": true,
+                "traced_processes": 4
+              },
+              "observed_buffer_bytes": 404192,
+              "observer_free_buffer_bytes": 197824,
+              "operations": 1,
+              "processes": 3,
+              "whole_original_native_terminal_equality": true
+            }
+          ],
+          "complete_observed_buffer_bytes": 218490720,
+          "complete_observer_free_buffer_bytes": 19805328,
+          "dependencies": {
+            "inspection_head": "48d5cf17e2c0a5a960f9142d5748afbaae24216f",
+            "inspection_run": 44114666930,
+            "packages": 22,
+            "retained_nonimplementation_metadata": {
+              "anyhow-1.0.104": {
+                ".gitignore": {
+                  "bytes": 21,
+                  "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+                }
+              },
+              "block-buffer-0.12.1": {},
+              "cfg-if-1.0.5": {
+                ".gitignore": {
+                  "bytes": 18,
+                  "sha256": "f9b1ca6ae27d1c18215265024629a8960c31379f206d9ed20f64e0b2dcf79805"
+                }
+              },
+              "const-oid-0.10.2": {},
+              "cpufeatures-0.3.1": {},
+              "crypto-common-0.2.2": {},
+              "digest-0.11.3": {},
+              "hybrid-array-0.4.15": {
+                ".gitignore": {
+                  "bytes": 225,
+                  "sha256": "c56679c2f63ac0e32959d94e311175cc482eebeda7b641692f8770b7641bd4f3"
+                }
+              },
+              "itoa-1.0.18": {
+                ".gitignore": {
+                  "bytes": 21,
+                  "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+                }
+              },
+              "libc-0.2.189": {
+                ".gitignore": {
+                  "bytes": 46,
+                  "sha256": "2c6be680ae3173f3fa5cb35f52625547ef9ff4333b076cd236f26cdd212b6a5f"
+                }
+              },
+              "memchr-2.8.3": {
+                ".gitignore": {
+                  "bytes": 93,
+                  "sha256": "0dbac962f4ec8a8f95158677e768b3163914026973cd77a9043c30c55ef84638"
+                }
+              },
+              "proc-macro2-1.0.107": {
+                ".gitignore": {
+                  "bytes": 21,
+                  "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+                }
+              },
+              "quote-1.0.47": {
+                ".gitignore": {
+                  "bytes": 21,
+                  "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+                }
+              },
+              "serde-1.0.229": {},
+              "serde_core-1.0.229": {},
+              "serde_derive-1.0.229": {},
+              "serde_json-1.0.151": {
+                ".gitignore": {
+                  "bytes": 21,
+                  "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+                }
+              },
+              "sha2-0.11.0": {},
+              "syn-3.0.6": {},
+              "typenum-1.20.1": {
+                ".gitattributes": {
+                  "bytes": 161,
+                  "sha256": "a2e981d32ba89f78b83b0cf98909e6156fc234c0f97d7a3a7a68638203df44e3"
+                },
+                ".gitignore": {
+                  "bytes": 16,
+                  "sha256": "65e81e6e23e687ca48278db919585d232c7d7f3c453d240c5c2bc655e86593a8"
+                }
+              },
+              "unicode-ident-1.0.26": {
+                ".gitattributes": {
+                  "bytes": 207,
+                  "sha256": "ae8eb6d0bcfdf98794d1f0d4134ca8999c30ae0f6d4fe7f1a5858dcf92e30394"
+                },
+                ".gitignore": {
+                  "bytes": 36,
+                  "sha256": "ab4f11740636387dbd09e6f976467f0168d1d51cd888db6a736ee1f867874b40"
+                },
+                "tests/fst/.gitignore": {
+                  "bytes": 14,
+                  "sha256": "2cd419079c0a08bb15766520880998651dd1c72c55347a31f43357595b16ac10"
+                }
+              },
+              "zmij-1.0.23": {
+                ".gitignore": {
+                  "bytes": 20,
+                  "sha256": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247"
+                }
+              }
+            },
+            "source_bytes": 12850046,
+            "source_files": 1131
+          },
+          "exact_public_error_rendering_qualified": false,
+          "fresh_build": {
+            "compiler_files": 1080,
+            "complete_packer_buffer_bytes": 3092134,
+            "fresh_packer_images": 1,
+            "fresh_semantic_images": 1,
+            "image": {
+              "bytes": 104516,
+              "sha256": "0e4153a7f4e99b09139ec1ff2cfc1a26a6b5f6234159be38219e727215ac31b0"
+            },
+            "native_or_rust_executions": 0,
+            "packer_calls": 8,
+            "packer_refusals": 7,
+            "status": "COMPLETE_NATIVE_CALLABLE_BUILD_READBACK_PASS"
+          },
+          "hot_cache_qualified": false,
+          "namespace_version_qualified": false,
+          "namespace_watch_qualified": false,
+          "native_or_rust_executions": 0,
+          "operations": 156,
+          "owner_calls": 4627,
+          "public_handler_qualified": false,
+          "qualified_scope": "private original fingerprint fallback and same-tree actual libc pump; whole buffers, kernel effects and native observer-free equality",
+          "reader_writes": 0,
+          "schema": "hepta.namespace-fingerprint.readback.v1",
+          "source_manifest_sha256": "682909fbec91ce42d145ebe8ee55c6943d385f1113b9ad25f03d9c3f694bf320",
+          "status": "PASS",
+          "whole_runtime_replaced": false
+        },
+        "status": "FINGERPRINT_SEMANTIC_AND_ABI_CONTROLS_PASS",
+        "transport_controls": {
+          "actual_calls": 348,
+          "cases": 87,
+          "complete_buffer_bytes": 23573903,
+          "native_or_rust_executions": 0,
+          "reader_writes": 0,
+          "recoveries": 87,
+          "refusals": 87,
+          "status": "COMPLETE_FINGERPRINT_TRANSPORT_CONTROLS_PASS"
+        }
+      },
+      "guard_probes": 204,
+      "native_or_rust_executions": 0,
+      "prior_verification": {
+        "original_gate_preserved": true,
+        "process": {
+          "argv": [
+            "/usr/bin/python3",
+            "-I",
+            "-B",
+            "/home/runner/work/_temp/fingerprint-controls/source/verify_controls.py",
+            "--prior",
+            "/home/runner/work/_temp/fingerprint-controls/restored/prior",
+            "--output",
+            "/home/runner/work/_temp/fingerprint-controls/output",
+            "--receipt",
+            "/home/runner/work/_temp/fingerprint-controls/output/READBACK.json"
+          ],
+          "completed": true,
+          "cwd": "/home/runner/work/_temp/fingerprint-controls/source",
+          "elapsed_seconds": 9.692758706,
+          "exit_code": 0,
+          "name": "fingerprint-verify",
+          "parent_pid": 2250,
+          "pgid": 2251,
+          "pid": 2251,
+          "stderr": {
+            "bytes": 0,
+            "file": "fingerprint-verify.stderr",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdin": null,
+          "stdout": {
+            "bytes": 19371,
+            "file": "fingerprint-verify.stdout",
+            "sha256": "2ab8a626340caa0e1edc9671bf4c7c8e5075c19f4fc0e8a6e516fddb41d0ebbe"
+          },
+          "timed_out": false,
+          "timeout_seconds": 180
+        },
+        "proof": {
+          "bytes": 2189606,
+          "sha256": "31148cb99129ab96b9a27352e74983520bd7333aadda9f84bafd783f0cfc69fb"
+        }
+      },
+      "reader_writes": 0,
+      "refusals": 15,
+      "status": "COMPLETE_PHYSICAL_FINGERPRINT_CONTROLS_PASS",
+      "worker_ownership": {
+        "native_or_rust_executions": 0,
+        "owned_processes": 2,
+        "parent": {
+          "deadline_ns": 387694469688,
+          "native_or_rust_executions": 0,
+          "output_root": "/home/runner/work/_temp/fingerprint-physical/output/physical",
+          "parent_pid": 2250,
+          "pgid": 2251,
+          "pid": 2251,
+          "retained_root": "/home/runner/work/_temp/fingerprint-physical/restored/retained",
+          "schema": "hepta.namespace-fingerprint.physical-parent.v1",
+          "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+          "source_root": "/home/runner/work/_temp/fingerprint-physical/source",
+          "started_ns": 207694469688,
+          "timeout_seconds": 180
+        },
+        "whole_parent_timeout_seconds": 180,
+        "workers": [
+          {
+            "argv": [
+              "/usr/bin/python3",
+              "-I",
+              "-B",
+              "/home/runner/work/_temp/fingerprint-physical/source/physical_worker.py",
+              "--retained",
+              "/home/runner/work/_temp/fingerprint-physical/restored/retained",
+              "--output",
+              "/home/runner/work/_temp/fingerprint-physical/output/physical",
+              "--part",
+              "0"
+            ],
+            "completed": true,
+            "cwd": "/home/runner/work/_temp/fingerprint-physical/source",
+            "elapsed_ns": 58562532574,
+            "exit_code": 0,
+            "finished_ns": 274288707543,
+            "names": [
+              "one",
+              "hia-input",
+              "hia-workspace",
+              "syscall-capability",
+              "outer-context-tail",
+              "kernel-dirent-inode",
+              "packer-output-tail",
+              "original-result",
+              "transport-control-return"
+            ],
+            "native_or_rust_executions": 0,
+            "parent_pid": 2251,
+            "part": 0,
+            "pgid": 2251,
+            "pid": 2253,
+            "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+            "started_ns": 215726174969,
+            "stderr": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdout": {
+              "bytes": 498,
+              "sha256": "e23935b5c24153a3257f9389e246de7c405376b657a943b2a33005c4230ffdbe"
+            },
+            "timed_out": false,
+            "timeout_seconds": 180
+          },
+          {
+            "argv": [
+              "/usr/bin/python3",
+              "-I",
+              "-B",
+              "/home/runner/work/_temp/fingerprint-physical/source/physical_worker.py",
+              "--retained",
+              "/home/runner/work/_temp/fingerprint-physical/restored/retained",
+              "--output",
+              "/home/runner/work/_temp/fingerprint-physical/output/physical",
+              "--part",
+              "1"
+            ],
+            "completed": true,
+            "cwd": "/home/runner/work/_temp/fingerprint-physical/source",
+            "elapsed_ns": 51459518310,
+            "exit_code": 0,
+            "finished_ns": 267186157438,
+            "names": [
+              "nested/two",
+              "hia-output-tail",
+              "syscall-errno",
+              "missing-boundary",
+              "off-missing-operation",
+              "source-copy",
+              "process-parent",
+              "owner-control-return"
+            ],
+            "native_or_rust_executions": 0,
+            "parent_pid": 2251,
+            "part": 1,
+            "pgid": 2251,
+            "pid": 2254,
+            "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+            "started_ns": 215726639128,
+            "stderr": {
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "stdout": {
+              "bytes": 473,
+              "sha256": "a1b2910e471a31ff9773d7f30b334f0a4d1a5443ef663d1c017a8841f3fd2b38"
+            },
+            "timed_out": false,
+            "timeout_seconds": 180
+          }
+        ]
+      }
+    },
+    "process": {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "/home/runner/work/_temp/fingerprint-physical/source/entry.py",
+        "--retained",
+        "/home/runner/work/_temp/fingerprint-physical/restored/retained",
+        "--output",
+        "/home/runner/work/_temp/fingerprint-physical/output",
+        "--phase",
+        "physical"
+      ],
+      "completed": true,
+      "cwd": "/home/runner/work/_temp/fingerprint-physical/source",
+      "elapsed_seconds": 66.89369864099999,
+      "exit_code": 0,
+      "name": "fingerprint-physical",
+      "parent_pid": 2250,
+      "pgid": 2251,
+      "pid": 2251,
+      "stderr": {
+        "bytes": 0,
+        "file": "fingerprint-physical.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdin": null,
+      "stdout": {
+        "bytes": 756,
+        "file": "fingerprint-physical.stdout",
+        "sha256": "85dd70ae254ef3a06b68f8c65e0e4f8fcfc1b99435fbb2cd7b270c57cc2132bb"
+      },
+      "timed_out": false,
+      "timeout_seconds": 180
+    },
+    "public_handler_qualified": false,
+    "reader_writes": 0,
+    "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+    "status": "PRIVATE_NAMESPACE_FINGERPRINT_QUALIFIED"
+  },
+  "native_or_rust_executions": 0,
+  "pgid": 2266,
+  "pid": 2266,
+  "ppid": 2265,
+  "probes": [
+    {
+      "guard_event": "file-write",
+      "name": "python-file-write",
+      "refusal": "owner-export read-only guard: file-write"
+    },
+    {
+      "guard_event": "descriptor-write-open",
+      "name": "descriptor-open",
+      "refusal": "owner-export read-only guard: descriptor-write-open"
+    },
+    {
+      "guard_event": "descriptor-write",
+      "name": "descriptor-write",
+      "refusal": "owner-export read-only guard: descriptor-write"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "metadata-mode",
+      "refusal": "owner-export read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "metadata-time",
+      "refusal": "owner-export read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "filesystem-mutation",
+      "name": "directory-create",
+      "refusal": "owner-export read-only guard: filesystem-mutation"
+    },
+    {
+      "guard_event": "process-execution",
+      "name": "subprocess",
+      "refusal": "owner-export read-only guard: process-execution"
+    },
+    {
+      "guard_event": "process-execution",
+      "name": "shell",
+      "refusal": "owner-export read-only guard: process-execution"
+    },
+    {
+      "guard_event": "native-mapping",
+      "name": "native-dlopen",
+      "refusal": "owner-export read-only guard: native-mapping"
+    },
+    {
+      "guard_event": "native-mapping",
+      "name": "native-mmap",
+      "refusal": "owner-export read-only guard: native-mapping"
+    },
+    {
+      "guard_event": "foreign-read",
+      "name": "producer-or-foreign-read",
+      "refusal": "owner-export read-only guard: foreign-read"
+    },
+    {
+      "guard_event": "foreign-file-descriptor",
+      "name": "unadmitted-file-descriptor",
+      "refusal": "owner-export read-only guard: foreign-file-descriptor"
+    }
+  ],
+  "reader_writes": 0,
+  "schema": "hepta.runtime.scope-span-readonly.v2",
+  "source_bound_guard": true
+}
+##[group]Run timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-physical" --archive "$RUNNER_TEMP/fingerprint-physical/fingerprint-physical-v2.tar.gz"
+[36;1mtimeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/fingerprint-physical/source/export.py" --workspace "$RUNNER_TEMP/fingerprint-physical" --archive "$RUNNER_TEMP/fingerprint-physical/fingerprint-physical-v2.tar.gz"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_reread": true,
+  "all_objects_and_modes_reread": true,
+  "bytes": 81269980,
+  "exporter_native_or_rust_executions": 0,
+  "exporter_original_rust_replay": 0,
+  "logical_bytes": 5656166057,
+  "logical_files": 56040,
+  "public_handler_qualified": false,
+  "schema": "hepta.namespace-fingerprint.physical-archive-read.v1",
+  "sha256": "9c2b224207250c2e161f58cf15c155974ae3067651c2cb237b240b224250673b",
+  "source_manifest_sha256": "23d78e05c8204e9f7f04c45d80140714369fde699320beba48f04e807a340897",
+  "status": "PRIVATE_NAMESPACE_FINGERPRINT_QUALIFIED",
+  "unique_objects": 2805
+}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: namespace-fingerprint-physical-v2
+  path: /home/runner/work/_temp/fingerprint-physical/fingerprint-physical-v2.tar.gz
+/home/runner/work/_temp/fingerprint-physical/fingerprint-physical-v2.tar.gz.json
+
+  include-hidden-files: true
+  if-no-files-found: error
+  compression-level: 0
+  retention-days: 30
+  overwrite: false
+##[endgroup]
+(node:2327) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/_temp/fingerprint-physical. This will be the root directory of the artifact
+With the provided path, there will be 2 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:2327) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 25165824
+Uploaded bytes 33554432
+Uploaded bytes 41943040
+Uploaded bytes 50331648
+Uploaded bytes 58720256
+Uploaded bytes 67108864
+Uploaded bytes 75497472
+Uploaded bytes 81270916
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is c01eb95b755661b201298e724d6cbc5a8bff7245db628dc608b0044e32be7baf
+Finalizing artifact upload
+Artifact namespace-fingerprint-physical-v2.zip successfully finalized. Artifact ID 14346947934
+Artifact namespace-fingerprint-physical-v2 has been successfully uploaded! Final size is 81270916 bytes. Artifact ID is 14346947934
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44124748541/artifacts/14346947934
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/d4baf73a-57d9-4d9c-9516-c8713b408fbb' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

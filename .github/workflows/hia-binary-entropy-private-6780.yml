@@ -1,0 +1,47 @@
+name: Qualify HIA entropy private transport and capacity
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-entropy-private-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  private:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ENTROPY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_entropy/v1/private_source
+      ENTROPY_MANIFEST: cd4f214c7482de80cf122d0299a343f784c4f865936ec03a6edb920ed4e9cb18
+    steps:
+      - name: Checkout all frozen private inputs and complete readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_entropy/v1/private_source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Reuse qualified build and execute private transport once
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/binary-entropy-private" --source-manifest-sha256 "$ENTROPY_MANIFEST"
+      - name: Preserve all completed or failed private evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$ENTROPY_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/binary-entropy-private" --output "$RUNNER_TEMP/binary-entropy-private-export" \
+            --source-manifest-sha256 "$ENTROPY_MANIFEST"
+      - name: Upload complete private evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-entropy-private-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-entropy-private-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

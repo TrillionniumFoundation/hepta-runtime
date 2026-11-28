@@ -1,0 +1,91 @@
+{
+  "actual_pair_design": "One physical fixture and identical operation sequence shared by native and fresh original processes. Filesystem actions occur once between paired calls, so both observe the same inode identities and raw readdir entries. Native and Rust own independent watcher streams, state, descriptors and processes; complete raw results and syscall/owner journals are retained.",
+  "mechanical_dependencies": [
+    "qualified native mutex/futex boundary",
+    "actual owned File descriptor capabilities with strong pin retain/release",
+    "actual inotify init/read/add/rm syscalls",
+    "actual openat/fdopendir/readdir/closedir/fcntl/stat syscalls",
+    "existing qualified HIA SHA-256 implementation, source/AST rebind required"
+  ],
+  "qualification": {
+    "actual_kernel": false,
+    "fresh_original": false,
+    "native_compiled": false,
+    "public": false,
+    "source_frozen": false,
+    "strict_reader": false
+  },
+  "retained_order": [
+    "version swallows watched_version errors and then executes the actual directory fingerprint",
+    "content_version creation failure returns None; poisoned mutex returns its exact original error; no fingerprint fallback",
+    "one actual HIA watcher state per protected namespace/content global, with persistent pinned descriptors",
+    "every event consumes a serial even if its watch descriptor is not in the cache",
+    "64 reads including Interrupted and 16384 processed events, unchanged finite drain budgets",
+    "a failed version drain calls changed(-1,IN_Q_OVERFLOW) before returning; its own serial failure can supersede the drain error",
+    "metadata and directory validation follow complete drain",
+    "a live hit is removed and appended at the LRU back without reinstalling its watch",
+    "a dead hit is removed, inotify_rm_watch is attempted, and its pin is dropped before replacement",
+    "add_watch succeeds before serial allocation and LRU eviction; serial failure preserves the prior prefix",
+    "Watcher's fields drop in source order: events File, then cached Arc<File> pins",
+    "ContentWatchSet obtains its independent high-bit identity before Watcher::new; duplicate identities make the final count check fail",
+    "ContentWatchSet uses actual shared Arc<File> pins and one protected event stream for all at most 258 directories",
+    "ContentWatchSet invalidation is permanent; it does not rearm",
+    "fingerprint consumes actual unsorted readdir order and hashes length LE, raw name, inode LE and dtype, without reading payloads",
+    "fingerprint fdopendir failure calls close before constructing last_os_error; preserve the actual errno at that point"
+  ],
+  "schema": "hepta.audit-namespace.target-bound-design.v1",
+  "scope": [
+    "version",
+    "content_version",
+    "ContentWatchSet::new",
+    "ContentWatchSet::version",
+    "Watcher::new",
+    "Watcher::serial",
+    "Watcher::changed",
+    "Watcher::drain_with_reader",
+    "Watcher::version_with_reader",
+    "fingerprint"
+  ],
+  "source_constraints": {
+    "content_scope_limit": 258,
+    "drain_bytes": 16384,
+    "drain_events": 16384,
+    "drain_reads": 64,
+    "no_existing_unknown_replay": true,
+    "no_local_rust_or_hia": true,
+    "original_functions_unchanged": true,
+    "watch_limit": 128
+  },
+  "status": "SOURCE_DESIGN_ONLY",
+  "target": {
+    "bytes": 12833,
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "git_blob": "4672d33a9ede7470a469f619da4dae91f89fcecd",
+    "mode": "100644",
+    "path": "src/mcp/runtime/namespace_version.rs",
+    "sha256": "7dd63c53bc1a85995a353bedc9643e7e4eb864cc7a5603dc331f0b4dd12576db"
+  },
+  "target_tests": [
+    {
+      "bytes": 3808,
+      "git_blob": "4f8caaa09d5ccc3e0796c3ffacf00b0a07c6111b",
+      "mode": "100644",
+      "name": "namespace_version_tests.rs",
+      "sha256": "73b2e8ab0c38a4dd130842f627ae9921daa4c2c8632a04ed9589f6846fcddc6d"
+    },
+    {
+      "bytes": 5464,
+      "git_blob": "1d07f57772dc468d6b6cfd1a608ffecc4e6b47d7",
+      "mode": "100644",
+      "name": "namespace_content_watch_tests.rs",
+      "sha256": "789adb74304f27855571013bfef7085eeadb396b27a6b580e66d85492d9854f5"
+    },
+    {
+      "bytes": 3930,
+      "git_blob": "b6bfc487208242b96eb6e58b6c9e2d5467fee0e7",
+      "mode": "100644",
+      "name": "namespace_drain_budget_tests.rs",
+      "sha256": "fcf5331d6032674003036eab5e39cbc6ef1e0a0946a819913018928cef3b32e3"
+    }
+  ]
+}

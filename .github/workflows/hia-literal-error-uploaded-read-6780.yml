@@ -1,0 +1,48 @@
+name: Independently read complete uploaded HIA literal error qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-literal-error-uploaded-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      LITERAL_SOURCE: ${{ github.workspace }}/runtime/qualification/literal_error/v1/uploaded_read
+      LITERAL_MANIFEST: c29e51f98e963b163e19b9f690408df1fddb6daffea983e5b0a2bf3f144ee0dc
+    steps:
+      - name: Checkout exact frozen independent source and complete producer readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/literal_error/v1/uploaded_read
+          persist-credentials: false
+      - name: Verify exact frozen head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Restore every uploaded byte and read all applications without execution
+        run: |
+          python3 -I -S -B "$LITERAL_SOURCE/read_archive.py" run \
+            --input "$RUNNER_TEMP/literal-error-upload-input" --capture "$RUNNER_TEMP/literal-error-upload-proof" \
+            --source-manifest-sha256 "$LITERAL_MANIFEST"
+      - name: Preserve complete independent proof or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$LITERAL_SOURCE/read_archive.py" export \
+            --input "$RUNNER_TEMP/literal-error-upload-input" --capture "$RUNNER_TEMP/literal-error-upload-proof" \
+            --output "$RUNNER_TEMP/literal-error-upload-export" --source-manifest-sha256 "$LITERAL_MANIFEST"
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: literal-error-uploaded-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/literal-error-upload-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

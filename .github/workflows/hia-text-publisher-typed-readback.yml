@@ -1,0 +1,63 @@
+name: Text publisher typed independent retained readback
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publisher-typed-readback-6780-20261117']
+    paths: ['qualification/text_publisher_typed_readback_v1/**', '.github/workflows/hia-text-publisher-typed-readback.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  retained-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "RB_SOURCE=$GITHUB_WORKSPACE/proof/tests/hia_native/text_file_write_ci/source" "RB_DRIVER=$GITHUB_WORKSPACE/proof/qualification/text_publisher_typed_readback_v1" "RB_OUTPUT=$RUNNER_TEMP/text-publisher-typed-independent" >> "$GITHUB_ENV"
+      - name: Checkout frozen readback source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: proof
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/text_publisher_typed_readback_v1
+            tests/hia_native/text_file_write_ci/source
+      - name: Check exact new reader source
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/proof" rev-parse HEAD)" = "${{ github.sha }}"
+          python3 -I -S -B - <<'PY'
+          import ast,hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RB_DRIVER'])
+          rows=json.loads((root/'SOURCE.json').read_bytes())['files']
+          assert {p.name for p in root.iterdir()}=={r['path'] for r in rows}|{'SOURCE.json'}
+          for r in rows:
+              p=root/r['path']; b=p.read_bytes()
+              assert len(b)==r['bytes'] and hashlib.sha256(b).hexdigest()==r['sha256']
+              assert hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()==r['git_blob']
+              if p.suffix=='.py':ast.parse(b)
+          PY
+      - name: Whole artifact and frozen guarded reader without native execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$RB_DRIVER/readback.py" --source "$RB_SOURCE" --output "$RB_OUTPUT" > "$RUNNER_TEMP/text-publisher-typed-readback.stdout" 2> "$RUNNER_TEMP/text-publisher-typed-readback.stderr"
+          cat "$RB_OUTPUT/READBACK_INDEX.json"
+      - name: Upload complete independent readback proof or failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publisher-typed-readback-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.RB_OUTPUT }}/readback-proof.tar.gz
+            ${{ env.RB_OUTPUT }}/READBACK_INDEX.json
+            ${{ runner.temp }}/text-publisher-typed-readback.stdout
+            ${{ runner.temp }}/text-publisher-typed-readback.stderr
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

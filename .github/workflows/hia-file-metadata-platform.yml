@@ -1,0 +1,32 @@
+name: Survey actual Linux metadata input capabilities
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-metadata-platform-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  platform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Checkout frozen input capability survey
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/file_metadata/v1/platform_survey
+      - name: Run bounded original-platform capability survey
+        run: python3 -I -S -B qualification/file_metadata/v1/platform_survey/driver.py --output "$RUNNER_TEMP/metadata-platform"
+      - name: Retain complete source-independent survey capture
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-platform-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-platform
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6

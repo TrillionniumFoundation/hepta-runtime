@@ -1,0 +1,53 @@
+{
+  "schema": "hepta.runtime.binary-root.continuation-binding.v1",
+  "commit": "36d89dd2656077248c7e5e5a387cddb3a9268e83",
+  "run_id": 44038410121,
+  "job_id": 133886787926,
+  "artifact": {
+    "id": 14308845637,
+    "bytes": 90882610,
+    "sha256": "af6b82924e17f580541cf193e10953728fbe06f9e09934212d117cb896299e1d"
+  },
+  "tar": {
+    "bytes": 90878081,
+    "sha256": "6f9f3b34d26af9405856f0ff19166ea620d974bac107e1f9af40c5c8a8b9fb04",
+    "logical_files": 2896,
+    "logical_bytes": 584934731,
+    "directories": 367,
+    "unique_objects": 2523,
+    "unique_bytes": 478506776
+  },
+  "manifest_sha256": "c869076896701c067fea9484fc5788e3550d5280241aba8620893c0632c971f7",
+  "original_status": "FAIL",
+  "original_failed_stage": "producers",
+  "failed_process": "native-controls",
+  "native_change": {
+    "original_sha256": "5044d3797b5da44447d54bd45ecfbb3676fe1cedc8d4d357c191af1e712afaf8",
+    "patched_sha256": "539a05e5ab8d53838e3637224d7221a82e93d0586e2c305e99d76bd802299822",
+    "replacement": {
+      "before": "if raw:ctypes.memmove(self.pointer,raw,len(raw))",
+      "after": "if raw:ctypes.memmove(self.pointer,bytes(raw),len(raw))"
+    }
+  },
+  "reader_change": {
+    "original_sha256": "f7f2a082dff605d1ff4836422154e3728bfaa9449cf864e2138e8b5692c80b0d",
+    "patched_sha256": "6042739ca52e52b1c90d4ec8d1bf84224c348ec6a5112522f9ae698a32cc0d66",
+    "replacements": [
+      {
+        "before": "def check_processes(output):\n",
+        "after": "def check_processes(output):\n    from continuation_proof import validate\n    validate(output)\n"
+      },
+      {
+        "before": "expected[\"native-controls\"]=py+[str(source/\"scripts/native_capture.py\"),\"--qualification\",str(at),\"--controls\"]",
+        "after": "expected[\"native-controls\"]=py+[str(at/\"continuation-source/scripts/native_capture.py\"),\"--qualification\",str(at),\"--controls\"]"
+      }
+    ]
+  },
+  "immutable_actual_hia_source_sha256": "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5",
+  "original_135_cases_replayed": false,
+  "original_12_wire_controls_replayed": false,
+  "original_rust_reexecuted": false,
+  "new_capacity_controls": 14,
+  "unknown_processes_replayed": false,
+  "scope": "Installed root policy only; no public binary body, SSH, audit or async qualification."
+}

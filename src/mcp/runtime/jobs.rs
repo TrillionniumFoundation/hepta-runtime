@@ -18,7 +18,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
-use super::config::{ExecutionMode, Platform};
+use super::config::{ExecutionMode, HostConfig, Platform};
+use super::native_jobs::AdmittedNativeJobs;
 use super::ssh::{run_jobctl, run_python_json};
 use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 
@@ -303,17 +304,26 @@ fn save_record_with_registry_gate(
 		.write()
 		.map_err(|_| anyhow::anyhow!("job registry write lock unavailable"))?;
 	let path = record_path()?;
+	#[cfg(target_os = "linux")]
+	if crate::mcp::hia_job_receipt::selected(record.idempotency_key.as_deref()) {
+		return crate::mcp::hia_job_receipt::publish(&path, &record.id, &record_bytes(record)?);
+	}
 	save_record_at(&path, record)
 }
 
-fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
-	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+fn record_bytes(record: &JobRecord) -> Result<Vec<u8>> {
 	let bytes = serde_json::to_vec_pretty(record)?;
 	// The durable identity must remain readable by the bounded recovery path.
 	// Reject an oversized request before creating a receipt or remote effect.
 	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
 		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
 	}
+	Ok(bytes)
+}
+
+fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
+	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+	let bytes = record_bytes(record)?;
 	#[cfg(unix)]
 	let mut file = {
 		use std::os::unix::fs::OpenOptionsExt;
@@ -1087,7 +1097,9 @@ fn select_idempotent_record(
 			// Historical duplicate owners cannot be resolved by selecting the oldest
 			// record. The external effect may already have run from either record.
 			if selected.is_some() {
-				bail!("duplicate original idempotency binding; multiple durable owners for one key; reconcile before reuse");
+				bail!(
+					"duplicate original idempotency binding; multiple durable owners for one key; reconcile before reuse"
+				);
 			}
 			selected = Some(record);
 		}
@@ -1574,7 +1586,9 @@ fn find_idempotent_in_with_probe(
 			}
 			if latest.strict && !strictly_verified {
 				if let Some(Err(error)) = strict_verification {
-					bail!("previous idempotency binding could not be verified: {error}; no new launch");
+					bail!(
+						"previous idempotency binding could not be verified: {error}; no new launch"
+					);
 				}
 				bail!("previous idempotency binding became strict during lookup; no new launch");
 			}
@@ -1793,6 +1807,22 @@ pub(crate) fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	Ok(hex)
 }
 
+pub(in crate::mcp) async fn owned_request_digest(params: &ProcessStartParams) -> Result<String> {
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		if hia::job_identity_selected(params.idempotency_key.as_deref()) {
+			// The binding's wire order belongs to the persisted v1 identity.
+			// HIA receives exactly those bytes, not a re-rendered equivalent.
+			let binding = serde_json::to_vec(&request_binding(params))?;
+			let digest = hia::job_identity(&binding).await?;
+			tracing::info!("Native HIA durable job binding hashed");
+			return Ok(digest);
+		}
+	}
+	request_digest(params)
+}
+
 // Retain the old prefix only for readable legacy metadata. New idempotent
 // requests compare all 256 bits, and legacy bindings never silently relaunch.
 fn fingerprint(digest: &str) -> u64 {
@@ -1830,10 +1860,13 @@ fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
 	}
 }
 
+const MISSING_REQUEST_BINDING: &str = "legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching";
+
 fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
-	let expected = record.request_digest.as_ref().context(
-		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
-	)?;
+	let expected = record
+		.request_digest
+		.as_ref()
+		.context(MISSING_REQUEST_BINDING)?;
 	Ok(expected.as_str() == digest
 		&& verify_reuse_binding(
 			record,
@@ -1842,6 +1875,30 @@ fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
 			digest,
 		)
 		.is_ok())
+}
+
+async fn owned_matches_request(record: &JobRecord, key: &str, digest: &str) -> Result<bool> {
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		if hia::job_identity_selected(Some(key)) {
+			let decision = hia::job_reuse(
+				record.request_fingerprint,
+				digest,
+				record.request_digest.as_deref(),
+			)
+			.await?;
+			tracing::info!("Native HIA durable job reuse decided");
+			return match decision {
+				hia::JobReuse::Matching => Ok(true),
+				hia::JobReuse::Different => Ok(false),
+				hia::JobReuse::LegacyDigestMissing => bail!("{MISSING_REQUEST_BINDING}"),
+			};
+		}
+	}
+	#[cfg(not(target_os = "linux"))]
+	let _ = key;
+	matches_request(record, digest)
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -2315,6 +2372,22 @@ def private_open_job_file(name):
         raise SystemExit("unsafe remote job file " + name + ": non-regular or linked inode")
     return fd
 
+def private_sealed_file(name, raw, mode):
+    import fcntl
+    fd = os.memfd_create(name, os.MFD_ALLOW_SEALING | os.MFD_CLOEXEC)
+    stream = os.fdopen(fd, "w+b")
+    try:
+        stream.write(raw)
+        stream.flush()
+        os.fchmod(fd, mode)
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS,
+                    fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE)
+        stream.seek(0)
+        return stream
+    except BaseException:
+        stream.close()
+        raise
+
 def private_read_json(name):
     import json
     fd = private_open_job_file(name)
@@ -2386,8 +2459,25 @@ pub(super) fn observation_script(kind: super::ssh::ObservationScript) -> Result<
 mod private_directory_tests;
 
 const START_CODE: &str = r#"
-import fcntl, json, os, pathlib, shutil, subprocess, sys, time
+import fcntl, hashlib, json, os, pathlib, shutil, subprocess, sys, time
 req = json.load(sys.stdin)
+terminal_artifacts = req.pop("hia_terminal_publication_artifacts", None)
+terminal_supervisor = req.pop("hia_terminal_supervisor", False)
+owner_publisher = req.pop("hia_owner_publication", False)
+workdir_authority = req.pop("hia_workdir_authority", False)
+loop_authority = req.pop("hia_loop_authority", False)
+group_authority = req.pop("hia_group_authority", False)
+child_publisher = req.pop("hia_child_publication", False)
+child_wait_authority = req.pop("hia_original_child_wait", False)
+output_capture = req.pop("hia_native_output_capture", False)
+workload_spawn = req.pop("hia_workload_spawn", False)
+supervisor_identity = req.pop("hia_supervisor_identity", False)
+owner_lock_admission = req.pop("hia_owner_lock_admission", False)
+owner_record_encoding = req.pop("hia_owner_record_encoding", False)
+owner_file_lock = req.pop("hia_owner_file_lock", False)
+owner_marker_observation = req.pop("hia_owner_marker_observation", False)
+owner_custody = req.pop("hia_owner_custody", False)
+job_owner = req.pop("hia_native_job_owner", False)
 req["default_cwd"] = os.getcwd()
 os.umask(0o077)
 job = private_job_directory(req["job_dir"], create=True)
@@ -2445,8 +2535,98 @@ if existing is not None:
         raise SystemExit(0)
     raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
-    if any(os.path.lexists(job / name) for name in ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log")):
+    if terminal_supervisor is not False and (terminal_supervisor is not True or terminal_artifacts is None):
+        raise SystemExit("invalid HIA terminal supervisor selection; no launch submitted")
+    if owner_publisher is not False and (owner_publisher is not True or terminal_supervisor is not True):
+        raise SystemExit("invalid HIA supervisor publication selection; no launch submitted")
+    if workdir_authority is not False and (workdir_authority is not True or owner_publisher is not True):
+        raise SystemExit("invalid HIA workdir authority selection; no launch submitted")
+    if loop_authority is not False and (loop_authority is not True or workdir_authority is not True):
+        raise SystemExit("invalid HIA supervision loop selection; no launch submitted")
+    if type(group_authority) is not bool or (group_authority and not loop_authority):
+        raise SystemExit("invalid HIA process group selection; no launch submitted")
+    if type(child_publisher) is not bool or (child_publisher and not group_authority):
+        raise SystemExit("invalid HIA child publisher selection; no launch submitted")
+    if type(child_wait_authority) is not bool or (child_wait_authority and not child_publisher):
+        raise SystemExit("invalid HIA original child wait selection; no launch submitted")
+    if type(output_capture) is not bool or (output_capture and not child_wait_authority):
+        raise SystemExit("invalid HIA output capture selection; no launch submitted")
+    if type(workload_spawn) is not bool or (workload_spawn and not output_capture):
+        raise SystemExit("invalid HIA workload spawn selection; no launch submitted")
+    if type(supervisor_identity) is not bool or (supervisor_identity and not workload_spawn):
+        raise SystemExit("invalid HIA supervisor identity selection; no launch submitted")
+    if type(owner_lock_admission) is not bool or (owner_lock_admission and not supervisor_identity):
+        raise SystemExit("invalid HIA owner lock selection; no launch submitted")
+    if type(owner_record_encoding) is not bool or (owner_record_encoding and not owner_lock_admission):
+        raise SystemExit("invalid HIA owner record selection; no launch submitted")
+    if type(owner_file_lock) is not bool or (owner_file_lock and not owner_record_encoding):
+        raise SystemExit("invalid HIA owner lock effect selection; no launch submitted")
+    if type(owner_marker_observation) is not bool or (owner_marker_observation and not owner_file_lock):
+        raise SystemExit("invalid HIA owner marker selection; no launch submitted")
+    if type(owner_custody) is not bool or (owner_custody and not owner_marker_observation):
+        raise SystemExit("invalid HIA owner custody selection; no launch submitted")
+    if type(job_owner) is not bool or (job_owner and not owner_custody):
+        raise SystemExit("invalid HIA native job owner selection; no launch submitted")
+    terminal_names = {"encoder": "hia-terminal-encoder", "writer": "hia-terminal-writer"}
+    if job_owner:
+        terminal_names["supervisor"] = "hia-terminal-supervisor"
+    old_artifacts = ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log","native-exit.bin")
+    if any(os.path.lexists(job / name) for name in (*old_artifacts, *terminal_names.values())):
         raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
+    if terminal_artifacts is not None:
+        if not isinstance(terminal_artifacts, dict) or terminal_artifacts.keys() != terminal_names.keys():
+            raise SystemExit("invalid HIA terminal release inventory; no launch submitted")
+        images = {}
+        pins = {}
+        for role, artifact in terminal_artifacts.items():
+            if not isinstance(artifact, dict) or artifact.keys() != {"sha256", "hex"}:
+                raise SystemExit("invalid HIA terminal release record; no launch submitted")
+            encoded = artifact["hex"]
+            if not isinstance(encoded, str) or not 128 <= len(encoded) <= 2 * (1 << 20):
+                raise SystemExit("invalid HIA terminal image extent; no launch submitted")
+            try:
+                raw = bytes.fromhex(encoded)
+            except ValueError as error:
+                raise SystemExit("invalid HIA terminal image bytes; no launch submitted") from error
+            if len(raw) * 2 != len(encoded) or hashlib.sha256(raw).hexdigest() != artifact["sha256"]:
+                raise SystemExit("HIA terminal image fingerprint mismatch; no launch submitted")
+            images[role] = raw
+            pins[role] = artifact["sha256"]
+        for role, name in terminal_names.items():
+            stage_file(name, images[role], 0o600)
+        req["hia_terminal_publisher"] = pins
+        if terminal_supervisor:
+            req["hia_terminal_supervisor"] = True
+        if owner_publisher:
+            req["hia_owner_publication"] = True
+        if workdir_authority:
+            req["hia_workdir_authority"] = True
+        if loop_authority:
+            req["hia_loop_authority"] = True
+        if group_authority:
+            req["hia_group_authority"] = True
+        if child_publisher:
+            req["hia_child_publication"] = True
+        if child_wait_authority:
+            req["hia_original_child_wait"] = True
+        if output_capture:
+            req["hia_native_output_capture"] = True
+        if workload_spawn:
+            req["hia_workload_spawn"] = True
+        if supervisor_identity:
+            req["hia_supervisor_identity"] = True
+        if owner_lock_admission:
+            req["hia_owner_lock_admission"] = True
+        if owner_record_encoding:
+            req["hia_owner_record_encoding"] = True
+        if owner_file_lock:
+            req["hia_owner_file_lock"] = True
+        if owner_marker_observation:
+            req["hia_owner_marker_observation"] = True
+        if owner_custody:
+            req["hia_owner_custody"] = True
+        if job_owner:
+            req["hia_native_job_owner"] = True
     req["launch_nonce"] = os.urandom(16).hex()
     req["terminal_publication_protocol"] = 1
     # Only the fixed Java worker can adopt this namespace. No caller chooses
@@ -2469,7 +2649,8 @@ else:
     try: os.fsync(fd)
     finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
-import errno, fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
+import errno, fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, struct, subprocess, sys, threading, time
+from functools import lru_cache
 # Only the trusted launcher chooses this argv marker, never request metadata.
 # A legacy unmarked runner retains the original detached nice adjustment.
 if len(sys.argv) not in (3, 4):
@@ -2494,6 +2675,400 @@ def atomic(name, value):
     os.replace(tmp, target)
     os.fsync(_hepta_directory_pins[-1])
     return encoded
+
+def load_terminal_image(role, expected):
+    name = "hia-terminal-" + role
+    fd = private_open_job_file(name)
+    if fd is None:
+        raise SystemExit("missing HIA terminal image; no workload submitted")
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if stat.S_IMODE(before.st_mode) != 0o600 or not 64 <= before.st_size <= 1 << 20:
+            raise SystemExit("unsafe HIA terminal image; no workload submitted")
+        raw = stream.read((1 << 20) + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if (len(raw) != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(current) or
+            hashlib.sha256(raw).hexdigest() != expected):
+        raise SystemExit("HIA terminal image changed; no workload submitted")
+    return private_sealed_file(name, raw, 0o500)
+
+terminal_encoder = terminal_writer = terminal_supervisor_image = None
+if binding.get("hia_terminal_publisher") != req.get("hia_terminal_publisher"):
+    raise SystemExit("changed HIA terminal publisher binding; no workload submitted")
+native_outcome = binding.get("hia_terminal_supervisor", False)
+if native_outcome is not req.get("hia_terminal_supervisor", False) or type(native_outcome) is not bool:
+    raise SystemExit("changed HIA terminal supervisor binding; no workload submitted")
+native_owner = binding.get("hia_owner_publication", False)
+if (native_owner is not req.get("hia_owner_publication", False) or type(native_owner) is not bool or
+        (native_owner and not native_outcome)):
+    raise SystemExit("changed HIA supervisor publication binding; no workload submitted")
+native_workdir = binding.get("hia_workdir_authority", False)
+if (native_workdir is not req.get("hia_workdir_authority", False) or type(native_workdir) is not bool or
+        (native_workdir and not native_owner)):
+    raise SystemExit("changed HIA workdir authority binding; no workload submitted")
+native_loop = binding.get("hia_loop_authority", False)
+if (native_loop is not req.get("hia_loop_authority", False) or type(native_loop) is not bool or
+        (native_loop and not native_workdir)):
+    raise SystemExit("changed HIA supervision loop binding; no workload submitted")
+native_group = binding.get("hia_group_authority", False)
+if (native_group is not req.get("hia_group_authority", False) or type(native_group) is not bool or
+        (native_group and not native_loop)):
+    raise SystemExit("changed HIA process group binding; no workload submitted")
+native_child = binding.get("hia_child_publication", False)
+if (native_child is not req.get("hia_child_publication", False) or type(native_child) is not bool or
+        (native_child and not native_group)):
+    raise SystemExit("changed HIA child publication binding; no workload submitted")
+native_wait = binding.get("hia_original_child_wait", False)
+if (native_wait is not req.get("hia_original_child_wait", False) or type(native_wait) is not bool or
+        (native_wait and not native_child)):
+    raise SystemExit("changed HIA original child wait binding; no workload submitted")
+native_output = binding.get("hia_native_output_capture", False)
+if (native_output is not req.get("hia_native_output_capture", False) or type(native_output) is not bool or
+        (native_output and not native_wait)):
+    raise SystemExit("changed HIA output capture binding; no workload submitted")
+native_spawn = binding.get("hia_workload_spawn", False)
+if (native_spawn is not req.get("hia_workload_spawn", False) or type(native_spawn) is not bool or
+        (native_spawn and not native_output)):
+    raise SystemExit("changed HIA workload spawn binding; no workload submitted")
+native_identity = binding.get("hia_supervisor_identity", False)
+if (native_identity is not req.get("hia_supervisor_identity", False) or type(native_identity) is not bool or
+        (native_identity and not native_spawn)):
+    raise SystemExit("changed HIA supervisor identity binding; no workload submitted")
+native_lock = binding.get("hia_owner_lock_admission", False)
+if (type(native_lock) is not bool or native_lock is not req.get("hia_owner_lock_admission", False) or
+        (native_lock and not native_identity)):
+    raise SystemExit("changed HIA owner lock binding; no workload submitted")
+native_record = binding.get("hia_owner_record_encoding", False)
+if (type(native_record) is not bool or native_record is not req.get("hia_owner_record_encoding", False) or
+        (native_record and not native_lock)):
+    raise SystemExit("changed HIA owner record binding; no workload submitted")
+native_file_lock = binding.get("hia_owner_file_lock", False)
+if (type(native_file_lock) is not bool or native_file_lock is not req.get("hia_owner_file_lock", False) or
+        (native_file_lock and not native_record)):
+    raise SystemExit("changed HIA owner lock effect binding; no workload submitted")
+native_markers = binding.get("hia_owner_marker_observation", False)
+if (type(native_markers) is not bool or native_markers is not req.get("hia_owner_marker_observation", False) or
+        (native_markers and not native_file_lock)):
+    raise SystemExit("changed HIA owner marker binding; no workload submitted")
+native_custody = binding.get("hia_owner_custody", False)
+if (type(native_custody) is not bool or native_custody is not req.get("hia_owner_custody", False) or
+        (native_custody and not native_markers)):
+    raise SystemExit("changed HIA owner custody binding; no workload submitted")
+native_job_owner = binding.get("hia_native_job_owner", False)
+if (type(native_job_owner) is not bool or native_job_owner is not req.get("hia_native_job_owner", False) or
+        (native_job_owner and not native_custody)):
+    raise SystemExit("changed HIA native job owner binding; no workload submitted")
+if "hia_terminal_publisher" in binding:
+    pins = binding["hia_terminal_publisher"]
+    expected_roles = {"encoder", "writer", "supervisor"} if native_job_owner else {"encoder", "writer"}
+    if not isinstance(pins, dict) or pins.keys() != expected_roles:
+        raise SystemExit("invalid HIA terminal publisher; no workload submitted")
+    terminal_encoder = load_terminal_image("encoder", pins["encoder"])
+    terminal_writer = load_terminal_image("writer", pins["writer"])
+    if native_job_owner:
+        terminal_supervisor_image = load_terminal_image("supervisor", pins["supervisor"])
+elif native_outcome:
+    raise SystemExit("missing HIA terminal supervisor image; no workload submitted")
+
+def run_terminal_image(image, frame, stdout, *, extra_fds=()):
+    fd = image.fileno()
+    with private_sealed_file("hia-terminal-frame", frame, 0o400) as source:
+        return subprocess.run(["/proc/self/fd/" + str(fd)], stdin=source, stdout=stdout,
+                              stderr=subprocess.PIPE, env={}, pass_fds=(fd, *extra_fds), timeout=10)
+
+def hia_owner_lock_admitted(phase, info, present):
+    frame = struct.pack("<8s6Q", b"HIAJLK01", phase, info.st_mode, info.st_uid,
+                        os.geteuid(), info.st_nlink, present)
+    result = run_terminal_image(terminal_encoder, frame, subprocess.PIPE)
+    if result.returncode or result.stderr or len(result.stdout) != 16:
+        raise SystemExit("HIA owner lock admission unavailable; no workload submitted")
+    protocol, admitted = struct.unpack("<8sQ", result.stdout)
+    if protocol != b"HIAJLR01" or admitted > 1:
+        raise SystemExit("invalid HIA owner lock admission; no workload submitted")
+    return bool(admitted)
+
+def hia_owner_record(record):
+    identity = record["supervisor_identity"]
+    if identity["kind"] != "proc_start_ticks":
+        raise SystemExit("unavailable HIA owner identity; no workload submitted")
+    job_id = record["job_id"].encode("ascii")
+    nonce = record["launch_nonce"].encode("ascii")
+    ticks = identity["value"].encode("ascii")
+    invocation = record["invocation_id"]
+    units = b"" if invocation is None else invocation.encode("utf-32le", errors="surrogatepass")
+    count = (1 << 64) - 1 if invocation is None else len(units) // 4
+    if len(nonce) != 32:
+        raise SystemExit("invalid HIA launch nonce; no workload submitted")
+    request = (struct.pack("<8s6Q", b"HIAJBE01", record["at_unix_ms"], record["supervisor_pid"],
+                           record["supervisor_uid"], len(job_id), len(ticks), count) +
+               job_id + nonce + ticks + units)
+    result = run_terminal_image(terminal_encoder, request, subprocess.PIPE)
+    if result.returncode or result.stderr or not (2 <= len(result.stdout) <= 4194304):
+        raise SystemExit("HIA owner record unavailable; no workload submitted")
+    return result.stdout
+
+def hia_acquire_owner_lock(descriptor, info):
+    frame = struct.pack("<8s4Q", b"HIAJLF01", os.getpid(), info.st_dev, info.st_ino, 0)
+    reply = run_terminal_image(terminal_writer, frame, descriptor)
+    if reply.returncode or len(reply.stderr) != 24:
+        raise SystemExit("HIA owner lock effect unavailable; no workload submitted")
+    protocol, phase, status = struct.unpack("<8sQq", reply.stderr)
+    if protocol != b"HIAJRW01" or phase not in (1, 2) or status > 0 or (phase == 1 and status == 0):
+        raise SystemExit("invalid HIA owner lock effect; no workload submitted")
+    if status:
+        raise OSError(-status, os.strerror(-status))
+
+def hia_owner_marker_mask():
+    directory = _hepta_directory_pins[-1]
+    frame = struct.pack("<8s4Q", b"HIAJMK01", os.getpid(), binding["device"], binding["inode"], 0)
+    reply = run_terminal_image(terminal_writer, frame, directory)
+    if reply.returncode or len(reply.stderr) != 24:
+        raise SystemExit("HIA owner marker observation unavailable; no workload submitted")
+    protocol, phase, value = struct.unpack("<8sQq", reply.stderr)
+    if protocol != b"HIAJRW01":
+        raise SystemExit("invalid HIA owner marker observation; no workload submitted")
+    if phase in (1, 2) and value < 0:
+        raise OSError(-value, os.strerror(-value))
+    if phase != 3 or value < 0 or value > 31:
+        raise SystemExit("invalid HIA owner marker observation; no workload submitted")
+    return value
+
+def hia_owner_custody():
+    from array import array
+    import socket
+    receiver, sender = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+    with receiver, sender:
+        frame = struct.pack("<8s5Q", b"HIAJLH01", os.getpid(), binding["device"], binding["inode"],
+                            sender.fileno(), 0)
+        reply = run_terminal_image(terminal_writer, frame, _hepta_directory_pins[-1],
+                                   extra_fds=(sender.fileno(),))
+        if reply.returncode or len(reply.stderr) != 24:
+            raise SystemExit("HIA owner custody unavailable; no workload submitted")
+        protocol, phase, value = struct.unpack("<8sQq", reply.stderr)
+        if protocol != b"HIAJRW01":
+            raise SystemExit("invalid HIA owner custody; no workload submitted")
+        if phase == 20 and value == 0:
+            raise SystemExit("unsafe supervisor lifetime lock")
+        if phase == 21 and 1 <= value <= 31:
+            raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
+        if 1 <= phase <= 12 and value < 0:
+            raise OSError(-value, os.strerror(-value))
+        if phase != 12 or value != 0:
+            raise SystemExit("invalid HIA owner custody; no workload submitted")
+        receiver.setblocking(False)
+        descriptors = array("i")
+        width = descriptors.itemsize
+        tag, control, flags, _ = receiver.recvmsg(1, socket.CMSG_SPACE(width), socket.MSG_CMSG_CLOEXEC)
+        try:
+            for level, kind, payload in control:
+                if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                    descriptors.frombytes(payload[:len(payload) - len(payload) % width])
+            if (tag != b"L" or flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC)
+                    or len(control) != 1 or len(descriptors) != 1 or os.get_inheritable(descriptors[0])):
+                raise SystemExit("invalid HIA lifetime descriptor; no workload submitted")
+            return descriptors.pop()
+        finally:
+            for descriptor in descriptors:
+                os.close(descriptor)
+
+def hia_group_signal(leader, number):
+    import errno
+    if leader == number == 0:
+        action = 0
+    elif number == signal.SIGTERM:
+        action = 1
+    elif number == signal.SIGKILL:
+        action = 2
+    else:
+        raise RuntimeError("invalid HIA original-group signal")
+    frame = struct.pack("<8s4Q", b"HIASGQ01", os.getpid(), leader, action, 0)
+    result = run_terminal_image(terminal_writer, frame, _hepta_directory_pins[-1])
+    if result.returncode or len(result.stderr) != 24:
+        raise RuntimeError("HIA group authority declined the original leader")
+    protocol, phase, status = struct.unpack("<8sQq", result.stderr)
+    if protocol != b"HIAJRW01" or phase != (0 if leader == 0 else 3):
+        raise RuntimeError("HIA original-group kernel identity could not be confirmed")
+    if status == -errno.ESRCH:
+        raise ProcessLookupError(errno.ESRCH, "original process group no longer exists")
+    if status != 0:
+        raise OSError(-status, "HIA original-group signal failed")
+
+if native_group:
+    hia_group_signal(0, 0)
+if native_child:
+    probe = struct.pack("<8s3Q", b"HIAJCH01", 3, os.getpid(), 0) + b"{}\n"
+    result = run_terminal_image(terminal_writer, probe, _hepta_directory_pins[-1])
+    if result.returncode or result.stderr != struct.pack("<8sQq", b"HIAJRW01", 0, 0):
+        raise SystemExit("HIA child publisher protocol unavailable; no workload submitted")
+
+def hia_code_range(raw, begin, end, maximum):
+    if raw.count(begin) != 1 or (end is not None and raw.count(end) != 1):
+        raise SystemExit("HIA supervisor entry unavailable; no workload submitted")
+    stop = len(raw) if end is None else raw.index(end)
+    code = raw[raw.index(begin) + len(begin):stop]
+    if not 32 <= len(code) <= maximum:
+        raise SystemExit("invalid HIA supervisor entry extent; no workload submitted")
+    return code
+
+def map_hia_supervisor_entry(code, function):
+    mapping = mmap.mmap(-1, len(code), prot=mmap.PROT_READ | mmap.PROT_WRITE)
+    mapping.write(code)
+    address = ctypes.addressof(ctypes.c_char.from_buffer(mapping))
+    protect = ctypes.CDLL(None, use_errno=True).mprotect
+    protect.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+    protect.restype = ctypes.c_int
+    if protect(address, len(code), mmap.PROT_READ | mmap.PROT_EXEC):
+        mapping.close()
+        raise OSError(ctypes.get_errno(), "HIA supervisor entry could not be mapped")
+    return mapping, function(address)
+
+if native_wait:
+    # These effects must run in this parent, not the receipt subprocess.
+    import ctypes, mmap, platform
+    if sys.platform != "linux" or platform.machine() != "x86_64" or struct.calcsize("P") != 8:
+        raise SystemExit("HIA original child wait requires Linux x86-64; no workload submitted")
+    raw_supervisor = os.pread(terminal_writer.fileno(), (1 << 20) + 1, 0)
+    code = hia_code_range(raw_supervisor, b"HIAWABI1", b"HIAWEND1", 256)
+    signature = ctypes.CFUNCTYPE(ctypes.c_int64, ctypes.c_uint64, ctypes.c_uint64)
+    original_wait_mapping, original_wait = map_hia_supervisor_entry(code, signature)
+    if original_wait(0, 0) != -errno.EINVAL:
+        raise SystemExit("HIA original child wait protocol unavailable; no workload submitted")
+
+def capture_chunk_plan(mode, stored, received, failed):
+    raw = struct.pack("<8s5Q", b"HIAJLG01", mode, stored, received, int(failed), 0)
+    result = ctypes.create_string_buffer(16)
+    if output_policy(raw, len(raw), result, len(result), None, 0) != 16:
+        raise RuntimeError("HIA output capture policy declined the original chunk")
+    size, truncated = struct.unpack("<2Q", result.raw)
+    if size > received or truncated not in (0, 1):
+        raise RuntimeError("invalid HIA output capture response")
+    return size, bool(truncated)
+
+if native_output:
+    code = hia_code_range(raw_supervisor, b"HIAKABI1", b"HIAKEND1", 256)
+    signature = ctypes.CFUNCTYPE(ctypes.c_uint64, ctypes.c_int64, ctypes.c_void_p,
+                                 ctypes.c_uint64, ctypes.c_uint64)
+    output_bridge_mapping, output_io = map_hia_supervisor_entry(code, signature)
+    code = hia_code_range(raw_supervisor, b"HIAJPOL1", None, 1 << 20)
+    signature = ctypes.CFUNCTYPE(ctypes.c_uint64, *([ctypes.c_void_p, ctypes.c_uint64] * 3))
+    output_policy_mapping, output_policy = map_hia_supervisor_entry(code, signature)
+    if output_io(-1, None, 0, 1) != errno.EINVAL << 32 or capture_chunk_plan(1, 16777215, 2, False) != (1, True):
+        raise SystemExit("HIA output capture protocol unavailable; no workload submitted")
+
+def workload_spawn_plan(cwd, stdin, stdout, stderr):
+    raw = struct.pack("<8s5Q", b"HIAJSP01", cwd, stdin, stdout, stderr, 0)
+    result = ctypes.create_string_buffer(64)
+    if output_policy(raw, len(raw), result, len(result), None, 0) != 64:
+        raise RuntimeError("HIA workload spawn policy refused original descriptors")
+    source_in, target_in, source_out, target_out, source_err, target_err, first_close, flags = struct.unpack("<8Q", result.raw)
+    if (source_in, target_in, source_out, target_out, source_err, target_err, first_close, flags) != (
+            stdin, 0, stdout, 1, stderr, 2, 3, 7):
+        raise RuntimeError("invalid HIA workload spawn response")
+    return [
+        (os.POSIX_SPAWN_DUP2, source_in, target_in),
+        (os.POSIX_SPAWN_DUP2, source_out, target_out),
+        (os.POSIX_SPAWN_DUP2, source_err, target_err),
+        (os.POSIX_SPAWN_CLOSEFROM, first_close),
+    ], flags
+
+if native_spawn:
+    if (b"HIAWEND1HIASPAWNHIAKABI1" not in raw_supervisor or
+            not all(hasattr(os, name) for name in ("posix_spawn", "pipe2", "POSIX_SPAWN_CLOSEFROM"))):
+        raise SystemExit("HIA workload spawn capability unavailable; no workload submitted")
+    workload_spawn_plan(8, 3, 4, 5)
+
+def output_capture_effect(fd, buffer, size, operation):
+    result = output_io(fd, buffer, size, operation)
+    used, error = result & 0xffffffff, result >> 32
+    if used > size or (error > 4095 and error != 8192):
+        raise RuntimeError("invalid HIA output capture effect result")
+    return used, error
+
+def check_capture_error(error, operation):
+    if error == 8192:
+        raise OSError("log " + operation + " made invalid progress")
+    if error:
+        raise OSError(error, os.strerror(error))
+
+def wait_original_child(pid, mode):
+    result = original_wait(pid, mode)
+    if result < 0:
+        if result == -errno.EPROTO:
+            raise RuntimeError("wait returned an unexpected child identity")
+        raise OSError(-result, os.strerror(-result))
+    if result and (result >> 32 != 1 if mode else result != 1):
+        raise RuntimeError("invalid HIA original child wait response")
+    return result
+
+def observe_original_child(child):
+    if native_wait:
+        return True if wait_original_child(child.pid, 0) else None
+    return os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+
+def signal_owned_group(child, number):
+    if native_group:
+        return hia_group_signal(child.pid, number)
+    return os.killpg(child.pid, number)
+
+def publish_with_hia(name, encoded, *, protocol=b"HIAJRQ02"):
+    frame = struct.pack("<8s3Q", protocol, len(encoded), os.getpid(), len(name)) + name + encoded
+    publish_hia_receipt(frame)
+
+def publish_hia_receipt(frame):
+    result = run_terminal_image(terminal_writer, frame, _hepta_directory_pins[-1])
+    if result.returncode or result.stderr != struct.pack("<8sQq", b"HIAJRW01", 6, 0):
+        raise RuntimeError("HIA receipt publication did not return a durable acknowledgement")
+
+def native_supervisor_outcome(status, timed_out, drain_error, eof, errors, truncated, synced):
+    def streams(values):
+        return int(bool(values["stdout"])) | (int(bool(values["stderr"])) << 1)
+    flags = int(timed_out) | (int(drain_error is not None) << 1)
+    frame = struct.pack("<8s6Q", b"HIAJSQ01", status, flags, streams(eof), streams(errors),
+                        streams(truncated), streams(synced))
+    result = run_terminal_image(terminal_encoder, frame, subprocess.PIPE)
+    if result.returncode or result.stderr or len(result.stdout) != 48:
+        raise RuntimeError("HIA terminal supervisor declined the original wait observation")
+    protocol, child, terminal, process_status, complete, durable = struct.unpack("<8s2q3Q", result.stdout)
+    if protocol != b"HIAJSO01" or not -64 <= child <= 255 or not -64 <= terminal <= 255 or (
+            process_status > 255 or complete > 1 or durable > complete):
+        raise RuntimeError("invalid HIA terminal supervisor response")
+    return child, terminal, process_status, bool(complete), bool(durable)
+
+def native_workdir_allowed(cwd, roots):
+    physical = os.fsencode(cwd)
+    frame = bytearray(struct.pack("<8s4Q", b"HIAJCQ01", len(physical), len(roots), 0, 0))
+    frame.extend(physical)
+    for root in roots:
+        raw = os.fsencode(root)
+        frame.extend(struct.pack("<Q", len(raw)))
+        frame.extend(raw)
+    result = run_terminal_image(terminal_encoder, frame, subprocess.PIPE)
+    if result.returncode or result.stderr or len(result.stdout) != 16:
+        raise RuntimeError("HIA workdir authority declined the observed workspace")
+    protocol, allowed = struct.unpack("<8sQ", result.stdout)
+    if protocol != b"HIAJCO01" or allowed > 1:
+        raise RuntimeError("invalid HIA workdir authority response")
+    return allowed == 1
+
+@lru_cache(maxsize=128)
+def native_loop_decision(stage, facts):
+    # Only the observed predicates vary. The decisions are pure and the
+    # executable is sealed for the whole lifetime of this supervisor.
+    frame = struct.pack("<8s2Q", b"HIAJLQ01", stage, facts)
+    result = run_terminal_image(terminal_encoder, frame, subprocess.PIPE)
+    if result.returncode or result.stderr or len(result.stdout) != 16:
+        raise RuntimeError("HIA supervision loop declined the observed state")
+    protocol, decision = struct.unpack("<8sQ", result.stdout)
+    if protocol != b"HIAJLO01" or decision > (63, 2, 7)[stage]:
+        raise RuntimeError("invalid HIA supervision loop response")
+    return decision
+
+if native_loop and native_loop_decision(0, 0) != 0:
+    raise SystemExit("invalid HIA supervision loop startup decision")
 
 # Embedded only in the existing original-job supervisor, before any workload.
 engine_scratch = None
@@ -2552,15 +3127,15 @@ def stop_engine_group_before_reap(child):
                     raise RuntimeError("engine original-group visibility is restricted")
     deadline = time.monotonic() + 2
     while True:
-        exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-        if exited is None or exited.si_pid != child.pid:
+        exited = observe_original_child(child)
+        if exited is None or (not native_wait and exited.si_pid != child.pid):
             raise RuntimeError("engine original child exit is unconfirmed; scratch retained")
         if not engine_group_members(child.pid, deadline):
             return True
         # Static Java children deliberately inherit this original group. A
         # crashed worker cannot leave its native decompiler writing scratch.
         try:
-            os.killpg(child.pid, signal.SIGKILL)
+            signal_owned_group(child, signal.SIGKILL)
         except ProcessLookupError:
             pass
         if time.monotonic() >= deadline:
@@ -2648,6 +3223,19 @@ def publish_terminal(value):
         value = {**value, "scratch_cleanup": finish_engine_scratch(False, False)}
     value = {**value, "terminal_publication_protocol": 1,
              "job_id": req["job_id"], "launch_nonce": req["launch_nonce"]}
+    if terminal_writer is not None:
+        encoded = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+        if len(encoded) > 1 << 20:
+            raise RuntimeError("HIA terminal receipt exceeds the observation limit")
+        identity = req["job_id"].encode("ascii")
+        nonce = req["launch_nonce"].encode("ascii")
+        frame = struct.pack("<8sQ32s", b"HIAJWE01", len(identity), nonce) + identity + encoded
+        witness = run_terminal_image(terminal_encoder, frame, subprocess.PIPE)
+        if witness.returncode or witness.stderr or not 2 <= len(witness.stdout) <= 1024 or not witness.stdout.endswith(b"\n"):
+            raise RuntimeError("HIA refused to encode the terminal publication witness")
+        publish_with_hia(b"exit", encoded)
+        publish_with_hia(b"exit.witness", witness.stdout)
+        return
     encoded = atomic("exit.json", value)
     # A visible witness proves that the preceding exit file and directory
     # barriers returned. Losing the witness only makes status unconfirmed;
@@ -2659,22 +3247,46 @@ def publish_terminal(value):
         "exit_sha256": hashlib.sha256(encoded).hexdigest(),
     })
 
-def reap_original_child(child, timeout):
+def reap_original_child(child, timeout, *, decode=True):
     # Finish every original-group signal before entering this bounded wait.
     # Popen.wait maps ECHILD to a successful-looking zero; only an actual
     # waitpid return for this original child can prove a reap and exit code.
     wait_deadline = time.monotonic() + timeout
     while True:
-        waited_pid, status = os.waitpid(child.pid, os.WNOHANG)
+        if native_wait:
+            observed = wait_original_child(child.pid, 1)
+            waited_pid, status = (child.pid, observed & 0xffffffff) if observed else (0, 0)
+        else:
+            waited_pid, status = os.waitpid(child.pid, os.WNOHANG)
         if waited_pid == child.pid:
-            child.returncode = os.waitstatus_to_exitcode(status)
-            return child.returncode
+            if decode:
+                child.returncode = os.waitstatus_to_exitcode(status)
+            return status
         if waited_pid != 0:
             raise RuntimeError("wait returned an unexpected child identity")
         remaining = wait_deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("original child wait deadline exceeded")
         time.sleep(min(0.01, remaining))
+
+def native_process_identity(pid):
+    if raw_supervisor.count(b"HIAOWNID") != 1 or b"HIAOWNIDHIAWABI1" not in raw_supervisor:
+        raise SystemExit("HIA supervisor identity capability unavailable; no workload submitted")
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as stream:
+            snapshot = stream.read(4096)
+        with open("/proc/sys/kernel/random/boot_id", "rb") as stream:
+            boot = stream.read(38)
+    except OSError:
+        return None
+    if len(boot) != 37 or not 0 < len(snapshot) < 4096:
+        return None
+    frame = struct.pack("<8s2Q", b"HIAJPI01", pid, len(snapshot)) + boot + snapshot
+    output = ctypes.create_string_buffer(57)
+    size = output_policy(frame, len(frame), output, len(output), None, 0)
+    if not 38 <= size <= len(output):
+        return None
+    return {"kind": "proc_start_ticks", "value": output.raw[:size].decode("ascii")}
 
 def process_identity(pid):
     if sys.platform == "linux":
@@ -2690,20 +3302,173 @@ def process_identity(pid):
     except Exception:
         return None
 
+def pin_workload_cwd():
+    # Keep the supervisor in its descriptor-pinned job directory: all receipt
+    # paths below are relative to that owner, never the workload directory.
+    roots = req.get("allowed_cwd_prefixes", [])
+    if not isinstance(roots, list) or any(
+        not isinstance(root, str) or not os.path.isabs(root) for root in roots
+    ):
+        raise PermissionError("invalid remote cwd policy")
+    if roots and not req.get("cwd"):
+        raise PermissionError("cwd required by remote execution policy")
+    cwd = req.get("cwd") or req.get("default_cwd") or "."
+    access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else getattr(os, "O_SEARCH", os.O_RDONLY)
+    owner = os.open(cwd, access | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        physical_roots = [os.path.realpath(root) for root in roots]
+        os.fchdir(owner)
+        actual_cwd = os.getcwd()
+        if native_workdir:
+            admitted = native_workdir_allowed(actual_cwd, physical_roots)
+        else:
+            admitted = not physical_roots or any(
+                os.path.commonpath([actual_cwd, root]) == root for root in physical_roots)
+        if not admitted:
+            raise PermissionError("cwd resolves outside allowed execution roots")
+    except BaseException:
+        os.close(owner)
+        raise
+    finally:
+        os.fchdir(_hepta_directory_pins[-1])
+    return owner
+
+def pin_native_workload_executable(path):
+    # The administrator may select a venv symlink. Pin its resolved inode but
+    # keep the original path as argv[0], so Python retains its venv semantics.
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    selected = os.lstat(path)
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
+    source_fd = os.open(path, flags)
+    with os.fdopen(source_fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or not 64 <= before.st_size <= 64 << 20 or
+                before.st_mode & 0o022 or not before.st_mode & 0o111 or
+                not os.access(f"/proc/self/fd/{stream.fileno()}", os.X_OK, effective_ids=True)):
+            raise SystemExit("unsafe native workload executable; no workload submitted")
+        executable = stream.read((64 << 20) + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(path)
+        selected_after = os.lstat(path)
+        if (len(executable) != before.st_size or stamp(before) != stamp(after) or
+                stamp(after) != stamp(current) or stamp(selected) != stamp(selected_after) or
+                not executable.startswith(b"\x7fELF\x02\x01\x01")):
+            raise SystemExit("native workload executable changed; no workload submitted")
+        workload = private_sealed_file("hia-workload", executable, 0o500)
+        try:
+            entry_anchor = os.dup(stream.fileno())
+        except BaseException:
+            workload.close()
+            raise
+    return workload, entry_anchor
+
+def exec_native_job_owner():
+    # The SSH/systemd bootstrap only binds bytes and descriptors. This exec
+    # preserves the unit MainPID while HIA owns lock, fork, capture, deadline,
+    # cancellation, wait and the durable owner/child/terminal publications.
+    if terminal_supervisor_image is None or sys.platform != "linux":
+        raise SystemExit("HIA native job owner unavailable; no workload submitted")
+    if req.get("engine_scratch_protocol"):
+        raise SystemExit("HIA native job owner requires an explicit scratch transport; no workload submitted")
+    if launch_backend == "detached" and req.get("nice"):
+        os.nice(int(req["nice"]))
+    owner_cwd = pin_workload_cwd()
+    workload, entry_anchor = pin_native_workload_executable(req["executable"])
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    payload = b""
+    if req.get("stdin_path"):
+        source_fd = private_open_job_file("stdin.bin")
+        if source_fd is None:
+            raise SystemExit("missing native workload input; no workload submitted")
+        with os.fdopen(source_fd, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if before.st_size > 512 << 20:
+                raise SystemExit("native workload input exceeds bounded transport")
+            payload = stream.read((512 << 20) + 1)
+            after = os.fstat(stream.fileno())
+            current = os.stat("stdin.bin", dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+        if len(payload) != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(current):
+            raise SystemExit("native workload input changed; no workload submitted")
+    source = private_sealed_file("hia-workload-input", payload, 0o400)
+    environment = os.environ.copy()
+    environment.update(req.get("env", {}))
+    environment["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
+    environment.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
+    environment["HEPTA_RUNTIME_WORKER_ENTRY_FD"] = str(entry_anchor)
+    arguments = [req["executable"], *req.get("args", [])]
+    strings = [os.fsencode(value) for value in arguments]
+    strings += [os.fsencode(key + "=" + value) for key, value in sorted(environment.items())]
+    if not 1 <= len(arguments) <= 64 or len(environment) > 64 or any(len(value) > 8192 or b"\0" in value for value in strings):
+        raise SystemExit("native workload arguments exceed bounded transport; no workload submitted")
+    directory = _hepta_directory_pins[-1]
+    def destination(name):
+        return os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                       0o600, dir_fd=directory)
+    output = destination("stdout.log")
+    errors = destination("stderr.log")
+    receipt = destination("native-exit.bin")
+    os.fsync(directory)
+    timeout = req.get("timeout_seconds")
+    deadline = time.monotonic_ns() + int(timeout * 1_000_000_000) if timeout else (1 << 63) - 1
+    # A durable job intentionally survives its short-lived submission parent.
+    # The original child remains parent-death bound to this HIA owner.
+    frame = struct.pack("<8s15Q", b"HIAJOB01", 0, deadline, workload.fileno(), source.fileno(),
+                        output, errors, owner_cwd, receipt, len(arguments), len(environment),
+                        64 << 20, 16 << 20, 2_000_000_000, 0, 0)
+    job_id = req["job_id"].encode("ascii")
+    invocation = os.environ.get("INVOCATION_ID", "").encode("ascii")
+    frame += struct.pack("<QQ32sQ32s", directory, len(job_id), req["launch_nonce"].encode("ascii"),
+                         len(invocation), invocation) + job_id
+    frame += b"".join(struct.pack("<Q", len(value)) + value + b"\0" for value in strings)
+    frame += struct.pack("<8sQQ", b"HIAPFD01", 1, entry_anchor)
+    if len(frame) > 65536:
+        raise SystemExit("native workload request exceeds bounded transport; no workload submitted")
+    request_image = private_sealed_file("hia-job-owner-request", frame, 0o400)
+    for fd in (workload.fileno(), source.fileno(), output, errors, owner_cwd, receipt, directory, entry_anchor):
+        os.set_inheritable(fd, True)
+    os.dup2(request_image.fileno(), 0, inheritable=True)
+    os.execve(terminal_supervisor_image.fileno(), ["hia-job-supervisor"], {})
+
 os.umask(0o077)
-owner_fd = os.open(job / "owner.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
-owner_stat = os.fstat(owner_fd)
-if not stat.S_ISREG(owner_stat.st_mode) or owner_stat.st_uid != os.geteuid() or owner_stat.st_nlink != 1 or owner_stat.st_mode & 0o077:
-    raise SystemExit("unsafe supervisor lifetime lock")
-fcntl.flock(owner_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-if any(os.path.lexists(job / name) for name in ("owner-intent.json","started.json","exit.json","exit.witness.json","exit.witness.json.tmp")):
-    raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
+if native_job_owner:
+    exec_native_job_owner()
+if native_custody:
+    owner_fd = hia_owner_custody()
+else:
+    owner_fd = os.open(job / "owner.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    owner_stat = os.fstat(owner_fd)
+    if native_lock:
+        owner_lock_ok = hia_owner_lock_admitted(0, owner_stat, 0)
+    else:
+        owner_lock_ok = (stat.S_ISREG(owner_stat.st_mode) and owner_stat.st_uid == os.geteuid()
+                         and owner_stat.st_nlink == 1 and not (owner_stat.st_mode & 0o077))
+    if not owner_lock_ok:
+        raise SystemExit("unsafe supervisor lifetime lock")
+    if native_file_lock:
+        hia_acquire_owner_lock(owner_fd, owner_stat)
+    else:
+        fcntl.flock(owner_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    owner_names = ("owner-intent.json", "started.json", "exit.json", "exit.witness.json", "exit.witness.json.tmp")
+    if native_lock:
+        if native_markers:
+            markers = hia_owner_marker_mask()
+        else:
+            markers = sum(1 << index for index, name in enumerate(owner_names) if os.path.lexists(job / name))
+        fresh_owner = hia_owner_lock_admitted(1, os.fstat(owner_fd), markers)
+    else:
+        fresh_owner = not any(os.path.lexists(job / name) for name in owner_names)
+    if not fresh_owner:
+        raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
 if sys.platform == "linux":
-    if not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
+    if not native_wait and (not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT")):
         raise SystemExit("non-reaping child identity observation unavailable; no workload submitted")
 elif not all(hasattr(select, name) for name in ("kqueue","kevent","KQ_FILTER_PROC","KQ_NOTE_EXIT")):
     raise SystemExit("non-reaping child exit observation unavailable; no workload submitted")
-owner_identity = process_identity(os.getpid())
+owner_identity = native_process_identity(os.getpid()) if native_identity else process_identity(os.getpid())
 if not owner_identity:
     raise SystemExit("supervisor start identity unavailable; no workload submitted")
 owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
@@ -2714,11 +3479,16 @@ def stage_owner(name):
     fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
-# Both files must be synced and closed before one barrier publishes their names.
-# Surviving partial creates remain tombstones; no workload precedes this barrier.
-stage_owner("owner-intent.json")
-stage_owner("started.json")
-os.fsync(_hepta_directory_pins[-1])
+# Both files must be synced and closed before one directory barrier. A
+# surviving partial creation remains a tombstone, never a fresh launch.
+if native_owner:
+    encoded = hia_owner_record(owner_binding) if native_record else json.dumps(owner_binding, sort_keys=True).encode("utf-8")
+    frame = struct.pack("<8s3Q", b"HIAJRO01", len(encoded), os.getpid(), 0) + encoded
+    publish_hia_receipt(frame)
+else:
+    stage_owner("owner-intent.json")
+    stage_owner("started.json")
+    os.fsync(_hepta_directory_pins[-1])
 child = None
 cancel_requested = False
 
@@ -2745,33 +3515,70 @@ env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 # The launcher alone chooses this binding, overriding caller or inherited env.
 env.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
 
-def pin_workload_cwd():
-    # Keep the supervisor in its descriptor-pinned job directory: all receipt
-    # paths below are relative to that owner, never the workload directory.
-    roots = req.get("allowed_cwd_prefixes", [])
-    if not isinstance(roots, list) or any(
-        not isinstance(root, str) or not os.path.isabs(root) for root in roots
-    ):
-        raise PermissionError("invalid remote cwd policy")
-    if roots and not req.get("cwd"):
-        raise PermissionError("cwd required by remote execution policy")
-    cwd = req.get("cwd") or req.get("default_cwd") or "."
-    access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else getattr(os, "O_SEARCH", os.O_RDONLY)
-    owner = os.open(cwd, access | os.O_DIRECTORY | os.O_CLOEXEC)
+
+class NativeWorkload:
+    def __init__(self):
+        self.pid = self.returncode = None
+        self.stdout = self.stderr = None
+
+def spawn_native_workload(child, cwd, stdin_handle, environment):
+    from contextlib import ExitStack
+
+    def protected_descriptor(fd, cleanup):
+        if fd >= 3:
+            return fd
+        moved = fcntl.fcntl(fd, fcntl.F_DUPFD_CLOEXEC, 3)
+        cleanup.callback(os.close, moved)
+        return moved
+
+    def pipe_for(name, cleanup):
+        incoming, outgoing = os.pipe2(os.O_CLOEXEC)
+        cleanup.callback(os.close, outgoing)
+        try:
+            stream = os.fdopen(incoming, "rb")
+        except BaseException:
+            os.close(incoming)
+            raise
+        setattr(child, name, stream)
+        return protected_descriptor(outgoing, cleanup)
+
+    executable = req["executable"]
+    arguments = [executable, *req.get("args", [])]
+    paths = [executable] if os.path.dirname(executable) else [
+        os.path.join(directory, executable) for directory in os.get_exec_path(environment)]
     try:
-        physical_roots = [os.path.realpath(root) for root in roots]
-        os.fchdir(owner)
-        actual_cwd = os.getcwd()
-        if physical_roots and not any(
-            os.path.commonpath([actual_cwd, root]) == root for root in physical_roots
-        ):
-            raise PermissionError("cwd resolves outside allowed execution roots")
+        with ExitStack() as cleanup:
+            source = cleanup.enter_context(open(os.devnull, "rb")) if stdin_handle == subprocess.DEVNULL else stdin_handle
+            file_actions, flags = workload_spawn_plan(
+                protected_descriptor(cwd, cleanup), protected_descriptor(source.fileno(), cleanup),
+                pipe_for("stdout", cleanup), pipe_for("stderr", cleanup))
+            reset = tuple(sig for bit, sig in ((2, signal.SIGPIPE), (4, signal.SIGXFSZ)) if flags & bit)
+            first, last = None, None
+            # No reader thread exists yet. The child inherits the pinned
+            # directory; the parent returns to its job fd before publication.
+            os.fchdir(cwd)
+            try:
+                for path in paths:
+                    try:
+                        child.pid = os.posix_spawn(path, arguments, environment, file_actions=file_actions,
+                                                   setsid=bool(flags & 1), setsigdef=reset)
+                        break
+                    except OSError as error:
+                        last = error
+                        if first is None and error.errno not in (errno.ENOENT, errno.ENOTDIR):
+                            first = error
+                if child.pid is None:
+                    failure = first or last
+                    code = failure.errno if failure is not None else errno.ENOENT
+                    raise OSError(code, os.strerror(code), executable)
+            finally:
+                os.fchdir(_hepta_directory_pins[-1])
     except BaseException:
-        os.close(owner)
+        if child.pid is None:
+            for stream in (child.stdout, child.stderr):
+                if stream is not None:
+                    stream.close()
         raise
-    finally:
-        os.fchdir(_hepta_directory_pins[-1])
-    return owner
 
 cwd_owner = None
 try:
@@ -2784,31 +3591,40 @@ try:
     engine_scratch = prepare_engine_scratch()
     if engine_scratch is not None:
         env["HEPTA_RUNTIME_ENGINE_SCRATCH"] = json.dumps(engine_scratch["binding"], sort_keys=True)
-    child = subprocess.Popen(
-        [req["executable"], *req.get("args", [])],
-        cwd=None,
-        preexec_fn=inherit_workload_cwd,
-        pass_fds=(cwd_owner,),
-        env=env,
-        stdin=stdin_handle,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
-    atomic("child.json", {
+    if native_spawn:
+        child = NativeWorkload()
+        spawn_native_workload(child, cwd_owner, stdin_handle, env)
+    else:
+        child = subprocess.Popen(
+            [req["executable"], *req.get("args", [])],
+            cwd=None,
+            preexec_fn=inherit_workload_cwd,
+            pass_fds=(cwd_owner,),
+            env=env,
+            stdin=stdin_handle,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    child_record = {
         "pid": child.pid,
-        "identity": process_identity(child.pid),
-    })
+        "identity": native_process_identity(child.pid) if native_identity else process_identity(child.pid),
+    }
+    if native_child:
+        encoded = (json.dumps(child_record, sort_keys=True) + "\n").encode("utf-8")
+        publish_with_hia(b"child", encoded, protocol=b"HIAJCH01")
+    else:
+        atomic("child.json", child_record)
 except Exception as exc:
-    if child is not None:
+    if child is not None and child.pid is not None:
         # Popen crossed the effect boundary. Keep the original child unreaped
         # until every group signal is sent, and never report a prelaunch error.
         group_signal = "submitted"
         try:
-            os.killpg(child.pid, signal.SIGKILL)
+            signal_owned_group(child, signal.SIGKILL)
         except ProcessLookupError:
             group_signal = "already_absent"
-        except OSError:
+        except (OSError, RuntimeError):
             group_signal = "failed"
         child_reaped = False
         try:
@@ -2858,25 +3674,45 @@ log_bytes = {"stdout": {"seen": 0, "stored": 0}, "stderr": {"seen": 0, "stored":
 def drain(stream, sink, label):
     stored = 0
     try:
+        if native_output:
+            capture_buffer = ctypes.create_string_buffer(65536)
+            capture_mode = int(req.get("execution_mode") != "operator")
         while True:
-            chunk = stream.read1(65536)
-            if not chunk:
+            if native_output:
+                received, error = output_capture_effect(stream.fileno(), capture_buffer, len(capture_buffer), 2)
+                check_capture_error(error, "read")
+            else:
+                chunk = stream.read1(65536)
+                received = len(chunk)
+            if received == 0:
                 log_eof[label] = True
                 break
-            log_bytes[label]["seen"] += len(chunk)
-            keep = chunk if req.get("execution_mode") == "operator" else chunk[:max(0, 16 * 1024 * 1024 - stored)]
-            if len(keep) != len(chunk):
+            log_bytes[label]["seen"] += received
+            if native_output:
+                count, truncated = capture_chunk_plan(capture_mode, stored, received, log_errors[label] is not None)
+            else:
+                keep = chunk if req.get("execution_mode") == "operator" else chunk[:max(0, 16 * 1024 * 1024 - stored)]
+                count, truncated = len(keep), len(keep) != received
+            if truncated:
                 log_truncated[label] = True
             if log_errors[label] is None:
                 try:
-                    pending = memoryview(keep)
-                    while pending:
-                        written = sink.write(pending)
-                        if written is None or written <= 0 or written > len(pending):
-                            raise OSError("log write made invalid progress")
+                    if native_output and count:
+                        written, error = output_capture_effect(sink.fileno(), capture_buffer, count, 0)
                         stored += written
                         log_bytes[label]["stored"] = stored
-                        pending = pending[written:]
+                        check_capture_error(error, "write")
+                        if written != count:
+                            raise OSError("log write made invalid progress")
+                    elif not native_output:
+                        pending = memoryview(keep)
+                        while pending:
+                            written = sink.write(pending)
+                            if written is None or written <= 0 or written > len(pending):
+                                raise OSError("log write made invalid progress")
+                            stored += written
+                            log_bytes[label]["stored"] = stored
+                            pending = pending[written:]
                 except Exception as exc:
                     # Continue draining after storage failure; never deadlock the
                     # producer or publish silent success for lost output.
@@ -2905,7 +3741,7 @@ except Exception as exc:
     cleanup_errors = []
     group_signal = "submitted"
     try:
-        os.killpg(child.pid, signal.SIGKILL)
+        signal_owned_group(child, signal.SIGKILL)
     except ProcessLookupError:
         group_signal = "already_absent"
     except Exception as cleanup:
@@ -2967,7 +3803,7 @@ leader_group_signal_number = None
 leader_kill_submitted, leader_cancel_signalled = False, False
 leader_cleanup_errors = []
 exit_queue, exit_seen = None, False
-def exit_observation_failed(exc):
+def exit_observation_failed(exc, stage="child exit observation"):
     # A failed observer does not establish that the submitted child stopped.
     # Except for ECHILD, this owner has never reaped its original child: finish
     # every group signal before its bounded wait. ECHILD expressly removes
@@ -2980,7 +3816,7 @@ def exit_observation_failed(exc):
     if custody_retained:
         group_signal, group_signal_number = "submitted", int(signal.SIGKILL)
         try:
-            os.killpg(child.pid, signal.SIGKILL)
+            signal_owned_group(child, signal.SIGKILL)
         except ProcessLookupError:
             group_signal = "already_absent"
         except Exception as cleanup:
@@ -3014,7 +3850,7 @@ def exit_observation_failed(exc):
         publish_terminal({
             "at_unix_ms": int(time.time() * 1000),
             "exit_code": 125,
-            "supervisor_error": "child exit observation failed after spawn: " + primary_error,
+            "supervisor_error": stage + " failed after spawn: " + primary_error,
             "supervisor_cleanup_errors": cleanup_errors,
             "effect_outcome": "unknown",
             "status_authoritative": False,
@@ -3035,6 +3871,13 @@ def exit_observation_failed(exc):
         raise exc from publication_error
     raise SystemExit(125)
 
+def loop_observation(stage, *facts):
+    try:
+        flags = sum(1 << index for index, fact in enumerate(facts) if fact)
+        return native_loop_decision(stage, flags)
+    except Exception as exc:
+        exit_observation_failed(exc, "HIA supervision loop")
+
 if sys.platform != "linux":
     try:
         exit_queue = select.kqueue()
@@ -3050,19 +3893,35 @@ while True:
     # leader holds its PID/PGID until this one path completes all group signals.
     try:
         if sys.platform == "linux":
-            exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            exited = observe_original_child(child)
         else:
             exit_seen = exit_seen or bool(exit_queue.control([], 1, 0))
             exited = True if exit_seen else None
     except Exception as exc:
         exit_observation_failed(exc)
     now = time.monotonic()
-    if exited is None and deadline is not None and now >= deadline:
-        timed_out = True
-    stopping = timed_out or cancel_requested
-    if exited is not None and not stopping and leader_drain_until is None:
+    if native_loop:
+        exited_observed = exited is not None
+        timeout_due = deadline is not None and now >= deadline
+        stop_due = stop_deadline is not None and now >= stop_deadline
+        eof_observed = all(log_eof.values())
+        wait_facts = (exited_observed, timed_out, cancel_requested, timeout_due,
+                      leader_drain_until is not None, stop_deadline is not None,
+                      stop_due, kill_submitted)
+        wait_plan = loop_observation(0, *wait_facts, eof_observed)
+        timed_out = bool(wait_plan & 1)
+        normal_drain, arm_drain = bool(wait_plan & 2), bool(wait_plan & 4)
+        stop_step = bool(wait_plan & 56)
+    else:
+        if exited is None and deadline is not None and now >= deadline:
+            timed_out = True
+        stopping = timed_out or cancel_requested
+        arm_drain = exited is not None and not stopping and leader_drain_until is None
+        normal_drain = leader_drain_until is not None or arm_drain
+        stop_step = stopping
+    if arm_drain:
         leader_reader_deadline, leader_drain_until = now + 2, now + 4
-    if leader_drain_until is not None:
+    if normal_drain:
         if not leader_kill_submitted:
             while leader_reader_index < len(readers):
                 label = ("stdout", "stderr")[leader_reader_index]
@@ -3071,22 +3930,40 @@ while True:
                 # failure also ends drain without releasing inherited writers.
                 # A completion timestamp later than this reader's deadline
                 # cannot turn an expired join into success.
-                if (log_eof[label] and not readers[leader_reader_index].is_alive() and finished is not None
-                        and finished <= leader_reader_deadline):
+                if native_loop:
+                    decision = loop_observation(1, log_eof[label], not readers[leader_reader_index].is_alive(),
+                                                finished is not None and finished <= leader_reader_deadline,
+                                                now >= leader_reader_deadline)
+                    advance, expired = decision == 1, decision == 2
+                else:
+                    advance = (log_eof[label] and not readers[leader_reader_index].is_alive()
+                               and finished is not None and finished <= leader_reader_deadline)
+                    expired = now >= leader_reader_deadline
+                if advance:
                     leader_reader_index += 1
                     if leader_reader_index < len(readers):
                         leader_reader_deadline = min(leader_drain_until, now + 2)
                     continue
-                if now >= leader_reader_deadline:
+                if expired:
                     leader_reader_expired = True
                 break
+        if native_loop:
+            drain_plan = loop_observation(2, leader_reader_index == len(readers),
+                                          leader_kill_submitted and not any(reader.is_alive() for reader in readers),
+                                          leader_kill_submitted, cancel_requested, leader_cancel_signalled,
+                                          leader_reader_expired, now >= leader_drain_until)
+            drain_term, drain_kill, drain_finish = bool(drain_plan & 1), bool(drain_plan & 2), bool(drain_plan & 4)
+        else:
             if leader_reader_index == len(readers):
                 break
-        elif not any(reader.is_alive() for reader in readers):
-            break
+            if leader_kill_submitted and not any(reader.is_alive() for reader in readers):
+                break
+            drain_term = cancel_requested and not leader_cancel_signalled and not leader_kill_submitted
+            drain_kill = leader_reader_expired and not leader_kill_submitted
+            drain_finish = now >= leader_drain_until
         # Cancellation during this existing drain window must not renew it
         # with a fresh eight-second cancellation grace period.
-        if cancel_requested and not leader_cancel_signalled and not leader_kill_submitted:
+        if drain_term:
             leader_cancel_signalled = True
             # SIGTERM can close the inherited pipes immediately. Record the
             # interrupted capture before signalling, not only on escalation.
@@ -3096,13 +3973,13 @@ while True:
                     log_errors[label] = log_errors[label] or leader_drain_error
             leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGTERM)
             try:
-                os.killpg(child.pid, signal.SIGTERM)
+                signal_owned_group(child, signal.SIGTERM)
             except ProcessLookupError:
                 leader_group_signal = "already_absent"
             except Exception as cleanup:
                 leader_group_signal = "failed"
                 leader_cleanup_errors.append("signal: " + str(cleanup))
-        if leader_reader_expired and not leader_kill_submitted:
+        if drain_kill:
             leader_kill_submitted = True
             leader_drain_error = leader_drain_error or "output drain deadline exceeded after leader exit"
             expired_label = ("stdout", "stderr")[leader_reader_index]
@@ -3112,27 +3989,38 @@ while True:
                     log_errors[label] = log_errors[label] or leader_drain_error
             leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGKILL)
             try:
-                os.killpg(child.pid, signal.SIGKILL)
+                signal_owned_group(child, signal.SIGKILL)
             except ProcessLookupError:
                 leader_group_signal = "already_absent"
             except Exception as cleanup:
                 leader_group_signal = "failed"
                 leader_cleanup_errors.append("signal: " + str(cleanup))
-        if now >= leader_drain_until:
+        if drain_finish:
             # A late stderr timeout may leave no join time. Signal while the
             # original leader is still held, then report any undrained reader;
             # never grant another interval or claim cleanup completed.
             break
-    elif stopping:
-        if stop_deadline is None:
+    elif stop_step:
+        if native_loop:
+            submit_term, submit_kill = bool(wait_plan & 8), bool(wait_plan & 16)
+        else:
+            submit_term = stop_deadline is None
+            submit_kill = not submit_term and now >= stop_deadline and not kill_submitted
+        if submit_term:
             stop_deadline = now + 8
-            try: os.killpg(child.pid, signal.SIGTERM)
+            try: signal_owned_group(child, signal.SIGTERM)
             except ProcessLookupError: pass
-        elif now >= stop_deadline and not kill_submitted:
+        elif submit_kill:
             kill_submitted = True
-            try: os.killpg(child.pid, signal.SIGKILL)
+            try: signal_owned_group(child, signal.SIGKILL)
             except ProcessLookupError: pass
-        if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
+        if native_loop:
+            finished = bool(wait_plan & 32)
+            if not finished and exited_observed and not eof_observed and all(log_eof.values()):
+                finished = bool(loop_observation(0, *wait_facts, True) & 32)
+        else:
+            finished = exited is not None and (all(log_eof.values()) or now >= stop_deadline)
+        if finished:
             break
     time.sleep(.05)
 engine_group_stopped, engine_group_error = False, None
@@ -3144,7 +4032,7 @@ if engine_scratch is not None:
 try:
     # Every loop exit already observed the original leader's exit. Consume its
     # actual status once, without creating another child-wait interval.
-    reap_original_child(child, 0)
+    raw_wait_status = reap_original_child(child, 0, decode=not native_outcome)
 except Exception as exc:
     # This is after the final reap boundary, unlike observer failures above.
     # A failed final wait grants no further signal or wait authority: ECHILD
@@ -3198,7 +4086,6 @@ except Exception as exc:
         raise exc from publication_error
     raise SystemExit(125)
 if exit_queue is not None: exit_queue.close()
-rc = 124 if timed_out else child.returncode
 log_synced = {"stdout": False, "stderr": False}
 for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
     remaining = max(0, leader_drain_until - time.monotonic()) if leader_drain_until is not None else 2
@@ -3212,12 +4099,25 @@ for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
         # One barrier per completed stream, never per chunk. A durable exit
         # receipt must not precede the output bytes whose completion it claims.
         sink.flush()
-        os.fsync(sink.fileno())
+        if native_output:
+            _, error = output_capture_effect(sink.fileno(), None, 0, 1)
+            check_capture_error(error, "sync")
+        else:
+            os.fsync(sink.fileno())
         log_synced[label] = True
     except Exception as exc:
         log_errors[label] = log_errors[label] or "sync: " + str(exc)
-output_complete = leader_drain_error is None and all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
-output_durable = output_complete and all(log_synced.values())
+if native_outcome:
+    child.returncode, rc, supervisor_rc, output_complete, output_durable = native_supervisor_outcome(
+        raw_wait_status, timed_out, leader_drain_error, log_eof, log_errors, log_truncated, log_synced)
+else:
+    rc = 124 if timed_out else child.returncode
+    output_complete = (leader_drain_error is None and all(log_eof.values()) and
+                       not any(log_errors.values()) and not any(log_truncated.values()))
+    output_durable = output_complete and all(log_synced.values())
+    supervisor_rc = 125 if leader_drain_error is not None else rc if output_durable or rc != 0 else 74
+    if not 0 <= supervisor_rc <= 255:
+        supervisor_rc = 1
 terminal = {
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
@@ -3234,7 +4134,7 @@ if leader_drain_error is not None:
     # EOF after terminating an inherited writer cannot restore successful
     # capture or establish which external effects that writer performed.
     terminal.update({
-        "exit_code": 125,
+        "exit_code": rc if native_outcome else 125,
         "supervisor_error": leader_drain_error,
         "supervisor_cleanup_errors": leader_cleanup_errors,
         "effect_outcome": "unknown",
@@ -3252,14 +4152,48 @@ if engine_scratch is not None:
     # its complete group was observed stopped. Unknown paths never reach here.
     terminal["scratch_cleanup"] = finish_engine_scratch(engine_group_stopped, True, engine_group_error)
 publish_terminal(terminal)
-supervisor_rc = 125 if leader_drain_error is not None else rc if output_durable or rc != 0 else 74
-raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
+raise SystemExit(supervisor_rc)
 '''
 runner_path = job / "runner.py"
 runner = REMOTE_DIRECTORY_SOURCE + "\n" + runner
 stage_file("runner.py", runner.encode("utf-8"), 0o700)
 info = os.fstat(_hepta_directory_pins[-1])
-binding = json.dumps({"device":info.st_dev,"inode":info.st_ino,"job_id":req["job_id"],"launch_nonce":req["launch_nonce"],"request_fingerprint":req["request_fingerprint"]}, sort_keys=True)
+binding = {"device":info.st_dev,"inode":info.st_ino,"job_id":req["job_id"],"launch_nonce":req["launch_nonce"],"request_fingerprint":req["request_fingerprint"]}
+if "hia_terminal_publisher" in req:
+    binding["hia_terminal_publisher"] = req["hia_terminal_publisher"]
+if terminal_supervisor:
+    binding["hia_terminal_supervisor"] = True
+if owner_publisher:
+    binding["hia_owner_publication"] = True
+if workdir_authority:
+    binding["hia_workdir_authority"] = True
+if loop_authority:
+    binding["hia_loop_authority"] = True
+if group_authority:
+    binding["hia_group_authority"] = True
+if child_publisher:
+    binding["hia_child_publication"] = True
+if child_wait_authority:
+    binding["hia_original_child_wait"] = True
+if output_capture:
+    binding["hia_native_output_capture"] = True
+if workload_spawn:
+    binding["hia_workload_spawn"] = True
+if supervisor_identity:
+    binding["hia_supervisor_identity"] = True
+if owner_lock_admission:
+    binding["hia_owner_lock_admission"] = True
+if owner_record_encoding:
+    binding["hia_owner_record_encoding"] = True
+if owner_file_lock:
+    binding["hia_owner_file_lock"] = True
+if owner_marker_observation:
+    binding["hia_owner_marker_observation"] = True
+if owner_custody:
+    binding["hia_owner_custody"] = True
+if job_owner:
+    binding["hia_native_job_owner"] = True
+binding = json.dumps(binding, sort_keys=True)
 uid = os.getuid()
 env = os.environ.copy()
 env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -3402,6 +4336,26 @@ def read_owner_binding():
         return {}
     return value if isinstance(value, dict) else {}
 
+def terminal_status(exit_data, confirmed):
+    if q.get("hia_status_terminal_facts") is True:
+        # Normalize the existing receipt types at the transport boundary.
+        # The pinned HIA program decides precedence and the state.
+        try:
+            exit_result = 1 if int(exit_data.get("exit_code", -1)) == 0 else 2
+        except (ValueError, TypeError, OverflowError):
+            exit_result = 0
+        def present_true(name):
+            return 0 if name not in exit_data else 1 if exit_data[name] is True else 2
+        facts = [int(exit_data.get("effect_outcome") == "unknown"), int(bool(exit_data.get("timed_out"))),
+                 int(bool(exit_data.get("cancelled"))), exit_result,
+                 present_true("output_complete"), present_true("output_durable")]
+        return {"_hia_terminal": {"receipt": exit_data, "facts": facts, "confirmed": confirmed}}
+    result = final_status(exit_data)
+    if confirmed:
+        result["terminal_publication_confirmed"] = True
+        result["automatic_retry"] = False
+    return result
+
 def read_terminal_status(request):
     field = "terminal_publication_protocol"
     if field in request and (type(request[field]) is not int or request[field] != 1):
@@ -3417,7 +4371,9 @@ def read_terminal_status(request):
         if not isinstance(exit_data, dict):
             raise ValueError("terminal receipt must be an object")
         if field not in request and field not in exit_data:
-            return final_status(exit_data)
+            return terminal_status(exit_data, False)
+        if q.get("hia_status_terminal_witness") is True:
+            return terminal_witness_snapshot(request, exit_data, encoded, field)
         if type(exit_data.get(field)) is not int or exit_data[field] != 1:
             return publication_pending("terminal publication protocol is missing or unsupported")
         nonce = request.get("launch_nonce")
@@ -3431,12 +4387,42 @@ def read_terminal_status(request):
                 witness.get("job_id") != request["job_id"] or witness.get("launch_nonce") != nonce or
                 witness.get("exit_sha256") != hashlib.sha256(encoded).hexdigest()):
             return publication_pending("terminal publication witness does not match the original receipt")
-        result = final_status(exit_data)
-        result["terminal_publication_confirmed"] = True
-        result["automatic_retry"] = False
-        return result
+        return terminal_status(exit_data, True)
     except (OSError, ValueError, TypeError, KeyError):
         return publication_pending("terminal publication witness or receipt is unavailable or invalid")
+
+def terminal_witness_snapshot(request, exit_data, encoded, field):
+    def protocol(value):
+        if field not in value:
+            return 0
+        return 1 if type(value[field]) is int and value[field] == 1 else 2
+
+    try:
+        witness = json.loads(read_terminal_file("exit.witness.json", 4096))
+        if not isinstance(witness, dict):
+            raise ValueError("terminal witness must be an object")
+        witness_protocol = protocol(witness)
+    except (OSError, ValueError, TypeError):
+        witness = {}
+        witness_protocol = 3
+
+    def text(value, key):
+        field_value = value.get(key)
+        return field_value if isinstance(field_value, str) and len(field_value) <= 128 else ""
+
+    if q.get("hia_status_native_receipt") is True:
+        response = {"_hia_terminal": {"receipt": exit_data, "confirmed": False}}
+    else:
+        response = terminal_status(exit_data, False)
+    response["_hia_terminal"]["witness"] = {
+        "protocol": [protocol(request), protocol(exit_data), witness_protocol],
+        "request_nonce": text(request, "launch_nonce"),
+        "job": text(witness, "job_id"),
+        "nonce": text(witness, "launch_nonce"),
+        "digest": text(witness, "exit_sha256"),
+        "raw": encoded.hex(),
+    }
+    return response
 
 def final_status(exit_data):
     if exit_data.get("effect_outcome") == "unknown":
@@ -3453,6 +4439,62 @@ def final_status(exit_data):
     else:
         state = "failed"
     return {**exit_data, "state": state}
+
+def lifecycle_snapshot(request, props, started):
+    owner = valid_owner(request, started, systemd=True)
+    nonce = request.get("launch_nonce")
+    incarnation = (props.get("InvocationID") == started.get("invocation_id") and
+        props.get("Description") == f"Hepta Runtime job {q['job_id']} {nonce}")
+    witness = "terminal_publication_protocol" in request
+    active = props.get("ActiveState")
+    sub = props.get("SubState")
+    process = 0
+    # Only the original guarded live branch observes a process. The HIA owner
+    # independently classifies the raw systemd properties and these facts.
+    if owner and (props.get("LoadState") == "not-found" or incarnation):
+        if active in ("active", "activating") and sub not in ("exited", "dead"):
+            try: matching = process_identity(started["supervisor_pid"]) == started["supervisor_identity"] and process_uid(started["supervisor_pid"]) == started["supervisor_uid"]
+            except (OSError, ValueError, subprocess.SubprocessError): matching = False
+            process = 1 if matching else 2
+    exit_code = -1
+    if owner and (props.get("LoadState") == "not-found" or incarnation) and not witness and active == "active" and sub == "exited":
+        try:
+            exit_code = int(props.get("ExecMainStatus", "-1"))
+        except ValueError:
+            pass
+    facts = [int(owner), int(incarnation), int(witness), process,
+             int(props.get("ExecMainCode") == "1"), int(exit_code == 0)]
+    return {"_hia_lifecycle": {"facts": facts, "systemd": props, "exit_code": exit_code}}
+
+def lifecycle_observations(request, props, started):
+    # Collect observations without deciding ownership or checking systemd's
+    # binding. The HIA controller compares the immutable values itself.
+    identity = started.get("supervisor_identity")
+    identity = identity if isinstance(identity, dict) else {}
+    pid = started.get("supervisor_pid")
+    uid = started.get("supervisor_uid")
+    effective_uid = os.geteuid()
+    actual_identity, actual_uid = {}, None
+    if (type(uid) is int and uid == effective_uid and type(pid) is int and 1 < pid <= 2147483647 and
+            props.get("ActiveState") in ("active", "activating") and
+            props.get("SubState") not in ("exited", "dead")):
+        try:
+            actual_identity = process_identity(pid) or {}
+            actual_uid = process_uid(pid)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    owner = {
+        "starter_uid": uid, "effective_uid": effective_uid,
+        "starter_pid": pid, "observed_uid": actual_uid,
+        "request_job": request.get("job_id"), "starter_job": started.get("job_id"),
+        "request_nonce": request.get("launch_nonce"), "starter_nonce": started.get("launch_nonce"),
+        "expected_kind": "proc_start_ticks" if sys.platform == "linux" else "ps_lstart",
+        "starter_kind": identity.get("kind"), "starter_identity": identity.get("value"),
+        "observed_kind": actual_identity.get("kind"), "observed_identity": actual_identity.get("value"),
+        "starter_invocation": started.get("invocation_id"),
+        "request_witness": "terminal_publication_protocol" in request,
+    }
+    return {"_hia_lifecycle": {"observations": owner, "systemd": props}}
 
 def one_status():
     request = read_json("request.json")
@@ -3482,6 +4524,10 @@ def one_status():
         if terminal is not None:
             return terminal
         started = read_owner_binding()
+        if q.get("hia_status_lifecycle_owner") is True:
+            return lifecycle_observations(request, props, started)
+        if q.get("hia_status_lifecycle_facts") is True:
+            return lifecycle_snapshot(request, props, started)
         nonce = request.get("launch_nonce")
         invocation = started.get("invocation_id")
         if not valid_owner(request, started, systemd=True):
@@ -3539,6 +4585,12 @@ def one_status():
     if not running and requires_witness:
         return publication_pending("supervisor disappeared without a confirmed terminal receipt")
     return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
+
+if q.get("hia_status_snapshot") is True:
+    status = one_status()
+    status["job_id"] = q["job_id"]
+    print(json.dumps(status, sort_keys=True))
+    raise SystemExit(0)
 
 deadline = time.monotonic() + min(float(q.get("wait_seconds", 0)), 30.0)
 while True:
@@ -3599,7 +4651,7 @@ print(json.dumps({
 "#;
 
 const CANCEL_CODE: &str = r#"
-import json, os, pathlib, signal, subprocess, sys, time
+import hashlib, json, os, pathlib, signal, struct, subprocess, sys, time
 q = json.load(sys.stdin)
 job = private_job_directory(q["job_dir"])
 
@@ -3648,6 +4700,58 @@ def process_uid(pid):
     if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
     return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
 
+def cancel_image(artifact):
+    if (sys.platform != "linux" or not isinstance(artifact, dict) or
+            artifact.keys() != {"sha256", "hex"}):
+        raise SystemExit("invalid HIA cancellation authority; no cancellation submitted")
+    encoded = artifact["hex"]
+    if not isinstance(encoded, str) or not 128 <= len(encoded) <= 2 * (1 << 20):
+        raise SystemExit("invalid HIA cancellation image extent; no cancellation submitted")
+    try:
+        raw = bytes.fromhex(encoded)
+    except ValueError as error:
+        raise SystemExit("invalid HIA cancellation image bytes; no cancellation submitted") from error
+    if len(raw) * 2 != len(encoded) or hashlib.sha256(raw).hexdigest() != artifact["sha256"]:
+        raise SystemExit("HIA cancellation image fingerprint mismatch; no cancellation submitted")
+    return private_sealed_file("hia-cancel-image", raw, 0o500)
+
+def cancel_authority(image, phase, observed_uid=0, observed=None):
+    def integer(value):
+        return value if type(value) is int and 0 <= value <= 0xffffffff else 0xffffffffffffffff
+    def text(value):
+        return value.encode("utf-8") if isinstance(value, str) else b""
+    frozen = expected if isinstance(expected, dict) and expected.keys() == {"kind", "value"} else {}
+    observed = observed or {}
+    fields = tuple(map(text, (q["job_id"], request.get("job_id"), started.get("job_id"), nonce,
+                              started.get("launch_nonce"), frozen.get("kind"), frozen.get("value"),
+                              started.get("invocation_id"), observed.get("kind"), observed.get("value"))))
+    if any(len(value) > 4096 for value in fields):
+        raise SystemExit("invalid HIA cancellation identity extent; no cancellation submitted")
+    frame = struct.pack("<8s16Q", b"HIAJCX01", phase, os.geteuid(), integer(expected_uid),
+                        integer(pid), integer(observed_uid), systemd, *map(len, fields)) + b"".join(fields)
+    fd = image.fileno()
+    with private_sealed_file("hia-cancel-frame", frame, 0o400) as source:
+        checked = subprocess.run(["/proc/self/fd/" + str(fd)], stdin=source, capture_output=True,
+                                 env={}, pass_fds=(fd,), timeout=5)
+    if checked.returncode or checked.stderr or len(checked.stdout) != 16:
+        raise SystemExit("HIA cancellation authority unavailable; no cancellation submitted")
+    protocol, decision = struct.unpack("<8sQ", checked.stdout)
+    if protocol != b"HIAJCY01" or decision not in ((0, 1) if phase == 0 else (0, 2, 3, 4)):
+        raise SystemExit("invalid HIA cancellation authority response; no cancellation submitted")
+    return decision
+
+def cancel_with_hia(image, owner_fd, job_id, nonce):
+    name = job_id.encode("ascii")
+    frame = struct.pack("<8s5Q32s", b"HIAJRC01", os.getpid(), owner_fd,
+                        int(time.time() * 1000), len(name), 0, nonce.encode("ascii")) + name
+    fd = image.fileno()
+    with private_sealed_file("hia-cancel-effect", frame, 0o400) as source:
+        checked = subprocess.run(["/proc/self/fd/" + str(fd)], stdin=source,
+                                 stdout=_hepta_directory_pins[-1], stderr=subprocess.PIPE,
+                                 env={}, pass_fds=(fd, owner_fd), timeout=5)
+    if checked.returncode or checked.stderr != struct.pack("<8sQq", b"HIAJRW01", 7, 0):
+        raise SystemExit("HIA cancellation has no confirmed durable signal receipt")
+
 request = read_json("request.json")
 if not request or request.get("job_id") != q["job_id"]:
     raise SystemExit("remote job metadata missing or mismatched")
@@ -3657,27 +4761,48 @@ if read_json("exit.json"):
 launch = read_json("launch.json") or {}
 started = read_json("started.json") or {}
 nonce = request.get("launch_nonce")
-pid = int(started.get("supervisor_pid") or 0)
+pid = started.get("supervisor_pid")
 expected = started.get("supervisor_identity")
 expected_uid = started.get("supervisor_uid")
-if not valid_owner(request, started, systemd=launch.get("backend") == "systemd"):
-    raise SystemExit("frozen supervisor binding unavailable; no cancellation submitted")
+systemd = launch.get("backend") == "systemd"
 # Never stop by a reusable unit name. This descriptor stays bound to the
 # original supervisor even if its PID or systemd unit name is later recycled.
 atomic_identity = sys.platform == "linux"
-fd = None
+fd = image = writer = None
 try:
+    if "hia_cancel_authority" in q:
+        image = cancel_image(q["hia_cancel_authority"])
+        valid = cancel_authority(image, 0) == 1
+    else:
+        valid = valid_owner(request, started, systemd=systemd)
+    if not valid:
+        raise SystemExit("frozen supervisor binding unavailable; no cancellation submitted")
+    if "hia_cancel_writer" in q:
+        if image is None:
+            raise SystemExit("missing HIA cancellation authority; no cancellation submitted")
+        writer = cancel_image(q["hia_cancel_writer"])
     if atomic_identity:
-        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        if not hasattr(os, "pidfd_open") or (writer is None and not hasattr(signal, "pidfd_send_signal")):
             raise SystemExit("atomic supervisor signalling unavailable; no cancellation submitted")
         fd = os.pidfd_open(pid, 0)
-    if process_identity(pid) != expected or process_uid(pid) != expected_uid:
-        raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
-    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000),
-           "job_id": q["job_id"], "launch_nonce": nonce})
-    if atomic_identity:
-        signal.pidfd_send_signal(fd, signal.SIGTERM, None, 0)
+    observed = process_identity(pid)
+    if image is None:
+        if observed != expected or process_uid(pid) != expected_uid:
+            raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
+        result = "stop_requested" if systemd else "term_sent"
     else:
+        decision = cancel_authority(image, 1, process_uid(pid), observed)
+        if decision not in (3, 4):
+            raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
+        result = "stop_requested" if decision == 4 else "term_sent"
+    if writer is not None:
+        cancel_with_hia(writer, fd, q["job_id"], nonce)
+    else:
+        atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000),
+               "job_id": q["job_id"], "launch_nonce": nonce})
+    if writer is None and atomic_identity:
+        signal.pidfd_send_signal(fd, signal.SIGTERM, None, 0)
+    elif not atomic_identity:
         # macOS has no pidfd. Retain its explicitly non-atomic account scope.
         if process_identity(pid) != expected or process_uid(pid) != expected_uid:
             raise SystemExit("supervisor changed before best-effort signal")
@@ -3690,12 +4815,13 @@ try:
         time.sleep(.1)
     # The original runner owns workload termination, escalation and output
     # drain. Never force-kill a potentially recycled child group from here.
-    result = "stop_requested" if launch.get("backend") == "systemd" else "term_sent"
     print(json.dumps({"job_id":q["job_id"],"result":result,
           "atomic_identity":atomic_identity,"supervisor_pid":pid,
           "termination_confirmed":False,"reconcile_via":"process_status"}, sort_keys=True))
 finally:
     if fd is not None: os.close(fd)
+    if image is not None: image.close()
+    if writer is not None: writer.close()
 "#;
 
 fn validate_start(params: &ProcessStartParams) -> Result<()> {
@@ -3774,7 +4900,9 @@ fn verify_host_binding(
 		record.id
 	);
 	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
-		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+		bail!(
+			"durable job host binding changed; remote operation requires independent reconciliation"
+		);
 	}
 	Ok(())
 }
@@ -3788,40 +4916,553 @@ fn check_binding(record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
+async fn poll_job_status<F, T>(
+	record: &JobRecord,
+	wait_seconds: u64,
+	operator_status: bool,
+	native_transport: Option<AdmittedNativeJobs>,
+	mut observe: F,
+) -> Result<Value>
+where
+	F: FnMut() -> T,
+	T: std::future::Future<Output = Result<Value>>,
+{
+	#[cfg(target_os = "linux")]
+	use crate::mcp::hia_request_prepare as hia;
+	#[cfg(target_os = "linux")]
+	let native =
+		native_transport.is_some() || hia::job_poll_selected(record.idempotency_key.as_deref());
+	#[cfg(not(target_os = "linux"))]
+	let _ = (record, native_transport);
+	#[cfg(target_os = "linux")]
+	let window = if native {
+		hia::job_poll_window(wait_seconds).await?
+	} else {
+		Duration::from_secs(wait_seconds.min(30))
+	};
+	#[cfg(not(target_os = "linux"))]
+	let window = Duration::from_secs(wait_seconds.min(30));
+	let started = tokio::time::Instant::now();
+	loop {
+		let mut value = observe().await?;
+		let state = value.get("state").and_then(Value::as_str);
+		let elapsed = started.elapsed();
+		let reference_decision = || {
+			let ending =
+				operator_status && matches!(state, Some("finalizing" | "completed_unknown"));
+			let transient = state == Some("running")
+				|| ending || (operator_status && state == Some("activating"));
+			let delay = (transient && elapsed < window).then(|| Duration::from_millis(100));
+			let mark_lost = ending
+				&& elapsed >= window
+				&& value.get("terminal_publication_confirmed") != Some(&Value::Bool(false));
+			(delay, mark_lost)
+		};
+		#[cfg(target_os = "linux")]
+		let (delay, mark_lost) = if native {
+			let unconfirmed =
+				value.get("terminal_publication_confirmed") == Some(&Value::Bool(false));
+			match hia::job_poll_decision(window, elapsed, state, operator_status, unconfirmed)
+				.await?
+			{
+				hia::JobPollDecision::Finish => (None, false),
+				hia::JobPollDecision::PollAfter(delay) => (Some(delay), false),
+				hia::JobPollDecision::MarkLost => (None, true),
+			}
+		} else {
+			reference_decision()
+		};
+		#[cfg(not(target_os = "linux"))]
+		let (delay, mark_lost) = reference_decision();
+		if mark_lost {
+			value["state"] = json!("lost");
+			value["reason"] = json!("no exit record appeared before the wait deadline");
+		}
+		let Some(delay) = delay else {
+			return Ok(value);
+		};
+		tokio::time::sleep(delay).await;
+	}
+}
+
+fn operator_status_request(
+	record: &JobRecord,
+	wait_seconds: u64,
+	snapshot_only: bool,
+	terminal_facts: bool,
+	lifecycle_facts: bool,
+	witness_facts: bool,
+) -> Value {
+	let wait = if snapshot_only {
+		0
+	} else {
+		wait_seconds.min(30)
+	};
+	let mut request = json!({
+		"job_id": record.id, "job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest, "unit": record.unit, "wait_seconds": wait,
+	});
+	if snapshot_only {
+		request["hia_status_snapshot"] = json!(true);
+	}
+	if terminal_facts {
+		request["hia_status_terminal_facts"] = json!(true);
+	}
+	if witness_facts {
+		request["hia_status_terminal_witness"] = json!(true);
+		#[cfg(target_os = "linux")]
+		if crate::mcp::hia_request_prepare::job_terminal_receipt_selected() {
+			request["hia_status_native_receipt"] = json!(true);
+		}
+	}
+	if lifecycle_facts {
+		request["hia_status_lifecycle_facts"] = json!(true);
+		#[cfg(target_os = "linux")]
+		if crate::mcp::hia_controller_release::lifecycle_owner_selected() {
+			request["hia_status_lifecycle_owner"] = json!(true);
+		}
+	}
+	request
+}
+
 async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
 	check_binding(record)?;
-	if record.system_jobctl {
-		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
-		loop {
-			let value = run_jobctl(host, &json!({"op":"status","job_id":record.id})).await?;
-			if value.get("state").and_then(Value::as_str) != Some("running")
-				|| tokio::time::Instant::now() >= deadline
-			{
-				return Ok(value);
-			}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-		}
+	if record.system_jobctl && host.native_jobs.is_some() {
+		bail!("native-only job profile does not admit legacy system jobctl status; no fallback");
 	}
-	let request = json!({
-		"job_id": record.id,
-		"job_dir": record.remote_job_dir,
-		"request_digest": record.request_digest,
-		"unit": record.unit,
-		"wait_seconds": wait_seconds.min(30),
-	});
-	run_python_json(
-		host,
-		&bound_remote_code(STATUS_CODE)?,
-		&request,
-		Duration::from_secs(wait_seconds.min(30) + 10),
+	if record.system_jobctl {
+		let request = json!({"op":"status","job_id":record.id});
+		return poll_job_status(record, wait_seconds, false, None, || {
+			run_jobctl(host, &request)
+		})
+		.await;
+	}
+	let native_transport = super::native_jobs::admit(host)?;
+	let code = if native_transport.is_some() {
+		None
+	} else {
+		Some(bound_remote_code(STATUS_CODE)?)
+	};
+	observe_operator_status(
+		record,
+		wait_seconds,
+		native_transport,
+		|snapshot_only, terminal_facts, lifecycle_facts, witness_facts| {
+			let code = &code;
+			async move {
+				let request = operator_status_request(
+					record,
+					wait_seconds,
+					snapshot_only,
+					terminal_facts,
+					lifecycle_facts,
+					witness_facts,
+				);
+				let wait = if snapshot_only {
+					0
+				} else {
+					wait_seconds.min(30)
+				};
+				if host.native_jobs.is_some() {
+					super::ssh::run_native_job_json(
+						host,
+						super::native_jobs::NativeJobOperation::Status(&request),
+						Duration::from_secs(wait + 10),
+					)
+					.await
+				} else {
+					run_python_json(
+						host,
+						code.as_deref()
+							.context("legacy status source unavailable")?,
+						&request,
+						Duration::from_secs(wait + 10),
+					)
+					.await
+				}
+			}
+		},
 	)
 	.await
 }
 
-/// Public observation routes opt in explicitly. Start/reuse reconciliation
-/// continues to call the unchanged status_record above.
+#[cfg(all(target_os = "linux", test))]
+async fn project_terminal_status(value: Value, job_id: &str) -> Result<Value> {
+	project_terminal_status_with_witness(value, job_id, false).await
+}
+
+#[cfg(target_os = "linux")]
+async fn project_terminal_status_with_witness(
+	value: Value,
+	job_id: &str,
+	witness_required: bool,
+) -> Result<Value> {
+	use crate::mcp::hia_request_prepare as hia;
+	use anyhow::ensure;
+	use hia::JobStatusUnavailable::Terminal;
+	let Some(envelope) = value.get("_hia_terminal") else {
+		ensure!(
+			!witness_required || value["terminal_publication_confirmed"] != true,
+			Terminal
+		);
+		return Ok(value);
+	};
+	let witness = envelope.get("witness").filter(|_| witness_required);
+	let raw_status = witness.is_some() && hia::job_terminal_receipt_selected();
+	let envelope_fields = if raw_status {
+		3
+	} else {
+		3 + usize::from(witness.is_some())
+	};
+	ensure!(
+		value.as_object().is_some_and(|items| items.len() == 2)
+			&& value["job_id"].as_str() == Some(job_id)
+			&& envelope
+				.as_object()
+				.is_some_and(|items| items.len() == envelope_fields),
+		Terminal
+	);
+	let mut confirmed = envelope["confirmed"].as_bool().ok_or(Terminal)?;
+	let mut receipt = envelope["receipt"].clone();
+	ensure!(receipt.is_object(), Terminal);
+	let mut witnessed_raw = None;
+	if witness_required {
+		ensure!(!confirmed, Terminal);
+		if let Some(witness) = witness {
+			match project_job_witness(witness, job_id, &receipt).await? {
+				WitnessedReceipt::Match(raw) => witnessed_raw = Some(raw),
+				WitnessedReceipt::Pending(reason) => {
+					return Ok(terminal_publication_pending(job_id, reason));
+				}
+			}
+			confirmed = true;
+		} else {
+			// The only modern omission allowed is a genuinely legacy receipt.
+			ensure!(
+				receipt.get("terminal_publication_protocol").is_none(),
+				Terminal
+			);
+		}
+	}
+	let state = if raw_status {
+		hia::job_terminal_state_from_receipt(witnessed_raw.as_deref().ok_or(Terminal)?).await?
+	} else {
+		let encoded = envelope["facts"]
+			.as_array()
+			.filter(|rows| rows.len() == 6)
+			.ok_or(Terminal)?;
+		let mut facts = [0; 6];
+		for (destination, source) in facts.iter_mut().zip(encoded) {
+			*destination = source.as_u64().ok_or(Terminal)?;
+		}
+		hia::job_terminal_state(facts).await?
+	};
+	match state {
+		Some(state) => {
+			receipt["state"] = json!(state);
+			receipt["job_id"] = json!(job_id);
+			if confirmed {
+				receipt["terminal_publication_confirmed"] = json!(true);
+				receipt["automatic_retry"] = json!(false);
+			}
+			Ok(receipt)
+		}
+		None => Ok(terminal_publication_pending(
+			job_id,
+			"terminal publication witness or receipt is unavailable or invalid",
+		)),
+	}
+}
+
+#[cfg(target_os = "linux")]
+fn terminal_publication_pending(job_id: &str, reason: &str) -> Value {
+	json!({
+		"job_id":job_id, "state":"finalizing", "outcome":"unknown", "reason":reason,
+		"terminal_publication_confirmed":false, "status_authoritative":false, "automatic_retry":false,
+	})
+}
+
+#[cfg(target_os = "linux")]
+enum WitnessedReceipt {
+	Match(Vec<u8>),
+	Pending(&'static str),
+}
+
+#[cfg(target_os = "linux")]
+async fn project_job_witness(
+	witness: &Value,
+	job_id: &str,
+	receipt: &Value,
+) -> Result<WitnessedReceipt> {
+	use crate::mcp::hia_request_prepare::{job_terminal_witness, JobStatusUnavailable::Terminal};
+	use anyhow::ensure;
+
+	ensure!(
+		witness.as_object().is_some_and(|fields| fields.len() == 6),
+		Terminal
+	);
+	let versions = witness["protocol"]
+		.as_array()
+		.filter(|rows| rows.len() == 3)
+		.ok_or(Terminal)?;
+	let mut protocols = [0; 3];
+	for (destination, encoded) in protocols.iter_mut().zip(versions) {
+		*destination = encoded
+			.as_u64()
+			.filter(|value| *value <= 3)
+			.ok_or(Terminal)?;
+	}
+	let raw_hex = witness["raw"]
+		.as_str()
+		.filter(|v| {
+			v.len() <= 2 << 20
+				&& v.len() % 2 == 0
+				&& v.bytes()
+					.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+		})
+		.ok_or(Terminal)?;
+	let mut raw = Vec::with_capacity(raw_hex.len() / 2);
+	for start in (0..raw_hex.len()).step_by(2) {
+		raw.push(u8::from_str_radix(&raw_hex[start..start + 2], 16).map_err(|_| Terminal)?);
+	}
+	let parsed: Value = serde_json::from_slice(&raw).context(Terminal)?;
+	ensure!(&parsed == receipt, Terminal);
+	fn bytes(value: &Value) -> &[u8] {
+		value
+			.as_str()
+			.filter(|text| text.len() <= 128)
+			.unwrap_or("")
+			.as_bytes()
+	}
+	let fields = [
+		job_id.as_bytes(),
+		bytes(&receipt["job_id"]),
+		bytes(&witness["job"]),
+		bytes(&witness["request_nonce"]),
+		bytes(&receipt["launch_nonce"]),
+		bytes(&witness["nonce"]),
+		bytes(&witness["digest"]),
+		&raw,
+	];
+	match job_terminal_witness(protocols, fields).await? {
+		0 => Ok(WitnessedReceipt::Match(raw)),
+		1 => Ok(WitnessedReceipt::Pending(
+			"terminal publication protocol is missing or unsupported",
+		)),
+		2 => Ok(WitnessedReceipt::Pending(
+			"terminal receipt identity does not match the original request",
+		)),
+		3 => Ok(WitnessedReceipt::Pending(
+			"terminal publication witness does not match the original receipt",
+		)),
+		4 => Ok(WitnessedReceipt::Pending(
+			"terminal publication witness or receipt is unavailable or invalid",
+		)),
+		_ => Err(Terminal.into()),
+	}
+}
+
+#[cfg(target_os = "linux")]
+async fn project_lifecycle_status(value: Value, job_id: &str) -> Result<Value> {
+	use crate::mcp::hia_request_prepare::{
+		job_lifecycle, job_lifecycle_owner, JobLifecycle, JobStatusUnavailable::Lifecycle,
+	};
+	use anyhow::ensure;
+	let Some(envelope) = value.get("_hia_lifecycle") else {
+		return Ok(value);
+	};
+	ensure!(
+		value.as_object().is_some_and(|items| items.len() == 2)
+			&& value["job_id"].as_str() == Some(job_id),
+		Lifecycle
+	);
+	let properties = envelope["systemd"].as_object().ok_or(Lifecycle)?;
+	let fact = |name| match properties.get(name) {
+		Some(value) => value.as_str().ok_or(Lifecycle),
+		None => Ok(""),
+	};
+	let (facts, exit_code) = if crate::mcp::hia_controller_release::lifecycle_owner_selected() {
+		ensure!(
+			envelope.as_object().is_some_and(|items| items.len() == 2),
+			Lifecycle
+		);
+		let owner = envelope["observations"].as_object().ok_or(Lifecycle)?;
+		let number = |name| owner.get(name).and_then(Value::as_u64).unwrap_or(u64::MAX);
+		let text = |name| owner.get(name).and_then(Value::as_str).unwrap_or("");
+		let numbers = [
+			number("starter_uid"),
+			number("effective_uid"),
+			number("starter_pid"),
+			number("observed_uid"),
+		];
+		let fields = [
+			job_id,
+			text("request_job"),
+			text("starter_job"),
+			text("request_nonce"),
+			text("starter_nonce"),
+			text("expected_kind"),
+			text("starter_kind"),
+			text("starter_identity"),
+			text("observed_kind"),
+			text("observed_identity"),
+			text("starter_invocation"),
+			fact("InvocationID")?,
+			fact("Description")?,
+		];
+		let [owner_frozen, incarnation, process] = job_lifecycle_owner(numbers, fields).await?;
+		let witnessed = owner
+			.get("request_witness")
+			.and_then(Value::as_bool)
+			.ok_or(Lifecycle)?;
+		let exit_code = fact("ExecMainStatus")?.trim().parse::<i64>().unwrap_or(-1);
+		(
+			[
+				owner_frozen,
+				incarnation,
+				u64::from(witnessed),
+				process,
+				u64::from(fact("ExecMainCode")? == "1"),
+				u64::from(exit_code == 0),
+			],
+			exit_code,
+		)
+	} else {
+		ensure!(
+			envelope.as_object().is_some_and(|items| items.len() == 3),
+			Lifecycle
+		);
+		let encoded = envelope["facts"]
+			.as_array()
+			.filter(|rows| rows.len() == 6)
+			.ok_or(Lifecycle)?;
+		let mut facts = [0; 6];
+		for (destination, source) in facts.iter_mut().zip(encoded) {
+			*destination = source.as_u64().ok_or(Lifecycle)?;
+		}
+		let exit_code = envelope["exit_code"].as_i64().ok_or(Lifecycle)?;
+		ensure!(u64::from(exit_code == 0) == facts[5], Lifecycle);
+		(facts, exit_code)
+	};
+	let active = fact("ActiveState")?;
+	let state = job_lifecycle(facts, [fact("LoadState")?, active, fact("SubState")?]).await?;
+	let owner_unknown = |reason| {
+		json!({"job_id":job_id,"state":"owner_unknown","reason":reason,
+		"status_authoritative":false,"automatic_retry":false})
+	};
+	let publication_pending = |reason| {
+		json!({"job_id":job_id,"state":"finalizing","outcome":"unknown",
+		"reason":reason,"terminal_publication_confirmed":false,"status_authoritative":false,"automatic_retry":false})
+	};
+	let state = match state {
+		JobLifecycle::OwnerUnavailable => {
+			return Ok(owner_unknown("frozen supervisor binding unavailable"));
+		}
+		JobLifecycle::IncarnationChanged => {
+			return Ok(owner_unknown(
+				"unit incarnation differs from frozen supervisor",
+			));
+		}
+		JobLifecycle::ProcessChanged => {
+			return Ok(owner_unknown(
+				"frozen supervisor PID/start/UID unavailable or changed",
+			));
+		}
+		JobLifecycle::AwaitingExitWitness => {
+			return Ok(publication_pending(
+				"supervisor exited without a confirmed terminal receipt",
+			));
+		}
+		JobLifecycle::AwaitingMissingWitness => {
+			return Ok(publication_pending(
+				"supervisor disappeared without a confirmed terminal receipt",
+			));
+		}
+		JobLifecycle::AwaitingWitness => {
+			return Ok(publication_pending(
+				"supervisor has no confirmed terminal receipt",
+			));
+		}
+		JobLifecycle::Exited(success) => {
+			return Ok(
+				json!({"job_id":job_id,"state":if success { "succeeded" } else { "failed" },
+			"backend":"systemd","exit_code":exit_code,"systemd":properties}),
+			);
+		}
+		JobLifecycle::Running => "running",
+		JobLifecycle::Failed => "failed",
+		JobLifecycle::CompletedUnknown => "completed_unknown",
+		JobLifecycle::Finalizing => "finalizing",
+		JobLifecycle::Other => {
+			if active.is_empty() {
+				"unknown"
+			} else {
+				active
+			}
+		}
+	};
+	Ok(json!({"job_id":job_id,"state":state,"backend":"systemd","systemd":properties}))
+}
+
+async fn observe_operator_status<F, T>(
+	record: &JobRecord,
+	wait_seconds: u64,
+	native_transport: Option<AdmittedNativeJobs>,
+	observe: F,
+) -> Result<Value>
+where
+	F: Fn(bool, bool, bool, bool) -> T,
+	T: Future<Output = Result<Value>>,
+{
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		let key = record.idempotency_key.as_deref();
+		let terminal = native_transport.is_some() || hia::job_terminal_selected(key);
+		let lifecycle = native_transport.is_some() || hia::job_lifecycle_selected(key);
+		let witness = terminal && (native_transport.is_some() || hia::job_witness_selected(key));
+		if witness {
+			hia::job_witness_image()?;
+		}
+		if terminal {
+			hia::job_terminal_image()?;
+		}
+		if lifecycle {
+			hia::job_lifecycle_image()?;
+		}
+		let snapshot = |snapshot_only| {
+			let observation = observe(snapshot_only, terminal, lifecycle, witness);
+			async move {
+				let mut value = observation.await?;
+				if terminal {
+					value =
+						project_terminal_status_with_witness(value, &record.id, witness).await?;
+				}
+				if lifecycle {
+					value = project_lifecycle_status(value, &record.id).await?;
+				}
+				Ok(value)
+			}
+		};
+		if terminal || lifecycle || hia::job_poll_selected(key) {
+			return poll_job_status(record, wait_seconds, true, native_transport, || {
+				snapshot(true)
+			})
+			.await;
+		}
+		return snapshot(false).await;
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (record, wait_seconds, native_transport);
+		observe(false, false, false, false).await
+	}
+}
+
+/// Public observation may use pooled SSH. Start/reuse reconciliation uses
+/// status_record directly and never borrows the public observation pool.
 async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	if !super::ssh::observation_pool_requested() {
 		return status_record(record, wait_seconds).await;
@@ -3829,32 +5470,39 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 	check_binding(record)?;
 	use super::ssh::{run_job_observation, JobObservation};
 	if record.system_jobctl {
-		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
-		loop {
-			let value = run_job_observation(
+		return poll_job_status(record, wait_seconds, false, None, || {
+			run_job_observation(
 				&record.host,
 				JobObservation::SystemStatus { job_id: &record.id },
 			)
-			.await?;
-			if value.get("state").and_then(Value::as_str) != Some("running")
-				|| tokio::time::Instant::now() >= deadline
-			{
-				return Ok(value);
-			}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-		}
+		})
+		.await;
 	}
-	run_job_observation(
-		&record.host,
-		JobObservation::PythonStatus {
-			job_id: &record.id,
-			job_dir: &record.remote_job_dir,
-			unit: &record.unit,
-			request_digest: record
-				.request_digest
-				.as_deref()
-				.context("legacy job has no full observation binding")?,
-			wait_seconds,
+	let host = runtime_config()?.host(&record.host)?;
+	let native_transport = super::native_jobs::admit(host)?;
+	let digest = record
+		.request_digest
+		.as_deref()
+		.context("legacy job has no full observation binding")?;
+	observe_operator_status(
+		record,
+		wait_seconds,
+		native_transport,
+		|snapshot_only, terminal_facts, lifecycle_facts, witness_facts| {
+			run_job_observation(
+				&record.host,
+				JobObservation::PythonStatus {
+					job_id: &record.id,
+					job_dir: &record.remote_job_dir,
+					unit: &record.unit,
+					request_digest: digest,
+					wait_seconds,
+					snapshot_only,
+					terminal_facts,
+					witness_facts,
+					lifecycle_facts,
+				},
+			)
 		},
 	)
 	.await
@@ -3937,6 +5585,34 @@ fn trusted_launch_ack(record: &JobRecord, value: &Value) -> bool {
 	}
 }
 
+fn reference_launch_state(record: &JobRecord, acknowledgement: &Value) -> Option<&'static str> {
+	if !trusted_launch_ack(record, acknowledgement) {
+		return None;
+	}
+	if record.system_jobctl
+		&& record.execution_mode == ExecutionMode::Isolated
+		&& acknowledgement["reused_remote"] == true
+	{
+		return Some(
+			match acknowledgement
+				.pointer("/status/launch_state")
+				.and_then(Value::as_str)
+			{
+				Some("pending") => "pending",
+				Some("launch_failed") => "launch_failed",
+				Some("launched") => "launched",
+				Some("cancelled") => "cancelled",
+				_ => "launch_unknown",
+			},
+		);
+	}
+	Some(if acknowledgement["backend"] == "launch_failed" {
+		"launch_failed"
+	} else {
+		"launched"
+	})
+}
+
 fn preserve_launch_outcome<F>(
 	record: &mut JobRecord,
 	outcome: Result<Value>,
@@ -3945,33 +5621,27 @@ fn preserve_launch_outcome<F>(
 where
 	F: FnOnce(&JobRecord) -> Result<()>,
 {
-	let value = match outcome {
-		Ok(value) if trusted_launch_ack(record, &value) => {
-			let remote_state = if record.system_jobctl
-				&& record.execution_mode == ExecutionMode::Isolated
-				&& value.get("reused_remote").and_then(Value::as_bool) == Some(true)
-			{
-				value
-					.pointer("/status/launch_state")
-					.and_then(Value::as_str)
-					.filter(|state| {
-						matches!(
-							*state,
-							"pending" | "launch_failed" | "launched" | "cancelled"
-						)
-					})
-					.unwrap_or("launch_unknown")
-			} else if value["backend"] == "launch_failed" {
-				"launch_failed"
-			} else {
-				"launched"
-			};
+	let decision = outcome
+		.as_ref()
+		.ok()
+		.and_then(|ack| reference_launch_state(record, ack));
+	preserve_launch_result(record, outcome, decision, persist)
+}
+
+fn preserve_launch_result(
+	record: &mut JobRecord,
+	outcome: Result<Value>,
+	decision: Option<&str>,
+	persist: impl FnOnce(&JobRecord) -> Result<()>,
+) -> LaunchOutcome {
+	let value = match (outcome, decision) {
+		(Ok(value), Some(remote_state)) => {
 			record.launch_state = remote_state.to_string();
 			record.launch_error = (remote_state == "launch_unknown")
 				.then(|| "Remote launch state unavailable".to_string());
 			value
 		}
-		Ok(_) | Err(_) => {
+		_ => {
 			// Invalid ACKs and transport failures cannot prove the supervisor did not launch.
 			record.launch_state = "launch_unknown".to_string();
 			record.launch_error = Some("Remote launch outcome unavailable".to_string());
@@ -3999,6 +5669,47 @@ async fn preserve_launch_outcome_async(
 ) -> LaunchOutcome {
 	// From receiving the ACK to handing its original outcome and ownership to
 	// the blocking worker there is no cancellable await, even when writers are busy.
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		if hia::launch_ack_selected(record.idempotency_key.as_deref()) {
+			let mut publication = record.clone();
+			let executor = tokio::runtime::Handle::current();
+			// The original lane and effect fence remain owned by the same
+			// detached writer during both HIA classification and publication.
+			let result = run_start_io(ownership, move || {
+				let decision = match &outcome {
+					Ok(ack) => executor
+						.block_on(hia::launch_ack(
+							publication.system_jobctl
+								&& publication.execution_mode == ExecutionMode::Isolated,
+							&publication.id,
+							&publication.unit,
+							ack,
+						))
+						.unwrap_or_else(|_| {
+							tracing::warn!(
+								"Native HIA launch acknowledgement unavailable; outcome uncertain"
+							);
+							None
+						}),
+					Err(_) => None,
+				};
+				let retained = preserve_launch_result(&mut publication, outcome, decision, persist);
+				Ok((publication, retained))
+			})
+			.await;
+			return match result {
+				Ok((publication, retained)) => {
+					*record = publication;
+					retained
+				}
+				Err(error) => preserve_launch_result(record, Err(error), None, |_| {
+					bail!("job launch result publication unavailable")
+				}),
+			};
+		}
+	}
 	let mut retained = preserve_launch_outcome(record, outcome, |_| Ok(()));
 	let publication = record.clone();
 	retained.local_record_pending = run_start_io(ownership, move || persist(&publication))
@@ -4027,26 +5738,60 @@ fn reconcile_retry_allowed(record: &JobRecord) -> bool {
 		&& matches!(record.launch_state.as_str(), "pending" | "launch_failed")
 }
 
+async fn owned_reuse_status_policy(
+	record: &JobRecord,
+	key: &str,
+	allow_reconcile_launch: bool,
+) -> Result<(bool, bool)> {
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		if hia::job_transition_selected(key) {
+			let action = hia::job_transition(
+				allow_reconcile_launch,
+				record.system_jobctl,
+				record.execution_mode == ExecutionMode::Isolated,
+				&record.launch_state,
+			)
+			.await?;
+			let (decision, mode) = match action {
+				hia::JobTransition::ObserveLocked => ((false, false), "observe_locked"),
+				hia::JobTransition::ObserveUnlocked => ((false, true), "observe_unlocked"),
+				hia::JobTransition::ReconcileKnownJob => ((true, false), "reconcile_known_job"),
+			};
+			tracing::info!("Native HIA durable launch transition decided: {mode}");
+			return Ok(decision);
+		}
+	}
+	#[cfg(not(target_os = "linux"))]
+	let _ = key;
+	let retry = allow_reconcile_launch && reconcile_retry_allowed(record);
+	Ok((retry, !retry && record.launch_state == "launched"))
+}
+
 fn unavailable_status(job_id: &str) -> Value {
 	json!({"job_id":job_id,"state":"status_unavailable","outcome":"unknown",
         "status_authoritative":false,"automatic_retry":false})
 }
 
 async fn read_reuse_status<G>(
-	record: &JobRecord,
-	retry: bool,
+	job_id: &str,
+	release_guard: bool,
 	start_guard: &mut Option<G>,
 	read_status: impl Future<Output = Result<Value>>,
-) -> Value {
+) -> Result<Value> {
 	// A confirmed original launch needs only an observation. Keep uncertain
 	// identities and launch reconciliation serialized, but do not make another
 	// same-host start wait for this read-only SSH status roundtrip.
-	if !retry && record.launch_state == "launched" {
+	if release_guard {
 		drop(start_guard.take());
 	}
-	read_status
-		.await
-		.unwrap_or_else(|_| unavailable_status(&record.id))
+	match read_status.await {
+		Ok(value) => Ok(value),
+		#[cfg(target_os = "linux")]
+		Err(error) if error.is::<crate::mcp::hia_request_prepare::JobStatusUnavailable>() => Err(error),
+		Err(_) => Ok(unavailable_status(job_id)),
+	}
 }
 
 fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
@@ -4078,6 +5823,128 @@ fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
 		"reconcile_via":"process_status"})
 }
 
+fn launch_request(
+	host: &HostConfig,
+	record: &JobRecord,
+	params: &ProcessStartParams,
+) -> Result<Value> {
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!(
+			"native-only job profile does not admit legacy system jobctl submission; no fallback"
+		);
+	}
+	let native = super::native_jobs::admit(host)?;
+	let request = json!({
+		"job_id": record.id,
+		"job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest,
+		"unit": record.unit,
+		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
+		"platform": host.platform,
+		"execution_mode": record.execution_mode,
+		"executable": params.executable,
+		"args": params.args,
+		"cwd": params.cwd,
+		"allowed_cwd_prefixes": &host.allowed_cwd_prefixes,
+		"env": params.env,
+		"stdin": params.stdin,
+		"timeout_seconds": params.timeout_seconds,
+		"nice": params.nice.unwrap_or(0),
+		"cpu_quota_percent": params.cpu_quota_percent,
+		"memory_max_bytes": params.memory_max_bytes,
+		"allow_job_network": host.allow_job_network,
+		"allow_detached_fallback": host.allow_detached_fallback,
+	});
+	#[cfg(target_os = "linux")]
+	let mut request = request;
+	#[cfg(target_os = "linux")]
+	{
+		use crate::mcp::hia_request_prepare as hia;
+		if hia::launch_ack_selected(record.idempotency_key.as_deref()) {
+			// An explicitly selected but invalid image must not permit a
+			// new remote effect before the acknowledgement owner is admitted.
+			hia::launch_ack_image()?;
+		}
+		if let Some(native) = native {
+			native.select_submission(&mut request)?;
+		} else if !record.system_jobctl
+			&& host.platform == Platform::Linux
+			&& record.execution_mode == ExecutionMode::Operator
+			&& hia::job_witness_selected(record.idempotency_key.as_deref())
+			&& params.args.get(..5).is_some_and(|args| {
+				args.iter().map(String::as_str).eq([
+					"-B",
+					"-E",
+					"-s",
+					"-m",
+					"hepta.hia_agent_worker",
+				])
+			}) && params
+			.args
+			.last()
+			.is_some_and(|arg| arg == "--request-json-stdin")
+		{
+			// This trusted transport payload is not part of the existing job identity.
+			if let Some((artifacts, supervisor_protocol)) =
+				crate::mcp::hia_controller_release::terminal_publication_artifacts()
+			{
+				request["hia_terminal_publication_artifacts"] = artifacts.clone();
+				if supervisor_protocol >= 7 {
+					request["hia_terminal_supervisor"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 8 {
+					request["hia_owner_publication"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 9 {
+					request["hia_workdir_authority"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 11 {
+					request["hia_loop_authority"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 14 {
+					request["hia_group_authority"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 15 {
+					request["hia_child_publication"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 16 {
+					request["hia_original_child_wait"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 17 {
+					request["hia_native_output_capture"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 18 {
+					request["hia_workload_spawn"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 19 {
+					request["hia_supervisor_identity"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 20 {
+					request["hia_owner_lock_admission"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 21 {
+					request["hia_owner_record_encoding"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 22 {
+					request["hia_owner_file_lock"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 23 {
+					request["hia_owner_marker_observation"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 24 {
+					request["hia_owner_custody"] = serde_json::Value::Bool(true);
+				}
+				if supervisor_protocol >= 25 {
+					request["hia_native_job_owner"] = serde_json::Value::Bool(true);
+				}
+			}
+		}
+	}
+	#[cfg(not(target_os = "linux"))]
+	let _ = native;
+	Ok(request)
+}
+
 async fn launch_record(
 	record: &mut JobRecord,
 	params: &ProcessStartParams,
@@ -4100,27 +5967,7 @@ where
 {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
-	let request = json!({
-		"job_id": record.id,
-		"job_dir": record.remote_job_dir,
-		"request_digest": record.request_digest,
-		"unit": record.unit,
-		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
-		"platform": host.platform,
-		"execution_mode": record.execution_mode,
-		"executable": params.executable,
-		"args": params.args,
-		"cwd": params.cwd,
-		"allowed_cwd_prefixes": &host.allowed_cwd_prefixes,
-		"env": params.env,
-		"stdin": params.stdin,
-		"timeout_seconds": params.timeout_seconds,
-		"nice": params.nice.unwrap_or(0),
-		"cpu_quota_percent": params.cpu_quota_percent,
-		"memory_max_bytes": params.memory_max_bytes,
-		"allow_job_network": host.allow_job_network,
-		"allow_detached_fallback": host.allow_detached_fallback,
-	});
+	let request = launch_request(host, record, params)?;
 	let launch_result = if record.system_jobctl {
 		run_jobctl_with_entry(
 			host,
@@ -4130,6 +5977,14 @@ where
 				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
 				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
 			}),
+			enter,
+		)
+		.await
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json_with_entry(
+			host,
+			super::native_jobs::NativeJobOperation::Submit(&request),
+			Duration::from_secs(20),
 			enter,
 		)
 		.await
@@ -4164,8 +6019,8 @@ fn validate_new_host_resource_limits(
 		&& (params.cpu_quota_percent.is_some() || params.memory_max_bytes.is_some())
 	{
 		bail!(
-            "macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted"
-        );
+			"macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted"
+		);
 	}
 	Ok(())
 }
@@ -4189,14 +6044,21 @@ pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String
 	let Some(existing) = find_idempotent_async(&params.host, key).await? else {
 		return Ok(None);
 	};
-	let digest = request_digest(&params)?;
-	if !matches_request(&existing, &digest)? {
+	let digest = owned_request_digest(&params).await?;
+	if !owned_matches_request(&existing, key, &digest).await? {
 		bail!("idempotency key `{key}` is already bound to a different request");
 	}
 	check_binding(&existing)?;
 	// Even pending isolated/jobctl records are observation-only here. In
 	// particular, do not use start_job's optional launch reconciliation path.
-	let status = read_reuse_status(&existing, false, &mut guard, status_record(&existing, 0)).await;
+	let (_, release_guard) = owned_reuse_status_policy(&existing, key, false).await?;
+	let status = read_reuse_status(
+		&existing.id,
+		release_guard,
+		&mut guard,
+		status_record(&existing, 0),
+	)
+	.await?;
 	Ok(Some(serde_json::to_string_pretty(&json!({
 		"observation_only": true,
 		"reused": true,
@@ -4255,15 +6117,16 @@ where
 	}
 	// Serialize and hash the full binding once, including potentially large stdin.
 	// Both reuse checks and new metadata retain this same complete SHA256 value.
-	let digest = request_digest(&params)?;
+	let digest = owned_request_digest(&params).await?;
 	let request_fingerprint = fingerprint(&digest);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent_async(&params.host, key).await? {
-			if !matches_request(&existing, &digest)? {
+			if !owned_matches_request(&existing, key, &digest).await? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			check_binding(&existing)?;
-			let retry = allow_reconcile_launch && reconcile_retry_allowed(&existing);
+			let (retry, release_guard) =
+				owned_reuse_status_policy(&existing, key, allow_reconcile_launch).await?;
 			let launch = if retry {
 				require_operation_intent(
 					start_audit(
@@ -4281,12 +6144,13 @@ where
 				None
 			};
 			let status = read_reuse_status(
-				&existing,
-				retry,
+				&existing.id,
+				release_guard,
 				&mut start_guard,
 				status_record(&existing, 0),
 			)
-			.await;
+			.await
+			.unwrap_or_else(|_| unavailable_status(&existing.id));
 			let mut result = json!({
 				"reused": true,
 				"retried_launch": retry,
@@ -4410,6 +6274,9 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	};
 	let record = check_ref(&reference)?;
 	let host = runtime_config()?.host(&record.host)?;
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!("native-only job profile does not admit legacy system jobctl reads; no fallback");
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -4446,6 +6313,13 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	} else if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"read","job_id":record.id,
             "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json(
+			host,
+			super::native_jobs::NativeJobOperation::Read(&request),
+			Duration::from_secs(15),
+		)
+		.await?
 	} else {
 		run_python_json(
 			host,
@@ -4493,6 +6367,11 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	// fenced off. Carry that verified binding, without acquiring a new owner.
 	let record = Arc::new(check_ref(&reference)?);
 	let host = runtime_config()?.host(&record.host)?;
+	if host.native_jobs.is_some() && record.system_jobctl {
+		bail!(
+			"native-only job profile does not admit legacy system jobctl cancellation; no fallback"
+		);
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -4500,6 +6379,21 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
+	#[cfg(target_os = "linux")]
+	let mut request = request;
+	#[cfg(target_os = "linux")]
+	if !record.system_jobctl && host.platform == Platform::Linux {
+		if let Some((artifacts, protocol)) =
+			crate::mcp::hia_controller_release::terminal_publication_artifacts()
+		{
+			if protocol >= 10 {
+				request["hia_cancel_authority"] = artifacts["encoder"].clone();
+			}
+			if protocol >= 12 {
+				request["hia_cancel_writer"] = artifacts["writer"].clone();
+			}
+		}
+	}
 	let intent = prepare_audit(
 		"process_cancel_intent",
 		&params.host,
@@ -4510,6 +6404,13 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	let record = run_cancel_intent(intent, record, append_audit).await?;
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
+	} else if host.native_jobs.is_some() {
+		super::ssh::run_native_job_json(
+			host,
+			super::native_jobs::NativeJobOperation::Cancel(&request),
+			Duration::from_secs(45),
+		)
+		.await
 	} else {
 		run_python_json(
 			host,
@@ -4848,6 +6749,14 @@ mod inventory_digest_tests;
 #[cfg(test)]
 #[path = "jobs_pagination_tests.rs"]
 mod pagination_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_native_executable_tests.rs"]
+mod native_executable_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_native_profile_tests.rs"]
+mod native_profile_tests;
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_output_durability_tests.rs"]

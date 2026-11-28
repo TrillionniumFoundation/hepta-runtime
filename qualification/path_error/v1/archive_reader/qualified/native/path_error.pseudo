@@ -1,0 +1,71 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def dispatch(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)>=8:
+        if load(s,0)==3544386036649119560:
+            return dual_entry(s,o,w)
+    return previous_entry(s,o,w)
+
+def dual_entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3544386036649119560 or load(s,8)!=3 or load(s,56)!=length(s)-64:
+        return 4294967295
+    kind=load(s,24)
+    number=load(s,32)
+    first=load(s,40)
+    size=length(s)-64
+    if kind<1 or kind>14 or number==0 or number>4095 or load(s,48)!=3 or first>size:
+        return 4294967295
+    if kind!=errno_class(number):
+        return 4294967295
+    second=size-first
+    if utf8(s,64,first)==0 or utf8(s,64+first,second)==0:
+        return 4294967295
+    if length(w)<12288:
+        return 4294967294
+    install_data(w)
+    kind=rendered_errno_class(number)
+    class_word=get(w,(kind-1)*8)
+    class_at=class_word&4294967295
+    class_size=class_word>>32
+    quote_first=choose_quote(s,64,first)
+    quote_second=choose_quote(s,64+first,second)
+    message_at=0
+    message_size=0
+    if number<134:
+        descriptor=get(w,128+number*8)
+        message_at=descriptor&4294967295
+        message_size=descriptor>>32
+    if message_size==0:
+        message_size=14+digits(number)
+    needed=class_size+2+9+digits(number)+message_size+2+repr_size(s,w,64,first,quote_first)
+    needed=needed+4+repr_size(s,w,64+first,second,quote_second)
+    if needed>=4294901760:
+        return 4294967295
+    if length(o)<needed:
+        return 4294967294
+    at=copy_out(w,o,class_at,0,class_size)
+    store(o,at,58)
+    store(o,at+1,32)
+    at=at+2
+    copy_out(w,o,10140,at,7)
+    at=decimal(o,at+7,number)
+    store(o,at,93)
+    store(o,at+1,32)
+    at=at+2
+    if message_at==0:
+        copy_out(w,o,10126,at,14)
+        at=decimal(o,at+14,number)
+    else:
+        copy_out(w,o,message_at,at,message_size)
+        at=at+message_size
+    store(o,at,58)
+    store(o,at+1,32)
+    at=repr_emit(s,w,o,64,first,at+2,quote_first)
+    store(o,at,32)
+    store(o,at+1,45)
+    store(o,at+2,62)
+    store(o,at+3,32)
+    return repr_emit(s,w,o,64+first,second,at+4,quote_second)

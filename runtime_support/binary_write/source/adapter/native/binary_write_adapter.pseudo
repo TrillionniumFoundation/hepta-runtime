@@ -1,0 +1,244 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(o)<64:
+        return 4294967294
+    if length(s)<48 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3544386032287302216 or load(s,32)!=length(s)-48:
+        return 4294967295
+    command=load(s,8)
+    if command==1:
+        return start(s,o,w)
+    if command==2:
+        return resume(s,o,w)
+    if command==3:
+        return release(s,o,w)
+    return 4294967295
+
+def load(s:readbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(s,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def get(w:mutbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(w,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    index=0
+    while index<8:
+        store(w,at+index,value>>(index*8))
+        index=index+1
+    return 0
+
+def grow(o:mutbuf,kind:u64,needed:u64) -> u32:
+    put(o,0,3616443635283937096)
+    put(o,8,kind)
+    put(o,16,needed)
+    put(o,24,0)
+    return 4294967248
+
+def header(o:mutbuf,kind:u64,sequence:u64,size:u64,detail:u64) -> u64:
+    fill_range(o,0,64,0)
+    put(o,0,3544386036582269512)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,size)
+    put(o,32,detail)
+    return 0
+
+def state(w:mutbuf) -> u64:
+    if length(w)<256:
+        return 0
+    if get(w,0)==0:
+        index=0
+        while index<256:
+            if byte(w,index)!=0:
+                return 0
+            index=index+1
+        return 1
+    if get(w,0)!=3544386040877236808 or get(w,8)>2 or get(w,16)==0:
+        return 0
+    index=48
+    while index<256:
+        if byte(w,index)!=0:
+            return 0
+        index=index+1
+    request=get(w,24)
+    ready=get(w,32)
+    if request>length(w)-256 or ready>length(w)-256-request:
+        return 0
+    if get(w,40)!=request+ready:
+        return 0
+    if get(w,8)==0:
+        if request!=0 or ready!=0:
+            return 0
+    elif request<304 or ready<64:
+        return 0
+    return 1
+
+def source_frame(s:readbuf,size:u64) -> u64:
+    if size<304 or size>length(s)-48:
+        return 0
+    if load(s,48)!=3544386032471392840 or load(s,56)!=2 or load(s,64)>1 or load(s,88)!=0:
+        return 0
+    typed=load(s,72)
+    feedback=load(s,80)
+    if typed<256 or typed>size-48 or feedback!=size-48-typed or feedback<32:
+        return 0
+    if load(s,96)!=3544386036867023432 or load(s,104)!=0 or load(s,112)!=3:
+        return 0
+    index=120
+    while index<184:
+        if load(s,index)!=0:
+            return 0
+        index=index+8
+    index=216
+    while index<352:
+        if byte(s,index)!=0:
+            return 0
+        index=index+1
+    remaining=typed-256
+    index=184
+    while index<216:
+        count=load(s,index)
+        if count>remaining:
+            return 0
+        remaining=remaining-count
+        index=index+8
+    if remaining!=0:
+        return 0
+    at=96+typed
+    if load(s,at)!=3544417875257414216 or load(s,at+8)!=0 or load(s,at+16)!=0 or load(s,at+24)!=feedback-32:
+        return 0
+    return 1
+
+def ready_frame(s:readbuf,at:u64,size:u64) -> u64:
+    if size<64:
+        return 0
+    if load(s,at)!=3544386036766360136 or load(s,at+8)!=3 or load(s,at+16)!=3:
+        return 0
+    if load(s,at+24)!=0 or load(s,at+32)!=3 or load(s,at+40)!=1 or load(s,at+48)!=0:
+        return 0
+    if load(s,at+56)!=size-64:
+        return 0
+    return 1
+
+def start(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if load(s,16)!=0 or load(s,24)!=0:
+        return 4294967295
+    request=load(s,40)
+    if source_frame(s,request)==0:
+        return 4294967295
+    ready=length(s)-48-request
+    if ready_frame(s,48+request,ready)==0:
+        return 4294967295
+    needed=256+length(s)-48
+    if length(w)>=256:
+        if state(w)==0 or get(w,8)!=0 or get(w,16)==18446744073709551615:
+            return 4294967295
+    if length(w)<needed:
+        return grow(o,1,needed)
+    if length(o)<64+request:
+        return grow(o,2,64+request)
+    sequence=get(w,16)+1
+    put(w,0,3544386040877236808)
+    put(w,8,1)
+    put(w,16,sequence)
+    put(w,24,request)
+    put(w,32,ready)
+    put(w,40,request+ready)
+    copy_span(w,s,256,48,request+ready)
+    header(o,1,sequence,request,0)
+    copy_span(o,s,64,48,request)
+    return 64+request
+
+def resume(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if load(s,40)!=0 or state(w)==0 or get(w,0)!=3544386040877236808 or get(w,8)!=1:
+        return 4294967295
+    sequence=get(w,16)
+    if load(s,16)!=sequence:
+        return 4294967295
+    code=load(s,24)
+    size=length(s)-48
+    if code==4294967295:
+        if size!=0:
+            return 4294967295
+        header(o,3,sequence,0,1)
+        put(w,8,2)
+        return 64
+    if code<64 or code>=4294901760 or code!=size:
+        return 4294967295
+    same=1
+    if size!=get(w,32):
+        same=0
+    else:
+        index=0
+        at=256+get(w,24)
+        while index<size:
+            if byte(s,48+index)!=byte(w,at+index):
+                same=0
+            index=index+1
+    if same==0:
+        if length(o)<64+size:
+            return grow(o,2,64+size)
+        header(o,3,sequence,size,2)
+        copy_span(o,s,64,48,size)
+        put(w,8,2)
+        return 64+size
+    return parent(o,w)
+
+def parent(o:mutbuf,w:mutbuf) -> u32:
+    request=256
+    typed=get(w,request+24)
+    root=request+48+typed+32
+    rootsize=get(w,root-8)
+    hostsize=get(w,request+136)
+    pathsize=get(w,request+144)
+    datasize=get(w,request+152)
+    versionsize=get(w,request+160)
+    path=request+304+hostsize
+    data=path+pathsize
+    version=data+datasize
+    total=96+rootsize+pathsize+versionsize+datasize
+    if length(o)<64+total:
+        return grow(o,2,64+total)
+    header(o,2,get(w,16),total,0)
+    fill_range(o,64,96,0)
+    put(o,64,3544386032655942216)
+    put(o,72,1)
+    put(o,88,1)
+    put(o,96,rootsize)
+    put(o,104,pathsize)
+    put(o,112,versionsize)
+    put(o,120,datasize)
+    put(o,128,1)
+    put(o,152,total-96)
+    at=160
+    copy_span(o,w,at,root,rootsize)
+    at=at+rootsize
+    copy_span(o,w,at,path,pathsize)
+    at=at+pathsize
+    copy_span(o,w,at,version,versionsize)
+    at=at+versionsize
+    copy_span(o,w,at,data,datasize)
+    put(w,8,2)
+    return 64+total
+
+def release(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)!=48 or load(s,24)!=0 or load(s,40)!=0:
+        return 4294967295
+    if state(w)==0 or get(w,0)!=3544386040877236808 or get(w,8)!=2 or load(s,16)!=get(w,16):
+        return 4294967295
+    header(o,0,get(w,16),0,0)
+    put(w,8,0)
+    put(w,24,0)
+    put(w,32,0)
+    put(w,40,0)
+    return 64

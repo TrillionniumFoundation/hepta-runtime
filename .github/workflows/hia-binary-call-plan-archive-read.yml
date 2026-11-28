@@ -1,0 +1,59 @@
+name: Independently read uploaded binary caller evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-call-plan-archive-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_ARCHIVE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_call_plan/v1/archive_reader
+      BINARY_ARCHIVE_MANIFEST: 63287cd0c66d181b341ebbe85cb7f35ed0b135654f5d3724ea4a04cef4c88336
+    steps:
+      - name: Checkout complete frozen pure reader sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_call_plan/v1/archive_reader
+          persist-credentials: false
+      - name: Verify every source byte before reading the uploaded archive
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          source=Path(os.environ["BINARY_ARCHIVE_SOURCE"]);sys.path.insert(0,str(source))
+          import archive_reader
+          archive_reader.identity(os.environ["BINARY_ARCHIVE_MANIFEST"])
+          for path in source.rglob("*.py"):compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Fetch and hash the complete uploaded ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$BINARY_ARCHIVE_SOURCE/driver.py" fetch \
+            --work "$RUNNER_TEMP/binary-call-plan-archive-read" --source-manifest-sha256 "$BINARY_ARCHIVE_MANIFEST"
+      - name: Restore and completely admit all uploaded archive bytes and sets
+        run: |
+          python3 -I -S -B "$BINARY_ARCHIVE_SOURCE/driver.py" restore \
+            --work "$RUNNER_TEMP/binary-call-plan-archive-read" --source-manifest-sha256 "$BINARY_ARCHIVE_MANIFEST"
+      - name: Read all ZIP TAR source native buffer original and physical proof bytes
+        run: |
+          python3 -I -S -B "$BINARY_ARCHIVE_SOURCE/driver.py" read \
+            --work "$RUNNER_TEMP/binary-call-plan-archive-read" --source-manifest-sha256 "$BINARY_ARCHIVE_MANIFEST"
+      - name: Upload full pure-reader proofs and failure streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-call-plan-independent-read-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-call-plan-archive-read/proof
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

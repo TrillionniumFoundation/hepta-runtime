@@ -1,0 +1,27 @@
+{
+  "schema": "hepta.runtime.multi-read-utf8.reader-fix.v1",
+  "original_commit": "2f340d95af89d927a54495e01ac8a81c590da94e",
+  "original_manifest_sha256": "96bb7cf4c9a69de88b3912753117855fc790fecaf1f52f98747f02720168c25a",
+  "before": {
+    "path": "scripts/read_utf8.py",
+    "mode": "100644",
+    "git_blob": "99b4f7e3ae37b734105db8c503b94975124d225b",
+    "bytes": 14595,
+    "sha256": "2082fa40b31226bf0a93a5b89e8d26fb35aa63fedffd40aff0bf3127cc9eacd9"
+  },
+  "after": {
+    "path": "scripts/read_utf8.py",
+    "mode": "100644",
+    "git_blob": "8fd748cd2887e9d72def15786119fa15c880e586",
+    "bytes": 14595,
+    "sha256": "39e68291ede0c97f6c4760362a4f686e3f49060a23c33c9fb6d2424c9a480996"
+  },
+  "edits": [
+    {
+      "old": "stat.S_IMODE(binary.stat().st_mode)==0o755",
+      "new": "stat.S_IMODE(binary.stat().st_mode)==0o500",
+      "occurrences": 1
+    }
+  ],
+  "evidence": "The unchanged native build reader and producer require and set mode 0500; the semantic reader incorrectly required 0755. Complete native ELF bytes are unchanged. No application will be replayed."
+}

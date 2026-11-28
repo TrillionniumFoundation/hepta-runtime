@@ -1,0 +1,50 @@
+name: Capture actual original JSON error-depth profiles
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-value-original-error-profile-6780-20261118]
+permissions:
+  contents: read
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [0, 1, 2]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v2/original_error_profiles
+      PYJSON_MANIFEST: 65c0916588f050f93758623fc72db65beda1c2e41c5ff48e789fbc6090f11fa1
+      PYJSON_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen original expressions and complete readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_value/v2/original_error_profiles
+          persist-credentials: false
+      - name: Execute each original depth case once
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" run \
+            --work "$RUNNER_TEMP/json-value-original-error-$PYJSON_GROUP" --group "$PYJSON_GROUP" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Preserve every original capture and failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/json-value-original-error-$PYJSON_GROUP" --group "$PYJSON_GROUP" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST" --output "$RUNNER_TEMP/json-value-original-error-$PYJSON_GROUP-export"
+      - name: Upload complete original profiles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: json-value-original-error-depth-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/json-value-original-error-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30

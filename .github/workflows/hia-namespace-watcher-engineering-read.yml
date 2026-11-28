@@ -1,0 +1,55 @@
+name: Pure recovery of complete Watcher engineering read
+on:
+  push:
+    branches: [hia-namespace-watcher-engineering-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_watcher_engineering_read
+      - name: Verify exact independent source and compile only Python
+        run: |
+          mkdir "$RUNNER_TEMP/watcher-engineering-read"
+          cp -a tests/hia_native/namespace_watcher_engineering_read "$RUNNER_TEMP/watcher-engineering-read/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"watcher-engineering-read/source";raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="2cab8bd51c139867ee1a3e8972f640046b1cffaa2e64f497c74e9162e7dfdf4e"
+          for p,pin in json.loads(raw)["files"].items():
+              b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"]
+              if p.endswith(".py"):compile(b,str(r/p),"exec")
+          PY
+      - name: Download exact failed complete native engineering artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14353077851/zip > "$RUNNER_TEMP/watcher-engineering-read/original.zip"
+      - name: Read every uploaded ZIP TAR logical byte mode and Git source
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/watcher-engineering-read/source/restore.py" --archive "$RUNNER_TEMP/watcher-engineering-read/original.zip" --output "$RUNNER_TEMP/watcher-engineering-read/restored" --pins "$RUNNER_TEMP/watcher-engineering-read/source/PINS.json"
+          mkdir "$RUNNER_TEMP/watcher-engineering-read/restoration-proof"
+          cp "$RUNNER_TEMP/watcher-engineering-read/restored/RESTORE.json" "$RUNNER_TEMP/watcher-engineering-read/restored/artifact-manifest.json" "$RUNNER_TEMP/watcher-engineering-read/restored/exporter.json" "$RUNNER_TEMP/watcher-engineering-read/restoration-proof/"
+      - name: Read every completed native engineering and build buffer without replay
+        run: python3 -I -B "$RUNNER_TEMP/watcher-engineering-read/source/run.py" --restored "$RUNNER_TEMP/watcher-engineering-read/restored" --output "$RUNNER_TEMP/watcher-engineering-read/output"
+      - name: Preserve all originals failures and independent proof
+        if: always()
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/watcher-engineering-read/source/export.py" --workspace "$RUNNER_TEMP/watcher-engineering-read" --archive "$RUNNER_TEMP/watcher-engineering-read/watcher-engineering-read-read.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-engineering-read-read
+          path: |
+            ${{ runner.temp }}/watcher-engineering-read/watcher-engineering-read-read.tar.gz
+            ${{ runner.temp }}/watcher-engineering-read/watcher-engineering-read-read.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

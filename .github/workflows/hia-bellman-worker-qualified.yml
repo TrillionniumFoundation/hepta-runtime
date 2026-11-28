@@ -1,0 +1,81 @@
+name: HIA complete private Bellman worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-bellman-worker-qualified-6780-20261116
+
+permissions:
+  contents: read
+
+jobs:
+  qualified:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: '1.95.0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+      SOURCE_PINS: 3d9990db99ea9050696006d1ce2878558db38af31ac3b7ee5a3f69f6e1af16c3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: worker-compiler
+          persist-credentials: false
+      - name: Install exact original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Fresh HIA and unchanged original complete worker domains
+        run: |
+          umask 077
+          mkdir "$RUNNER_TEMP/bellman-worker-qualified"
+          python -I -S -B tests/hia_native/bellman_worker_qualified/source/tests/hia_native/blocking_worker/worker_recipe.py \
+            --phase all --source-root "$GITHUB_WORKSPACE/tests/hia_native/bellman_worker_qualified/source" \
+            --capture "$RUNNER_TEMP/bellman-worker-qualified/capture" --hepta "$GITHUB_WORKSPACE/worker-compiler" \
+            --source-pins-sha256 "$SOURCE_PINS"
+      - name: Physical rehashed reader refusal controls
+        run: |
+          python -I -S -B tests/hia_native/bellman_worker_qualified/source/tests/hia_native/blocking_worker/worker_reader_controls.py \
+            --source-root "$GITHUB_WORKSPACE/tests/hia_native/bellman_worker_qualified/source" \
+            --capture "$RUNNER_TEMP/bellman-worker-qualified/capture" --source-pins-sha256 "$SOURCE_PINS" \
+            --output "$RUNNER_TEMP/bellman-worker-qualified/controls"
+      - name: Relocate complete admitted capture and source
+        run: |
+          python -I -S -B - "$GITHUB_WORKSPACE" "$RUNNER_TEMP/bellman-worker-qualified" <<'PY'
+          import sys
+          from pathlib import Path
+          repository=Path(sys.argv[1]);base=Path(sys.argv[2]);source=repository/'tests/hia_native/bellman_worker_qualified/source'
+          sys.path.insert(0,str(source/'tests/hia_native/blocking_worker'))
+          from worker_reader_controls import copy_files
+          copy_files(base/'capture',base/'relocated/capture')
+          copy_files(source,base/'relocated/source')
+          copy_files(base/'controls',base/'relocated/controls')
+          PY
+      - name: Readonly relocated full reader under execution and write rejection
+        run: |
+          python -I -S -B "$RUNNER_TEMP/bellman-worker-qualified/relocated/source/tests/hia_native/blocking_worker/worker_readonly_guard.py" \
+            --source-root "$RUNNER_TEMP/bellman-worker-qualified/relocated/source" \
+            --capture "$RUNNER_TEMP/bellman-worker-qualified/relocated/capture" --source-pins-sha256 "$SOURCE_PINS" \
+            --controls "$RUNNER_TEMP/bellman-worker-qualified/relocated/controls" \
+            --output "$RUNNER_TEMP/bellman-worker-qualified/READONLY.json"
+      - name: Retain every success or failure byte
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/bellman-worker-qualified" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-worker-qualified.tar.gz" bellman-worker-qualified
+            sha256sum "$RUNNER_TEMP/bellman-worker-qualified.tar.gz" > "$RUNNER_TEMP/bellman-worker-qualified.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-worker-qualified-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bellman-worker-qualified.tar.gz
+            ${{ runner.temp }}/bellman-worker-qualified.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error

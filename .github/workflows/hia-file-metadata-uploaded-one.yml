@@ -1,0 +1,47 @@
+name: Complete retained metadata upload read after terminal transfer failure
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-metadata-uploaded-one-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [preserve-race-b]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      METADATA_SOURCE: ${{ github.workspace }}/qualification/file_metadata/v1/uploaded_read
+      METADATA_MANIFEST: fad7e08903ccdd57beaff4f13f3e97970883ca8f14bc15a6c7c90f810800c8a3
+      METADATA_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact full source-owned pure readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_metadata/v1/uploaded_read
+          persist-credentials: false
+      - name: Read all archive objects source buffers effects controls and guarded records
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/driver.py" read --work "$RUNNER_TEMP/metadata-independent" --group "$METADATA_GROUP" --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Retain complete independent reader and all process streams
+        if: always()
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/driver.py" export --work "$RUNNER_TEMP/metadata-independent" --group "$METADATA_GROUP" --output "$RUNNER_TEMP/metadata-independent-export" --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Upload complete independently bound proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

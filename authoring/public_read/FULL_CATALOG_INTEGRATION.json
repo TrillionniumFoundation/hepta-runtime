@@ -1,0 +1,38 @@
+{
+  "additional_runtime_hia_images": 4,
+  "all_runtime_hia_image_instances": 162,
+  "capability_commit": "bba7e45464b15d371de12dfa359050322ec090ca",
+  "capability_runtime_hia_images": 5,
+  "current_entry_after_sha256": "bba7da5a538aa9e6f3d70dd7e042f550c4b1af85a47e894fa44b08d47e421cb1",
+  "current_entry_before_sha256": "1cb9ba1f0c4adc8021b67b9c084b69b17e12f35f6ca2db722c258b42e60f59d4",
+  "declared_tools": 136,
+  "exact_replacements": [
+    [
+      "from public_read_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images",
+      "from public_read_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images\nfrom public_full_catalog_build import source_paths as catalog_source_paths, build_image as build_catalog_image"
+    ],
+    [
+      "*HELPERS, *read_source_paths(root),",
+      "*HELPERS, *read_source_paths(root), *catalog_source_paths(root),"
+    ],
+    [
+      "    images.update(read_images)\n    assembly = adapter_source",
+      "    images.update(read_images)\n    images['catalog'], catalog_build = build_catalog_image(root, build, folder, images['catalog'])\n    assembly = adapter_source"
+    ],
+    [
+      "'runtime_hia_images': len(MEMBERS) + 8 + read_build['runtime_hia_image_instances'],",
+      "'runtime_hia_images': len(MEMBERS) + 8 + read_build['runtime_hia_image_instances'] + catalog_build['additional_runtime_hia_images'],"
+    ],
+    [
+      "              'public_read_dependencies': read_build,",
+      "              'public_read_dependencies': read_build,\n              'public_catalog_dependency': catalog_build,\n              'catalog_member_image_retained_inside_composite': True,"
+    ]
+  ],
+  "public_builder_after_sha256": "26a73ff63ff75d48659e0bb5729b3ea0ba1c43a3d758c836c2d3c6040eff420d",
+  "public_builder_before_sha256": "a24f086ca051789080c37c057588ef8be1c24894b23c0b23f856e2999f04957e",
+  "public_dispatch_qualified": false,
+  "replaced_original_member_images": 1,
+  "schema": "hepta.runtime.public-full-catalog.integration-source.v1",
+  "standard_compiled_member_count": 127,
+  "top_level_physical_images": 130
+}

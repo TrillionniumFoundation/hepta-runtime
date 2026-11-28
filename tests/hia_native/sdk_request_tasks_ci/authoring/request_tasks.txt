@@ -1,0 +1,600 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 64 or length(s) > 67108928:
+        return INVALID
+    if read64(s, 0) != INPUT_MAGIC or read64(s, 56) != 0:
+        return INVALID
+    if read64(s, 16) == 0 or read64(s, 48) != length(s) - 64:
+        return INVALID
+    op = read64(s, 8)
+    if op < 1 or op > 14:
+        return INVALID
+    if op > 2 and read64(s, 48) != 0:
+        return INVALID
+    if length(o) < 192:
+        return grow(o, 2, 192)
+    if length(w) < 256:
+        return grow(o, 1, 256)
+    if get(w, 0) == 0:
+        fill_range(w, 0, 256, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, read64(s, 16))
+        put(w, 16, 1)
+        put(w, 72, 256)
+        put(w, 120, 1)
+    if get(w, 0) != STATE_MAGIC or get(w, 8) != read64(s, 16):
+        return INVALID
+    if get(w, 72) < 256 or get(w, 72) > length(w):
+        return INVALID
+    if op == 1:
+        return admit(s, o, w)
+    if op == 2:
+        return notification(s, o, w)
+    if op == 3:
+        return handler_response(s, o, w)
+    if op == 4:
+        return send_ack(s, o, w)
+    if op == 5:
+        return handler_dropped(s, o, w)
+    if op == 6:
+        return begin_drain(s, o, w)
+    if op == 7:
+        return drain_progress(s, o, w)
+    if op == 8:
+        return retire(s, o, w)
+    if op == 9:
+        return attach(s, o, w)
+    if op == 10:
+        return next_cancel(s, o, w)
+    if op == 11:
+        return cancel_ack(s, o, w)
+    if op == 13:
+        return queue_response(s, o, w)
+    if op == 14:
+        if controls_zero(s) == False:
+            return INVALID
+        return claim_response(o, w)
+    if read64(s, 32) != 0 or read64(s, 40) != 0:
+        return INVALID
+    return reply(o, w, 0, read64(s, 24))
+
+def admit(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if controls_zero(s) == False:
+        return INVALID
+    if get(w, 24) != 0:
+        return BUSY
+    if message_header(s, 1) == False:
+        return INVALID
+    if pair_valid(s, 80) == False:
+        return INVALID
+    start = 64 + read64(s, 144)
+    size = read64(s, 152)
+    kind = read64(s, 104)
+    if size == 0 or size > 16777216:
+        return INVALID
+    if canonical_id(s, start, size, kind) == False:
+        return INVALID
+    used = get(w, 72)
+    record = (112 + size + 7) & 18446744073709551608
+    if used > 268435456 - record:
+        return grow(o, 3, used + record)
+    if length(w) < used + record:
+        return grow(o, 1, used + record)
+    generation = get(w, 16)
+    if generation == 18446744073709551615:
+        return RESOURCE
+    previous = find_input_id(s, w, start, size, kind)
+    if previous != 0:
+        put(w, previous + 16, 0)
+        put(w, 40, get(w, 40) - 1)
+    fill_range(w, used, record, 0)
+    put(w, used, record)
+    put(w, used + 8, generation)
+    put(w, used + 16, 1)
+    put(w, used + 64, kind)
+    put(w, used + 72, size)
+    copy_range(w, s, used + 112, start, size)
+    put(w, 16, generation + 1)
+    put(w, 40, get(w, 40) + 1)
+    put(w, 48, get(w, 48) + 1)
+    put(w, 64, get(w, 64) + 1)
+    put(w, 72, used + record)
+    advance(w)
+    return reply(o, w, 1, generation)
+
+def notification(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if controls_zero(s) == False or message_header(s, 2) == False:
+        return INVALID
+    if get(w, 24) != 0:
+        return BUSY
+    if read64(s, 80) != 101:
+        return reply(o, w, 11, 0)
+    if pair_valid(s, 176) == False:
+        return INVALID
+    if cancellation_id(s, w) == False:
+        return INVALID
+    row = 0
+    if get(w, 144) != 0:
+        row = find_input_id(s, w, get(w, 128), get(w, 136), get(w, 144))
+    if row == 0:
+        advance(w)
+        return reply(o, w, 3, 0)
+    put(w, row + 16, 0)
+    cancel_context(w, row)
+    put(w, 40, get(w, 40) - 1)
+    advance(w)
+    return reply(o, w, 2, get(w, row + 8))
+
+def handler_response(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if no_arguments(s) == False:
+        return INVALID
+    if get(w, 112) != 0:
+        return BUSY
+    if get(w, 24) == 1:
+        if get(w, 56) != 0 or get(w, 152) != 0:
+            return BUSY
+    code = queue_response(s, o, w)
+    if code != 192:
+        return code
+    return claim_response(o, w)
+
+def send_ack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if read64(s, 40) != 0 or read64(s, 32) > 1:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0 or get(w, row + 48) != 1:
+        return BUSY
+    if get(w, row + 104) == 1 and get(w, 24) == 1:
+        if read64(s, 32) == 0:
+            put(w, 152, 1)
+    put(w, row + 104, 0)
+    put(w, row + 48, 0)
+    put(w, 56, get(w, 56) - 1)
+    advance(w)
+    return reply(o, w, 0, read64(s, 24))
+
+def handler_dropped(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if no_arguments(s) == False:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0:
+        return BUSY
+    if get(w, row + 24) != 1 or get(w, row + 32) != 0:
+        return BUSY
+    put(w, row + 32, 1)
+    put(w, row + 56, 0)
+    put(w, 48, get(w, 48) - 1)
+    advance(w)
+    return reply(o, w, 5, read64(s, 24))
+
+def begin_drain(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if read64(s, 24) != 0:
+        return INVALID
+    reason = read64(s, 32)
+    if reason < 1 or reason > 2:
+        return INVALID
+    if get(w, 24) != 0:
+        return BUSY
+    duration = 5000000000
+    if reason == 2:
+        duration = 2000000000
+    now = read64(s, 40)
+    if now > 18446744073709551615 - duration:
+        return INVALID
+    put(w, 24, 1)
+    put(w, 96, now + duration)
+    put(w, 104, reason)
+    if reason == 2:
+        put(w, 80, 1)
+        cancel_all(w)
+    advance(w)
+    return reply(o, w, 6, 0)
+
+def drain_progress(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if read64(s, 24) != 0 or read64(s, 40) != 0:
+        return INVALID
+    if get(w, 24) != 1:
+        return BUSY
+    if get(w, 152) == 0:
+        if get(w, 48) != 0 or get(w, 56) != 0 or get(w, 112) != 0:
+            if read64(s, 32) < get(w, 96):
+                return reply(o, w, 6, 0)
+    cancel_all(w)
+    row = 256
+    while row < get(w, 72):
+        put(w, row + 16, 0)
+        row = row + get(w, row)
+    put(w, 40, 0)
+    put(w, 24, 2)
+    advance(w)
+    return reply(o, w, 7, 0)
+
+def retire(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if no_arguments(s) == False:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0:
+        return BUSY
+    if get(w, row + 16) != 0 or get(w, row + 32) != 1:
+        return BUSY
+    if get(w, row + 48) != 0 or get(w, row + 56) != 0:
+        return BUSY
+    if get(w, row + 96) != 0:
+        return BUSY
+    size = get(w, row)
+    end = get(w, 72)
+    copy_within(w, row, row + size, end - row - size)
+    fill_range(w, end - size, size, 0)
+    put(w, 64, get(w, 64) - 1)
+    put(w, 72, end - size)
+    advance(w)
+    return reply(o, w, 8, read64(s, 24))
+
+def attach(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    row = find_generation(w, read64(s, 24))
+    tag = read64(s, 32)
+    job = read64(s, 40)
+    if row == 0 or tag == 0:
+        return INVALID
+    if get(w, row + 32) != 0:
+        return BUSY
+    previous = get(w, row + 80)
+    if previous != 0 and previous != tag:
+        return BUSY
+    previous = get(w, row + 88)
+    if previous != 0 and previous != job:
+        return BUSY
+    put(w, row + 80, tag)
+    put(w, row + 88, job)
+    advance(w)
+    return reply(o, w, 0, read64(s, 24))
+
+def next_cancel(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if controls_zero(s) == False:
+        return INVALID
+    row = 256
+    while row < get(w, 72):
+        if get(w, row + 56) == 1:
+            return reply(o, w, 10, get(w, row + 8))
+        row = row + get(w, row)
+    return reply(o, w, 9, 0)
+
+def cancel_ack(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if no_arguments(s) == False:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0 or get(w, row + 56) != 1:
+        return BUSY
+    put(w, row + 56, 0)
+    advance(w)
+    return reply(o, w, 0, read64(s, 24))
+
+def cancel_context(w:mutbuf, row:u64) -> u64:
+    if get(w, row + 24) == 0:
+        put(w, row + 24, 1)
+        if get(w, row + 32) == 0:
+            put(w, row + 56, 1)
+    return 0
+
+def cancel_all(w:mutbuf) -> u64:
+    put(w, 32, 1)
+    row = 256
+    while row < get(w, 72):
+        cancel_context(w, row)
+        row = row + get(w, row)
+    return 0
+
+def advance(w:mutbuf) -> u64:
+    put(w, 88, get(w, 88) + 1)
+    return 0
+
+def controls_zero(s:readbuf) -> bool:
+    if read64(s, 24) != 0:
+        return False
+    return no_arguments(s)
+
+def no_arguments(s:readbuf) -> bool:
+    if read64(s, 32) != 0:
+        return False
+    return read64(s, 40) == 0
+
+def message_header(s:readbuf, kind:u64) -> bool:
+    if read64(s, 48) < 256:
+        return False
+    if read64(s, 64) != MESSAGE_MAGIC:
+        return False
+    return read64(s, 72) == kind
+
+def pair_valid(s:readbuf, field:u64) -> bool:
+    start = read64(s, 64 + field)
+    size = read64(s, 72 + field)
+    if start < 256 or start > read64(s, 48):
+        return False
+    return size <= read64(s, 48) - start
+
+def canonical_id(s:readbuf, start:u64, size:u64, kind:u64) -> bool:
+    if size == 0:
+        return False
+    if kind == 2:
+        if byte(s, start) != 34:
+            return False
+        return string_end(s, start, start + size) == start + size
+    if kind != 1:
+        return False
+    pos = start
+    if byte(s, pos) == 45:
+        pos = pos + 1
+    if pos == start + size:
+        return False
+    while pos < start + size:
+        if byte(s, pos) < 48 or byte(s, pos) > 57:
+            return False
+        pos = pos + 1
+    return True
+
+def cancellation_id(s:readbuf, w:mutbuf) -> bool:
+    put(w, 128, 0)
+    put(w, 136, 0)
+    put(w, 144, 0)
+    pos = 64 + read64(s, 240)
+    end = pos + read64(s, 248)
+    if end - pos < 2 or byte(s, pos) != 123:
+        return False
+    pos = pos + 1
+    while pos < end:
+        if byte(s, pos) == 125:
+            return pos + 1 == end
+        key = pos
+        key_end = string_end(s, key, end)
+        if key_end == 0 or key_end >= end:
+            return False
+        if byte(s, key_end) != 58:
+            return False
+        value = key_end + 1
+        tail = value_end(s, value, end)
+        if tail == 0:
+            return False
+        if request_id_key(s, key, key_end) == True:
+            if tail - value == 4:
+                if byte(s, value) == 110:
+                    return True
+            kind = 1
+            if byte(s, value) == 34:
+                kind = 2
+            if canonical_id(s, value, tail - value, kind) == False:
+                return False
+            put(w, 128, value)
+            put(w, 136, tail - value)
+            put(w, 144, kind)
+            return True
+        if tail >= end:
+            return False
+        if byte(s, tail) == 125:
+            return tail + 1 == end
+        if byte(s, tail) != 44:
+            return False
+        pos = tail + 1
+    return False
+
+def request_id_key(s:readbuf, start:u64, end:u64) -> bool:
+    if end - start != 11:
+        return False
+    if read64(s, start + 1) != REQUEST_ID_WORD:
+        return False
+    return byte(s, start + 9) == 100
+
+def string_end(s:readbuf, pos:u64, end:u64) -> u64:
+    if pos >= end or byte(s, pos) != 34:
+        return 0
+    pos = pos + 1
+    while pos < end:
+        c = byte(s, pos)
+        if c == 34:
+            return pos + 1
+        if c == 92:
+            pos = pos + 1
+            if pos >= end:
+                return 0
+        pos = pos + 1
+    return 0
+
+def value_end(s:readbuf, pos:u64, end:u64) -> u64:
+    if pos >= end:
+        return 0
+    c = byte(s, pos)
+    if c == 34:
+        return string_end(s, pos, end)
+    if c != 123 and c != 91:
+        while pos < end:
+            c = byte(s, pos)
+            if c == 44 or c == 125 or c == 93:
+                return pos
+            pos = pos + 1
+        return 0
+    depth = 0
+    while pos < end:
+        c = byte(s, pos)
+        if c == 34:
+            pos = string_end(s, pos, end)
+            if pos == 0:
+                return 0
+        else:
+            if c == 123 or c == 91:
+                depth = depth + 1
+            if c == 125 or c == 93:
+                if depth == 0:
+                    return 0
+                depth = depth - 1
+                if depth == 0:
+                    return pos + 1
+            pos = pos + 1
+    return 0
+
+def find_generation(w:mutbuf, generation:u64) -> u64:
+    row = 256
+    while row < get(w, 72):
+        if get(w, row + 8) == generation:
+            return row
+        row = row + get(w, row)
+    return 0
+
+def find_input_id(s:readbuf, w:mutbuf, start:u64, size:u64, kind:u64) -> u64:
+    row = 256
+    while row < get(w, 72):
+        if get(w, row + 16) == 1:
+            if get(w, row + 64) == kind and get(w, row + 72) == size:
+                if equal_input(s, w, start, row + 112, size) == True:
+                    return row
+        row = row + get(w, row)
+    return 0
+
+def equal_input(s:readbuf, w:mutbuf, start:u64, at:u64, size:u64) -> bool:
+    i = 0
+    while i < size:
+        if byte(s, start + i) != byte(w, at + i):
+            return False
+        i = i + 1
+    return True
+
+def find_row_id(w:mutbuf, selected:u64) -> u64:
+    row = 256
+    while row < get(w, 72):
+        if get(w, row + 16) == 1:
+            if get(w, row + 64) == get(w, selected + 64):
+                if get(w, row + 72) == get(w, selected + 72):
+                    if equal_rows(w, row, selected) == True:
+                        return row
+        row = row + get(w, row)
+    return 0
+
+def equal_rows(w:mutbuf, first:u64, second:u64) -> bool:
+    i = 0
+    while i < get(w, first + 72):
+        if byte(w, first + 112 + i) != byte(w, second + 112 + i):
+            return False
+        i = i + 1
+    return True
+
+def reply(o:mutbuf, w:mutbuf, disposition:u64, generation:u64) -> u32:
+    fill_range(o, 0, 192, 0)
+    put(o, 0, OUTPUT_MAGIC)
+    put(o, 8, disposition)
+    put(o, 16, get(w, 8))
+    put(o, 24, generation)
+    row = find_generation(w, generation)
+    if row != 0:
+        put(o, 32, get(w, row + 80))
+        put(o, 40, get(w, row + 88))
+        flags = get(w, row + 16) | (get(w, row + 24) << 1)
+        flags = flags | (get(w, row + 32) << 2) | (get(w, row + 40) << 3)
+        flags = flags | (get(w, row + 48) << 4) | (get(w, row + 56) << 5)
+        put(o, 48, flags)
+    put(o, 56, get(w, 24))
+    put(o, 64, get(w, 40))
+    put(o, 72, get(w, 48))
+    put(o, 80, get(w, 56))
+    put(o, 88, get(w, 64))
+    put(o, 96, get(w, 72))
+    put(o, 104, get(w, 104))
+    put(o, 112, get(w, 96))
+    put(o, 120, get(w, 32))
+    put(o, 128, get(w, 80))
+    put(o, 136, get(w, 88))
+    put(o, 160, get(w, 112))
+    put(o, 168, get(w, 120))
+    put(o, 176, get(w, 152))
+    return 192
+
+def grow(o:mutbuf, kind:u64, capacity:u64) -> u32:
+    if length(o) < 32:
+        return RESOURCE
+    fill_range(o, 0, 32, 0)
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, capacity)
+    return GROW
+
+def read64(s:readbuf, at:u64) -> u64:
+    value = byte(s, at)
+    value = value | (byte(s, at + 1) << 8)
+    value = value | (byte(s, at + 2) << 16)
+    value = value | (byte(s, at + 3) << 24)
+    value = value | (byte(s, at + 4) << 32)
+    value = value | (byte(s, at + 5) << 40)
+    value = value | (byte(s, at + 6) << 48)
+    value = value | (byte(s, at + 7) << 56)
+    return value
+
+def get(w:mutbuf, at:u64) -> u64:
+    value = byte(w, at)
+    value = value | (byte(w, at + 1) << 8)
+    value = value | (byte(w, at + 2) << 16)
+    value = value | (byte(w, at + 3) << 24)
+    value = value | (byte(w, at + 4) << 32)
+    value = value | (byte(w, at + 5) << 40)
+    value = value | (byte(w, at + 6) << 48)
+    value = value | (byte(w, at + 7) << 56)
+    return value
+
+def put(w:mutbuf, at:u64, value:u64) -> u64:
+    store(w, at, value & 255)
+    store(w, at + 1, (value >> 8) & 255)
+    store(w, at + 2, (value >> 16) & 255)
+    store(w, at + 3, (value >> 24) & 255)
+    store(w, at + 4, (value >> 32) & 255)
+    store(w, at + 5, (value >> 40) & 255)
+    store(w, at + 6, (value >> 48) & 255)
+    store(w, at + 7, (value >> 56) & 255)
+    return 0
+
+def queue_response(s:readbuf, o:mutbuf, w:mutbuf) -> u64:
+    if no_arguments(s) == False:
+        return INVALID
+    row = find_generation(w, read64(s, 24))
+    if row == 0 or get(w, row + 32) != 0:
+        return BUSY
+    ordinal = get(w, 120)
+    if ordinal == 18446744073709551615:
+        return RESOURCE
+    put(w, row + 32, 1)
+    put(w, row + 40, 1)
+    put(w, row + 56, 0)
+    put(w, row + 96, ordinal)
+    put(w, 120, ordinal + 1)
+    put(w, 48, get(w, 48) - 1)
+    put(w, 112, get(w, 112) + 1)
+    advance(w)
+    return reply(o, w, 12, read64(s, 24))
+
+def claim_response(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, 24) == 1:
+        if get(w, 56) != 0 or get(w, 152) != 0:
+            return reply(o, w, 14, 0)
+    row = first_queued(w)
+    if row == 0:
+        return reply(o, w, 13, 0)
+    put(w, row + 96, 0)
+    put(w, 112, get(w, 112) - 1)
+    selected = find_row_id(w, row)
+    if selected == 0 or get(w, 24) == 2:
+        advance(w)
+        return reply(o, w, 5, get(w, row + 8))
+    put(w, selected + 16, 0)
+    cancel_context(w, selected)
+    put(w, 40, get(w, 40) - 1)
+    put(w, row + 48, 1)
+    put(w, row + 104, get(w, 24))
+    put(w, 56, get(w, 56) + 1)
+    advance(w)
+    return reply(o, w, 4, get(w, row + 8))
+
+def first_queued(w:mutbuf) -> u64:
+    row = 256
+    chosen = 0
+    ordinal = 18446744073709551615
+    while row < get(w, 72):
+        current = get(w, row + 96)
+        if current != 0 and current < ordinal:
+            ordinal = current
+            chosen = row
+        row = row + get(w, row)
+    return chosen

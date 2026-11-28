@@ -1,0 +1,115 @@
+def query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)>=24:
+        if load(s,0)==REQUEST and load(s,8)==9:
+            return binary_root(s,o,w)
+    return retained_query(s,o,w)
+
+def binary_root(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<64:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=9 or load(s,16)!=length(s)-24:
+        return INVALID
+    if load(s,24)!=0 or load(s,32)!=0 or load(s,40)>1:
+        return INVALID
+    name_size=load(s,48)
+    path_size=load(s,56)
+    if name_size>length(s)-64:
+        return INVALID
+    if path_size!=length(s)-64-name_size:
+        return INVALID
+    if valid_utf8(s,64,name_size)==0 or valid_utf8(s,64+name_size,path_size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return binary_result(s,o,w,1,0,0)
+    host=binary_named_host(s,w,name_size)
+    if host==0:
+        return binary_result(s,o,w,2,64,name_size)
+    base=region(w,2)+24
+    if get(w,base+host+152)!=1:
+        return binary_result(s,o,w,3,0,0)
+    status=remote_path_query(s,o,w,length(s)-24)
+    if status!=32:
+        return status
+    if get(o,8)!=0:
+        return status
+    roots=host+768
+    if load(s,40)!=0:
+        roots=host+832
+    node=binary_longest_root(s,w,64+name_size,path_size,roots)
+    if node==0:
+        return binary_result(s,o,w,4,0,0)
+    return binary_result(s,o,w,0,base+get(w,base+node+32),get(w,base+node+40))
+
+def binary_named_host(s:readbuf,w:mutbuf,name_size:u64) -> u64:
+    base=region(w,2)+24
+    root=get(w,region(w,2)+40)
+    fields=get(w,base+root+16)
+    node=get(w,base+fields+144)
+    while node!=0:
+        name=get(w,base+node+48)
+        size=get(w,base+node+56)
+        if equal(s,64,name_size,w,base+name,size):
+            return get(w,base+node+16)
+        node=get(w,base+node+8)
+    return 0
+
+def binary_longest_root(s:readbuf,w:mutbuf,path:u64,path_size:u64,field:u64) -> u64:
+    base=region(w,2)+24
+    node=get(w,base+field+16)
+    best=0
+    best_size=0
+    while node!=0:
+        start=get(w,base+node+32)
+        size=get(w,base+node+40)
+        if size>=best_size:
+            if binary_prefix(s,w,path,path_size,base+start,size):
+                best=node
+                best_size=size
+        node=get(w,base+node+8)
+    return best
+
+def binary_prefix(s:readbuf,w:mutbuf,path:u64,path_size:u64,root:u64,root_size:u64) -> bool:
+    if equal(s,path,path_size,w,root,root_size):
+        return True
+    while root_size>0:
+        if byte(w,root+root_size-1)!=47:
+            if path_size<=root_size:
+                return False
+            if byte(s,path+root_size)!=47:
+                return False
+            return equal(s,path,root_size,w,root,root_size)
+        root_size=root_size-1
+    if path_size==0:
+        return False
+    return byte(s,path)==47
+
+def binary_result(s:readbuf,o:mutbuf,w:mutbuf,code:u64,start:u64,size:u64) -> u64:
+    payload=size
+    if code!=0:
+        payload=binary_literal_size(code)
+    if code==2:
+        if size>=LIMIT-32-payload-binary_literal_size(5):
+            return growth(o,3,0)
+        payload=payload+size+binary_literal_size(5)
+    if payload>=LIMIT-32:
+        return growth(o,3,0)
+    required=32+payload
+    if length(o)<required:
+        return growth(o,2,required)
+    put(o,0,RESPONSE)
+    flag=0
+    if code!=0:
+        flag=1
+    put(o,8,flag)
+    put(o,16,0)
+    put(o,24,payload)
+    if code==0:
+        copy_span(o,w,32,start,size)
+    else:
+        at=binary_literal(o,32,code)
+        if code==2:
+            copy_span(o,s,at,start,size)
+            binary_literal(o,at+size,5)
+    return required

@@ -1,0 +1,83 @@
+name: Actual private publication worker lifecycle
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-worker-lifecycle-6780-v2-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_worker_lifecycle_ci
+      - name: Exact source and Python import preflight without application execution
+        run: python3 -I -S -B "$GITHUB_WORKSPACE/runtime/tests/hia_native/publication_worker_lifecycle_ci/source/recipe/entry.py" source
+  native:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set actual runner paths
+        run: |
+          printf '%s\n' "PW_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/publication_worker_lifecycle_ci/source" "PW_RUN=$RUNNER_TEMP/publication-worker-lifecycle" "PW_EXPORT=$RUNNER_TEMP/publication-worker-lifecycle-export" "PW_DRIVER=$RUNNER_TEMP/publication-worker-lifecycle-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_worker_lifecycle_ci
+      - name: Complete actual 24-process native lifecycle and pure controls
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/entry.py" capture --output "$PW_RUN" > "$PW_DRIVER.stdout" 2> "$PW_DRIVER.stderr"
+      - name: Preserve all completed or failed native evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/archive.py" pack --source "$PW_SOURCE" --capture "$PW_RUN" --output "$PW_EXPORT" --driver-prefix "$PW_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publisher-worker-lifecycle-${{ github.sha }}
+          path: ${{ env.PW_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  uploaded-read:
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set actual read paths
+        run: |
+          printf '%s\n' "PW_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/publication_worker_lifecycle_ci/source" "PW_WORK=$RUNNER_TEMP/publication-worker-lifecycle-reread" "PW_PROOF=$RUNNER_TEMP/publication-worker-lifecycle-proof" "PW_EXPORT=$RUNNER_TEMP/publication-worker-lifecycle-proof-export" "PW_DRIVER=$RUNNER_TEMP/publication-worker-lifecycle-proof-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_worker_lifecycle_ci
+      - name: Entire uploaded archive and independent guarded read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/read_uploaded.py" --run "${{ github.run_id }}" --head "${{ github.sha }}" --artifact-name "publisher-worker-lifecycle-${{ github.sha }}" --work "$PW_WORK" --output "$PW_PROOF" > "$PW_DRIVER.stdout" 2> "$PW_DRIVER.stderr"
+      - name: Preserve complete passive proof
+        if: always()
+        run: |
+          python3 -I -S -B "$PW_SOURCE/recipe/archive.py" pack --source "$PW_SOURCE" --capture "$PW_PROOF" --output "$PW_EXPORT" --driver-prefix "$PW_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publisher-worker-lifecycle-read-${{ github.sha }}
+          path: ${{ env.PW_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

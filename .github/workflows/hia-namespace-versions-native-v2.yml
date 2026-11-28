@@ -1,0 +1,79 @@
+name: Build real native namespace mutex and child composition
+on:
+  push:
+    branches: [hia-namespace-versions-native-v2-6780-20261118]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Freeze every actual source byte before author or compiler execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAMESPACE_BUILD_ROOT="$RUNNER_TEMP/namespace-versions-native-v2"
+          printf 'NAMESPACE_BUILD_ROOT=%s\n' "$NAMESPACE_BUILD_ROOT" >> "$GITHUB_ENV"
+          mkdir "$NAMESPACE_BUILD_ROOT"
+          cp -a qualification/namespace_versions/v1/native_v2 "$NAMESPACE_BUILD_ROOT/source"
+          mkdir "$NAMESPACE_BUILD_ROOT/outer"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"namespace-versions-native-v2/source"
+          raw=(r/"SOURCE_MANIFEST.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="5bf7163e98a72947382412833fea0424dad6e23636bf9a7044981fb0e7a27fa2"
+          m=json.loads(raw)
+          assert {p.relative_to(r).as_posix()for p in r.rglob("*")if p.is_file()}=={x["path"]for x in m["files"]}|{"SOURCE_MANIFEST.json"}
+          for row in m["files"]:
+              b=(r/row["path"]).read_bytes()
+              assert len(b)==row["bytes"]and hashlib.sha256(b).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==row["git_blob"]
+              if row["path"].endswith(".py"):compile(b,str(r/row["path"]),"exec")
+          PY
+      - name: Compile actual owners and HIA packers with zero application calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B "$NAMESPACE_BUILD_ROOT/source/gate.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --output "$NAMESPACE_BUILD_ROOT/run" \
+            > "$NAMESPACE_BUILD_ROOT/outer/build.stdout" 2> "$NAMESPACE_BUILD_ROOT/outer/build.stderr"
+      - name: Retain the exact generated source and actual failure streams
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$NAMESPACE_BUILD_ROOT/outer/build.stdout"; then cat "$NAMESPACE_BUILD_ROOT/outer/build.stdout"; fi
+          if test -f "$NAMESPACE_BUILD_ROOT/outer/build.stderr"; then cat "$NAMESPACE_BUILD_ROOT/outer/build.stderr"; fi
+      - name: Archive and read every source/build byte without executing an application
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_BUILD_ROOT/source/export.py" \
+            --workspace "$NAMESPACE_BUILD_ROOT" --archive "$RUNNER_TEMP/namespace-versions-native-v2.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-versions-native-v2
+          path: |
+            ${{ runner.temp }}/namespace-versions-native-v2.tar.gz
+            ${{ runner.temp }}/namespace-versions-native-v2.tar.gz.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

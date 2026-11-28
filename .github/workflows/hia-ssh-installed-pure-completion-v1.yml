@@ -1,0 +1,73 @@
+name: Complete SSH uploaded probes and only missing installed relocation phase
+on:
+  push:
+    branches: ['hia-ssh-installed-pure-completion-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pure:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: ssh
+            first: 14387434055
+            second: 14388670406
+          - role: installed
+            first: 14375126162
+            second: 14387877386
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set frozen pure source and owned evidence paths
+        run: |
+          printf '%s\n' "PC_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/pure_completion" "PC_CAPTURE=$RUNNER_TEMP/pure-completion-${{ matrix.role }}" "PC_STAGE=$RUNNER_TEMP/pure-completion-stage-${{ matrix.role }}" "PC_EXPORT=$RUNNER_TEMP/pure-completion-export-${{ matrix.role }}" "PC_DRIVER=$RUNNER_TEMP/pure-completion-driver-${{ matrix.role }}" "PC_TAR=$RUNNER_TEMP/original-failure-complete.tar" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/pure_completion
+      - name: Bind all source and syntax before any retained pure reader
+        run: |
+          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 579a7b929ef69512cfbb1c8ba5ffe113613687d4b328bb99de9ec384ecf91ba4
+          python3 -I -S -B - <<'PY'
+          import ast,os
+          from pathlib import Path
+          for p in Path(os.environ["PC_SOURCE"]).rglob("*.py"):
+              ast.parse(p.read_bytes(),filename=str(p))
+          PY
+      - name: Download exact complete uploaded evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.first }}/zip" -o "$RUNNER_TEMP/first.zip"
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.second }}/zip" -o "$RUNNER_TEMP/second.zip"
+      - name: Read captured probes or finish only the missing second pure phase
+        run: |
+          set +e
+          if [ "${{ matrix.role }}" = ssh ]; then
+            timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PC_SOURCE/recipe/read_uploaded.py" --source "$PC_SOURCE" --native "$RUNNER_TEMP/first.zip" --original "$RUNNER_TEMP/second.zip" --stage "$PC_STAGE" --output "$PC_CAPTURE" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+            pc_status=$?
+          else
+            pc_status=0
+            for phase in inflate extract finish; do
+              timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PC_SOURCE/recipe/recover_installed.py" "$phase" --source "$PC_SOURCE" --original-zip "$RUNNER_TEMP/first.zip" --metadata-zip "$RUNNER_TEMP/second.zip" --tar "$PC_TAR" --stage "$PC_STAGE" --output "$PC_CAPTURE" >> "$PC_DRIVER.stdout" 2>> "$PC_DRIVER.stderr"
+              pc_status=$?
+              if [ "$pc_status" -ne 0 ]; then break; fi
+            done
+          fi
+          cat "$PC_DRIVER.stderr"
+          cat "$PC_DRIVER.stdout"
+          exit "$pc_status"
+      - name: Preserve complete pure evidence with all source and metadata
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PC_SOURCE/recipe/archive.py" pack --source "$PC_SOURCE" --capture "$PC_CAPTURE" --output "$PC_EXPORT" --driver-prefix "$PC_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-installed-pure-completion-${{ matrix.role }}-${{ github.sha }}
+          path: ${{ env.PC_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

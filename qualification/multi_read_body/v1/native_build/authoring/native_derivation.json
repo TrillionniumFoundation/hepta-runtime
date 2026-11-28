@@ -1,0 +1,309 @@
+{
+  "schema": "hepta.runtime.multi-read-body.native-derivation.v1",
+  "files": {
+    "bridge": {
+      "source": "reference/file_info_at_callable.S",
+      "target": "asm/multi_read_body_callable.S",
+      "renames": [
+        {
+          "before": "file_info_at",
+          "after": "multi_read_body",
+          "count": 13
+        },
+        {
+          "before": ".Lifa_",
+          "after": ".Lmrd_",
+          "count": 312
+        },
+        {
+          "before": "I_",
+          "after": "M_",
+          "count": 55
+        },
+        {
+          "before": "0x31304943464e4948",
+          "after": "0x3130494344524d48",
+          "count": 1
+        },
+        {
+          "before": "HINFCI01",
+          "after": "HMRDCI01",
+          "count": 1
+        },
+        {
+          "before": "0x31303051464e4948",
+          "after": "0x3130305144524d48",
+          "count": 2
+        },
+        {
+          "before": "0x31303052464e4948",
+          "after": "0x3130305344524d48",
+          "count": 1
+        },
+        {
+          "before": ".equ M_MAX_INPUT, 134217728",
+          "after": ".equ M_MAX_INPUT, 1048576",
+          "count": 1
+        },
+        {
+          "before": ".equ M_REPLY_CAP, 4096",
+          "after": ".equ M_REPLY_CAP, 69632",
+          "count": 1
+        }
+      ],
+      "edits": [
+        {
+          "label": "image binding",
+          "before": "    lea rax, [rip+.Lmrd_stat]\n    mov [r12+24], rax\n",
+          "after": "    lea rax, [rip+.Lmrd_stat]\n    mov [r12+24], rax\n    lea rax, [rip+.Lmrd_codec]\n    mov [r12+32], rax\n    lea rax, [rip+.Lmrd_utf8]\n    mov [r12+152], rax\n",
+          "offset": 3560
+        },
+        {
+          "label": "two independent parent contexts",
+          "before": "    mov rdi, r13\n    mov rsi, r14\n    call binary_read_body_create\n    cmp rax, -4095\n    jae .Lmrd_create_fail\n    mov [r12+384], rax\n    mov rdi, r13\n    mov rsi, r14\n    call file_metadata_create\n",
+          "after": "    mov rdi, r13\n    mov rsi, r14\n    call parent_directory_create\n    cmp rax, -4095\n    jae .Lmrd_create_fail\n    mov [r12+384], rax\n    mov rdi, r13\n    mov rsi, r14\n    call parent_directory_create\n",
+          "offset": 4391
+        },
+        {
+          "label": "release requires both parents idle",
+          "before": "    jnz .Lmrd_release_bad\n    mov qword ptr [rdi+56], 0\n",
+          "after": "    jnz .Lmrd_release_bad\n    mov rax, [rdi+384]\n    cmp qword ptr [rax+56], 0\n    jne .Lmrd_release_bad\n    mov rax, [rdi+392]\n    cmp qword ptr [rax+56], 0\n    jne .Lmrd_release_bad\n    mov qword ptr [rdi+56], 0\n",
+          "offset": 5543
+        },
+        {
+          "label": "owned files before parent teardown",
+          "before": "    mov rdi, [r12+392]\n    test rdi, rdi\n    jz .Lmrd_destroy_read\n    call file_metadata_destroy\n    test rax, rax\n    jnz .Lmrd_destroy_resource\n    mov qword ptr [r12+392], 0\n.Lmrd_destroy_read:\n    mov rdi, [r12+384]\n    test rdi, rdi\n    jz .Lmrd_destroy_owned\n    call binary_read_body_destroy\n    test rax, rax\n    jnz .Lmrd_destroy_resource\n    mov qword ptr [r12+384], 0\n.Lmrd_destroy_owned:\n    xor ebx, ebx\n.Lmrd_destroy_fd:\n    mov rdi, [r12+256+rbx*8]\n    cmp rdi, -1\n    je .Lmrd_destroy_fd_next\n    mov eax, 3\n    syscall\n    mov qword ptr [r12+256+rbx*8], -1\n.Lmrd_destroy_fd_next:\n    inc ebx\n    cmp ebx, 8\n    jb .Lmrd_destroy_fd\n    mov qword ptr [r12+184], 0\n",
+          "after": "    mov ebx, 8\n.Lmrd_destroy_fd:\n    dec ebx\n    mov rdi, [r12+256+rbx*8]\n    cmp rdi, -1\n    je .Lmrd_destroy_fd_next\n    mov eax, 3\n    syscall\n    mov qword ptr [r12+256+rbx*8], -1\n.Lmrd_destroy_fd_next:\n    test ebx, ebx\n    jnz .Lmrd_destroy_fd\n    mov qword ptr [r12+184], 0\n    mov ebx, 392\n.Lmrd_destroy_parent:\n    mov r14, [r12+rbx]\n    test r14, r14\n    jz .Lmrd_destroy_parent_next\n    cmp qword ptr [r14+56], 4\n    jne .Lmrd_destroy_parent_release\n    mov rdi, r14\n    call parent_directory_close\n    cmp rax, 64\n    jne .Lmrd_destroy_resource\n.Lmrd_destroy_parent_release:\n    cmp qword ptr [r14+56], 2\n    jne .Lmrd_destroy_parent_do\n    mov rdi, r14\n    call parent_directory_release\n    test rax, rax\n    jnz .Lmrd_destroy_resource\n.Lmrd_destroy_parent_do:\n    mov rdi, r14\n    call parent_directory_destroy\n    test rax, rax\n    jnz .Lmrd_destroy_resource\n    mov qword ptr [r12+rbx], 0\n.Lmrd_destroy_parent_next:\n    sub ebx, 8\n    cmp ebx, 384\n    jae .Lmrd_destroy_parent\n",
+          "offset": 6318
+        },
+        {
+          "label": "fixed two-parent owned-file capabilities and raw read",
+          "before": ".Lmrd_capability:\n    M_ENTER\n    mov qword ptr [r12+232], 0\n    mov qword ptr [r12+240], 0\n    mov rax, [rbp+40]\n    or rax, [rbp+48]\n    jnz .Lmrd_cap_bad\n    mov rbx, [rbp+24]\n    cmp rbx, 1\n    je .Lmrd_cap_open\n    cmp rbx, 2\n    jb .Lmrd_cap_bad\n    cmp rbx, 4\n    ja .Lmrd_cap_bad\n    cmp qword ptr [rbp+56], 0\n    jne .Lmrd_cap_bad\n    mov rdi, [rbp+32]\n    call .Lmrd_fd_find\n    cmp rax, -1\n    je .Lmrd_cap_bad\n    mov r15, rax\n    cmp rbx, 2\n    je .Lmrd_cap_stat\n    cmp rbx, 3\n    je .Lmrd_cap_close\n    mov rdi, [r12+376]\n    mov rsi, [rbp+32]\n    mov rdx, r12\n    mov rcx, [r12+192]\n    call hia_process_orphans_append\n    test rax, rax\n    jnz .Lmrd_cap_resource\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n    inc qword ptr [r12+400]\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_open:\n    cmp qword ptr [r12+352], 1\n    jne .Lmrd_cap_bad\n    mov rax, [rbp+32]\n    cmp rax, [r12+344]\n    jne .Lmrd_cap_bad\n    cmp qword ptr [r12+184], 0\n    jne .Lmrd_cap_bad\n    lea rdi, [rbp+64]\n    mov rsi, [rbp+56]\n    call .Lmrd_name\n    test eax, eax\n    jnz .Lmrd_cap_bad\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    mov edx, 657408 /* O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC; O_RDONLY=0 */\n    mov r10d, 384\n    mov eax, 257\n    syscall\n    mov [r12+232], rax\n    cmp rax, -4095\n    jae .Lmrd_cap_ok\n    cmp rax, 2147483647\n    ja .Lmrd_cap_bad\n    mov [r12+256], rax\n    mov qword ptr [r12+184], 1\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_stat:\n    mov rdi, [r12+120]\n    add rdi, 96\n    xor eax, eax\n    mov ecx, 18\n    rep stosq\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov eax, 5\n    syscall\n    mov [r12+232], rax\n    test rax, rax\n    jnz .Lmrd_cap_ok\n    mov qword ptr [r12+240], 144\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_close:\n    mov rdi, [rbp+32]\n    mov eax, 3\n    syscall\n    mov [r12+232], rax\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n.Lmrd_cap_ok:\n    xor eax, eax\n    jmp .Lmrd_cap_done\n.Lmrd_cap_resource:\n    mov eax, M_RESOURCE\n    jmp .Lmrd_cap_done\n.Lmrd_cap_bad:\n    mov eax, M_INVALID\n.Lmrd_cap_done:\n    M_LEAVE\n",
+          "after": ".Lmrd_capability:\n    M_ENTER\n    mov qword ptr [r12+232], 0\n    mov qword ptr [r12+240], 0\n    cmp qword ptr [rbp+48], 0\n    jne .Lmrd_cap_bad\n    mov rbx, [rbp+24]\n    cmp rbx, 5\n    je .Lmrd_cap_read_check\n    cmp qword ptr [rbp+40], 0\n    jne .Lmrd_cap_bad\n    cmp rbx, 1\n    je .Lmrd_cap_open\n    cmp rbx, 2\n    jb .Lmrd_cap_bad\n    cmp rbx, 4\n    ja .Lmrd_cap_bad\n    jmp .Lmrd_cap_owned\n.Lmrd_cap_read_check:\n    cmp qword ptr [rbp+40], 1\n    jb .Lmrd_cap_bad\n    cmp qword ptr [rbp+40], 65537\n    ja .Lmrd_cap_bad\n.Lmrd_cap_owned:\n    cmp qword ptr [rbp+56], 0\n    jne .Lmrd_cap_bad\n    mov rdi, [rbp+32]\n    call .Lmrd_fd_find\n    cmp rax, -1\n    je .Lmrd_cap_bad\n    mov r15, rax\n    cmp rbx, 2\n    je .Lmrd_cap_stat\n    cmp rbx, 3\n    je .Lmrd_cap_close\n    cmp rbx, 5\n    je .Lmrd_cap_read\n    mov rdi, [r12+376]\n    mov rsi, [rbp+32]\n    mov rdx, r12\n    mov rcx, [r12+192]\n    call hia_process_orphans_append\n    test rax, rax\n    jnz .Lmrd_cap_resource\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n    inc qword ptr [r12+400]\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_open:\n    xor r15d, r15d\n.Lmrd_cap_free_slot:\n    cmp qword ptr [r12+256+r15*8], -1\n    je .Lmrd_cap_parent\n    inc r15d\n    cmp r15d, 8\n    jb .Lmrd_cap_free_slot\n    jmp .Lmrd_cap_bad\n.Lmrd_cap_parent:\n    mov r14, [r12+384]\n    mov rax, [rbp+32]\n    cmp qword ptr [r14+56], 4\n    jne .Lmrd_cap_parent_second\n    cmp [r14+344], rax\n    je .Lmrd_cap_parent_found\n.Lmrd_cap_parent_second:\n    mov r14, [r12+392]\n    cmp qword ptr [r14+56], 4\n    jne .Lmrd_cap_bad\n    cmp [r14+344], rax\n    jne .Lmrd_cap_bad\n.Lmrd_cap_parent_found:\n    cmp qword ptr [r14+8], 4096\n    jne .Lmrd_cap_bad\n    cmp qword ptr [r14+352], 1\n    jne .Lmrd_cap_bad\n    cmp qword ptr [r14+184], 1\n    jne .Lmrd_cap_bad\n    cmp rax, 2147483647\n    ja .Lmrd_cap_bad\n    lea rdi, [rbp+64]\n    mov rsi, [rbp+56]\n    call .Lmrd_name\n    test eax, eax\n    jnz .Lmrd_cap_bad\n    mov rsi, [r14+104]\n    cmp qword ptr [rsi+8], 6\n    jne .Lmrd_cap_bad\n    mov rcx, [rsi+56]\n    lea rax, [rcx+1]\n    cmp [rbp+56], rax\n    jne .Lmrd_cap_bad\n    add rsi, 64\n    lea rdi, [rbp+64]\n    repe cmpsb\n    jne .Lmrd_cap_bad\n    mov rdi, [rbp+32]\n    lea rsi, [rbp+64]\n    mov edx, 657408 /* fixed O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, O_RDONLY */\n    mov r10d, 384\n    mov eax, 257\n    syscall\n    mov [r12+232], rax\n    cmp rax, -4095\n    jae .Lmrd_cap_ok\n    cmp rax, 2147483647\n    ja .Lmrd_cap_bad\n    mov [r12+256+r15*8], rax\n    inc qword ptr [r12+184]\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_stat:\n    mov rdi, [r12+120]\n    add rdi, 96\n    xor eax, eax\n    mov ecx, 18\n    rep stosq\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov eax, 5\n    syscall\n    mov [r12+232], rax\n    test rax, rax\n    jnz .Lmrd_cap_ok\n    mov qword ptr [r12+240], 144\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_read:\n    mov rdi, [rbp+32]\n    mov rsi, [r12+120]\n    add rsi, 96\n    mov rdx, [rbp+40]\n    xor eax, eax\n    syscall\n    mov [r12+232], rax\n    test rax, rax\n    js .Lmrd_cap_ok\n    mov [r12+240], rax\n    jmp .Lmrd_cap_ok\n.Lmrd_cap_close:\n    mov rdi, [rbp+32]\n    mov eax, 3\n    syscall\n    mov [r12+232], rax\n    mov qword ptr [r12+256+r15*8], -1\n    dec qword ptr [r12+184]\n.Lmrd_cap_ok:\n    xor eax, eax\n    jmp .Lmrd_cap_done\n.Lmrd_cap_resource:\n    mov eax, M_RESOURCE\n    jmp .Lmrd_cap_done\n.Lmrd_cap_bad:\n    mov eax, M_INVALID\n.Lmrd_cap_done:\n    M_LEAVE\n",
+          "offset": 9204
+        },
+        {
+          "label": "packet-only invoke with two idle parent contexts",
+          "before": "/* Fixed graph-only parent capability. Packet FD word is zero externally. */\n.global multi_read_body_invoke\nmulti_read_body_invoke:\n    M_ENTER\n    mov r12, rdi\n    mov r15, rsi\n    mov r13, rdx\n    mov r14, rcx\n    cmp r15, 2147483647\n    ja .Lmrd_invoke_reject\n    mov rax, M_MAGIC\n    cmp [r12], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+8], 4096\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+56], 0\n    jne .Lmrd_invoke_busy\n    mov rax, [r12+184]\n    or rax, [r12+344]\n    or rax, [r12+352]\n    or rax, [r12+360]\n    or rax, [r12+368]\n    jnz .Lmrd_invoke_reject\n    cmp r14, 96\n    jb .Lmrd_invoke_reject\n    cmp r14, M_MAX_INPUT\n    ja .Lmrd_invoke_reject\n    test r13, r13\n    jz .Lmrd_invoke_reject\n    mov rax, 0x3130305144524d48\n    cmp [r13], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r13+8], 1\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r13+24], 1\n    jne .Lmrd_invoke_reject\n    mov rax, [r13+16]\n    or rax, [r13+32]\n    or rax, [r13+56]\n    or rax, [r13+64]\n    or rax, [r13+72]\n    or rax, [r13+80]\n    jnz .Lmrd_invoke_reject\n    mov rax, r14\n    sub rax, 96\n    cmp [r13+88], rax\n    jne .Lmrd_invoke_reject\n    cmp [r13+40], rax\n    ja .Lmrd_invoke_reject\n    sub rax, [r13+40]\n    cmp [r13+48], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+192], -1\n    je .Lmrd_invoke_reject\n    mov rbx, [r12+384]\n    cmp qword ptr [rbx+56], 0\n    jne .Lmrd_invoke_reject\n    mov rbx, [r12+392]\n    cmp qword ptr [rbx+56], 0\n    jne .Lmrd_invoke_reject\n    lea rdi, [r12+64]\n    mov rsi, r14\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmrd_invoke_return\n    mov rdi, [r12+64]\n    mov rsi, r13\n    mov rcx, r14\n    rep movsb\n    mov rax, [r12+64]\n    mov [rax+32], r15\n    mov [r12+344], r15\n    mov qword ptr [r12+352], 1\n    mov [r12+80], r14\n    mov rax, [r12+64]\n    mov [r12+200], rax\n    mov [r12+208], r14\n    inc qword ptr [r12+192]\n    mov qword ptr [r12+248], 0\n    mov qword ptr [r12+56], 1\n    mov qword ptr [r12+168], 0\n    mov qword ptr [r12+176], 0\n",
+          "after": "/* All paths and policy packets are owned by the HIA body. */\n.global multi_read_body_invoke\nmulti_read_body_invoke:\n    M_ENTER\n    mov r12, rdi\n    mov r13, rsi\n    mov r14, rdx\n    mov rax, M_MAGIC\n    cmp [r12], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+8], 4096\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+56], 0\n    jne .Lmrd_invoke_busy\n    mov rax, [r12+184]\n    or rax, [r12+344]\n    or rax, [r12+352]\n    or rax, [r12+360]\n    or rax, [r12+368]\n    jnz .Lmrd_invoke_reject\n    cmp r14, 96\n    jb .Lmrd_invoke_reject\n    cmp r14, M_MAX_INPUT\n    jae .Lmrd_invoke_reject\n    test r13, r13\n    jz .Lmrd_invoke_reject\n    mov rax, 0x3130305144524d48\n    cmp [r13], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r13+8], 1\n    jne .Lmrd_invoke_reject\n    mov rax, [r13+16]\n    or rax, [r13+56]\n    or rax, [r13+64]\n    or rax, [r13+72]\n    or rax, [r13+80]\n    jnz .Lmrd_invoke_reject\n    mov rax, r14\n    sub rax, 96\n    cmp [r13+88], rax\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [r12+192], -1\n    je .Lmrd_invoke_reject\n    mov rbx, [r12+384]\n    cmp qword ptr [rbx+56], 0\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [rbx+184], 0\n    jne .Lmrd_invoke_reject\n    mov rbx, [r12+392]\n    cmp qword ptr [rbx+56], 0\n    jne .Lmrd_invoke_reject\n    cmp qword ptr [rbx+184], 0\n    jne .Lmrd_invoke_reject\n    lea rdi, [r12+64]\n    mov rsi, r14\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmrd_invoke_return\n    mov rdi, [r12+64]\n    mov rsi, r13\n    mov rcx, r14\n    rep movsb\n    mov [r12+80], r14\n    mov rax, [r12+64]\n    mov [r12+200], rax\n    mov [r12+208], r14\n    inc qword ptr [r12+192]\n    mov qword ptr [r12+248], 0\n    mov qword ptr [r12+56], 1\n    mov qword ptr [r12+168], 0\n    mov qword ptr [r12+176], 0\n",
+          "offset": 12611
+        },
+        {
+          "label": "fixed parent acquire close and three HIA leaves",
+          "before": ".Lmrd_invoke_child:\n    cmp qword ptr [rbp+48], 0\n    jne .Lmrd_invoke_failed\n    mov edx, 5\n    lea rcx, [rbp+64]\n    mov r8, [rbp+56]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov rbx, [rbp+24]\n    cmp rbx, 1\n    je .Lmrd_child_fingerprint\n    cmp rbx, 2\n    je .Lmrd_child_stat\n    cmp rbx, 3\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 96\n    jb .Lmrd_invoke_failed\n    mov rax, 0x3130305154444d48\n    cmp [rbp+64], rax\n    jne .Lmrd_invoke_failed\n    mov rbx, [rbp+40]\n    cmp rbx, [rbp+88]\n    jne .Lmrd_invoke_failed\n    cmp rbx, 1\n    je .Lmrd_child_metadata_capture\n    cmp rbx, 2\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+32], 0\n    jne .Lmrd_invoke_failed\n    jmp .Lmrd_child_metadata\n.Lmrd_child_metadata_capture:\n    mov rdi, [rbp+32]\n    call .Lmrd_fd_find\n    cmp rax, -1\n    je .Lmrd_invoke_failed\n.Lmrd_child_metadata:\n    mov rax, [r12+392]\n    mov [r12+360], rax\n    mov qword ptr [r12+368], 3\n    mov rdi, rax\n    mov rsi, [rbp+32]\n    xor edx, edx\n    lea rcx, [rbp+64]\n    mov r8, [rbp+56]\n    call file_metadata_invoke\n    cmp rax, 64\n    jne .Lmrd_invoke_failed\n    mov rdi, [r12+392]\n    mov esi, 3\n    call .Lmrd_copy_nested\n    cmp eax, M_RESOURCE\n    je .Lmrd_invoke_resource\n    test eax, eax\n    jnz .Lmrd_invoke_failed\n    jmp .Lmrd_invoke_reply\n.Lmrd_child_fingerprint:\n    cmp qword ptr [rbp+40], 0\n    jne .Lmrd_invoke_failed\n    mov rax, [rbp+32]\n    cmp rax, [r12+344]\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [r12+352], 1\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 96\n    jb .Lmrd_invoke_failed\n    mov rax, 0x3130444644524248\n    cmp [rbp+64], rax\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+88], 2\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+384]\n    mov [r12+360], rax\n    mov qword ptr [r12+368], 1\n    mov rdi, rax\n    mov rsi, [rbp+32]\n    lea rdx, [rbp+64]\n    mov rcx, [rbp+56]\n    call binary_read_body_invoke_at\n    cmp rax, 64\n    jne .Lmrd_invoke_failed\n    mov rdi, [r12+384]\n    mov esi, 1\n    call .Lmrd_copy_nested\n    cmp eax, M_RESOURCE\n    je .Lmrd_invoke_resource\n    test eax, eax\n    jnz .Lmrd_invoke_failed\n    jmp .Lmrd_invoke_reply\n.Lmrd_child_stat:\n    mov rax, [rbp+32]\n    or rax, [rbp+40]\n    jnz .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 72\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+24]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 128\n    mov qword ptr [r12+336], 256\n    mov rdi, [r12+136]\n    mov ecx, 16\n    mov rax, 0xa5a5a5a5a5a5a5a5\n    rep stosq\n    mov rdi, [r12+144]\n    mov ecx, 32\n    xor eax, eax\n    rep stosq\n    mov edx, 13\n    mov rcx, [r12+136]\n    mov r8, [r12+328]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov edx, 14\n    mov rcx, [r12+144]\n    mov r8, [r12+336]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    lea rdi, [rbp+64]\n    mov rsi, [rbp+56]\n    mov rdx, [r12+136]\n    mov rcx, [r12+328]\n    mov r8, [r12+144]\n    mov r9, [r12+336]\n    call qword ptr [r12+320]\n    mov [r12+232], rax\n    cmp rax, [r12+328]\n    ja .Lmrd_invoke_failed\n    mov [r12+240], rax\n    mov rdi, [r12+120]\n    add rdi, 96\n    mov rsi, [r12+136]\n    mov rcx, rax\n    rep movsb\n    mov edx, 6\n    mov rcx, [r12+136]\n    mov r8, [r12+328]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov edx, 7\n    mov rcx, [r12+144]\n    mov r8, [r12+336]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n",
+          "after": ".Lmrd_invoke_child:\n    cmp qword ptr [rbp+48], 0\n    jne .Lmrd_invoke_failed\n    mov edx, 5\n    lea rcx, [rbp+64]\n    mov r8, [rbp+56]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov rbx, [rbp+24]\n    cmp rbx, 3\n    je .Lmrd_child_parent_acquire\n    cmp rbx, 4\n    je .Lmrd_child_parent_close\n    mov rax, [rbp+32]\n    or rax, [rbp+40]\n    jnz .Lmrd_invoke_failed\n    cmp rbx, 1\n    je .Lmrd_child_codec\n    cmp rbx, 2\n    je .Lmrd_child_stat\n    cmp rbx, 5\n    je .Lmrd_child_utf8\n    jmp .Lmrd_invoke_failed\n.Lmrd_child_parent_acquire:\n    cmp qword ptr [rbp+40], 0\n    jne .Lmrd_invoke_failed\n    mov rbx, [rbp+32]\n    cmp rbx, 1\n    ja .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 96\n    jb .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 8288\n    ja .Lmrd_invoke_failed\n    mov r14, [r12+384+rbx*8]\n    cmp qword ptr [r14+56], 0\n    jne .Lmrd_invoke_failed\n    mov [r12+360], r14\n    mov qword ptr [r12+368], 3\n    mov rdi, r14\n    lea rsi, [rbp+64]\n    mov rdx, [rbp+56]\n    call parent_directory_acquire\n    cmp rax, 64\n    jne .Lmrd_invoke_failed\n    jmp .Lmrd_child_copy_parent\n.Lmrd_child_parent_close:\n    cmp qword ptr [rbp+40], 0\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 0\n    jne .Lmrd_invoke_failed\n    mov rbx, [rbp+32]\n    cmp rbx, 1\n    ja .Lmrd_invoke_failed\n    mov r14, [r12+384+rbx*8]\n    cmp qword ptr [r14+56], 4\n    jne .Lmrd_invoke_failed\n    mov [r12+360], r14\n    mov qword ptr [r12+368], 4\n    mov rdi, r14\n    call parent_directory_close\n    cmp rax, 64\n    jne .Lmrd_invoke_failed\n.Lmrd_child_copy_parent:\n    mov rdi, r14\n    call .Lmrd_copy_parent\n    cmp eax, M_RESOURCE\n    je .Lmrd_invoke_resource\n    test eax, eax\n    jnz .Lmrd_invoke_failed\n    jmp .Lmrd_invoke_reply\n.Lmrd_child_codec:\n    cmp qword ptr [rbp+56], 24\n    jb .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 65560\n    ja .Lmrd_invoke_failed\n    movabs rax, 0x314345444f435248\n    cmp [rbp+64], rax\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+72], 2\n    jne .Lmrd_invoke_failed\n    mov rax, [rbp+56]\n    sub rax, 24\n    cmp [rbp+80], rax\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+32]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 64\n    mov qword ptr [r12+336], 1184\n    jmp .Lmrd_child_direct\n.Lmrd_child_stat:\n    cmp qword ptr [rbp+56], 72\n    jne .Lmrd_invoke_failed\n    movabs rax, 0x3130524556545348\n    cmp [rbp+64], rax\n    jne .Lmrd_invoke_failed\n    cmp qword ptr [rbp+72], 1\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+24]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 128\n    mov qword ptr [r12+336], 256\n    jmp .Lmrd_child_direct\n.Lmrd_child_utf8:\n    cmp qword ptr [rbp+56], 16\n    jb .Lmrd_invoke_failed\n    cmp qword ptr [rbp+56], 65552\n    ja .Lmrd_invoke_failed\n    movabs rax, 0x3130305146545548\n    cmp [rbp+64], rax\n    jne .Lmrd_invoke_failed\n    mov rax, [rbp+56]\n    sub rax, 16\n    cmp [rbp+72], rax\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+152]\n    mov [r12+320], rax\n    mov qword ptr [r12+328], 256\n    mov qword ptr [r12+336], 512\n.Lmrd_child_direct:\n    mov rdi, [r12+136]\n    mov rcx, [r12+328]\n    shr rcx, 3\n    mov rax, 0xa5a5a5a5a5a5a5a5\n    rep stosq\n    mov rdi, [r12+144]\n    mov rcx, [r12+336]\n    shr rcx, 3\n    xor eax, eax\n    rep stosq\n    mov edx, 13\n    mov rcx, [r12+136]\n    mov r8, [r12+328]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov edx, 14\n    mov rcx, [r12+144]\n    mov r8, [r12+336]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    lea rdi, [rbp+64]\n    mov rsi, [rbp+56]\n    mov rdx, [r12+136]\n    mov rcx, [r12+328]\n    mov r8, [r12+144]\n    mov r9, [r12+336]\n    call qword ptr [r12+320]\n    mov [r12+232], rax\n    cmp rax, [r12+328]\n    ja .Lmrd_invoke_failed\n    mov [r12+240], rax\n    mov rdi, [r12+120]\n    add rdi, 96\n    mov rsi, [r12+136]\n    mov rcx, rax\n    rep movsb\n    mov edx, 6\n    mov rcx, [r12+136]\n    mov r8, [r12+328]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n    mov edx, 7\n    mov rcx, [r12+144]\n    mov r8, [r12+336]\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_invoke_failed\n",
+          "offset": 16217
+        },
+        {
+          "label": "final requires both parent loans released",
+          "before": "    mov rax, [r12+360]\n    or rax, [r12+368]\n    jnz .Lmrd_invoke_failed\n    mov rax, [rbp+24]\n",
+          "after": "    mov rax, [r12+360]\n    or rax, [r12+368]\n    jnz .Lmrd_invoke_failed\n    mov rax, [r12+384]\n    cmp qword ptr [rax+56], 0\n    jne .Lmrd_invoke_failed\n    mov rax, [r12+392]\n    cmp qword ptr [rax+56], 0\n    jne .Lmrd_invoke_failed\n    mov rax, [rbp+24]\n",
+          "offset": 22154
+        },
+        {
+          "label": "UTF8 diagnostic is the second complete nested error",
+          "before": "    mov rax, 0x3130305253444d48\n    cmp [rbp+64], rax\n",
+          "after": "    mov rax, 0x3130304446545548\n    cmp [rbp+64], rax\n",
+          "offset": 22703
+        },
+        {
+          "label": "private failure retains held parents and releases terminal outputs",
+          "before": "    mov rdi, [r12+384]\n    cmp qword ptr [rdi+56], 2\n    jne .Lmrd_failure_metadata\n    call binary_read_body_release\n.Lmrd_failure_metadata:\n    mov rdi, [r12+392]\n    cmp qword ptr [rdi+56], 2\n    jne .Lmrd_failure_recorded\n    call file_metadata_release\n",
+          "after": "    mov rdi, [r12+384]\n    cmp qword ptr [rdi+56], 2\n    jne .Lmrd_failure_parent_second\n    call parent_directory_release\n.Lmrd_failure_parent_second:\n    mov rdi, [r12+392]\n    cmp qword ptr [rdi+56], 2\n    jne .Lmrd_failure_recorded\n    call parent_directory_release\n",
+          "offset": 23516
+        },
+        {
+          "label": "complete parent output with explicit held versus terminal ownership",
+          "before": "/* Copy the complete actual child output before releasing its borrow.\n * r12 is the caller context; rdi child context; rsi fixed child type 1 or 3.\n * No output bytes are synthesized here. Every child has its own full journal. */\n.Lmrd_copy_nested:\n    M_ENTER\n    mov r14, rdi\n    mov r15, rsi\n    cmp qword ptr [r14+56], 2\n    jne .Lmrd_copy_bad\n    mov r13, [r14+168]\n    cmp r13, 64\n    jb .Lmrd_copy_bad\n    cmp r13, M_MAX_OUT\n    ja .Lmrd_copy_bad\n    mov rax, [r14+104]\n    test rax, rax\n    jz .Lmrd_copy_bad\n    cmp r13, [r14+112]\n    ja .Lmrd_copy_bad\n    mov rbx, [rax+56]\n    add rbx, 64\n    jc .Lmrd_copy_bad\n    cmp r13, rbx\n    jne .Lmrd_copy_bad\n    lea rdi, [r12+120]\n    lea rsi, [r13+96]\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmrd_copy_resource\n    mov edx, 6\n    mov rcx, [r14+104]\n    mov r8, r13\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_copy_bad\n    mov edx, 15\n    mov rcx, r14\n    mov r8d, 4096\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_copy_bad\n    mov rdi, [r12+120]\n    add rdi, 96\n    mov rsi, [r14+104]\n    mov rcx, r13\n    rep movsb\n    mov [r12+232], r13\n    mov [r12+240], r13\n    mov rdi, r14\n    cmp r15, 1\n    je .Lmrd_copy_release_read\n    cmp r15, 3\n    jne .Lmrd_copy_bad\n    call file_metadata_release\n    jmp .Lmrd_copy_released\n.Lmrd_copy_release_read:\n    call binary_read_body_release\n.Lmrd_copy_released:\n    test rax, rax\n    jnz .Lmrd_copy_bad\n    mov qword ptr [r12+360], 0\n    mov qword ptr [r12+368], 0\n    xor eax, eax\n    jmp .Lmrd_copy_done\n.Lmrd_copy_resource:\n    mov eax, M_RESOURCE\n    jmp .Lmrd_copy_done\n.Lmrd_copy_bad:\n    mov eax, M_INVALID\n.Lmrd_copy_done:\n    M_LEAVE\n\n",
+          "after": "/* Copy every actual parent frame. A kind-6 held loan remains held.\n * Only terminal state-2 error/close responses are released here. */\n.Lmrd_copy_parent:\n    M_ENTER\n    mov r14, rdi\n    mov r15, [r14+56]\n    cmp r15, 2\n    je .Lmrd_copy_state\n    cmp r15, 4\n    jne .Lmrd_copy_bad\n.Lmrd_copy_state:\n    mov r13, [r14+168]\n    cmp r13, 64\n    jb .Lmrd_copy_bad\n    cmp r13, 4160\n    ja .Lmrd_copy_bad\n    mov rax, [r14+104]\n    test rax, rax\n    jz .Lmrd_copy_bad\n    cmp r13, [r14+112]\n    ja .Lmrd_copy_bad\n    mov rbx, [rax+56]\n    add rbx, 64\n    jc .Lmrd_copy_bad\n    cmp r13, rbx\n    jne .Lmrd_copy_bad\n    cmp r15, 4\n    jne .Lmrd_copy_terminal\n    cmp qword ptr [rax+8], 6\n    jne .Lmrd_copy_bad\n    jmp .Lmrd_copy_extent\n.Lmrd_copy_terminal:\n    cmp qword ptr [rax+8], 0\n    je .Lmrd_copy_extent\n    cmp qword ptr [rax+8], 3\n    jne .Lmrd_copy_bad\n.Lmrd_copy_extent:\n    lea rdi, [r12+120]\n    lea rsi, [r13+96]\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmrd_copy_resource\n    mov edx, 6\n    mov rcx, [r14+104]\n    mov r8, r13\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_copy_bad\n    mov edx, 15\n    mov rcx, r14\n    mov r8d, 4096\n    call .Lmrd_emit\n    test rax, rax\n    jnz .Lmrd_copy_bad\n    mov rdi, [r12+120]\n    add rdi, 96\n    mov rsi, [r14+104]\n    mov rcx, r13\n    rep movsb\n    mov [r12+232], r13\n    mov [r12+240], r13\n    cmp r15, 4\n    je .Lmrd_copy_held\n    mov rdi, r14\n    call parent_directory_release\n    test rax, rax\n    jnz .Lmrd_copy_bad\n.Lmrd_copy_held:\n    mov qword ptr [r12+360], 0\n    mov qword ptr [r12+368], 0\n    xor eax, eax\n    jmp .Lmrd_copy_done\n.Lmrd_copy_resource:\n    mov eax, M_RESOURCE\n    jmp .Lmrd_copy_done\n.Lmrd_copy_bad:\n    mov eax, M_INVALID\n.Lmrd_copy_done:\n    M_LEAVE\n\n",
+          "offset": 24191
+        },
+        {
+          "label": "four immutable direct entries",
+          "before": "/* Only these two direct HIA entries are supplied by the actual image packer.\n * Fingerprint and metadata opaque callables are statically linked above. */\n.balign 16\n.global multi_read_body_body_call_displacement\n.Lmrd_body:\n    .byte 0xe9\nmulti_read_body_body_call_displacement:\n    .long 0\n.global multi_read_body_stat_call_displacement\n.Lmrd_stat:\n    .byte 0xe9\nmulti_read_body_stat_call_displacement:\n    .long 0\n",
+          "after": "/* Four direct HIA entries and one parent image are fixed by the actual packer. */\n.balign 16\n.global multi_read_body_body_call_displacement\n.Lmrd_body:\n    .byte 0xe9\nmulti_read_body_body_call_displacement:\n    .long 0\n.global multi_read_body_stat_call_displacement\n.Lmrd_stat:\n    .byte 0xe9\nmulti_read_body_stat_call_displacement:\n    .long 0\n.global multi_read_body_codec_call_displacement\n.Lmrd_codec:\n    .byte 0xe9\nmulti_read_body_codec_call_displacement:\n    .long 0\n.global multi_read_body_utf8_call_displacement\n.Lmrd_utf8:\n    .byte 0xe9\nmulti_read_body_utf8_call_displacement:\n    .long 0\n",
+          "offset": 25934
+        },
+        {
+          "label": "module description",
+          "before": " * Fixed borrowed-parent info capability. All original info policy is HIA.\n",
+          "after": " * Fixed bounded multi-file capabilities. All original body policy is HIA.\n",
+          "offset": 74
+        }
+      ],
+      "source_sha256": "58e6658aa997eb96c05f094f2df731e68f9f35c8043499e78eced9fc84ef44b5",
+      "target_sha256": "c04aedcb9f3386f2f938651f194138005512d68c6e13a3aa1edfe06cd6382dd1"
+    },
+    "fixture": {
+      "source": "reference/file_info_at_fixture.S",
+      "target": "asm/multi_read_body_fixture.S",
+      "renames": [
+        {
+          "before": "file_info_at",
+          "after": "multi_read_body",
+          "count": 9
+        },
+        {
+          "before": ".Liff_",
+          "after": ".Lmmf_",
+          "count": 250
+        },
+        {
+          "before": ".Lifa_",
+          "after": ".Lmrd_",
+          "count": 8
+        },
+        {
+          "before": "I_",
+          "after": "M_",
+          "count": 7
+        },
+        {
+          "before": "0x31304943464e4948",
+          "after": "0x3130494344524d48",
+          "count": 3
+        },
+        {
+          "before": "HINFCI01",
+          "after": "HMRDCI01",
+          "count": 1
+        },
+        {
+          "before": "0x3130514658464948",
+          "after": "0x3130514644524d48",
+          "count": 1
+        },
+        {
+          "before": "HIFXFQ01",
+          "after": "HMRDFQ01",
+          "count": 1
+        },
+        {
+          "before": "0x3130524658464948",
+          "after": "0x3130524644524d48",
+          "count": 1
+        },
+        {
+          "before": "HIFXFR01",
+          "after": "HMRDFR01",
+          "count": 1
+        },
+        {
+          "before": "0x3130305245464948",
+          "after": "0x3130305245464d48",
+          "count": 1
+        },
+        {
+          "before": "HIFER001",
+          "after": "HMF ER001",
+          "count": 1
+        },
+        {
+          "before": "cmp r13, 134217792",
+          "after": "cmp r13, 1048640",
+          "count": 1
+        }
+      ],
+      "edits": [
+        {
+          "label": "fixture dispatch without an external parent",
+          "before": "    cmp r14, 20\n    ja .Lmmf_fatal\n",
+          "after": "    cmp r14, 21\n    ja .Lmmf_fatal\n",
+          "offset": 1468
+        },
+        {
+          "label": "parameterized fstat and pure UTF8 commands",
+          "before": "    cmp r14, 10\n    je .Lmmf_hold_parent\n    test r13, r13\n",
+          "after": "    cmp r14, 18\n    je .Lmmf_arm_fstat_error\n    cmp r14, 21\n    je .Lmmf_utf8_direct\n    test r13, r13\n",
+          "offset": 1726
+        },
+        {
+          "label": "remove parent operations",
+          "before": "    cmp r14, 12\n    je .Lmmf_drop_parent\n    cmp r14, 14\n    je .Lmmf_parent_stat\n    cmp r14, 16\n    je .Lmmf_close_retained\n",
+          "after": "",
+          "offset": 1967
+        },
+        {
+          "label": "remove duplicate fstat dispatch",
+          "before": "    cmp r14, 18\n    je .Lmmf_arm_fstat_error\n    cmp r14, 20\n",
+          "after": "    cmp r14, 20\n",
+          "offset": 2009
+        },
+        {
+          "label": "packet-only body invocation",
+          "before": "    mov rsi, [r15+32+rbx*8]\n    test rsi, rsi\n    jz .Lmmf_no_context\n    dec rsi\n    mov rdi, r12\n    lea rdx, [rbp+64]\n    mov rcx, r13\n    call multi_read_body_invoke\n",
+          "after": "    mov [r15+344], r12\n    mov rdi, r12\n    lea rsi, [rbp+64]\n    mov rdx, r13\n    call multi_read_body_invoke\n",
+          "offset": 2763
+        },
+        {
+          "label": "active source for explicit destroy",
+          "before": ".Lmmf_destroy:\n    mov rdi, r12\n",
+          "after": ".Lmmf_destroy:\n    mov [r15+344], r12\n    mov rdi, r12\n",
+          "offset": 3552
+        },
+        {
+          "label": "remove all fixture-held target descriptors",
+          "before": ".Lmmf_hold_parent:\n    cmp qword ptr [r15+32+rbx*8], 0\n    jne .Lmmf_busy\n    lea rdi, [rbp+64]\n    mov rsi, r13\n    call .Lmrd_name\n    test eax, eax\n    jnz .Lmmf_no_context\n    lea rdi, [rbp+64]\n    mov esi, 0xb0000 /* O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW */\n    xor edx, edx\n    mov eax, 2\n    syscall\n    mov r13, rax\n    cmp rax, -4095\n    jae .Lmmf_empty_reply\n    inc rax\n    mov [r15+32+rbx*8], rax\n    jmp .Lmmf_empty_reply\n.Lmmf_drop_parent:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmmf_no_context\n    dec rdi\n    mov eax, 3\n    syscall\n    mov qword ptr [r15+32+rbx*8], 0\n    mov r13, rax\n    jmp .Lmmf_empty_reply\n.Lmmf_close_retained:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmmf_no_context\n    dec rdi\n    mov eax, 3\n    syscall\n    mov r13, rax\n    jmp .Lmmf_empty_reply\n.Lmmf_parent_stat:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmmf_no_context\n    dec rdi\n    lea rsi, [r15+512]\n    mov eax, 5\n    syscall\n    mov r13, rax\n    test rax, rax\n    jnz .Lmmf_empty_reply\n    lea r14, [r15+512]\n    mov ebp, 144\n    jmp .Lmmf_reply\n\n",
+          "after": "",
+          "offset": 3780
+        },
+        {
+          "label": "exact first or later fstat fault coordinates",
+          "before": ".Lmmf_arm_fstat_error:\n    cmp qword ptr [r15+88], 0\n    jne .Lmmf_no_context\n    mov qword ptr [r15+88], 1\n    xor r13d, r13d\n    jmp .Lmmf_empty_reply\n",
+          "after": ".Lmmf_arm_fstat_error:\n    cmp qword ptr [r15+88], 0\n    jne .Lmmf_no_context\n    cmp r13, 16\n    jne .Lmmf_no_context\n    mov rax, [rbp+64]\n    cmp rax, 23\n    je .Lmmf_arm_phase_ok\n    cmp rax, 31\n    je .Lmmf_arm_phase_ok\n    cmp rax, 41\n    je .Lmmf_arm_phase_ok\n    cmp rax, 61\n    jne .Lmmf_no_context\n.Lmmf_arm_phase_ok:\n    mov rdx, [rbp+72]\n    cmp rdx, 1\n    ja .Lmmf_no_context\n    mov [r15+320], rax\n    mov [r15+328], rdx\n    mov qword ptr [r15+88], 1\n    xor r13d, r13d\n    jmp .Lmmf_empty_reply\n",
+          "offset": 4233
+        },
+        {
+          "label": "ordinary EOF preserves process orphans until an actual pre-exit barrier",
+          "before": ".Lmmf_eof:\n    xor ebx, ebx\n.Lmmf_eof_context:\n    mov r12, [r15+rbx*8]\n    test r12, r12\n    jz .Lmmf_eof_parent\n    cmp qword ptr [r12+56], 2\n    jne .Lmmf_eof_destroy\n    mov rdi, r12\n    call multi_read_body_release\n    test eax, eax\n    jnz .Lmmf_fatal\n.Lmmf_eof_destroy:\n    mov rdi, r12\n    call multi_read_body_destroy\n    test eax, eax\n    jnz .Lmmf_fatal\n    mov qword ptr [r15+rbx*8], 0\n.Lmmf_eof_parent:\n    mov rdi, [r15+32+rbx*8]\n    test rdi, rdi\n    jz .Lmmf_eof_next\n    dec rdi\n    mov eax, 3\n    syscall\n    test rax, rax\n    jz .Lmmf_eof_parent_closed\n    cmp rax, -9\n    jne .Lmmf_fatal\n.Lmmf_eof_parent_closed:\n    mov qword ptr [r15+32+rbx*8], 0\n.Lmmf_eof_next:\n    inc ebx\n    cmp ebx, 2\n    jb .Lmmf_eof_context\n    mov rdi, [r15+72]\n    test rdi, rdi\n    jz .Lmmf_eof_exit\n    mov eax, 3\n    syscall\n.Lmmf_eof_exit:\n    /* The process-lifetime orphan pool and FDs are retired only by OS exit. */\n    xor edi, edi\n    mov eax, 60\n    syscall\n",
+          "after": ".Lmmf_eof:\n    xor ebx, ebx\n.Lmmf_eof_context:\n    mov r12, [r15+rbx*8]\n    test r12, r12\n    jz .Lmmf_eof_next\n    mov [r15+344], r12\n    cmp qword ptr [r12+56], 2\n    jne .Lmmf_eof_destroy\n    mov rdi, r12\n    call multi_read_body_release\n    test eax, eax\n    jnz .Lmmf_fatal\n.Lmmf_eof_destroy:\n    mov rdi, r12\n    call multi_read_body_destroy\n    test eax, eax\n    jnz .Lmmf_fatal\n    mov qword ptr [r15+rbx*8], 0\n.Lmmf_eof_next:\n    inc ebx\n    cmp ebx, 2\n    jb .Lmmf_eof_context\n    mov rdi, [r15+72]\n    test rdi, rdi\n    jz .Lmmf_eof_witness\n    mov eax, 3\n    syscall\n.Lmmf_eof_witness:\n    lea rdi, [r15+512]\n    xor eax, eax\n    mov ecx, 8\n    rep stosq\n    movabs rax, 0x31464f4544524d48 /* HMRDEOF1 */\n    mov [r15+512], rax\n    mov rdx, [r15+80]\n    mov rax, [rdx+48]\n    mov [r15+520], rax\n    mov rax, [rdx+56]\n    mov [r15+528], rax\n    mov edi, 4\n    lea rsi, [r15+512]\n    mov edx, 64\n    call .Lmmf_write_all\n    test rax, rax\n    jnz .Lmmf_fatal\n    mov edi, 5\n    lea rsi, [r15+576]\n    mov edx, 8\n    call .Lmmf_read_exact\n    cmp rax, 8\n    jne .Lmmf_fatal\n    cmp qword ptr [r15+576], 0\n    jne .Lmmf_fatal\n    xor edi, edi\n    mov eax, 60\n    syscall\n",
+          "offset": 8436
+        },
+        {
+          "label": "distinct complete journals for source and confirmation parent",
+          "before": "    movabs rax, 0x3130494344524d48 /* HMRDCI01 */\n    cmp [r12], rax\n    je .Lmmf_journal_info_magic\n    movabs rax, 0x3130494344524248 /* HBRDCI01 */\n    cmp [r12], rax\n    je .Lmmf_journal_read_magic\n    movabs rax, 0x3130494354444d48 /* HMDTCI01 */\n    cmp [r12], rax\n    jne .Lmmf_journal_hook_bad\n    movabs rax, 0x3130524a54444d48 /* HMDTJR01 */\n    jmp .Lmmf_journal_magic_ready\n.Lmmf_journal_info_magic:\n    movabs rax, 0x3130524a464e4948 /* HINFJR01 */\n    jmp .Lmmf_journal_magic_ready\n.Lmmf_journal_read_magic:\n    movabs rax, 0x3130524a44524248 /* HBRDJR01 */\n",
+          "after": "    movabs rax, 0x3130494344524d48 /* HMRDCI01 */\n    cmp [r12], rax\n    je .Lmmf_journal_body_magic\n    movabs rax, 0x3130494352445048 /* exact unchanged parent context magic */\n    cmp [r12], rax\n    jne .Lmmf_journal_hook_bad\n    mov rdx, [rbx+344]\n    test rdx, rdx\n    jz .Lmmf_journal_hook_bad\n    cmp [rdx+384], r12\n    je .Lmmf_journal_parent_zero\n    cmp [rdx+392], r12\n    jne .Lmmf_journal_hook_bad\n    movabs rax, 0x3130524a31445048\n    jmp .Lmmf_journal_magic_ready\n.Lmmf_journal_parent_zero:\n    movabs rax, 0x3130524a30445048\n    jmp .Lmmf_journal_magic_ready\n.Lmmf_journal_body_magic:\n    cmp [rbx+344], r12\n    jne .Lmmf_journal_hook_bad\n    movabs rax, 0x3130524a44524d48\n",
+          "offset": 15437
+        },
+        {
+          "label": "distinct actual effect barriers",
+          "before": "    /* The observer can delay a fixed raw OS request, never replace its result.\n     * A separate actual fixture actor performs any frozen filesystem change. */\n    movabs rax, 0x3130494344524d48\n    cmp [r12], rax\n    je .Lmmf_hook_info_magic\n    movabs rax, 0x3130494344524248\n    cmp [r12], rax\n    je .Lmmf_hook_read_magic\n    movabs rax, 0x31304b4854444d48 /* HMDTHK01 */\n    jmp .Lmmf_hook_magic_ready\n.Lmmf_hook_info_magic:\n    movabs rax, 0x31304b48464e4948 /* HINFHK01 */\n    jmp .Lmmf_hook_magic_ready\n.Lmmf_hook_read_magic:\n    movabs rax, 0x31304b4844524248 /* HBRDHK01 */\n",
+          "after": "    /* These barriers never supply a result. The actual OS operation follows. */\n    movabs rax, 0x3130494344524d48\n    cmp [r12], rax\n    je .Lmmf_hook_body_magic\n    mov rdx, [rbx+344]\n    cmp [rdx+384], r12\n    je .Lmmf_hook_parent_zero\n    cmp [rdx+392], r12\n    jne .Lmmf_journal_hook_bad\n    movabs rax, 0x31304b4831445048\n    jmp .Lmmf_hook_magic_ready\n.Lmmf_hook_parent_zero:\n    movabs rax, 0x31304b4830445048\n    jmp .Lmmf_hook_magic_ready\n.Lmmf_hook_body_magic:\n    movabs rax, 0x31304b4844524d48\n",
+          "offset": 17134
+        },
+        {
+          "label": "bind seccomp to exact HIA phase and regular role",
+          "before": "    mov rax, [r12+88]\n    cmp qword ptr [rax+8], 13\n    jne .Lmmf_journal_hook_ok\n    mov rdi, [r14+32]\n",
+          "after": "    mov rax, [r12+88]\n    mov rdx, [rbx+320]\n    cmp [rax+8], rdx\n    jne .Lmmf_journal_hook_ok\n    mov rdx, [rbx+328]\n    cmp [rax+200], rdx\n    jne .Lmmf_journal_hook_ok\n    mov rdi, [r14+32]\n",
+          "offset": 18505
+        },
+        {
+          "label": "complete UTF8 diagnostic projection",
+          "before": "    lea rdx, [r14+64]\n    mov [r15+256], rdx\n",
+          "after": "    lea rdx, [r14+64]\n    movabs rcx, 0x3130304446545548 /* HUTFD001 */\n    cmp [rdx], rcx\n    jne .Lmmf_format_structured\n    cmp qword ptr [rdx+8], 3\n    jne .Lmmf_fatal\n    sub rax, 64\n    cmp [rdx+56], rax\n    jne .Lmmf_fatal\n    cmp [rdx+40], rax\n    jne .Lmmf_fatal\n    lea r14, [rdx+64]\n    mov rbp, rax\n    mov r13, rax\n    jmp .Lmmf_reply\n.Lmmf_format_structured:\n    mov [r15+256], rdx\n",
+          "offset": 9877
+        },
+        {
+          "label": "complete direct UTF8 physical buffers",
+          "before": ".Lmmf_context:\n",
+          "after": "/* Private direct leaf qualification. Both complete 4 KiB physical arenas are\n * returned before and after invocation, including bytes outside passed caps. */\n.Lmmf_utf8_direct:\n    cmp r13, 32\n    jb .Lmmf_no_context\n    mov rax, [rbp+64]\n    cmp rax, 4096\n    ja .Lmmf_no_context\n    mov [r15+280], rax\n    mov rax, [rbp+72]\n    cmp rax, 4096\n    ja .Lmmf_no_context\n    mov [r15+288], rax\n    cmp qword ptr [rbp+80], 255\n    ja .Lmmf_no_context\n    cmp qword ptr [rbp+88], 255\n    ja .Lmmf_no_context\n    lea rax, [rbp+96]\n    mov [r15+256], rax\n    sub r13, 32\n    mov [r15+264], r13\n    lea rdi, [r15+224]\n    mov esi, 4096\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmmf_fatal\n    lea rdi, [r15+240]\n    mov esi, 4096\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmmf_fatal\n    lea rdi, [r15+208]\n    mov esi, 16416\n    call .Lmrd_grow\n    test eax, eax\n    jnz .Lmmf_fatal\n    mov rdi, [r15+224]\n    mov rax, [rbp+80]\n    mov ecx, 4096\n    rep stosb\n    mov rdi, [r15+240]\n    mov rax, [rbp+88]\n    mov ecx, 4096\n    rep stosb\n    mov r14, [r15+208]\n    mov rax, [r15+280]\n    mov [r14], rax\n    mov rax, [r15+288]\n    mov [r14+8], rax\n    mov qword ptr [r14+16], 0\n    mov rax, [r15+264]\n    mov [r14+24], rax\n    lea rdi, [r14+32]\n    mov rsi, [r15+224]\n    mov ecx, 4096\n    rep movsb\n    mov rsi, [r15+240]\n    mov ecx, 4096\n    rep movsb\n    mov rdi, [r15+256]\n    mov rsi, [r15+264]\n    mov rdx, [r15+224]\n    mov rcx, [r15+280]\n    mov r8, [r15+240]\n    mov r9, [r15+288]\n    call .Lmrd_utf8\n    mov r13, rax\n    mov [r14+16], rax\n    lea rdi, [r14+8224]\n    mov rsi, [r15+224]\n    mov ecx, 4096\n    rep movsb\n    mov rsi, [r15+240]\n    mov ecx, 4096\n    rep movsb\n    mov ebp, 16416\n    xor r12d, r12d\n    jmp .Lmmf_reply\n\n.Lmmf_context:\n",
+          "offset": 7121
+        },
+        {
+          "label": "fixture description",
+          "before": " * Private two-context info carrier. All parent FDs and the orphan pool belong\n * to this fixed fixture. No public JSON input can select an FD or code address.\n",
+          "after": " * Private two-context multi-read carrier. Each body owns two parent children;\n * both bodies share one process orphan pool. No public route is exposed here.\n",
+          "offset": 115
+        },
+        {
+          "label": "formatter journal label",
+          "before": "/* HMF ER001 */",
+          "after": "/* HMFER001 */",
+          "offset": 13941
+        }
+      ],
+      "source_sha256": "71f47ff8d7f10dab9f2ae2b124217436fe6e2556c70473441112058b294112b9",
+      "target_sha256": "3933c4b964fecc2e88e66dd931f1db2e3cb3ee40a6c7d961769a5faa6b4ff47d"
+    }
+  }
+}

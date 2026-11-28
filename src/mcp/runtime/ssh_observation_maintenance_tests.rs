@@ -52,7 +52,7 @@ async fn slow_retirement(core: &Arc<Core>) {
 		.send(Request {
 			host: "cold".into(),
 			command: "controlled-dispatch".into(),
-			input: vec![],
+			input: ObservationInput::Legacy(vec![]),
 			deadline: Instant::now() + Duration::from_secs(3),
 			cancel: CancellationToken::new(),
 			reply,
@@ -248,7 +248,7 @@ async fn idle_rearm(core: &Arc<Core>) {
 		.send(Request {
 			host: "fixture".into(),
 			command: "background-after-idle".into(),
-			input: vec![],
+			input: ObservationInput::Legacy(vec![]),
 			deadline: Instant::now() + Duration::from_secs(3),
 			cancel: CancellationToken::new(),
 			reply,
@@ -349,7 +349,7 @@ async fn idle_pending_cancellation(core: &Arc<Core>) {
 		.send(Request {
 			host: "fixture".into(),
 			command: "cancel-active-request".into(),
-			input: vec![],
+			input: ObservationInput::Legacy(vec![]),
 			deadline: Instant::now() + Duration::from_secs(20),
 			cancel: cancel.clone(),
 			reply,

@@ -1,0 +1,99 @@
+name: HIA Runtime Shell Components
+
+on:
+  push:
+    branches: ['codex/**']
+    paths:
+      - 'native/shell_gate*'
+      - 'native/terminal_clean*'
+      - 'scripts/*hia*shell*'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/hia-runtime-shell.yml'
+  pull_request:
+    paths:
+      - 'native/shell_gate*'
+      - 'native/terminal_clean*'
+      - 'scripts/*hia*shell*'
+      - 'tests/hia_native/*shell*'
+      - 'tests/hia_native/shell_oracle/**'
+      - 'src/mcp/fs/shell.rs'
+      - 'src/mcp/fs/shell_tests.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/hia-runtime-shell.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-runtime-shell-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell:
+    name: Native shell owners and unchanged original Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            src
+            tests/hia_native
+            .github
+      - name: Materialize explicit historical qualification source
+        run: |
+          python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"
+          printf 'HIA_QUALIFICATION_SOURCE=%s\n' "$RUNNER_TEMP/hia-historical-public58" >> "$GITHUB_ENV"
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source and install original reference toolchain
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          rustup toolchain install 1.95.0 --profile minimal
+      - name: Execute native suites and fresh unchanged original Rust
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/qualify_hia_shell_native.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-shell" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)" \
+            --cargo "$(rustup which --toolchain 1.95.0 cargo)"
+      - name: Retain complete qualification source profile
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json"; then
+            mkdir -p "$RUNNER_TEMP/hia-shell"
+            cp "$RUNNER_TEMP/hia-historical-public58/HISTORICAL_PUBLIC_SOURCE.json" "$RUNNER_TEMP/hia-shell/source-profile.json"
+          fi
+      - name: Retain complete shell streams and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-runtime-shell-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-shell/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

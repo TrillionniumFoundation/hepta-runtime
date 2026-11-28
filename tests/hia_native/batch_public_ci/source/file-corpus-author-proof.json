@@ -1,0 +1,66 @@
+{
+  "complete_session_deadline_seconds": 180,
+  "fresh_current_original_compared": false,
+  "generated_bytes": 13894,
+  "generated_sha256": "a0c4d65effa8bc4eb04ddbd912f58a60732e6f3bcf2c6642e99ee50ebc587459",
+  "inherited_cases": 926,
+  "large_cases_enabled": true,
+  "native_executed": false,
+  "original_sha256": "a8a351b4e0e312117fba08fd90dc45ea238e87b06be23294a16851a67901b34a",
+  "original_source": "corpus/reference/tests/hia_native/test_batch_write_files.py",
+  "per_reply_deadline_seconds": 60,
+  "schema": "hepta.runtime.rebuilt-batch-file-corpus-author.v1",
+  "transport_changes": [
+    {
+      "count": 1,
+      "new": "\"\"\"Complete published 926-file corpus over the new serial callable fixture.\n\nNo case or deadline is removed. Python expectations are development evidence;\nfresh current original Rust comparison is a separate required gate.\n\"\"\"",
+      "old": "\"\"\"Actual Local batch body requests and complete retained file bytes.\"\"\""
+    },
+    {
+      "count": 1,
+      "new": "ROOT = Path(__file__).resolve().parent\nREFERENCE = ROOT / 'corpus/reference'\nHERE = REFERENCE / 'tests/hia_native'\nsys.dont_write_bytecode = True\nos.environ['HIA_REFERENCE_RUNTIME'] = str(REFERENCE)\nos.environ['HIA_RUNTIME_REPO'] = str(REFERENCE)\nsys.path.insert(0, str(ROOT / 'runtime_support/scripts'))\nsys.path.insert(0, str(HERE))",
+      "old": "HERE = Path(__file__).resolve().parent\nsys.path.insert(0, str(HERE))"
+    },
+    {
+      "count": 1,
+      "new": "'schema': 'hepta.runtime.rebuilt-batch-callable-files.v1'",
+      "old": "'schema': 'hepta.runtime.batch-write-files.v1'"
+    },
+    {
+      "count": 1,
+      "new": "'domains': {}, 'inherits_outer_process_group': True, 'outer_timeout_seconds': 180,\n              'body_requests': 926, 'setup_frames': [], 'native_thread_identity_claimed': False,\n              'fresh_current_original_compared': False, 'public_batch_qualified': False,\n              'full_async_cancellation_qualified': False}",
+      "old": "'domains': {}, 'inherits_outer_process_group': True, 'outer_timeout_seconds': 180}"
+    },
+    {
+      "count": 1,
+      "new": "packet = struct.pack('<Q', len(wire)) + wire",
+      "old": "packet = struct.pack('<QQ', len(wire), ordinal) + wire"
+    },
+    {
+      "count": 1,
+      "new": "        header = exact(process.stdout, 8, deadline)\n        code, = struct.unpack('<Q', header)\n        tag = ordinal\n        assert 32 <= code < 0xffff0000, (label, ordinal, code)",
+      "old": "        header = exact(process.stdout, 20, deadline)\n        tag, tid, code = struct.unpack('<QQI', header)\n        assert tag == ordinal and tid > 0 and 32 <= code < 0xffff0000, (label, tag, code)"
+    },
+    {
+      "count": 1,
+      "new": "    def setup(magic, count, result_magic, expected_size):\n        wire = magic + bytes(count * 8)\n        packet = struct.pack('<Q', len(wire)) + wire\n        requests.write(packet); process.stdin.write(packet); process.stdin.flush()\n        deadline = min(started + 180, time.monotonic() + 60)\n        header = exact(process.stdout, 8, deadline)\n        size, = struct.unpack('<Q', header)\n        assert size == expected_size\n        response = exact(process.stdout, size, deadline)\n        responses.write(header + response)\n        assert response[:8] == result_magic and response[8:] == bytes(size - 8)\n        report['setup_frames'].append({'input_hex': wire.hex(), 'output_hex': response.hex()})\n    try:\n        setup(b'HVCACH01', 5, b'HVCAR001', 32)\n        setup(b'HHISTQ01', 7, b'HHISTR01', 64)\n        path = fixture / 'target'",
+      "old": "    try:\n        path = fixture / 'target'"
+    },
+    {
+      "count": 1,
+      "new": "        assert large and report['requests'] == 926\n        report['status'] = 'PASS'",
+      "old": "        report['status'] = 'PASS'"
+    },
+    {
+      "count": 1,
+      "new": "    parser.add_argument('--reference', type=Path, default=REFERENCE)",
+      "old": "    parser.add_argument('--reference', type=Path, required=True)"
+    },
+    {
+      "count": 1,
+      "new": "large=True)",
+      "old": "large=args.large)"
+    }
+  ],
+  "unchanged_complete_case_body_ast_sha256": "97cb58988aa16b192708b91f22b52b20da3fdd01f5772f58f2e71a99806ed608"
+}

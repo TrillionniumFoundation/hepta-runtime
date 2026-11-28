@@ -1,0 +1,11 @@
+# Current 124 ordinary public regression
+
+This candidate executes only the current native graph. It preserves the full prior 686 actual SDK rows and their 24 complete processes, restores the exact immutable archives, and compares all retained wire, files, cache, history, locks and session observations. No completed original application is replayed.
+
+The actual public and dual-session filesystem carrier are the four-entry build f4a348f6 for production 7567502b. The fresh default command c498ff39 independently produced the identical public ELF; its source installation only corrects seven inventory declarations, with runtime HIA and native boundaries unchanged. Current graph admission reads the full original compile/link/pack receipts and every source and image byte. The filesystem carrier uses its retained actual publication-worker suspension/resume and close/reap boundary; this recipe does not replace it with Python effects.
+
+Two derived Python files retain every original function except the named capture/read function. TRANSFORMS.json specifies exact full-text replacements and inverse pins. The native capture performs the unchanged row loop once. The full reader routes the immutable original role to its original dependency record, admits the current role separately, and changes the result inventory from 123/116 to 124/117. Every request, expected comparison, timestamp/stat normalization policy, full buffer and error remains unchanged. The original 39-file recovery source remains byte exact alongside the new files.
+
+Twelve groups each capture both protocol eras. Every exchange remains 60 seconds, every native process and pure reader remains 180 seconds, and every CI job remains 15 minutes. The original absolute fixture path is recreated only after proving it is absent, inside the actual runner temporary root, and disjoint from evidence. A complete native process is closed before its owned evidence directory is sealed; then the full original role is copied byte for byte. Failed attempts remain complete artifacts.
+
+This is the ordinary publisher domain only. It does not claim all 136 handlers, full SDK behavior, Remote/SSH transport, or installation. The separate 22 public and eight direct future-drop domains retain their own exact evidence and qualification boundaries.

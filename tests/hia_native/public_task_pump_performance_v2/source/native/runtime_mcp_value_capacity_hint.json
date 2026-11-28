@@ -1,0 +1,18 @@
+{
+  "after_sha256": "42583274c811efee0f5747e95e6e3f692383694df137a462a06cef6858523b65",
+  "all_actual_growth_and_refusal_handlers_unchanged": true,
+  "author_sha256": "d0e73f1aa2910a3f9dd479dc84145baa44814dd0b87b622959b726ce419e5ca4",
+  "before_sha256": "13a16b581ecec1f2ecbff0144af1a3f87d0d525abc92649de950bf17310316db",
+  "exact_inverse": true,
+  "existing_capacity_never_reduced": true,
+  "fresh_ci_qualified": false,
+  "hint": "input loan length +64, if no overflow and <=64 MiB",
+  "inserted_at": "runtime_grow_resume:",
+  "inserted_text": "    /* A new, admitted slot10 call ends the prior output loan. Reserve an\n     * input-sized output before the first parse to avoid a known full reparse\n     * on ordinary canonical output. This is only a mechanical hint: it is\n     * capped at64 MiB, never shrinks, and leaves all HIA-required growth and\n     * refusals below/above the hint to the original exact protocol. */\n    cmp ebp, 10\n    jne runtime_grow_value_hint_done\n    mov rdx, [rsp + 8]\n    add rdx, 64\n    jc runtime_grow_value_hint_done\n    cmp rdx, 67108864\n    ja runtime_grow_value_hint_done\n    cmp rdx, [rbx + 40]\n    jbe runtime_grow_value_hint_done\n    mov rdi, rbx\n    mov esi, 2\n    call runtime_grow_resize_borrow\n    test eax, eax\n    jnz runtime_grow_error\nruntime_grow_value_hint_done:\n",
+  "no_new_input_or_output_semantic_limit": true,
+  "old_small_capacity_leaf_tests_unchanged": true,
+  "public_domain_qualified": false,
+  "schema": "hepta.runtime.value-output-capacity-hint.v1",
+  "selected_slot": 10,
+  "unchanged_hia_sources": true
+}

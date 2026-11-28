@@ -1,0 +1,9 @@
+# Complete prefixed-error successor
+
+This source-only candidate preserves every qualified formatter34 function under an invertible entry relocation. Existing HBRDS001/HMDSR001/HOSER001 and literal15..17 inputs delegate to exactly that retained formatter. No existing diagnostic kind is repurposed.
+
+The new HCPER001 private frame is exactly64 bytes plus a nonempty complete UTF-8 diagnostic. All words are little-endian u64: magic0, kind3 at8, zero16/24/32/40/48, exact payload length56, payload64. Payload already contains the original exception class, colon, space and complete exception text. It is produced only by the owning HIA controller from actual JSON byte/value error results; no host Python dictionary or class-name inference participates. The formatter does not add, strip, normalize or re-encode any byte and adds no newline. Newline publication belongs to the eventual stdio caller.
+
+Entry remains f0(readbuf, mutbuf output, mutbuf workspace)->u32. The new path requires workspace length>=12288 and input length<4294901760. It fully validates header, extent and UTF-8 before copying. Invalid input or short workspace returns0xffffffff; short output returns0xfffffffe. Every refusal leaves the entire output/workspace unchanged. Success copies only payload bytes at output0, leaves the remaining output and all workspace unchanged, and returns payload length. Old formats retain all original capacity, workspace, errno, integer-FD and quoting behavior through the exact old entry.
+
+This extends only the trusted internal diagnostic envelope. A public request cannot select native code, foreign errors or callbacks. No source authoring/build result is a semantic qualification. Actual retained old formatter input/output/workspace records and original JSON exception records must be compared with the new HIA image before callers install it.

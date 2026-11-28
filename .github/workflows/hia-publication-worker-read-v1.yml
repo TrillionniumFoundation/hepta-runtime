@@ -1,0 +1,33 @@
+name: Independently read uploaded publication worker author build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publisher-worker-read-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_worker_author_read_v1
+      - name: Read complete uploaded archive without semantic execution
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B qualification/publication_worker_author_read_v1/read.py --output "$RUNNER_TEMP/worker-read"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publication-worker-author-read-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/worker-read/READBACK.json
+            ${{ runner.temp }}/worker-read/FILES.json
+            ${{ runner.temp }}/worker-read/ARCHIVE.json
+          compression-level: 0
+          if-no-files-found: error

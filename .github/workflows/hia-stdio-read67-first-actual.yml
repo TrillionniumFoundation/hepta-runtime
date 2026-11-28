@@ -1,0 +1,50 @@
+name: HIA stdio read67 first actual process qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-stdio-read67-first-actual-6780-20261118]
+    paths:
+      - 'qualification/binary_read_stdio/v2/read67_qualification/**'
+      - '.github/workflows/hia-stdio-read67-first-actual.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual-process-group:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [ordinary, values, errors, types, links, child-orphans, shm-orphans, diagnostics]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      STDIO_SOURCE: ${{ github.workspace }}/qualification/binary_read_stdio/v2/read67_qualification
+      STDIO_MANIFEST: 63d63d6cf998a26684d4e7ee94984b3fad766baa4b3f5cf9e7d421c27d5e693a
+      STDIO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen source, input domain, observers and complete readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            qualification/binary_read_stdio/v2/read67_qualification
+          persist-credentials: false
+      - name: First original production and observed target captures
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/driver.py" run --work "$RUNNER_TEMP/stdio-read67-$STDIO_GROUP" --group "$STDIO_GROUP" --source-manifest-sha256 "$STDIO_MANIFEST"
+      - name: Preserve complete archive including any first failure
+        if: always()
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/driver.py" export --work "$RUNNER_TEMP/stdio-read67-$STDIO_GROUP" --group "$STDIO_GROUP" --source-manifest-sha256 "$STDIO_MANIFEST" --output "$RUNNER_TEMP/stdio-read67-$STDIO_GROUP-export"
+      - name: Upload every retained source process buffer and guard byte
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stdio-read67-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/stdio-read67-${{ matrix.group }}-export
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 90

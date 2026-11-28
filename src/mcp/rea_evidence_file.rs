@@ -1147,7 +1147,7 @@ impl<'de> DeserializeSeed<'de> for Seed {
 		deserializer.deserialize_any(self)
 	}
 }
-#[cfg(target_os = "linux")]
+// Checkpoint sidecars validate JavaScript index order on every platform.
 fn array_index(key: &str) -> Option<u32> {
 	if key.is_empty()
 		|| (key.len() > 1 && key.starts_with('0'))

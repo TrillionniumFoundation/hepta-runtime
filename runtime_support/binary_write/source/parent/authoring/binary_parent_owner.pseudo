@@ -1,0 +1,470 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,88)!=length(s)-96:
+        return INVALID
+    command=load(s,8)
+    if command!=1 and command!=2:
+        return INVALID
+    if length(o)<64:
+        return CAPACITY
+    if command==1:
+        if valid_start(s)==0:
+            return INVALID
+        needed=required(load(s,32),load(s,40),load(s,48),load(s,56))
+        if needed>=LIMIT:
+            return INVALID
+        if length(w)<needed:
+            return short(o,4,needed)
+        if get(w,0)==WORK:
+            if get(w,8)!=0 and get(w,8)!=99:
+                return INVALID
+        fill_range(w,0,4096,0)
+        put(w,0,WORK)
+        put(w,8,1)
+        put(w,56,MAXIMUM)
+        put(w,64,MAXIMUM)
+        put(w,72,load(s,32))
+        put(w,80,load(s,40))
+        put(w,88,load(s,48))
+        put(w,96,load(s,56))
+        put(w,104,BASE)
+        put(w,112,ROOT+get(w,72)+2)
+        put(w,120,PATH+get(w,80)+2)
+        put(w,128,PRIOR+get(w,88))
+        put(w,136,DATA+get(w,96))
+        put(w,144,CHILD+get(w,80)+get(w,88)+get(w,96)+96)
+        put(w,152,ERROR+get(w,80)+2048)
+        put(w,160,REPLY+reply_capacity(get(w,80),get(w,96)))
+        put(w,168,reply_capacity(get(w,80),get(w,96)))
+        put(w,176,needed)
+        put(w,184,load(s,64))
+        copy_in(s,w,96+get(w,72)+get(w,80),PRIOR,get(w,88))
+        copy_in(s,w,96+get(w,72)+get(w,80)+get(w,88),DATA,get(w,96))
+        put(w,192,normalize(s,w,96,get(w,72),ROOT,224))
+        put(w,200,normalize(s,w,96+get(w,72),get(w,80),PATH,240))
+        validate_path(w)
+    else:
+        if length(w)<4096 or get(w,0)!=WORK:
+            return INVALID
+        if length(w)<get(w,176):
+            return short(o,4,get(w,176))
+        if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+            return INVALID
+        if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+            return INVALID
+        if length(s)-96>get(w,168):
+            return INVALID
+        if negative(load(s,24))!=0:
+            if length(s)!=96 or load(s,24)<MAXIMUM-4094:
+                return INVALID
+        sequence=load(s,16)
+        if get(w,24)!=0:
+            if sequence!=get(w,24):
+                return INVALID
+            copy_in(s,w,96,REPLY,length(s)-96)
+            put(w,32,sequence)
+            put(w,40,load(s,24))
+            put(w,48,length(s)-96)
+            put(w,24,0)
+        else:
+            if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                return INVALID
+            at=0
+            while at<get(w,48):
+                if byte(s,96+at)!=byte(w,REPLY+at):
+                    return INVALID
+                at=at+1
+    status=NEXT
+    while status==NEXT:
+        phase=get(w,8)
+        if phase<10:
+            status=flow(o,w)
+        else:
+            status=finish(o,w)
+    return status
+
+def valid_start(s:readbuf) -> u64:
+    if load(s,16)!=0 or load(s,24)!=1 or load(s,64)>1:
+        return 0
+    if load(s,72)!=0 or load(s,80)!=0:
+        return 0
+    root=load(s,32)
+    path=load(s,40)
+    prior=load(s,48)
+    data=load(s,56)
+    left=length(s)-96
+    if root>left:
+        return 0
+    left=left-root
+    if path>left:
+        return 0
+    left=left-path
+    if prior>left or data!=left-prior:
+        return 0
+    if load(s,64)==0 and prior!=0:
+        return 0
+    if utf8(s,96,root)==0 or utf8(s,96+root,path)==0:
+        return 0
+    if utf8(s,96+root+path,prior)==0 or utf8(s,96+root+path+prior,data)==0:
+        return 0
+    return 1
+
+def reply_capacity(path:u64,data:u64) -> u64:
+    needed=path+data+4096
+    if needed<2097152:
+        needed=2097152
+    return needed
+
+def required(root:u64,path:u64,prior:u64,data:u64) -> u64:
+    return 4096+root+2+path+2+prior+data+path+prior+data+96+path+2048+reply_capacity(path,data)+reply_capacity(path,data)
+
+def short(o:mutbuf,kind:u64,size:u64) -> u32:
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,32,size)
+    return 64
+
+def normalize(s:readbuf,w:mutbuf,at:u64,size:u64,dst:u64,meta:u64) -> u64:
+    source=0
+    anchor=0
+    count=0
+    if size!=0:
+        if byte(s,at)==47:
+            anchor=1
+            if size>=2:
+                if byte(s,at+1)==47:
+                    anchor=2
+                    if size>=3:
+                        if byte(s,at+2)==47:
+                            anchor=1
+            stop=0
+            while source<size and stop==0:
+                if byte(s,at+source)!=47:
+                    stop=1
+                else:
+                    source=source+1
+            store(w,dst,47)
+            count=1
+            if anchor==2:
+                store(w,dst+1,47)
+                count=2
+    put(w,meta,anchor)
+    put(w,meta+8,0)
+    while source<size:
+        end=source
+        stop=0
+        while end<size and stop==0:
+            if byte(s,at+end)==47:
+                stop=1
+            else:
+                end=end+1
+        extent=end-source
+        omit=0
+        if extent==0:
+            omit=1
+        if extent==1:
+            if byte(s,at+source)==46:
+                omit=1
+        if omit==0:
+            if extent==2:
+                if byte(s,at+source)==46 and byte(s,at+source+1)==46:
+                    put(w,meta+8,1)
+            if count>anchor:
+                store(w,dst+count,47)
+                count=count+1
+            copy_in(s,w,at+source,dst+count,extent)
+            count=count+extent
+        source=end+1
+    if count==0:
+        store(w,dst,46)
+        count=1
+    store(w,dst+count,0)
+    return count
+
+def validate_path(w:mutbuf) -> u64:
+    if get(w,224)==0 or get(w,240)==0 or get(w,232)!=0 or get(w,248)!=0:
+        literal_error(w,1)
+        put(w,8,99)
+        return 0
+    root=get(w,192)
+    path=get(w,200)
+    same=0
+    if root==path:
+        same=equal(w,ROOT,PATH,root)
+    inside=same
+    if get(w,224)==get(w,240) and path>root:
+        if equal(w,ROOT,PATH,root)!=0:
+            if root==get(w,224):
+                inside=1
+            else:
+                if byte(w,PATH+root)==47:
+                    inside=1
+    if inside==0:
+        literal_error(w,2)
+        put(w,8,99)
+        return 0
+    name=path
+    stop=0
+    while name>get(w,240) and stop==0:
+        if byte(w,PATH+name-1)==47:
+            stop=1
+        else:
+            name=name-1
+    put(w,208,name)
+    put(w,216,path-name)
+    sidecar=0
+    if path-name>=7:
+        if byte(w,PATH+name)==46 and byte(w,PATH+name+1)==104 and byte(w,PATH+name+2)==101:
+            if byte(w,PATH+name+3)==112 and byte(w,PATH+name+4)==116 and byte(w,PATH+name+5)==97 and byte(w,PATH+name+6)==45:
+                sidecar=1
+    if same!=0 or sidecar!=0:
+        literal_error(w,3)
+        put(w,8,99)
+        return 0
+    put(w,256,get(w,240))
+    return 0
+
+def error_header(w:mutbuf,klass:u64,number:u64,literal:u64,named:u64,size:u64) -> u64:
+    fill_range(w,ERROR,64,0)
+    put(w,ERROR,ERROR_RESPONSE)
+    put(w,ERROR+8,3)
+    put(w,ERROR+16,get(w,16))
+    put(w,ERROR+24,klass)
+    put(w,ERROR+32,number)
+    put(w,ERROR+40,literal)
+    put(w,ERROR+48,named)
+    put(w,ERROR+56,size)
+    put(w,280,64+size)
+    return 0
+
+def literal_error(w:mutbuf,code:u64) -> u64:
+    at=ERROR+64
+    end=at
+    klass=1
+    if code==1:
+        end=literal_absolute(w,at)
+    if code==2:
+        end=literal_outside(w,at)
+        klass=2
+    if code==3:
+        end=literal_sidecar(w,at)
+    if code==4:
+        end=literal_null(w,at)
+    if end==at:
+        return INVALID
+    error_header(w,klass,0,end-at,0,end-at)
+    return 0
+
+def os_error(w:mutbuf,number:u64,named:u64,at:u64,size:u64) -> u64:
+    if number==0 or number>4095 or named>1:
+        return INVALID
+    if named!=0:
+        copy_within(w,ERROR+64,at,size)
+    else:
+        size=0
+    error_header(w,error_class(number),number,0,named,size)
+    return 0
+
+def request(w:mutbuf,o:mutbuf,phase:u64,kind:u64,op:u64,a:u64,b:u64,at:u64,size:u64) -> u64:
+    if size>length(w) or at>length(w)-size:
+        return INVALID
+    if length(o)<64+size:
+        return short(o,5,64+size)
+    sequence=get(w,16)+1
+    if sequence==0:
+        return INVALID
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,op)
+    put(o,32,a)
+    put(o,40,b)
+    put(o,56,size)
+    copy_out(w,o,at,64,size)
+    put(w,16,sequence)
+    put(w,24,sequence)
+    put(w,8,phase)
+    return 64
+
+def body_start(w:mutbuf) -> u64:
+    size=get(w,216)+get(w,88)+get(w,96)
+    fill_range(w,CHILD,96,0)
+    put(w,CHILD,BODY_REQUEST)
+    put(w,CHILD+8,1)
+    put(w,CHILD+24,1)
+    put(w,CHILD+40,get(w,216))
+    put(w,CHILD+48,get(w,88))
+    put(w,CHILD+56,get(w,96))
+    put(w,CHILD+64,get(w,184))
+    put(w,CHILD+88,size)
+    copy_within(w,CHILD+96,PATH+get(w,208),get(w,216))
+    copy_within(w,CHILD+96+get(w,216),PRIOR,get(w,88))
+    copy_within(w,CHILD+96+get(w,216)+get(w,88),DATA,get(w,96))
+    return size+96
+
+def flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==1:
+        store(w,384,47)
+        store(w,385,0)
+        return request(w,o,2,1,1,0,FLAGS,384,2)
+    if phase==2:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            if result==MAXIMUM-3:
+                put(w,8,1)
+            else:
+                os_error(w,0-result,1,384,1)
+                put(w,8,99)
+            return NEXT
+        if result>2147483647:
+            return INVALID
+        put(w,56,result)
+        put(w,8,3)
+        return NEXT
+    if phase==3:
+        start=get(w,256)
+        if start>=get(w,208):
+            size=body_start(w)
+            return request(w,o,8,2,1,get(w,56),0,CHILD,size)
+        end=start
+        stop=0
+        while end<get(w,200) and stop==0:
+            if byte(w,PATH+end)==47:
+                stop=1
+            else:
+                end=end+1
+        put(w,264,end-start)
+        put(w,272,end+1)
+        at=start
+        while at<end:
+            if byte(w,PATH+at)==0:
+                literal_error(w,4)
+                put(w,8,90)
+                return NEXT
+            at=at+1
+        copy_within(w,CHILD,PATH+start,end-start)
+        store(w,CHILD+end-start,0)
+        return request(w,o,4,1,2,get(w,56),FLAGS,CHILD,end-start+1)
+    if phase==4:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            if result==MAXIMUM-3:
+                put(w,8,3)
+            else:
+                os_error(w,0-result,1,PATH+get(w,256),get(w,264))
+                put(w,8,90)
+            return NEXT
+        if result>2147483647:
+            return INVALID
+        put(w,64,result)
+        return request(w,o,5,1,3,get(w,56),0,0,0)
+    if phase==5:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            os_error(w,0-result,0,0,0)
+            return request(w,o,6,1,3,get(w,56),1,0,0)
+        if result!=0:
+            return INVALID
+        put(w,56,get(w,64))
+        put(w,64,MAXIMUM)
+        put(w,256,get(w,272))
+        put(w,8,3)
+        return NEXT
+    if phase==6:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            os_error(w,0-result,0,0,0)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,56,MAXIMUM)
+        return request(w,o,7,1,4,get(w,64),0,0,0)
+    if phase==7:
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,64,MAXIMUM)
+        put(w,8,99)
+        return NEXT
+    if phase==8:
+        if result!=64 or get(w,48)<64:
+            return INVALID
+        if get(w,REPLY)!=BODY_RESPONSE or get(w,REPLY+56)!=get(w,48)-64:
+            return INVALID
+        if get(w,REPLY+24)!=0 or get(w,REPLY+32)!=0 or get(w,REPLY+40)!=0 or get(w,REPLY+48)!=0:
+            return INVALID
+        kind=get(w,REPLY+8)
+        if kind!=0 and kind!=3:
+            return INVALID
+        if kind==3:
+            if get(w,48)<128:
+                return INVALID
+            tag=get(w,REPLY+64)
+            if tag!=ERROR_RESPONSE and tag!=META_ERROR and tag!=PATH_ERROR:
+                return INVALID
+            if get(w,REPLY+72)!=3 or get(w,REPLY+120)!=get(w,48)-128:
+                return INVALID
+        copy_within(w,RESULT,REPLY,get(w,48))
+        put(w,288,get(w,48))
+        return request(w,o,9,1,3,get(w,56),0,0,0)
+    if phase==9:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            os_error(w,0-result,0,0,0)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,56,MAXIMUM)
+        put(w,8,99)
+        return NEXT
+    return INVALID
+
+def finish(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    if phase==90:
+        if get(w,56)==MAXIMUM or get(w,64)!=MAXIMUM:
+            return INVALID
+        return request(w,o,91,1,3,get(w,56),0,0,0)
+    if phase==91:
+        if get(w,48)!=0:
+            return INVALID
+        result=get(w,40)
+        if negative(result)!=0:
+            os_error(w,0-result,0,0,0)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,56,MAXIMUM)
+        put(w,8,99)
+        return NEXT
+    if phase==99:
+        if get(w,56)!=MAXIMUM or get(w,64)!=MAXIMUM:
+            return INVALID
+        kind=3
+        at=ERROR
+        size=get(w,280)
+        if size==0:
+            if get(w,288)<64:
+                return INVALID
+            kind=get(w,RESULT+8)
+            at=RESULT+64
+            size=get(w,RESULT+56)
+        if length(o)<64+size:
+            return short(o,5,64+size)
+        fill_range(o,0,64,0)
+        put(o,0,RESPONSE)
+        put(o,8,kind)
+        put(o,16,get(w,16))
+        put(o,56,size)
+        copy_out(w,o,at,64,size)
+        return 64
+    return INVALID

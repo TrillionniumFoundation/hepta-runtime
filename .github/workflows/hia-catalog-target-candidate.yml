@@ -1,0 +1,60 @@
+name: Current target complete catalog reference
+
+on:
+  push:
+    branches: [hia-catalog-qualification-6780-20261116]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-catalog-qualification-6780-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reference:
+    name: Fresh original 136-tool router and 216 list handler observations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact source-owned recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: recipe
+          persist-credentials: false
+      - name: Checkout complete immutable current original
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          path: target
+          persist-credentials: false
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Compile exact original prefix and invoke original metadata handlers
+        run: >-
+          python3 -I -B recipe/tests/hia_native/catalog_target_ci/capture.py
+          --target "$GITHUB_WORKSPACE/target"
+          --output "$RUNNER_TEMP/hia-catalog-reference"
+      - name: Read all complete original source and result bytes
+        run: >-
+          python3 -I -B recipe/tests/hia_native/catalog_target_ci/verify.py
+          --evidence "$RUNNER_TEMP/hia-catalog-reference"
+          > "$RUNNER_TEMP/hia-catalog-reference/verification.json"
+      - name: Archive complete observation evidence including real failures
+        if: always()
+        run: >-
+          python3 -I -B recipe/tests/hia_native/catalog_target_ci/export.py
+          --source "$RUNNER_TEMP/hia-catalog-reference"
+          --output "$RUNNER_TEMP/hia-catalog-export"
+      - name: Retain complete reference artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-current-catalog-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-catalog-export/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

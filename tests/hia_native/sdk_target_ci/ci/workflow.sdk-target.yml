@@ -1,0 +1,133 @@
+name: SDK 3.9 ordinary source closure and public eight-tool loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Repository path containing the complete v3 source bundle
+        required: true
+        default: tests/hia_native/sdk_target_ci
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-source-closure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      LC_ALL: C.UTF-8
+      RUSTUP_TOOLCHAIN: 1.95.0
+      CARGO_HOME: ${{ runner.temp }}/sdk-target-cargo-cache
+      SDK_SOURCE_DIR: ${{ github.workspace }}/runtime/${{ inputs.source_path }}
+      SDK_OUTPUT_DIR: ${{ runner.temp }}/sdk-target-qualified-output
+      SDK_CACHE_PREPARATION_DIR: ${{ runner.temp }}/sdk-target-cache-preparation
+    steps:
+      - name: Checkout this exact recipe revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout pinned Hepta source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Checkout exact current original Rust target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/server.rs
+
+      - name: Verify source closure and original identities
+        run: |
+          python3 -I -B "$SDK_SOURCE_DIR/scripts/ci_source_dependencies.py" --source "$SDK_SOURCE_DIR"
+          python3 -I -B "$SDK_SOURCE_DIR/scripts/run_full_public_recipe.py" --source "$SDK_SOURCE_DIR" --check-only
+          python3 -I -B - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          workspace = Path(os.environ['GITHUB_WORKSPACE'])
+          source = Path(os.environ['SDK_SOURCE_DIR'])
+          def revision(path, expression):
+              return subprocess.check_output(['git', '-C', str(path), 'rev-parse', expression], text=True).strip()
+          assert revision(workspace/'runtime', 'HEAD') == os.environ['GITHUB_SHA']
+          assert revision(workspace/'compiler', 'HEAD') == 'd3e2c90173cf733e42b299d0c4274df4b593a12f'
+          assert revision(workspace/'compiler', 'HEAD^{tree}') == '8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49'
+          assert revision(workspace/'original-target', 'HEAD') == 'd3d75c30719db966b004756f610007a7c723729e'
+          for rel in ['Cargo.toml', 'Cargo.lock', 'src/mcp/server.rs']:
+              assert (workspace/'original-target'/rel).read_bytes() == (source/'g5/target'/rel).read_bytes(), rel
+          PY
+
+      - name: Install native build dependencies and exact Rust toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Fetch exact locked fixture dependencies
+        run: |
+          sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$SDK_SOURCE_DIR/scripts/prepare_ci_cargo_cache.py" \
+            --source "$SDK_SOURCE_DIR" \
+            --output "$SDK_CACHE_PREPARATION_DIR" \
+            --rust-bin "$sdk_rust_bin"
+
+      - name: Fresh HIA, five original SDK fixtures, retained contracts, and eight real tools
+        run: |
+          sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$SDK_SOURCE_DIR/scripts/run_full_public_recipe.py" \
+            --source "$SDK_SOURCE_DIR" \
+            --output "$SDK_OUTPUT_DIR" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --rust-bin "$sdk_rust_bin"
+
+      - name: Require bounded completion flags
+        run: |
+          python3 -I -B - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['SDK_OUTPUT_DIR'])/'evidence/recipe-summary.json').read_bytes())
+          assert report['status'] == 'PASS'
+          assert report['five_original_target_oracles_rebuilt'] is True
+          assert report['retained_g1_g2_g3_g4_domains_reexecuted'] is True
+          assert report['actual_eight_tool_loop_qualified'] is True
+          assert report['physical_images'] == 62
+          for key in ['full_sdk_qualified', 'full_136_route_qualified', 'full_async_runtime_qualified',
+                      'native_task_registry_qualified', 'native_future_cancellation_qualified',
+                      'fresh_cold_qualified', 'production_activated', 'old_path_removed',
+                      'target_connection_identity_integrated', 'target_async_transport_integrated',
+                      'target_response_owner_integrated', 'all_original_tool_bodies_current_target_qualified']:
+              assert report[key] is False, key
+          PY
+
+      - name: Archive successful or failed observations and original executables
+        if: always()
+        run: |
+          python3 -I -B "$SDK_SOURCE_DIR/scripts/export_ci_evidence.py" \
+            --source "$SDK_SOURCE_DIR" \
+            --output "$SDK_OUTPUT_DIR" \
+            --cache-preparation "$SDK_CACHE_PREPARATION_DIR" \
+            --archive-directory "$RUNNER_TEMP/sdk-target-evidence"
+
+      - name: Retain complete bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-target-five-originals-eight-tools-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-target-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,1716 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {b3233c14-1228-471c-b262-e3afbee07df7}
+Region: westcentralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: complete-read
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  sparse-checkout: tests/hia_native/audit_storage_recovery
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/25d64fea-7819-4bbf-a697-cbfac6ab0b18' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +baef371fa267e2d830788a1f504c6a48e382496b:refs/remotes/origin/hia-audit-storage-readback-6780-20261117
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * [new ref]         baef371fa267e2d830788a1f504c6a48e382496b -> origin/hia-audit-storage-readback-6780-20261117
+[command]/usr/bin/git branch --list --remote origin/hia-audit-storage-readback-6780-20261117
+  origin/hia-audit-storage-readback-6780-20261117
+[command]/usr/bin/git rev-parse refs/remotes/origin/hia-audit-storage-readback-6780-20261117
+baef371fa267e2d830788a1f504c6a48e382496b
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set tests/hia_native/audit_storage_recovery
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B hia-audit-storage-readback-6780-20261117 refs/remotes/origin/hia-audit-storage-readback-6780-20261117
+Updating files:   0% (1/738)
+Updating files:   1% (8/738)
+Updating files:   2% (15/738)
+Updating files:   3% (23/738)
+Updating files:   4% (30/738)
+Updating files:   5% (37/738)
+Updating files:   6% (45/738)
+Updating files:   7% (52/738)
+Updating files:   8% (60/738)
+Updating files:   9% (67/738)
+Updating files:  10% (74/738)
+Updating files:  11% (82/738)
+Updating files:  12% (89/738)
+Updating files:  13% (96/738)
+Updating files:  14% (104/738)
+Updating files:  15% (111/738)
+Updating files:  16% (119/738)
+Updating files:  17% (126/738)
+Updating files:  18% (133/738)
+Updating files:  19% (141/738)
+Updating files:  20% (148/738)
+Updating files:  21% (155/738)
+Updating files:  22% (163/738)
+Updating files:  23% (170/738)
+Updating files:  24% (178/738)
+Updating files:  25% (185/738)
+Updating files:  26% (192/738)
+Updating files:  27% (200/738)
+Updating files:  28% (207/738)
+Updating files:  29% (215/738)
+Updating files:  30% (222/738)
+Updating files:  31% (229/738)
+Updating files:  32% (237/738)
+Updating files:  33% (244/738)
+Updating files:  34% (251/738)
+Updating files:  35% (259/738)
+Updating files:  36% (266/738)
+Updating files:  37% (274/738)
+Updating files:  38% (281/738)
+Updating files:  39% (288/738)
+Updating files:  40% (296/738)
+Updating files:  41% (303/738)
+Updating files:  42% (310/738)
+Updating files:  43% (318/738)
+Updating files:  44% (325/738)
+Updating files:  45% (333/738)
+Updating files:  46% (340/738)
+Updating files:  47% (347/738)
+Updating files:  48% (355/738)
+Updating files:  49% (362/738)
+Updating files:  50% (369/738)
+Updating files:  51% (377/738)
+Updating files:  52% (384/738)
+Updating files:  53% (392/738)
+Updating files:  54% (399/738)
+Updating files:  55% (406/738)
+Updating files:  56% (414/738)
+Updating files:  57% (421/738)
+Updating files:  58% (429/738)
+Updating files:  59% (436/738)
+Updating files:  60% (443/738)
+Updating files:  61% (451/738)
+Updating files:  62% (458/738)
+Updating files:  63% (465/738)
+Updating files:  64% (473/738)
+Updating files:  65% (480/738)
+Updating files:  66% (488/738)
+Updating files:  67% (495/738)
+Updating files:  68% (502/738)
+Updating files:  69% (510/738)
+Updating files:  70% (517/738)
+Updating files:  71% (524/738)
+Updating files:  72% (532/738)
+Updating files:  73% (539/738)
+Updating files:  74% (547/738)
+Updating files:  75% (554/738)
+Updating files:  76% (561/738)
+Updating files:  77% (569/738)
+Updating files:  78% (576/738)
+Updating files:  79% (584/738)
+Updating files:  80% (591/738)
+Updating files:  81% (598/738)
+Updating files:  82% (606/738)
+Updating files:  83% (613/738)
+Updating files:  84% (620/738)
+Updating files:  85% (628/738)
+Updating files:  86% (635/738)
+Updating files:  87% (643/738)
+Updating files:  88% (650/738)
+Updating files:  89% (657/738)
+Updating files:  90% (665/738)
+Updating files:  91% (672/738)
+Updating files:  92% (679/738)
+Updating files:  93% (687/738)
+Updating files:  94% (694/738)
+Updating files:  95% (702/738)
+Updating files:  96% (709/738)
+Updating files:  97% (716/738)
+Updating files:  98% (724/738)
+Updating files:  99% (731/738)
+Updating files: 100% (738/738)
+Updating files: 100% (738/738), done.
+Switched to a new branch 'hia-audit-storage-readback-6780-20261117'
+branch 'hia-audit-storage-readback-6780-20261117' set up to track 'origin/hia-audit-storage-readback-6780-20261117'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+baef371fa267e2d830788a1f504c6a48e382496b
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+/home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-3ffd46a5\-80ba\-4a2b\-a8ef\-6a8869986bf0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-3ffd46a5\-80ba\-4a2b\-a8ef\-6a8869986bf0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-3ffd46a5\-80ba\-4a2b\-a8ef\-6a8869986bf0\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-3ffd46a5\-80ba\-4a2b\-a8ef\-6a8869986bf0\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-3ffd46a5-80ba-4a2b-a8ef-6a8869986bf0.config'
+##[endgroup]
+##[group]Run python3 -I -B - <<'PY'
+[36;1mpython3 -I -B - <<'PY'[0m
+[36;1mfrom pathlib import Path[0m
+[36;1mimport hashlib,os,sys[0m
+[36;1mroot=Path('tests/hia_native/audit_storage_recovery').resolve()[0m
+[36;1massert hashlib.sha256((root/'RECOVERY_SOURCE.json').read_bytes()).hexdigest()==os.environ['EXPECTED_SOURCE'][0m
+[36;1msys.path.insert(0,str(root))[0m
+[36;1mimport read_adapter[0m
+[36;1massert read_adapter.check_adapter()==os.environ['EXPECTED_SOURCE'][0m
+[36;1mfor path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')[0m
+[36;1mPY[0m
+[36;1mpython3 -I -B tests/hia_native/audit_storage_recovery/export.py --help[0m
+shell: /usr/bin/bash -e {0}
+env:
+  EXPECTED_SOURCE: b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d
+##[endgroup]
+usage: export.py [-h] --restored RESTORED --recovery RECOVERY --archive
+                 ARCHIVE --original-zip ORIGINAL_ZIP
+
+Losslessly retain the old failed capture and every new read/control artifact;
+zero semantic execution.
+
+options:
+  -h, --help            show this help message and exit
+  --restored RESTORED
+  --recovery RECOVERY
+  --archive ARCHIVE
+  --original-zip ORIGINAL_ZIP
+##[group]Run curl --fail --location --retry 3 -H "Authorization: ***" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14307841184/zip -o "$RUNNER_TEMP/original-failure.zip"
+[36;1mcurl --fail --location --retry 3 -H "Authorization: ***" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14307841184/zip -o "$RUNNER_TEMP/original-failure.zip"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  GH_TOKEN: ***
+##[endgroup]
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+  0 28.4M    0  190k    0     0   199k      0  0:02:26 --:--:--  0:02:26  199k
+100 28.4M  100 28.4M    0     0  17.5M      0  0:00:01  0:00:01 --:--:-- 42.2M
+##[group]Run mkdir -p "$RUNNER_TEMP/audit-record-io-recovery"
+[36;1mmkdir -p "$RUNNER_TEMP/audit-record-io-recovery"[0m
+[36;1mtimeout 180s python3 -I -B tests/hia_native/audit_storage_recovery/restore.py --zip "$RUNNER_TEMP/original-failure.zip" --destination "$RUNNER_TEMP/audit-record-io-retained" --report "$RUNNER_TEMP/audit-record-io-recovery/RESTORED.json"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_reread": true,
+  "all_object_bytes_and_modes_read": true,
+  "diagnosis": {
+    "build": {
+      "audit-json": {
+        "image": {
+          "bytes": 161260,
+          "sha256": "76122331b305e654b6175a3d0a975d080815ee1cfcf542ea837d8aecdb83b2fc"
+        },
+        "manifest": {
+          "bytes": 709,
+          "path": "modules/audit-json/manifest.json",
+          "sha256": "46ec0a34335cbb4db06301d8a5794b5e334e3a22b45c9af67d4da71099d9980b"
+        },
+        "source": {
+          "bytes": 126320,
+          "sha256": "5146e5c42028692933762ce68bd9c62d52f9760d8ce378124e3888edacb4255b"
+        },
+        "source_path": "imports/audit_json.hepta"
+      },
+      "audit-record-io": {
+        "image": {
+          "bytes": 295103,
+          "sha256": "3b290dab82a2c60982a7af947562a4cf7aa407e9399c0d877640354c13112664"
+        },
+        "manifest": {
+          "bytes": 719,
+          "path": "modules/audit-record-io/manifest.json",
+          "sha256": "65dfecff10dea2fc72e21a8189eaadba7ec79d98eb0ad525c51ad9636fe81ec7"
+        },
+        "source": {
+          "bytes": 218029,
+          "sha256": "6826f361511a1345b63a1604a92b89252f5405c549fe38337e88e3d8aa8338ea"
+        },
+        "source_path": "native/audit_record_io.hepta"
+      }
+    },
+    "mismatches": [],
+    "native": {
+      "buffers": {
+        "bytes": 5302030,
+        "sha256": "1d13552148ab2965e9c37dc1edf0de7a2657ef77d54067a3bb145e97698e084d"
+      },
+      "cases": 219,
+      "controls": [
+        "initial/initial-truncated-0",
+        "initial/initial-truncated-1",
+        "initial/initial-truncated-7",
+        "initial/initial-truncated-8",
+        "initial/initial-truncated-15",
+        "initial/initial-truncated-31",
+        "initial/initial-truncated-63",
+        "initial/initial-truncated-127",
+        "initial/initial-header-0-0",
+        "initial/initial-header-8-0",
+        "initial/initial-header-8-5",
+        "initial/initial-header-16-0",
+        "initial/initial-header-24-0",
+        "initial/initial-header-32-4",
+        "initial/initial-header-40-18446744073709551615",
+        "initial/initial-header-48-0",
+        "initial/initial-reserved-56",
+        "initial/initial-reserved-64",
+        "initial/initial-reserved-72",
+        "initial/initial-reserved-80",
+        "initial/initial-reserved-88",
+        "initial/initial-reserved-96",
+        "initial/initial-reserved-104",
+        "initial/initial-reserved-112",
+        "initial/initial-reserved-120",
+        "initial/initial-extra-byte",
+        "initial/initial-Record-128",
+        "initial/initial-Record-136",
+        "initial/initial-Record-144",
+        "initial/initial-Record-168",
+        "initial/initial-Record-184",
+        "initial/initial-Record-192",
+        "initial/initial-Record-200",
+        "initial/initial-Record-208",
+        "initial/initial-Record-216",
+        "initial/initial-Record-224",
+        "initial/initial-Record-232",
+        "initial/initial-Record-240",
+        "initial/initial-Record-248",
+        "initial/output-8191",
+        "initial/workspace-initial-minus-one",
+        "initial/workspace-zero",
+        "ack-2-2-0/ack-header-0",
+        "ack-2-2-0/ack-header-8",
+        "ack-2-2-0/ack-header-16",
+        "ack-2-2-0/ack-header-24",
+        "ack-2-2-0/ack-header-32",
+        "ack-2-2-0/ack-header-40",
+        "ack-2-2-0/ack-header-48",
+        "ack-2-2-0/ack-header-64",
+        "ack-2-2-0/ack-header-72",
+        "ack-2-2-0/ack-reserved-80",
+        "ack-2-2-0/ack-reserved-88",
+        "ack-2-2-0/ack-reserved-96",
+        "ack-2-2-0/ack-reserved-104",
+        "ack-2-2-0/ack-reserved-112",
+        "ack-2-2-0/ack-reserved-120",
+        "ack-2-2-0/work-header-0",
+        "ack-2-2-0/work-header-8",
+        "ack-2-2-0/work-header-16",
+        "ack-2-2-0/work-header-48",
+        "ack-2-2-0/work-header-56",
+        "ack-2-2-0/work-header-64",
+        "ack-2-2-0/work-header-72",
+        "ack-2-2-0/work-header-80",
+        "ack-2-2-0/work-header-160",
+        "ack-2-2-0/work-header-168",
+        "ack-2-2-0/work-header-176",
+        "ack-2-2-0/work-header-144",
+        "ack-2-2-0/work-header-456",
+        "ack-2-2-0/work-header-16384",
+        "ack-2-2-0/work-header-16432",
+        "ack-2-2-0/work-header-16440",
+        "ack-2-2-0/ack-extra-byte",
+        "ack-2-2-0/metadata-field-128",
+        "ack-2-2-0/metadata-field-136",
+        "ack-2-2-0/metadata-field-176",
+        "ack-2-2-0/metadata-field-184",
+        "ack-2-3-0/ack-header-0",
+        "ack-2-3-0/ack-header-8",
+        "ack-2-3-0/ack-header-16",
+        "ack-2-3-0/ack-header-24",
+        "ack-2-3-0/ack-header-32",
+        "ack-2-3-0/ack-header-40",
+        "ack-2-3-0/ack-header-48",
+        "ack-2-3-0/ack-header-64",
+        "ack-2-3-0/ack-header-72",
+        "ack-2-3-0/ack-reserved-80",
+        "ack-2-3-0/ack-reserved-88",
+        "ack-2-3-0/ack-reserved-96",
+        "ack-2-3-0/ack-reserved-104",
+        "ack-2-3-0/ack-reserved-112",
+        "ack-2-3-0/ack-reserved-120",
+        "ack-2-3-0/work-header-0",
+        "ack-2-3-0/work-header-8",
+        "ack-2-3-0/work-header-16",
+        "ack-2-3-0/work-header-48",
+        "ack-2-3-0/work-header-56",
+        "ack-2-3-0/work-header-64",
+        "ack-2-3-0/work-header-72",
+        "ack-2-3-0/work-header-80",
+        "ack-2-3-0/work-header-160",
+        "ack-2-3-0/work-header-168",
+        "ack-2-3-0/work-header-176",
+        "ack-2-3-0/work-header-144",
+        "ack-2-3-0/work-header-456",
+        "ack-2-3-0/work-header-16384",
+        "ack-2-3-0/work-header-16432",
+        "ack-2-3-0/work-header-16440",
+        "ack-2-3-0/ack-extra-byte",
+        "ack-3-3-0/ack-header-0",
+        "ack-3-3-0/ack-header-8",
+        "ack-3-3-0/ack-header-16",
+        "ack-3-3-0/ack-header-24",
+        "ack-3-3-0/ack-header-32",
+        "ack-3-3-0/ack-header-40",
+        "ack-3-3-0/ack-header-48",
+        "ack-3-3-0/ack-header-64",
+        "ack-3-3-0/ack-header-72",
+        "ack-3-3-0/ack-reserved-80",
+        "ack-3-3-0/ack-reserved-88",
+        "ack-3-3-0/ack-reserved-96",
+        "ack-3-3-0/ack-reserved-104",
+        "ack-3-3-0/ack-reserved-112",
+        "ack-3-3-0/ack-reserved-120",
+        "ack-3-3-0/work-header-0",
+        "ack-3-3-0/work-header-8",
+        "ack-3-3-0/work-header-16",
+        "ack-3-3-0/work-header-48",
+        "ack-3-3-0/work-header-56",
+        "ack-3-3-0/work-header-64",
+        "ack-3-3-0/work-header-72",
+        "ack-3-3-0/work-header-80",
+        "ack-3-3-0/work-header-160",
+        "ack-3-3-0/work-header-168",
+        "ack-3-3-0/work-header-176",
+        "ack-3-3-0/work-header-144",
+        "ack-3-3-0/work-header-456",
+        "ack-3-3-0/work-header-16384",
+        "ack-3-3-0/work-header-16432",
+        "ack-3-3-0/work-header-16440",
+        "ack-3-3-0/ack-extra-byte",
+        "ack-3-3-0/codec-return-mismatch",
+        "ack-2-1-0/ack-header-0",
+        "ack-2-1-0/ack-header-8",
+        "ack-2-1-0/ack-header-16",
+        "ack-2-1-0/ack-header-24",
+        "ack-2-1-0/ack-header-32",
+        "ack-2-1-0/ack-header-40",
+        "ack-2-1-0/ack-header-48",
+        "ack-2-1-0/ack-header-64",
+        "ack-2-1-0/ack-header-72",
+        "ack-2-1-0/ack-reserved-80",
+        "ack-2-1-0/ack-reserved-88",
+        "ack-2-1-0/ack-reserved-96",
+        "ack-2-1-0/ack-reserved-104",
+        "ack-2-1-0/ack-reserved-112",
+        "ack-2-1-0/ack-reserved-120",
+        "ack-2-1-0/work-header-0",
+        "ack-2-1-0/work-header-8",
+        "ack-2-1-0/work-header-16",
+        "ack-2-1-0/work-header-48",
+        "ack-2-1-0/work-header-56",
+        "ack-2-1-0/work-header-64",
+        "ack-2-1-0/work-header-72",
+        "ack-2-1-0/work-header-80",
+        "ack-2-1-0/work-header-160",
+        "ack-2-1-0/work-header-168",
+        "ack-2-1-0/work-header-176",
+        "ack-2-1-0/work-header-144",
+        "ack-2-1-0/work-header-456",
+        "ack-2-1-0/work-header-16384",
+        "ack-2-1-0/work-header-16432",
+        "ack-2-1-0/work-header-16440",
+        "ack-2-1-0/ack-extra-byte",
+        "ack-2-5-0/ack-header-0",
+        "ack-2-5-0/ack-header-8",
+        "ack-2-5-0/ack-header-16",
+        "ack-2-5-0/ack-header-24",
+        "ack-2-5-0/ack-header-32",
+        "ack-2-5-0/ack-header-40",
+        "ack-2-5-0/ack-header-48",
+        "ack-2-5-0/ack-header-64",
+        "ack-2-5-0/ack-header-72",
+        "ack-2-5-0/ack-reserved-80",
+        "ack-2-5-0/ack-reserved-88",
+        "ack-2-5-0/ack-reserved-96",
+        "ack-2-5-0/ack-reserved-104",
+        "ack-2-5-0/ack-reserved-112",
+        "ack-2-5-0/ack-reserved-120",
+        "ack-2-5-0/work-header-0",
+        "ack-2-5-0/work-header-8",
+        "ack-2-5-0/work-header-16",
+        "ack-2-5-0/work-header-48",
+        "ack-2-5-0/work-header-56",
+        "ack-2-5-0/work-header-64",
+        "ack-2-5-0/work-header-72",
+        "ack-2-5-0/work-header-80",
+        "ack-2-5-0/work-header-160",
+        "ack-2-5-0/work-header-168",
+        "ack-2-5-0/work-header-176",
+        "ack-2-5-0/work-header-144",
+        "ack-2-5-0/work-header-456",
+        "ack-2-5-0/work-header-16384",
+        "ack-2-5-0/work-header-16432",
+        "ack-2-5-0/work-header-16440",
+        "ack-2-5-0/ack-extra-byte",
+        "ack-2-6-0/ack-header-0",
+        "ack-2-6-0/ack-header-8",
+        "ack-2-6-0/ack-header-16",
+        "ack-2-6-0/ack-header-24",
+        "ack-2-6-0/ack-header-32",
+        "ack-2-6-0/ack-header-40",
+        "ack-2-6-0/ack-header-48",
+        "ack-2-6-0/ack-header-64",
+        "ack-2-6-0/ack-header-72",
+        "ack-2-6-0/ack-reserved-80",
+        "ack-2-6-0/ack-reserved-88",
+        "ack-2-6-0/ack-reserved-96",
+        "ack-2-6-0/ack-reserved-104",
+        "ack-2-6-0/ack-reserved-112",
+        "ack-2-6-0/ack-reserved-120",
+        "ack-2-6-0/work-header-0",
+        "ack-2-6-0/work-header-8",
+        "ack-2-6-0/work-header-16",
+        "ack-2-6-0/work-header-48",
+        "ack-2-6-0/work-header-56",
+        "ack-2-6-0/work-header-64",
+        "ack-2-6-0/work-header-72",
+        "ack-2-6-0/work-header-80",
+        "ack-2-6-0/work-header-160",
+        "ack-2-6-0/work-header-168",
+        "ack-2-6-0/work-header-176",
+        "ack-2-6-0/work-header-144",
+        "ack-2-6-0/work-header-456",
+        "ack-2-6-0/work-header-16384",
+        "ack-2-6-0/work-header-16432",
+        "ack-2-6-0/work-header-16440",
+        "ack-2-6-0/ack-extra-byte",
+        "ack-2-7-0/ack-header-0",
+        "ack-2-7-0/ack-header-8",
+        "ack-2-7-0/ack-header-16",
+        "ack-2-7-0/ack-header-24",
+        "ack-2-7-0/ack-header-32",
+        "ack-2-7-0/ack-header-40",
+        "ack-2-7-0/ack-header-48",
+        "ack-2-7-0/ack-header-64",
+        "ack-2-7-0/ack-header-72",
+        "ack-2-7-0/ack-reserved-80",
+        "ack-2-7-0/ack-reserved-88",
+        "ack-2-7-0/ack-reserved-96",
+        "ack-2-7-0/ack-reserved-104",
+        "ack-2-7-0/ack-reserved-112",
+        "ack-2-7-0/ack-reserved-120",
+        "ack-2-7-0/work-header-0",
+        "ack-2-7-0/work-header-8",
+        "ack-2-7-0/work-header-16",
+        "ack-2-7-0/work-header-48",
+        "ack-2-7-0/work-header-56",
+        "ack-2-7-0/work-header-64",
+        "ack-2-7-0/work-header-72",
+        "ack-2-7-0/work-header-80",
+        "ack-2-7-0/work-header-160",
+        "ack-2-7-0/work-header-168",
+        "ack-2-7-0/work-header-176",
+        "ack-2-7-0/work-header-144",
+        "ack-2-7-0/work-header-456",
+        "ack-2-7-0/work-header-16384",
+        "ack-2-7-0/work-header-16432",
+        "ack-2-7-0/work-header-16440",
+        "ack-2-7-0/ack-extra-byte",
+        "ack-2-8-0/ack-header-0",
+        "ack-2-8-0/ack-header-8",
+        "ack-2-8-0/ack-header-16",
+        "ack-2-8-0/ack-header-24",
+        "ack-2-8-0/ack-header-32",
+        "ack-2-8-0/ack-header-40",
+        "ack-2-8-0/ack-header-48",
+        "ack-2-8-0/ack-header-64",
+        "ack-2-8-0/ack-header-72",
+        "ack-2-8-0/ack-reserved-80",
+        "ack-2-8-0/ack-reserved-88",
+        "ack-2-8-0/ack-reserved-96",
+        "ack-2-8-0/ack-reserved-104",
+        "ack-2-8-0/ack-reserved-112",
+        "ack-2-8-0/ack-reserved-120",
+        "ack-2-8-0/work-header-0",
+        "ack-2-8-0/work-header-8",
+        "ack-2-8-0/work-header-16",
+        "ack-2-8-0/work-header-48",
+        "ack-2-8-0/work-header-56",
+        "ack-2-8-0/work-header-64",
+        "ack-2-8-0/work-header-72",
+        "ack-2-8-0/work-header-80",
+        "ack-2-8-0/work-header-160",
+        "ack-2-8-0/work-header-168",
+        "ack-2-8-0/work-header-176",
+        "ack-2-8-0/work-header-144",
+        "ack-2-8-0/work-header-456",
+        "ack-2-8-0/work-header-16384",
+        "ack-2-8-0/work-header-16432",
+        "ack-2-8-0/work-header-16440",
+        "ack-2-8-0/ack-extra-byte",
+        "ack-2-9-0/ack-header-0",
+        "ack-2-9-0/ack-header-8",
+        "ack-2-9-0/ack-header-16",
+        "ack-2-9-0/ack-header-24",
+        "ack-2-9-0/ack-header-32",
+        "ack-2-9-0/ack-header-40",
+        "ack-2-9-0/ack-header-48",
+        "ack-2-9-0/ack-header-64",
+        "ack-2-9-0/ack-header-72",
+        "ack-2-9-0/ack-reserved-80",
+        "ack-2-9-0/ack-reserved-88",
+        "ack-2-9-0/ack-reserved-96",
+        "ack-2-9-0/ack-reserved-104",
+        "ack-2-9-0/ack-reserved-112",
+        "ack-2-9-0/ack-reserved-120",
+        "ack-2-9-0/work-header-0",
+        "ack-2-9-0/work-header-8",
+        "ack-2-9-0/work-header-16",
+        "ack-2-9-0/work-header-48",
+        "ack-2-9-0/work-header-56",
+        "ack-2-9-0/work-header-64",
+        "ack-2-9-0/work-header-72",
+        "ack-2-9-0/work-header-80",
+        "ack-2-9-0/work-header-160",
+        "ack-2-9-0/work-header-168",
+        "ack-2-9-0/work-header-176",
+        "ack-2-9-0/work-header-144",
+        "ack-2-9-0/work-header-456",
+        "ack-2-9-0/work-header-16384",
+        "ack-2-9-0/work-header-16432",
+        "ack-2-9-0/work-header-16440",
+        "ack-2-9-0/ack-extra-byte",
+        "terminal-ack-replay",
+        "ack-2-1-1/ack-header-0",
+        "ack-2-1-1/ack-header-8",
+        "ack-2-1-1/ack-header-16",
+        "ack-2-1-1/ack-header-24",
+        "ack-2-1-1/ack-header-32",
+        "ack-2-1-1/ack-header-40",
+        "ack-2-1-1/ack-header-48",
+        "ack-2-1-1/ack-header-64",
+        "ack-2-1-1/ack-header-72",
+        "ack-2-1-1/ack-reserved-80",
+        "ack-2-1-1/ack-reserved-88",
+        "ack-2-1-1/ack-reserved-96",
+        "ack-2-1-1/ack-reserved-104",
+        "ack-2-1-1/ack-reserved-112",
+        "ack-2-1-1/ack-reserved-120",
+        "ack-2-1-1/work-header-0",
+        "ack-2-1-1/work-header-8",
+        "ack-2-1-1/work-header-16",
+        "ack-2-1-1/work-header-48",
+        "ack-2-1-1/work-header-56",
+        "ack-2-1-1/work-header-64",
+        "ack-2-1-1/work-header-72",
+        "ack-2-1-1/work-header-80",
+        "ack-2-1-1/work-header-160",
+        "ack-2-1-1/work-header-168",
+        "ack-2-1-1/work-header-176",
+        "ack-2-1-1/work-header-144",
+        "ack-2-1-1/work-header-456",
+        "ack-2-1-1/work-header-16384",
+        "ack-2-1-1/work-header-16432",
+        "ack-2-1-1/work-header-16440",
+        "ack-2-1-1/ack-extra-byte",
+        "ack-2-4-0/ack-header-0",
+        "ack-2-4-0/ack-header-8",
+        "ack-2-4-0/ack-header-16",
+        "ack-2-4-0/ack-header-24",
+        "ack-2-4-0/ack-header-32",
+        "ack-2-4-0/ack-header-40",
+        "ack-2-4-0/ack-header-48",
+        "ack-2-4-0/ack-header-64",
+        "ack-2-4-0/ack-header-72",
+        "ack-2-4-0/ack-reserved-80",
+        "ack-2-4-0/ack-reserved-88",
+        "ack-2-4-0/ack-reserved-96",
+        "ack-2-4-0/ack-reserved-104",
+        "ack-2-4-0/ack-reserved-112",
+        "ack-2-4-0/ack-reserved-120",
+        "ack-2-4-0/work-header-0",
+        "ack-2-4-0/work-header-8",
+        "ack-2-4-0/work-header-16",
+        "ack-2-4-0/work-header-48",
+        "ack-2-4-0/work-header-56",
+        "ack-2-4-0/work-header-64",
+        "ack-2-4-0/work-header-72",
+        "ack-2-4-0/work-header-80",
+        "ack-2-4-0/work-header-160",
+        "ack-2-4-0/work-header-168",
+        "ack-2-4-0/work-header-176",
+        "ack-2-4-0/work-header-144",
+        "ack-2-4-0/work-header-456",
+        "ack-2-4-0/work-header-16384",
+        "ack-2-4-0/work-header-16432",
+        "ack-2-4-0/work-header-16440",
+        "ack-2-4-0/ack-extra-byte",
+        "ack-3-1-0/ack-header-0",
+        "ack-3-1-0/ack-header-8",
+        "ack-3-1-0/ack-header-16",
+        "ack-3-1-0/ack-header-24",
+        "ack-3-1-0/ack-header-32",
+        "ack-3-1-0/ack-header-40",
+        "ack-3-1-0/ack-header-48",
+        "ack-3-1-0/ack-header-64",
+        "ack-3-1-0/ack-header-72",
+        "ack-3-1-0/ack-reserved-80",
+        "ack-3-1-0/ack-reserved-88",
+        "ack-3-1-0/ack-reserved-96",
+        "ack-3-1-0/ack-reserved-104",
+        "ack-3-1-0/ack-reserved-112",
+        "ack-3-1-0/ack-reserved-120",
+        "ack-3-1-0/work-header-0",
+        "ack-3-1-0/work-header-8",
+        "ack-3-1-0/work-header-16",
+        "ack-3-1-0/work-header-48",
+        "ack-3-1-0/work-header-56",
+        "ack-3-1-0/work-header-64",
+        "ack-3-1-0/work-header-72",
+        "ack-3-1-0/work-header-80",
+        "ack-3-1-0/work-header-160",
+        "ack-3-1-0/work-header-168",
+        "ack-3-1-0/work-header-176",
+        "ack-3-1-0/work-header-144",
+        "ack-3-1-0/work-header-456",
+        "ack-3-1-0/work-header-16384",
+        "ack-3-1-0/work-header-16432",
+        "ack-3-1-0/work-header-16440",
+        "ack-3-1-0/ack-extra-byte",
+        "ack-3-1-0/codec-return-mismatch",
+        "ack-2-10-0/ack-header-0",
+        "ack-2-10-0/ack-header-8",
+        "ack-2-10-0/ack-header-16",
+        "ack-2-10-0/ack-header-24",
+        "ack-2-10-0/ack-header-32",
+        "ack-2-10-0/ack-header-40",
+        "ack-2-10-0/ack-header-48",
+        "ack-2-10-0/ack-header-64",
+        "ack-2-10-0/ack-header-72",
+        "ack-2-10-0/ack-reserved-80",
+        "ack-2-10-0/ack-reserved-88",
+        "ack-2-10-0/ack-reserved-96",
+        "ack-2-10-0/ack-reserved-104",
+        "ack-2-10-0/ack-reserved-112",
+        "ack-2-10-0/ack-reserved-120",
+        "ack-2-10-0/work-header-0",
+        "ack-2-10-0/work-header-8",
+        "ack-2-10-0/work-header-16",
+        "ack-2-10-0/work-header-48",
+        "ack-2-10-0/work-header-56",
+        "ack-2-10-0/work-header-64",
+        "ack-2-10-0/work-header-72",
+        "ack-2-10-0/work-header-80",
+        "ack-2-10-0/work-header-160",
+        "ack-2-10-0/work-header-168",
+        "ack-2-10-0/work-header-176",
+        "ack-2-10-0/work-header-144",
+        "ack-2-10-0/work-header-456",
+        "ack-2-10-0/work-header-16384",
+        "ack-2-10-0/work-header-16432",
+        "ack-2-10-0/work-header-16440",
+        "ack-2-10-0/ack-extra-byte",
+        "ack-3-1-2/ack-header-0",
+        "ack-3-1-2/ack-header-8",
+        "ack-3-1-2/ack-header-16",
+        "ack-3-1-2/ack-header-24",
+        "ack-3-1-2/ack-header-32",
+        "ack-3-1-2/ack-header-40",
+        "ack-3-1-2/ack-header-48",
+        "ack-3-1-2/ack-header-64",
+        "ack-3-1-2/ack-header-72",
+        "ack-3-1-2/ack-reserved-80",
+        "ack-3-1-2/ack-reserved-88",
+        "ack-3-1-2/ack-reserved-96",
+        "ack-3-1-2/ack-reserved-104",
+        "ack-3-1-2/ack-reserved-112",
+        "ack-3-1-2/ack-reserved-120",
+        "ack-3-1-2/work-header-0",
+        "ack-3-1-2/work-header-8",
+        "ack-3-1-2/work-header-16",
+        "ack-3-1-2/work-header-48",
+        "ack-3-1-2/work-header-56",
+        "ack-3-1-2/work-header-64",
+        "ack-3-1-2/work-header-72",
+        "ack-3-1-2/work-header-80",
+        "ack-3-1-2/work-header-160",
+        "ack-3-1-2/work-header-168",
+        "ack-3-1-2/work-header-176",
+        "ack-3-1-2/work-header-144",
+        "ack-3-1-2/work-header-456",
+        "ack-3-1-2/work-header-16384",
+        "ack-3-1-2/work-header-16432",
+        "ack-3-1-2/work-header-16440",
+        "ack-3-1-2/ack-extra-byte",
+        "ack-3-1-2/codec-return-mismatch",
+        "ack-2-11-0/ack-header-0",
+        "ack-2-11-0/ack-header-8",
+        "ack-2-11-0/ack-header-16",
+        "ack-2-11-0/ack-header-24",
+        "ack-2-11-0/ack-header-32",
+        "ack-2-11-0/ack-header-40",
+        "ack-2-11-0/ack-header-48",
+        "ack-2-11-0/ack-header-64",
+        "ack-2-11-0/ack-header-72",
+        "ack-2-11-0/ack-reserved-80",
+        "ack-2-11-0/ack-reserved-88",
+        "ack-2-11-0/ack-reserved-96",
+        "ack-2-11-0/ack-reserved-104",
+        "ack-2-11-0/ack-reserved-112",
+        "ack-2-11-0/ack-reserved-120",
+        "ack-2-11-0/work-header-0",
+        "ack-2-11-0/work-header-8",
+        "ack-2-11-0/work-header-16",
+        "ack-2-11-0/work-header-48",
+        "ack-2-11-0/work-header-56",
+        "ack-2-11-0/work-header-64",
+        "ack-2-11-0/work-header-72",
+        "ack-2-11-0/work-header-80",
+        "ack-2-11-0/work-header-160",
+        "ack-2-11-0/work-header-168",
+        "ack-2-11-0/work-header-176",
+        "ack-2-11-0/work-header-144",
+        "ack-2-11-0/work-header-456",
+        "ack-2-11-0/work-header-16384",
+        "ack-2-11-0/work-header-16432",
+        "ack-2-11-0/work-header-16440",
+        "ack-2-11-0/ack-extra-byte",
+        "ack-2-12-0/ack-header-0",
+        "ack-2-12-0/ack-header-8",
+        "ack-2-12-0/ack-header-16",
+        "ack-2-12-0/ack-header-24",
+        "ack-2-12-0/ack-header-32",
+        "ack-2-12-0/ack-header-40",
+        "ack-2-12-0/ack-header-48",
+        "ack-2-12-0/ack-header-64",
+        "ack-2-12-0/ack-header-72",
+        "ack-2-12-0/ack-reserved-80",
+        "ack-2-12-0/ack-reserved-88",
+        "ack-2-12-0/ack-reserved-96",
+        "ack-2-12-0/ack-reserved-104",
+        "ack-2-12-0/ack-reserved-112",
+        "ack-2-12-0/ack-reserved-120",
+        "ack-2-12-0/work-header-0",
+        "ack-2-12-0/work-header-8",
+        "ack-2-12-0/work-header-16",
+        "ack-2-12-0/work-header-48",
+        "ack-2-12-0/work-header-56",
+        "ack-2-12-0/work-header-64",
+        "ack-2-12-0/work-header-72",
+        "ack-2-12-0/work-header-80",
+        "ack-2-12-0/work-header-160",
+        "ack-2-12-0/work-header-168",
+        "ack-2-12-0/work-header-176",
+        "ack-2-12-0/work-header-144",
+        "ack-2-12-0/work-header-456",
+        "ack-2-12-0/work-header-16384",
+        "ack-2-12-0/work-header-16432",
+        "ack-2-12-0/work-header-16440",
+        "ack-2-12-0/ack-extra-byte",
+        "ack-2-13-0/ack-header-0",
+        "ack-2-13-0/ack-header-8",
+        "ack-2-13-0/ack-header-16",
+        "ack-2-13-0/ack-header-24",
+        "ack-2-13-0/ack-header-32",
+        "ack-2-13-0/ack-header-40",
+        "ack-2-13-0/ack-header-48",
+        "ack-2-13-0/ack-header-64",
+        "ack-2-13-0/ack-header-72",
+        "ack-2-13-0/ack-reserved-80",
+        "ack-2-13-0/ack-reserved-88",
+        "ack-2-13-0/ack-reserved-96",
+        "ack-2-13-0/ack-reserved-104",
+        "ack-2-13-0/ack-reserved-112",
+        "ack-2-13-0/ack-reserved-120",
+        "ack-2-13-0/work-header-0",
+        "ack-2-13-0/work-header-8",
+        "ack-2-13-0/work-header-16",
+        "ack-2-13-0/work-header-48",
+        "ack-2-13-0/work-header-56",
+        "ack-2-13-0/work-header-64",
+        "ack-2-13-0/work-header-72",
+        "ack-2-13-0/work-header-80",
+        "ack-2-13-0/work-header-160",
+        "ack-2-13-0/work-header-168",
+        "ack-2-13-0/work-header-176",
+        "ack-2-13-0/work-header-144",
+        "ack-2-13-0/work-header-456",
+        "ack-2-13-0/work-header-16384",
+        "ack-2-13-0/work-header-16432",
+        "ack-2-13-0/work-header-16440",
+        "ack-2-13-0/ack-extra-byte",
+        "ack-2-14-0/ack-header-0",
+        "ack-2-14-0/ack-header-8",
+        "ack-2-14-0/ack-header-16",
+        "ack-2-14-0/ack-header-24",
+        "ack-2-14-0/ack-header-32",
+        "ack-2-14-0/ack-header-40",
+        "ack-2-14-0/ack-header-48",
+        "ack-2-14-0/ack-header-64",
+        "ack-2-14-0/ack-header-72",
+        "ack-2-14-0/ack-reserved-80",
+        "ack-2-14-0/ack-reserved-88",
+        "ack-2-14-0/ack-reserved-96",
+        "ack-2-14-0/ack-reserved-104",
+        "ack-2-14-0/ack-reserved-112",
+        "ack-2-14-0/ack-reserved-120",
+        "ack-2-14-0/work-header-0",
+        "ack-2-14-0/work-header-8",
+        "ack-2-14-0/work-header-16",
+        "ack-2-14-0/work-header-48",
+        "ack-2-14-0/work-header-56",
+        "ack-2-14-0/work-header-64",
+        "ack-2-14-0/work-header-72",
+        "ack-2-14-0/work-header-80",
+        "ack-2-14-0/work-header-160",
+        "ack-2-14-0/work-header-168",
+        "ack-2-14-0/work-header-176",
+        "ack-2-14-0/work-header-144",
+        "ack-2-14-0/work-header-456",
+        "ack-2-14-0/work-header-16384",
+        "ack-2-14-0/work-header-16432",
+        "ack-2-14-0/work-header-16440",
+        "ack-2-14-0/ack-extra-byte",
+        "ack-2-8-1/ack-header-0",
+        "ack-2-8-1/ack-header-8",
+        "ack-2-8-1/ack-header-16",
+        "ack-2-8-1/ack-header-24",
+        "ack-2-8-1/ack-header-32",
+        "ack-2-8-1/ack-header-40",
+        "ack-2-8-1/ack-header-48",
+        "ack-2-8-1/ack-header-64",
+        "ack-2-8-1/ack-header-72",
+        "ack-2-8-1/ack-reserved-80",
+        "ack-2-8-1/ack-reserved-88",
+        "ack-2-8-1/ack-reserved-96",
+        "ack-2-8-1/ack-reserved-104",
+        "ack-2-8-1/ack-reserved-112",
+        "ack-2-8-1/ack-reserved-120",
+        "ack-2-8-1/work-header-0",
+        "ack-2-8-1/work-header-8",
+        "ack-2-8-1/work-header-16",
+        "ack-2-8-1/work-header-48",
+        "ack-2-8-1/work-header-56",
+        "ack-2-8-1/work-header-64",
+        "ack-2-8-1/work-header-72",
+        "ack-2-8-1/work-header-80",
+        "ack-2-8-1/work-header-160",
+        "ack-2-8-1/work-header-168",
+        "ack-2-8-1/work-header-176",
+        "ack-2-8-1/work-header-144",
+        "ack-2-8-1/work-header-456",
+        "ack-2-8-1/work-header-16384",
+        "ack-2-8-1/work-header-16432",
+        "ack-2-8-1/work-header-16440",
+        "ack-2-8-1/ack-extra-byte"
+      ],
+      "effects": {
+        "bytes": 3488841,
+        "sha256": "b4b2438642f4be61a72e57bacd81513ab76247ea3d7f6a0a2f9667417b85a5d1"
+      },
+      "invocations": {
+        "bytes": 5943315,
+        "sha256": "a6d08fe6d9dc4f87bafc7c694745d7a08abc4b1f1ad94fa11b99bb862489b7ea"
+      },
+      "json_calls": 404,
+      "modules": [
+        {
+          "image": {
+            "bytes": 295103,
+            "sha256": "3b290dab82a2c60982a7af947562a4cf7aa407e9399c0d877640354c13112664"
+          },
+          "manifest": {
+            "bytes": 719,
+            "sha256": "65dfecff10dea2fc72e21a8189eaadba7ec79d98eb0ad525c51ad9636fe81ec7"
+          }
+        },
+        {
+          "image": {
+            "bytes": 161260,
+            "sha256": "76122331b305e654b6175a3d0a975d080815ee1cfcf542ea837d8aecdb83b2fc"
+          },
+          "manifest": {
+            "bytes": 709,
+            "sha256": "46ec0a34335cbb4db06301d8a5794b5e334e3a22b45c9af67d4da71099d9980b"
+          }
+        }
+      ],
+      "native_calls": 5764,
+      "observations": {
+        "bytes": 1708385,
+        "sha256": "f3dca6e83c8df805488b18a86d9a6c512895dac812dbfddfa1957389b2d63784"
+      },
+      "operations": 459,
+      "public_handler_qualified": false,
+      "retirement": {
+        "bytes": 205453,
+        "sha256": "d0cd40df58a4c5cb2188d3197514a762b4a8c0928018edea1c1ec7e981de9c45"
+      },
+      "root": "/home/runner/work/_temp/audit-record-io-build/owned-fixture",
+      "schema": "hepta.audit-record-io.native.v1",
+      "source_manifest_sha256": "35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6",
+      "status": "PASS",
+      "whole_runtime_replaced": false
+    },
+    "native_or_rust_executions": 0,
+    "omissions": [
+      {
+        "bytes": 21,
+        "mode": 420,
+        "package": "anyhow-1.0.104",
+        "path": ".gitignore",
+        "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+      },
+      {
+        "bytes": 21,
+        "mode": 420,
+        "package": "itoa-1.0.18",
+        "path": ".gitignore",
+        "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+      },
+      {
+        "bytes": 46,
+        "mode": 420,
+        "package": "libc-0.2.189",
+        "path": ".gitignore",
+        "sha256": "2c6be680ae3173f3fa5cb35f52625547ef9ff4333b076cd236f26cdd212b6a5f"
+      },
+      {
+        "bytes": 93,
+        "mode": 420,
+        "package": "memchr-2.8.3",
+        "path": ".gitignore",
+        "sha256": "0dbac962f4ec8a8f95158677e768b3163914026973cd77a9043c30c55ef84638"
+      },
+      {
+        "bytes": 28,
+        "mode": 420,
+        "package": "once_cell-1.21.4",
+        "path": ".gitignore",
+        "sha256": "a7d1bce3ba42de5fc6338b20f544f36a4e3d8bf684105abedd553c20890eb8ac"
+      },
+      {
+        "bytes": 21,
+        "mode": 420,
+        "package": "proc-macro2-1.0.107",
+        "path": ".gitignore",
+        "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+      },
+      {
+        "bytes": 21,
+        "mode": 420,
+        "package": "quote-1.0.47",
+        "path": ".gitignore",
+        "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+      },
+      {
+        "bytes": 21,
+        "mode": 420,
+        "package": "serde_json-1.0.151",
+        "path": ".gitignore",
+        "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+      },
+      {
+        "bytes": 207,
+        "mode": 420,
+        "package": "unicode-ident-1.0.26",
+        "path": ".gitattributes",
+        "sha256": "ae8eb6d0bcfdf98794d1f0d4134ca8999c30ae0f6d4fe7f1a5858dcf92e30394"
+      },
+      {
+        "bytes": 36,
+        "mode": 420,
+        "package": "unicode-ident-1.0.26",
+        "path": ".gitignore",
+        "sha256": "ab4f11740636387dbd09e6f976467f0168d1d51cd888db6a736ee1f867874b40"
+      },
+      {
+        "bytes": 14,
+        "mode": 420,
+        "package": "unicode-ident-1.0.26",
+        "path": "tests/fst/.gitignore",
+        "sha256": "2cd419079c0a08bb15766520880998651dd1c72c55347a31f43357595b16ac10"
+      },
+      {
+        "bytes": 20,
+        "mode": 420,
+        "package": "zmij-1.0.23",
+        "path": ".gitignore",
+        "sha256": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247"
+      }
+    ],
+    "original": {
+      "cases": 219,
+      "observations": {
+        "bytes": 1686902,
+        "sha256": "7da249979f433ee9a11470bdbe98d4e3a6cd302d93755a0059218098244e2e7a"
+      },
+      "operations": 459,
+      "process": {
+        "bytes": 1021,
+        "sha256": "e17e9028aeac9283315a0bb46c47e740adf223400e376c87e42244313b1966ae"
+      },
+      "retirement": {
+        "bytes": 205453,
+        "sha256": "9514af159b67725ee6694210b76d53e8e642a201d8facc570a6efb1a5ba6b02f"
+      },
+      "schema": "hepta.audit-record-io.original.v1",
+      "source_manifest_sha256": "35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6",
+      "status": "PASS"
+    },
+    "packages": {
+      "anyhow-1.0.104": {
+        "archive_members": 54,
+        "vendor_members": 53
+      },
+      "itoa-1.0.18": {
+        "archive_members": 14,
+        "vendor_members": 13
+      },
+      "libc-0.2.189": {
+        "archive_members": 404,
+        "vendor_members": 403
+      },
+      "memchr-2.8.3": {
+        "archive_members": 59,
+        "vendor_members": 58
+      },
+      "once_cell-1.21.4": {
+        "archive_members": 29,
+        "vendor_members": 28
+      },
+      "pin-project-lite-0.2.17": {
+        "archive_members": 81,
+        "vendor_members": 81
+      },
+      "proc-macro2-1.0.107": {
+        "archive_members": 33,
+        "vendor_members": 32
+      },
+      "quote-1.0.47": {
+        "archive_members": 35,
+        "vendor_members": 34
+      },
+      "serde-1.0.229": {
+        "archive_members": 33,
+        "vendor_members": 33
+      },
+      "serde_core-1.0.229": {
+        "archive_members": 27,
+        "vendor_members": 27
+      },
+      "serde_derive-1.0.229": {
+        "archive_members": 36,
+        "vendor_members": 36
+      },
+      "serde_json-1.0.151": {
+        "archive_members": 89,
+        "vendor_members": 88
+      },
+      "syn-2.0.119": {
+        "archive_members": 105,
+        "vendor_members": 105
+      },
+      "syn-3.0.6": {
+        "archive_members": 104,
+        "vendor_members": 104
+      },
+      "tracing-0.1.44": {
+        "archive_members": 93,
+        "vendor_members": 93
+      },
+      "tracing-attributes-0.1.31": {
+        "archive_members": 30,
+        "vendor_members": 30
+      },
+      "tracing-core-0.1.36": {
+        "archive_members": 28,
+        "vendor_members": 28
+      },
+      "unicode-ident-1.0.26": {
+        "archive_members": 26,
+        "vendor_members": 23
+      },
+      "zmij-1.0.23": {
+        "archive_members": 17,
+        "vendor_members": 16
+      }
+    },
+    "status": "READ_ONLY_REGISTRY_DIAGNOSIS"
+  },
+  "logical_bytes": 132979131,
+  "logical_files": 2602,
+  "native_or_rust_executions": 0,
+  "original_failure_preserved": true,
+  "producer": {
+    "all_logical_files_reread": true,
+    "all_object_bytes_and_modes_reread": true,
+    "archive": "audit-record-io-complete.tar.gz",
+    "bytes": 30010406,
+    "gate_status": "NO_GATE_RECORD",
+    "logical_bytes": 132979131,
+    "logical_files": 2602,
+    "mode": 420,
+    "native_or_rust_executions": 0,
+    "schema": "hepta.audit-record-io.complete-archive-read.v1",
+    "sha256": "65b9f6d62c521c12d74c455c85aa3ab770f7559392ba071a57028d122b7d3257",
+    "unique_bytes": 125326752,
+    "unique_objects": 2372,
+    "whole_runtime_replaced": false
+  },
+  "status": "COMPLETE_FAILED_CAPTURE_RESTORED",
+  "tar": {
+    "bytes": 30010406,
+    "sha256": "65b9f6d62c521c12d74c455c85aa3ab770f7559392ba071a57028d122b7d3257"
+  },
+  "zip": {
+    "bytes": 29880685,
+    "sha256": "30b0ab0030e4706360dd1ea24bbebd2e8a27380d0b57b930e38fc72c55277cf4"
+  }
+}
+##[group]Run python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase semantic --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+[36;1mpython3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase semantic --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "evidence": {
+    "actual_native_graph_and_original_group_binding": true,
+    "compiler": {
+      "compiler_files": 1080,
+      "compiler_image": {
+        "bytes": 673413,
+        "sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+      },
+      "modules": {
+        "audit-json": {
+          "image": {
+            "bytes": 161260,
+            "sha256": "76122331b305e654b6175a3d0a975d080815ee1cfcf542ea837d8aecdb83b2fc"
+          },
+          "manifest": {
+            "bytes": 709,
+            "sha256": "46ec0a34335cbb4db06301d8a5794b5e334e3a22b45c9af67d4da71099d9980b"
+          },
+          "source": {
+            "bytes": 126320,
+            "sha256": "5146e5c42028692933762ce68bd9c62d52f9760d8ce378124e3888edacb4255b"
+          }
+        },
+        "audit-record-io": {
+          "image": {
+            "bytes": 295103,
+            "sha256": "3b290dab82a2c60982a7af947562a4cf7aa407e9399c0d877640354c13112664"
+          },
+          "manifest": {
+            "bytes": 719,
+            "sha256": "65dfecff10dea2fc72e21a8189eaadba7ec79d98eb0ad525c51ad9636fe81ec7"
+          },
+          "source": {
+            "bytes": 218029,
+            "sha256": "6826f361511a1345b63a1604a92b89252f5405c549fe38337e88e3d8aa8338ea"
+          }
+        }
+      }
+    },
+    "complete_filesystem_and_durable_order_equal": true,
+    "dependencies": {
+      "archive_member_bytes": 23585916,
+      "archive_members": 1297,
+      "packages": 19,
+      "retained_cargo_metadata_files": [
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "anyhow-1.0.104",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "itoa-1.0.18",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 46,
+          "mode": 420,
+          "package": "libc-0.2.189",
+          "path": ".gitignore",
+          "sha256": "2c6be680ae3173f3fa5cb35f52625547ef9ff4333b076cd236f26cdd212b6a5f"
+        },
+        {
+          "bytes": 93,
+          "mode": 420,
+          "package": "memchr-2.8.3",
+          "path": ".gitignore",
+          "sha256": "0dbac962f4ec8a8f95158677e768b3163914026973cd77a9043c30c55ef84638"
+        },
+        {
+          "bytes": 28,
+          "mode": 420,
+          "package": "once_cell-1.21.4",
+          "path": ".gitignore",
+          "sha256": "a7d1bce3ba42de5fc6338b20f544f36a4e3d8bf684105abedd553c20890eb8ac"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "proc-macro2-1.0.107",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "quote-1.0.47",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "serde_json-1.0.151",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 207,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitattributes",
+          "sha256": "ae8eb6d0bcfdf98794d1f0d4134ca8999c30ae0f6d4fe7f1a5858dcf92e30394"
+        },
+        {
+          "bytes": 36,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitignore",
+          "sha256": "ab4f11740636387dbd09e6f976467f0168d1d51cd888db6a736ee1f867874b40"
+        },
+        {
+          "bytes": 14,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": "tests/fst/.gitignore",
+          "sha256": "2cd419079c0a08bb15766520880998651dd1c72c55347a31f43357595b16ac10"
+        },
+        {
+          "bytes": 20,
+          "mode": 420,
+          "package": "zmij-1.0.23",
+          "path": ".gitignore",
+          "sha256": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247"
+        }
+      ],
+      "source_bytes": 23585367,
+      "source_files": 1285
+    },
+    "exact_serde_diagnostic_replacement": false,
+    "native": {
+      "calls": 5764,
+      "effects": 4243,
+      "json_calls": 404,
+      "logical_buffer_bytes": 452279602,
+      "refusals": 658
+    },
+    "native_or_rust_executions": 0,
+    "original": {
+      "cases": 219,
+      "complete_stdout": {
+        "bytes": 70220,
+        "sha256": "d9f7b766b4385ac7f1181053bc15b6089c7476db9efffe7d1afb73e63540fde0"
+      },
+      "durable_syscalls": 608,
+      "filesystem_equal": true,
+      "full_actual_strace": {
+        "bytes": 27981111,
+        "sha256": "7be22c1e6473bcb272a728b0149cf338e462b7bffed47696aed6121c409a956e"
+      },
+      "operations": 459,
+      "original_errors": 96
+    },
+    "processes": 10,
+    "public_handler_qualified": false,
+    "qualified_scope": "four private record I/O functions with actual ordinary Linux effects",
+    "reader_adapter_source_sha256": "b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d",
+    "reader_writes": 0,
+    "schema": "hepta.audit-record-io.readback.v1",
+    "source_manifest_sha256": "35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6",
+    "status": "PASS",
+    "whole_audit_caller_qualified": false,
+    "whole_runtime_replaced": false
+  },
+  "native_or_rust_executions": 0,
+  "physical_entries": 3026,
+  "probes": 12,
+  "reader_writes": 0,
+  "status": "PASS"
+}
+##[group]Run python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase controls --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+[36;1mpython3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase controls --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "admissions": 2,
+  "native_or_rust_executions": 0,
+  "refusals": 14,
+  "status": "PASS"
+}
+##[group]Run python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase final --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+[36;1mpython3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase final --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "evidence": {
+    "actual_native_graph_and_original_group_binding": true,
+    "compiler": {
+      "compiler_files": 1080,
+      "compiler_image": {
+        "bytes": 673413,
+        "sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+      },
+      "modules": {
+        "audit-json": {
+          "image": {
+            "bytes": 161260,
+            "sha256": "76122331b305e654b6175a3d0a975d080815ee1cfcf542ea837d8aecdb83b2fc"
+          },
+          "manifest": {
+            "bytes": 709,
+            "sha256": "46ec0a34335cbb4db06301d8a5794b5e334e3a22b45c9af67d4da71099d9980b"
+          },
+          "source": {
+            "bytes": 126320,
+            "sha256": "5146e5c42028692933762ce68bd9c62d52f9760d8ce378124e3888edacb4255b"
+          }
+        },
+        "audit-record-io": {
+          "image": {
+            "bytes": 295103,
+            "sha256": "3b290dab82a2c60982a7af947562a4cf7aa407e9399c0d877640354c13112664"
+          },
+          "manifest": {
+            "bytes": 719,
+            "sha256": "65dfecff10dea2fc72e21a8189eaadba7ec79d98eb0ad525c51ad9636fe81ec7"
+          },
+          "source": {
+            "bytes": 218029,
+            "sha256": "6826f361511a1345b63a1604a92b89252f5405c549fe38337e88e3d8aa8338ea"
+          }
+        }
+      }
+    },
+    "complete_filesystem_and_durable_order_equal": true,
+    "controls": {
+      "admissions": 2,
+      "all_physical_controls_retained": true,
+      "guard_probes": 192,
+      "native_or_rust_executions": 0,
+      "reader_writes": 0,
+      "refusals": 14
+    },
+    "dependencies": {
+      "archive_member_bytes": 23585916,
+      "archive_members": 1297,
+      "packages": 19,
+      "retained_cargo_metadata_files": [
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "anyhow-1.0.104",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "itoa-1.0.18",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 46,
+          "mode": 420,
+          "package": "libc-0.2.189",
+          "path": ".gitignore",
+          "sha256": "2c6be680ae3173f3fa5cb35f52625547ef9ff4333b076cd236f26cdd212b6a5f"
+        },
+        {
+          "bytes": 93,
+          "mode": 420,
+          "package": "memchr-2.8.3",
+          "path": ".gitignore",
+          "sha256": "0dbac962f4ec8a8f95158677e768b3163914026973cd77a9043c30c55ef84638"
+        },
+        {
+          "bytes": 28,
+          "mode": 420,
+          "package": "once_cell-1.21.4",
+          "path": ".gitignore",
+          "sha256": "a7d1bce3ba42de5fc6338b20f544f36a4e3d8bf684105abedd553c20890eb8ac"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "proc-macro2-1.0.107",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "quote-1.0.47",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "serde_json-1.0.151",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 207,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitattributes",
+          "sha256": "ae8eb6d0bcfdf98794d1f0d4134ca8999c30ae0f6d4fe7f1a5858dcf92e30394"
+        },
+        {
+          "bytes": 36,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitignore",
+          "sha256": "ab4f11740636387dbd09e6f976467f0168d1d51cd888db6a736ee1f867874b40"
+        },
+        {
+          "bytes": 14,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": "tests/fst/.gitignore",
+          "sha256": "2cd419079c0a08bb15766520880998651dd1c72c55347a31f43357595b16ac10"
+        },
+        {
+          "bytes": 20,
+          "mode": 420,
+          "package": "zmij-1.0.23",
+          "path": ".gitignore",
+          "sha256": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247"
+        }
+      ],
+      "source_bytes": 23585367,
+      "source_files": 1285
+    },
+    "exact_serde_diagnostic_replacement": false,
+    "native": {
+      "calls": 5764,
+      "effects": 4243,
+      "json_calls": 404,
+      "logical_buffer_bytes": 452279602,
+      "refusals": 658
+    },
+    "native_or_rust_executions": 0,
+    "original": {
+      "cases": 219,
+      "complete_stdout": {
+        "bytes": 70220,
+        "sha256": "d9f7b766b4385ac7f1181053bc15b6089c7476db9efffe7d1afb73e63540fde0"
+      },
+      "durable_syscalls": 608,
+      "filesystem_equal": true,
+      "full_actual_strace": {
+        "bytes": 27981111,
+        "sha256": "7be22c1e6473bcb272a728b0149cf338e462b7bffed47696aed6121c409a956e"
+      },
+      "operations": 459,
+      "original_errors": 96
+    },
+    "processes": 10,
+    "public_handler_qualified": false,
+    "qualified_scope": "four private record I/O functions with actual ordinary Linux effects",
+    "reader_adapter_source_sha256": "b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d",
+    "reader_writes": 0,
+    "schema": "hepta.audit-record-io.readback.v1",
+    "source_manifest_sha256": "35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6",
+    "status": "PASS",
+    "whole_audit_caller_qualified": false,
+    "whole_runtime_replaced": false
+  },
+  "native_or_rust_executions": 0,
+  "physical_entries": 50326,
+  "probes": 12,
+  "reader_writes": 0,
+  "status": "PASS"
+}
+##[group]Run python3 -I -B tests/hia_native/audit_storage_recovery/export.py --restored "$RUNNER_TEMP/audit-record-io-retained" --recovery "$RUNNER_TEMP/audit-record-io-recovery" --original-zip "$RUNNER_TEMP/original-failure.zip" --archive "$RUNNER_TEMP/audit-record-io-recovery.tar.gz"
+[36;1mpython3 -I -B tests/hia_native/audit_storage_recovery/export.py --restored "$RUNNER_TEMP/audit-record-io-retained" --recovery "$RUNNER_TEMP/audit-record-io-recovery" --original-zip "$RUNNER_TEMP/original-failure.zip" --archive "$RUNNER_TEMP/audit-record-io-recovery.tar.gz"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_reread": true,
+  "all_objects_and_modes_reread": true,
+  "bytes": 65202915,
+  "logical_bytes": 2322155047,
+  "logical_files": 43411,
+  "native_or_rust_executions": 0,
+  "original_producer_status": "FAIL",
+  "public_handler_qualified": false,
+  "schema": "hepta.audit-record-io.recovery-archive-read.v1",
+  "sha256": "29c7cc3c799bb37b19c1a400fa89b5dc92dc136216f75394ed69ac4a780fb6a6",
+  "status": "PASS",
+  "unique_objects": 2458
+}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: audit-record-io-recovery-baef371fa267e2d830788a1f504c6a48e382496b
+  path: /home/runner/work/_temp/audit-record-io-recovery.tar.gz
+/home/runner/work/_temp/audit-record-io-recovery.tar.gz.json
+/home/runner/work/_temp/audit-record-io-recovery-fallback.tar.gz
+/home/runner/work/_temp/audit-record-io-recovery-fallback.sha256
+
+  if-no-files-found: error
+  retention-days: 14
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+##[endgroup]
+(node:2481) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/_temp. This will be the root directory of the artifact
+With the provided path, there will be 2 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:2481) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 25165824
+Uploaded bytes 33554432
+Uploaded bytes 41943040
+Uploaded bytes 50331648
+Uploaded bytes 58720256
+Uploaded bytes 64906591
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is 3971b6fb20eb43d6f858934c687d80ce933399d59dc9900b14e9d1b2d295f364
+Finalizing artifact upload
+Artifact audit-record-io-recovery-baef371fa267e2d830788a1f504c6a48e382496b.zip successfully finalized. Artifact ID 14309180653
+Artifact audit-record-io-recovery-baef371fa267e2d830788a1f504c6a48e382496b has been successfully uploaded! Final size is 64906591 bytes. Artifact ID is 14309180653
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44039146687/artifacts/14309180653
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/58ae33d7-35a9-4334-bcbc-edcfa71eccf9' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,158 @@
+name: Inspect retained wide-array owner allocation without replay
+on:
+  push:
+    branches: [hia-scope-span-inspect-r3-6780-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - revision: r3
+            artifact: 14239997887
+            run: 43898646439
+            head: ffc4f26b8e7531d5dba3f7df9291c2897b92f6cc
+            bytes: 215829313
+            sha256: 7fc55f93b36369f3396f82759384e372970ca3880b4e0d35d1b2e4da264e5c7d
+            manifest: 3bea8745891f100a5e13422f422cf9b4a1749c9b5d9b27814e227dc44af33764
+    env:
+      SOURCE_ARTIFACT_ID: ${{ matrix.artifact }}
+      SOURCE_RUN_ID: ${{ matrix.run }}
+      SOURCE_HEAD: ${{ matrix.head }}
+      SOURCE_ZIP_BYTES: ${{ matrix.bytes }}
+      SOURCE_ZIP_SHA256: ${{ matrix.sha256 }}
+      SOURCE_MANIFEST_SHA256: ${{ matrix.manifest }}
+    steps:
+      - name: Download exact retained failure bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$SOURCE_ARTIFACT_ID" > "$RUNNER_TEMP/input-artifact.json"
+          gh api "repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" > "$RUNNER_TEMP/input-artifact.zip"
+      - name: Read complete archive and actual call timing records
+        run: |
+          python3 -I -B - <<'PY'
+          """Inspect complete existing failure bytes; never execute native code or Rust."""
+          from pathlib import Path
+          import gzip, hashlib, json, os, shutil, struct, tarfile, zipfile
+          root=Path(os.environ["RUNNER_TEMP"])
+          package=root/"scope-inspection";package.mkdir()
+          recovered=package/"recovered";recovered.mkdir()
+          reports=package/"reports";reports.mkdir()
+          sha=lambda raw:hashlib.sha256(raw).hexdigest()
+          def pin(path):
+              with path.open("rb") as stream:return dict(bytes=path.stat().st_size,sha256=hashlib.file_digest(stream,"sha256").hexdigest())
+          def put(name,value):
+              (reports/name).write_text(json.dumps(value,sort_keys=True,indent=2)+"\n")
+          metadata=json.loads((root/"input-artifact.json").read_bytes())
+          digest=os.environ["SOURCE_ZIP_SHA256"]
+          assert metadata["id"]==int(os.environ["SOURCE_ARTIFACT_ID"]) and metadata["workflow_run"]["id"]==int(os.environ["SOURCE_RUN_ID"])
+          assert metadata["workflow_run"]["head_sha"]==os.environ["SOURCE_HEAD"]
+          assert metadata["expired"] is False and metadata["digest"]=="sha256:"+digest
+          assert metadata["size_in_bytes"]==int(os.environ["SOURCE_ZIP_BYTES"]) and pin(root/"input-artifact.zip")==dict(bytes=int(os.environ["SOURCE_ZIP_BYTES"]),sha256=digest)
+          zip_rows={}
+          with zipfile.ZipFile(root/"input-artifact.zip") as archive:
+              assert len(archive.infolist())==4 and set(archive.namelist())=={"annotation-span-v2.tar.gz","annotation-span-v2.tar.gz.json","annotation-export.stdout","annotation-export.stderr"}
+              for item in archive.infolist():
+                  target=package/item.filename
+                  with archive.open(item) as source,target.open("xb") as destination:shutil.copyfileobj(source,destination,1<<20)
+                  zip_rows[item.filename]=pin(target)
+                  assert zip_rows[item.filename]["bytes"]==item.file_size
+          archive_path=package/"annotation-span-v2.tar.gz"
+          receipt=json.loads((package/"annotation-span-v2.tar.gz.json").read_bytes())
+          assert pin(archive_path)=={k:receipt[k] for k in ("bytes","sha256")}
+          assert receipt["all_members_reread"] is True and receipt["gate_status"]=="FAIL"
+          assert receipt["source_manifest_sha256"]==os.environ["SOURCE_MANIFEST_SHA256"]
+          members={}
+          with tarfile.open(archive_path,"r|gz") as archive:
+              while item:=archive.next():
+                  name=item.name;relative=Path(name)
+                  assert item.isfile() and name not in members and not relative.is_absolute() and ".." not in relative.parts
+                  target=recovered/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                  with archive.extractfile(item) as source,target.open("xb") as destination:shutil.copyfileobj(source,destination,1<<20)
+                  target.chmod(item.mode)
+                  members[name]=dict(**pin(target),mode=item.mode)
+                  assert members[name]["bytes"]==item.size
+                  archive.members.clear()
+          raw=(recovered/"artifact-manifest.json").read_bytes();manifest=json.loads(raw)
+          expected=dict(manifest["files"]);expected["artifact-manifest.json"]=dict(bytes=len(raw),sha256=sha(raw),mode=0o644)
+          assert members==expected and len(members)==receipt["files"]
+          assert sum(row["bytes"] for row in members.values())==receipt["logical_bytes"]
+          assert manifest["git_head"]==metadata["workflow_run"]["head_sha"] and int(manifest["run_id"])==int(os.environ["SOURCE_RUN_ID"])
+          assert manifest["semantic_reexecutions_by_exporter"]==0 and manifest["gate_status"]=="FAIL"
+          put("ZIP_FILES.json",zip_rows);put("TAR_FILES.json",members);put("original-archive-receipt.json",receipt)
+          data=recovered/"run/native"
+          def ledger(name):
+              raw=(data/name).read_bytes();records=[];tail=None
+              lines=raw.splitlines()
+              for index,line in enumerate(lines):
+                  try:records.append(json.loads(line))
+                  except (ValueError,UnicodeDecodeError):
+                      assert index==len(lines)-1
+                      tail=dict(bytes=len(line),sha256=sha(line))
+              return records,tail
+          calls,call_tail=ledger("calls.jsonl")
+          cases,case_tail=ledger("cases.jsonl")
+          owners={};case_cost={}
+          for row in calls:
+              bucket=owners.setdefault(row["owner"],dict(calls=0,seconds=0.0,workspace_bytes=0,output_bytes=0))
+              bucket["calls"]+=1;bucket["seconds"]+=row["elapsed_seconds"]
+              bucket["workspace_bytes"]+=row["workspace_capacity"];bucket["output_bytes"]+=row["output_capacity"]
+              case_cost[row["case"]]=case_cost.get(row["case"],0.0)+row["elapsed_seconds"]
+          largest=[{k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")}
+                   for row in sorted(calls,key=lambda row:row["elapsed_seconds"],reverse=True)[:30]]
+          processes=json.loads((recovered/"run/gate-processes/processes.json").read_bytes())
+          native_process=next(row for row in processes if row["name"]=="native-domain")
+          summary=dict(status="COMPLETE_EXISTING_ARCHIVE_BYTES_READ",original_run=int(os.environ["SOURCE_RUN_ID"]),
+              original_head=os.environ["SOURCE_HEAD"],artifact_id=int(os.environ["SOURCE_ARTIFACT_ID"]),
+              original_zip=dict(bytes=int(os.environ["SOURCE_ZIP_BYTES"]),sha256=digest),
+              files=len(members),logical_bytes=receipt["logical_bytes"],all_archive_files_bytes_modes_verified=True,
+              source_manifest_sha256=receipt["source_manifest_sha256"],
+              native_capture_metadata=json.loads((data/"CAPTURE.json").read_bytes()),
+              native_process=native_process,completed_case_records=len(cases),complete_call_records=len(calls),
+              last_completed_cases=cases[-3:],last_complete_calls=calls[-2:],
+              call_ledger_incomplete_tail=call_tail,case_ledger_incomplete_tail=case_tail,
+              per_owner=owners,largest_calls=largest,
+              most_native_seconds_by_case=sorted(case_cost.items(),key=lambda row:row[1],reverse=True)[:30],
+              sum_observed_native_seconds=sum(row["elapsed_seconds"] for row in calls),
+              native_executions=0,rust_executions=0,original_failure_reclassified_as_pass=False,complete_gate_pass=False)
+          put("PERFORMANCE.json",summary)
+          summary["last_complete_calls"]=[{k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")} for row in calls[-2:]]
+          print(json.dumps(summary,sort_keys=True))
+          def prefix(descriptor,size):
+              raw=b"".join(gzip.decompress((data/"buffers"/(key+".gz")).read_bytes())
+                           for key in descriptor["chunks"][:(size+(128<<10)-1)//(128<<10)])
+              return raw[:size]
+          focus=[]
+          for row in calls:
+              if row["case"]!="effect-baseline-wide-number-array":
+                  continue
+              item={k:row[k] for k in ("call","owner","case","elapsed_seconds","return_code","output_capacity","workspace_capacity")}
+              head=prefix(row["output_after"],64)
+              item["output_head_hex"]=head.hex()
+              if row["owner"]=="scope_annotation_span" and row["workspace_capacity"]>=352:
+                  state=prefix(row["workspace_after"],352)
+                  item["owner_state_words"]=list(struct.unpack_from("<28Q",state,0))
+                  item["owner_action_words"]=list(struct.unpack_from("<12Q",state,256))
+              focus.append(item)
+          focus_summary=dict(original_run=int(os.environ["SOURCE_RUN_ID"]),case="effect-baseline-wide-number-array",
+              calls=focus,growth=[row for row in ledger("growth.jsonl")[0] if row["case"]=="effect-baseline-wide-number-array"],
+              handoffs=[row for row in ledger("handoffs.jsonl")[0] if row["case"]=="effect-baseline-wide-number-array"],
+              native_executions=0,rust_executions=0)
+          put("WIDE_ARRAY_SEQUENCE.json",focus_summary)
+          print("WIDE_ARRAY_SEQUENCE="+json.dumps(focus_summary,sort_keys=True))
+          PY
+      - name: Preserve complete readback and diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: scope-owner-allocation-${{ matrix.revision }}-${{ github.sha }}
+          path: ${{ runner.temp }}/scope-inspection/reports/
+          retention-days: 14
+          if-no-files-found: error

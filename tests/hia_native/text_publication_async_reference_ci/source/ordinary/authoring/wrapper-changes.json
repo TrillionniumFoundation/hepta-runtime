@@ -1,0 +1,30 @@
+[
+  {
+    "before": "use std::io::{self, BufRead};",
+    "after": "use std::io::{self, BufRead, Write};\nuse std::time::Duration;"
+  },
+  {
+    "before": "use rmcp::{RoleServer, ServerHandler};",
+    "after": "use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};\nuse rmcp::model::{CallToolRequestParams, CallToolResponse, ExperimentalCapabilities,\n    Implementation, JsonObject, ProtocolVersion, ServerCapabilities, ServerConfig,\n    CacheScope, ListToolsResult, PaginatedRequestParams, Tool};\nuse rmcp::handler::server::tool::{AsyncMethodAdapter, ToolCallContext};\nuse tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHalf, WriteHalf};"
+  },
+  {
+    "before": "use rmcp::service::{RequestContext, serve_directly};",
+    "after": "use rmcp::service::RequestContext;"
+  },
+  {
+    "before": "struct OctofsServer {",
+    "after": "#[derive(Clone)]\nstruct OctofsServer {"
+  },
+  {
+    "before": "    session_applied: AtomicBool,",
+    "after": "    session_applied: Arc<AtomicBool>,"
+  },
+  {
+    "before": "struct PeerCarrier;\nimpl ServerHandler for PeerCarrier {}\n",
+    "after": ""
+  },
+  {
+    "before": "include!(\"original_publication_gateway.rs\");",
+    "after": "include!(\"original_publication_gateway.rs\");\ninclude!(\"original_get_info.rs\");\ninclude!(\"original_list_tools.rs\");\ninclude!(\"fixture_catalog_registry.rs\");"
+  }
+]

@@ -1,0 +1,1454 @@
+/* Copyright 2026 Muvon Un Limited
+ * SPDX-License-Identifier: Apache-2.0
+ * Mechanical real Watcher boundary. Policy and LRU/drain state are HIA-owned.
+ */
+.intel_syntax noprefix
+.section .text
+.equ NW_BYTES,131072
+.equ NW_INPUT,8192
+.equ NW_INPUT_MAX,16480
+.equ NW_OUTPUT,24704
+.equ NW_OBSERVE,24960
+.equ NW_WORK,32768
+.equ NW_WORK_BYTES,65536
+.equ NW_TABLE,256
+.equ NW_PINS,512
+.equ NW_PIN_SLOTS,259
+.equ NW_STAT,6144
+.equ NW_PATH,6400
+.equ NW_PIN_RESULT,6528
+.equ NW_READ,98336
+.equ NW_MAGIC,0x3130585443574e48 /* HNWCTX01 */
+.equ NW_PIN_MAGIC,0x3130305046574e48 /* HNWFP001 */
+.equ NW_PIN_RESULT_MAGIC,0x3130525046574e48 /* HNWFPR01 */
+.equ NW_REQUEST,0x3130303051574e48 /* HNWQ0001 */
+.equ NW_RESPONSE,0x3130303052574e48 /* HNWR0001 */
+.equ NW_ACK,0x3130304b41574e48 /* HNWAK001 */
+
+.macro NW_SAVE
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp,72
+.endm
+.macro NW_RETURN
+    add rsp,72
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.endm
+
+.global namespace_watcher_entry
+namespace_watcher_entry:
+    NW_SAVE
+    mov rbx,rdi
+    mov r13,rdx
+    mov r12,r8
+    cmp rsi,96
+    jne nw_invalid
+    cmp rcx,128
+    jb nw_capacity
+    cmp r9,NW_BYTES
+    jb nw_capacity
+    test rbx,rbx
+    jz nw_invalid
+    test r13,r13
+    jz nw_invalid
+    test r12,r12
+    jz nw_invalid
+    test r12,7
+    jnz nw_invalid
+    lea rax,[rbx+96]
+    cmp rax,rbx
+    jb nw_invalid
+    lea rdx,[r13+128]
+    cmp rdx,r13
+    jb nw_invalid
+    lea rcx,[r12+NW_BYTES]
+    cmp rcx,r12
+    jb nw_invalid
+    cmp rbx,rdx
+    jae nw_overlap_b
+    cmp r13,rax
+    jb nw_invalid
+nw_overlap_b:
+    cmp rbx,rcx
+    jae nw_overlap_c
+    cmp r12,rax
+    jb nw_invalid
+nw_overlap_c:
+    cmp r13,rcx
+    jae nw_regions_ok
+    cmp r12,rdx
+    jb nw_invalid
+nw_regions_ok:
+    mov rax,NW_MAGIC
+    cmp [r12],rax
+    jne nw_invalid
+    cmp qword ptr [r12+8],0
+    jne nw_busy_or_poison
+    cmp qword ptr [r12+56],0
+    jne nw_poison_return
+    cmp qword ptr [r12+152],0
+    jne nw_poison_return
+    cmp qword ptr [r12+104],NW_PIN_SLOTS
+    ja nw_poison_return
+    lea r15,[r12+NW_TABLE]
+    xor ecx,ecx
+nw_table_admit:
+    cmp qword ptr [r15+rcx],0
+    je nw_poison_return
+    add ecx,8
+    cmp ecx,64
+    jb nw_table_admit
+    mov ecx,160
+nw_reserved_admit:
+    cmp qword ptr [r12+rcx],0
+    jne nw_poison_return
+    add ecx,8
+    cmp ecx,256
+    jb nw_reserved_admit
+    call nw_native_pins_valid
+    test eax,eax
+    jz nw_poison_return
+    mov rax,NW_REQUEST
+    cmp [rbx],rax
+    jne nw_invalid
+    mov rax,[rbx+16]
+    test rax,rax
+    jz nw_invalid
+    cmp rax,[r12+16]
+    jbe nw_invalid
+    mov ecx,72
+nw_request_reserved:
+    cmp qword ptr [rbx+rcx],0
+    jne nw_invalid
+    add ecx,8
+    cmp ecx,96
+    jb nw_request_reserved
+    mov rbp,[rbx+8]
+    cmp rbp,1
+    jb nw_invalid
+    cmp rbp,5
+    ja nw_invalid
+    cmp rbp,1
+    je nw_admit_init
+    cmp qword ptr [r12+96],-1
+    je nw_invalid
+    cmp qword ptr [rbx+40],0
+    jne nw_invalid
+    cmp qword ptr [rbx+48],0
+    jne nw_invalid
+    cmp rbp,2
+    je nw_admit_version
+    cmp qword ptr [rbx+24],0
+    jne nw_invalid
+    cmp qword ptr [rbx+32],0
+    jne nw_invalid
+    cmp rbp,5
+    je nw_admit_changed
+    cmp qword ptr [rbx+56],0
+    jne nw_invalid
+    cmp qword ptr [rbx+64],0
+    jne nw_invalid
+    jmp nw_initial_admitted
+nw_admit_changed:
+    mov eax,0xffffffff
+    cmp [rbx+56],rax
+    ja nw_invalid
+    cmp [rbx+64],rax
+    ja nw_invalid
+    jmp nw_initial_admitted
+nw_admit_version:
+    cmp qword ptr [rbx+24],1
+    jne nw_invalid
+    cmp qword ptr [rbx+56],0
+    jne nw_invalid
+    cmp qword ptr [rbx+64],0
+    jne nw_invalid
+    cmp qword ptr [r12+24],0
+    jl nw_invalid
+    cmp qword ptr [r12+24],0x7fffffff
+    ja nw_invalid
+    cmp qword ptr [rbx+32],0
+    je nw_initial_admitted
+    cmp qword ptr [rbx+32],3
+    jne nw_invalid
+    mov rdi,[r12+32]
+    test rdi,rdi
+    jz nw_invalid
+    test rdi,4095
+    jnz nw_invalid
+    cmp qword ptr [rdi+24],4096
+    jne nw_invalid
+    mov rax,[r15+48]
+    cmp [rdi+32],rax
+    jne nw_invalid
+    mov rax,[r15+56]
+    cmp [rdi+40],rax
+    jne nw_invalid
+    mov rax,NW_PIN_MAGIC
+    cmp [rdi],rax
+    jne nw_invalid
+    cmp qword ptr [rdi+8],0
+    je nw_invalid
+    mov rax,[r12+24]
+    cmp [rdi+16],rax
+    jne nw_invalid
+    jmp nw_initial_admitted
+nw_admit_init:
+    cmp qword ptr [r12+96],-1
+    jne nw_invalid
+    cmp qword ptr [r12+104],0
+    jne nw_invalid
+    cmp qword ptr [rbx+24],0
+    jne nw_invalid
+    cmp qword ptr [rbx+32],0
+    jne nw_invalid
+    cmp qword ptr [rbx+40],258
+    ja nw_invalid
+    cmp qword ptr [rbx+48],1
+    ja nw_invalid
+    cmp qword ptr [rbx+56],0
+    jne nw_invalid
+    cmp qword ptr [rbx+64],0
+    jne nw_invalid
+nw_initial_admitted:
+    mov rax,[rbx+16]
+    mov [r12+16],rax
+    mov [r12+144],rbp
+    mov qword ptr [r12+8],1
+    mov qword ptr [r12+72],0
+    call qword ptr [r15+56]
+    test rax,rax
+    jz nw_poison
+    mov [r12+56],rax
+    mov edx,[rax]
+    mov [r12+136],rdx
+    mov rsi,rbx
+    lea rdi,[r12+NW_INPUT]
+    mov ecx,96
+    rep movsb
+    mov qword ptr [r12+112],96
+    cmp rbp,2
+    je nw_clear_read
+    cmp rbp,3
+    jne nw_read_ready
+nw_clear_read:
+    lea rdi,[r12+NW_READ]
+    xor eax,eax
+    mov ecx,2048
+    rep stosq
+nw_read_ready:
+    lea r14,[r12+NW_OUTPUT]
+    mov rdi,r14
+    mov rax,0xa5a5a5a5a5a5a5a5
+    mov ecx,18
+    rep stosq
+    lea rdi,[r12+NW_WORK+NW_WORK_BYTES]
+    mov rax,0x5a5a5a5a5a5a5a5a
+    mov ecx,2
+    rep stosq
+nw_owner_loop:
+    lea rdi,[r12+NW_INPUT]
+    add rdi,[r12+112]
+    mov rax,0xc3c3c3c3c3c3c3c3
+    mov ecx,2
+    rep stosq
+    call nw_owner_observation
+    call nw_observe
+    lea rdi,[r12+NW_INPUT]
+    mov rsi,[r12+112]
+    mov rdx,r14
+    mov ecx,128
+    lea r8,[r12+NW_WORK]
+    mov r9d,NW_WORK_BYTES
+    call .NW_owner_image
+    mov eax,eax
+    mov [r12+120],rax
+    inc qword ptr [r12+64]
+    mov [r12+NW_OBSERVE+16],rax
+    mov qword ptr [r12+NW_OBSERVE+8],1
+    call nw_observe
+    mov rax,0xa5a5a5a5a5a5a5a5
+    cmp [r14+128],rax
+    jne nw_poison
+    cmp [r14+136],rax
+    jne nw_poison
+    mov rax,0x5a5a5a5a5a5a5a5a
+    cmp [r12+NW_WORK+NW_WORK_BYTES],rax
+    jne nw_poison
+    cmp [r12+NW_WORK+NW_WORK_BYTES+8],rax
+    jne nw_poison
+    mov rcx,[r12+112]
+    mov rax,0xc3c3c3c3c3c3c3c3
+    cmp [r12+NW_INPUT+rcx],rax
+    jne nw_poison
+    cmp [r12+NW_INPUT+rcx+8],rax
+    jne nw_poison
+    cmp qword ptr [r12+120],128
+    jne nw_poison
+    mov rax,NW_RESPONSE
+    cmp [r14],rax
+    jne nw_poison
+    mov rax,[r12+16]
+    cmp [r14+16],rax
+    jne nw_poison
+    mov rax,[r12+144]
+    cmp [r14+32],rax
+    jne nw_poison
+    cmp qword ptr [r14+120],0
+    jne nw_poison
+    cmp qword ptr [r14+8],2
+    ja nw_poison
+    jb nw_terminal
+    mov rax,[r12+72]
+    add rax,1
+    jc nw_poison
+    cmp [r14+24],rax
+    jne nw_poison
+    mov [r12+72],rax
+    mov rcx,72
+nw_effect_zero:
+    cmp qword ptr [r14+rcx],0
+    jne nw_poison
+    add ecx,8
+    cmp ecx,104
+    jb nw_effect_zero
+    jmp nw_effect_admit
+
+nw_effect_admit:
+    mov rax,[r14+40]
+    cmp rax,1
+    jb nw_poison
+    cmp rax,8
+    ja nw_poison
+    cmp rax,1
+    je nw_effect_init_check
+    cmp rax,4
+    je nw_effect_pin_check
+    cmp rax,3
+    je nw_effect_stat_check
+    cmp rax,7
+    je nw_effect_release_check
+    cmp qword ptr [r14+48],2
+    jne nw_poison
+    cmp qword ptr [r12+96],0
+    jl nw_poison
+    cmp qword ptr [r12+96],0x7fffffff
+    ja nw_poison
+    cmp rax,2
+    je nw_effect_read_check
+    cmp rax,5
+    je nw_effect_add_check
+    cmp qword ptr [r14+64],0
+    jne nw_poison
+    cmp rax,6
+    je nw_effect_rm_check
+    cmp qword ptr [r14+56],0
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_rm_check:
+    cmp qword ptr [r14+56],0x7fffffff
+    ja nw_poison
+    mov rdi,[r14+56]
+    call nw_has_wd
+    test rax,rax
+    jz nw_poison
+    jmp nw_effect_ready
+nw_effect_read_check:
+    cmp qword ptr [r14+56],16384
+    jne nw_poison
+    cmp qword ptr [r14+64],0
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_add_check:
+    mov rdi,[r14+56]
+    call nw_has_pin
+    test rax,rax
+    jz nw_poison
+    cmp qword ptr [rax+8],-1
+    jne nw_poison
+    cmp qword ptr [r14+64],16781248
+    je nw_effect_ready
+    cmp qword ptr [r14+64],16781262
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_init_check:
+    cmp qword ptr [r14+48],526336
+    jne nw_poison
+    cmp qword ptr [r14+56],0
+    jne nw_poison
+    cmp qword ptr [r14+64],0
+    jne nw_poison
+    cmp qword ptr [r12+96],-1
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_stat_check:
+    cmp qword ptr [r14+48],1
+    jne nw_poison
+    cmp qword ptr [r14+56],0
+    jne nw_poison
+    cmp qword ptr [r14+64],0
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_pin_check:
+    cmp qword ptr [r14+48],1
+    jne nw_poison
+    cmp qword ptr [r14+64],0
+    je nw_pin_check_duplicate
+    cmp qword ptr [r14+64],1
+    jne nw_poison
+    cmp qword ptr [r14+56],3
+    jne nw_poison
+    cmp qword ptr [r12+32],0
+    je nw_poison
+    jmp nw_effect_ready
+nw_pin_check_duplicate:
+    cmp qword ptr [r14+56],0
+    jne nw_poison
+    jmp nw_effect_ready
+nw_effect_release_check:
+    cmp qword ptr [r14+56],0
+    jne nw_poison
+    cmp qword ptr [r14+64],0
+    jne nw_poison
+    mov rdi,[r14+48]
+    call nw_has_pin
+    test rax,rax
+    jz nw_poison
+nw_effect_ready:
+    lea rdi,[r12+NW_INPUT]
+    xor eax,eax
+    mov ecx,12
+    rep stosq
+    mov rax,NW_ACK
+    mov [r12+NW_INPUT],rax
+    mov rax,[r12+16]
+    mov [r12+NW_INPUT+8],rax
+    mov rax,[r12+72]
+    mov [r12+NW_INPUT+16],rax
+    mov rax,[r14+40]
+    mov [r12+NW_INPUT+24],rax
+    mov qword ptr [r12+NW_INPUT+80],96
+    mov qword ptr [r12+112],96
+    mov qword ptr [r12+80],0
+    mov qword ptr [r12+88],0
+    lea rdi,[r12+NW_PIN_RESULT]
+    xor eax,eax
+    mov ecx,8
+    rep stosq
+    call nw_boundary_observation
+    call nw_observe
+    call nw_restore_errno
+    mov rax,[r14+40]
+    cmp rax,1
+    je nw_do_init
+    cmp rax,2
+    je nw_do_read
+    cmp rax,3
+    je nw_do_stat
+    cmp rax,4
+    je nw_do_pin
+    cmp rax,5
+    je nw_do_add
+    cmp rax,6
+    je nw_do_rm
+    cmp rax,7
+    je nw_do_release
+    jmp nw_do_close
+nw_do_init:
+    mov edi,526336
+    call qword ptr [r15]
+    movsxd rax,eax
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    cmp rax,0x7fffffff
+    ja nw_poison
+    mov [r12+96],rax
+    mov qword ptr [r12+NW_INPUT+48],2
+    jmp nw_effect_complete
+nw_do_read:
+    mov edi,[r12+96]
+    lea rsi,[r12+NW_READ]
+    mov edx,16384
+    call qword ptr [r15+8]
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    cmp rax,16384
+    ja nw_poison
+    mov [r12+NW_INPUT+48],rax
+    mov [r12+NW_INPUT+72],rax
+    mov rcx,rax
+    lea rsi,[r12+NW_READ]
+    lea rdi,[r12+NW_INPUT+96]
+    rep movsb
+    add rax,96
+    mov [r12+NW_INPUT+80],rax
+    mov [r12+112],rax
+    jmp nw_effect_complete
+nw_do_stat:
+    lea rdi,[r12+NW_STAT]
+    xor eax,eax
+    mov ecx,18
+    rep stosq
+    mov edi,[r12+24]
+    lea rsi,[r12+NW_STAT]
+    call qword ptr [r15+16]
+    movsxd rax,eax
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    jnz nw_poison
+    mov rax,[r12+NW_STAT]
+    mov [r12+NW_INPUT+48],rax
+    mov rax,[r12+NW_STAT+8]
+    mov [r12+NW_INPUT+56],rax
+    mov eax,[r12+NW_STAT+24]
+    mov [r12+NW_INPUT+64],rax
+    jmp nw_effect_complete
+nw_do_pin:
+    cmp qword ptr [r12+104],NW_PIN_SLOTS
+    jae nw_poison
+    cmp qword ptr [r14+64],1
+    je nw_do_shared_pin
+    mov edi,[r12+24]
+    mov esi,1030 /* F_DUPFD_CLOEXEC */
+    xor edx,edx
+    xor eax,eax
+    call qword ptr [r15+24]
+    movsxd rax,eax
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    cmp rax,0x7fffffff
+    ja nw_poison
+    mov rbp,rax
+    mov rdi,rax
+    mov rsi,[r15+48]
+    mov rdx,[r15+56]
+    call .NW_pin_adopt
+    cmp rax,-4095
+    jae nw_pin_allocation_failed
+    test rax,rax
+    jz nw_pin_allocation_failed
+    jmp nw_pin_track
+nw_pin_allocation_failed:
+    mov edi,ebp
+    call qword ptr [r15+48]
+    jmp nw_poison
+nw_do_shared_pin:
+    mov rdi,[r12+32]
+    call .NW_pin_clone
+    cmp rax,-4095
+    jae nw_poison
+    test rax,rax
+    jz nw_poison
+    mov [r12+80],rax
+    mov rdx,[r12+56]
+    mov edx,[rdx]
+    mov [r12+88],rdx
+    mov [r12+136],rdx
+nw_pin_track:
+    mov rbp,rax
+    mov rdi,rax
+    call nw_has_pin
+    test rax,rax
+    jnz nw_pin_duplicate_poison
+    mov rax,[r12+104]
+    shl rax,4
+    lea rdx,[r12+NW_PINS+rax]
+    mov [rdx],rbp
+    mov qword ptr [rdx+8],-1
+    inc qword ptr [r12+104]
+    mov [r12+NW_INPUT+48],rbp
+    jmp nw_effect_complete
+nw_pin_duplicate_poison:
+    mov rdi,rbp
+    lea rsi,[r12+NW_PIN_RESULT]
+    call .NW_pin_release
+    jmp nw_poison
+nw_do_add:
+    mov rdi,[r14+56]
+    call nw_fd_path
+    test eax,eax
+    jz nw_poison
+    mov edi,[r12+96]
+    lea rsi,[r12+NW_PATH]
+    mov edx,[r14+64]
+    call qword ptr [r15+32]
+    movsxd rax,eax
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    cmp rax,0x7fffffff
+    ja nw_poison
+    mov rbp,rax
+    mov rdi,[r14+56]
+    call nw_has_pin
+    test rax,rax
+    jz nw_poison
+    mov [rax+8],rbp
+    mov [r12+NW_INPUT+48],rbp
+    jmp nw_effect_complete
+nw_do_rm:
+    mov edi,[r12+96]
+    mov esi,[r14+56]
+    call qword ptr [r15+40]
+    movsxd rax,eax
+    call nw_actual
+    test rax,rax
+    js nw_effect_error
+    jnz nw_poison
+    jmp nw_effect_complete
+nw_do_release:
+    mov rdi,[r14+48]
+    lea rsi,[r12+NW_PIN_RESULT]
+    call .NW_pin_release
+    test eax,eax
+    jnz nw_poison
+    mov rdi,[r14+48]
+    call nw_forget_pin
+    test eax,eax
+    jnz nw_poison
+    cmp qword ptr [r12+NW_PIN_RESULT+48],0
+    jne nw_poison
+    mov rax,[r12+NW_PIN_RESULT+32]
+    mov [r12+80],rax
+    mov rdx,[r12+NW_PIN_RESULT+40]
+    mov [r12+88],rdx
+    mov [r12+136],rdx
+    test rax,rax
+    js nw_effect_error
+    jmp nw_effect_complete
+nw_do_close:
+    mov edi,[r12+96]
+    call qword ptr [r15+48]
+    movsxd rax,eax
+    call nw_actual
+    mov qword ptr [r12+96],-1
+    test rax,rax
+    js nw_effect_error
+    jnz nw_poison
+    jmp nw_effect_complete
+nw_effect_error:
+    cmp rax,-1
+    jne nw_poison
+    mov rax,[r12+88]
+    test rax,rax
+    jz nw_poison
+    cmp rax,4095
+    ja nw_poison
+    mov qword ptr [r12+NW_INPUT+32],1
+    mov [r12+NW_INPUT+40],rax
+nw_effect_complete:
+    inc qword ptr [r12+128]
+    call nw_boundary_observation
+    mov qword ptr [r12+NW_OBSERVE+8],1
+    mov rax,[r12+80]
+    mov [r12+NW_OBSERVE+16],rax
+    mov [r12+NW_OBSERVE+96],rax
+    mov rax,[r12+88]
+    mov [r12+NW_OBSERVE+104],rax
+    call nw_observe
+    jmp nw_owner_loop
+
+nw_terminal:
+    mov rax,[r12+72]
+    cmp [r14+24],rax
+    jne nw_poison
+    mov ecx,40
+nw_terminal_zero:
+    cmp qword ptr [r14+rcx],0
+    jne nw_poison
+    add ecx,8
+    cmp ecx,72
+    jb nw_terminal_zero
+    mov rax,[r12+104]
+    cmp [r14+112],rax
+    jne nw_poison
+    cmp qword ptr [r14+8],0
+    jne nw_terminal_error
+    cmp qword ptr [r14+72],0
+    jne nw_poison
+    cmp qword ptr [r14+80],0
+    jne nw_poison
+    jmp nw_terminal_copy
+nw_terminal_error:
+    cmp qword ptr [r14+72],1
+    jb nw_poison
+    cmp qword ptr [r14+72],2
+    ja nw_poison
+    cmp qword ptr [r14+80],0
+    je nw_poison
+    cmp qword ptr [r14+80],4095
+    ja nw_poison
+    cmp qword ptr [r14+88],0
+    jne nw_poison
+    cmp qword ptr [r14+96],0
+    jne nw_poison
+nw_terminal_copy:
+    mov rax,[r14+104]
+    cmp [r12+NW_WORK+80],rax
+    jne nw_poison
+    mov rax,[r14+112]
+    cmp [r12+NW_WORK+88],rax
+    jne nw_poison
+    cmp qword ptr [r12+NW_WORK+16],0
+    jne nw_poison
+    cmp qword ptr [r12+NW_WORK+48],0
+    jne nw_poison
+    cmp qword ptr [r12+96],-1
+    je nw_terminal_not_live
+    cmp qword ptr [r12+NW_WORK+8],1
+    jne nw_poison
+    cmp qword ptr [r12+NW_WORK+72],2
+    jne nw_poison
+    jmp nw_terminal_pin_check
+nw_terminal_not_live:
+    cmp qword ptr [r12+NW_WORK+8],0
+    jne nw_poison
+    cmp qword ptr [r12+NW_WORK+72],0
+    jne nw_poison
+nw_terminal_pin_check:
+    xor ebp,ebp
+nw_terminal_pin_next:
+    cmp rbp,[r12+104]
+    jae nw_terminal_version_check
+    mov rax,rbp
+    shl rax,6
+    mov rdi,[r12+NW_WORK+1024+rax]
+    mov [rsp],rax
+    call nw_has_pin
+    test rax,rax
+    jz nw_poison
+    mov rdx,[rsp]
+    mov rdx,[r12+NW_WORK+1024+rdx+24]
+    cmp [rax+8],rdx
+    jne nw_poison
+    inc rbp
+    jmp nw_terminal_pin_next
+nw_terminal_version_check:
+    cmp qword ptr [r12+144],2
+    je nw_terminal_copy_ready
+    cmp qword ptr [r14+88],0
+    jne nw_poison
+    cmp qword ptr [r14+96],0
+    jne nw_poison
+nw_terminal_copy_ready:
+    mov rdi,r13
+    mov rsi,r14
+    mov ecx,16
+    rep movsq
+    call nw_restore_errno
+    mov qword ptr [r12+8],0
+    mov qword ptr [r12+56],0
+    mov qword ptr [r12+136],0
+    mov eax,128
+    NW_RETURN
+
+nw_actual:
+    mov [r12+80],rax
+    mov rdx,[r12+56]
+    mov edx,[rdx]
+    mov [r12+88],rdx
+    mov [r12+136],rdx
+    ret
+nw_restore_errno:
+    mov rax,[r12+56]
+    mov edx,[r12+136]
+    mov [rax],edx
+    ret
+nw_has_pin:
+    xor ecx,ecx
+nw_has_pin_loop:
+    cmp rcx,[r12+104]
+    jae nw_has_none
+    mov rax,rcx
+    shl rax,4
+    lea rax,[r12+NW_PINS+rax]
+    cmp [rax],rdi
+    je nw_has_done
+    inc ecx
+    jmp nw_has_pin_loop
+nw_has_none:
+    xor eax,eax
+nw_has_done:
+    ret
+nw_has_wd:
+    xor ecx,ecx
+nw_has_wd_loop:
+    cmp rcx,[r12+104]
+    jae nw_has_none
+    mov rax,rcx
+    shl rax,4
+    lea rax,[r12+NW_PINS+rax]
+    cmp [rax+8],rdi
+    je nw_has_done
+    inc ecx
+    jmp nw_has_wd_loop
+nw_forget_pin:
+    sub rsp,8
+    call nw_has_pin
+    test rax,rax
+    jz nw_forget_bad
+    dec qword ptr [r12+104]
+    mov rdx,[r12+104]
+    shl rdx,4
+    lea rdx,[r12+NW_PINS+rdx]
+    mov rcx,[rdx]
+    mov [rax],rcx
+    mov rcx,[rdx+8]
+    mov [rax+8],rcx
+    mov qword ptr [rdx],0
+    mov qword ptr [rdx+8],0
+    xor eax,eax
+    add rsp,8
+    ret
+nw_forget_bad:
+    mov eax,0xffffffff
+    add rsp,8
+    ret
+nw_fd_path:
+    mov rax,NW_PIN_MAGIC
+    cmp [rdi],rax
+    jne nw_fd_path_bad
+    cmp qword ptr [rdi+8],0
+    je nw_fd_path_bad
+    cmp qword ptr [rdi+16],0x7fffffff
+    ja nw_fd_path_bad
+    mov eax,[rdi+16]
+    lea rdx,[r12+NW_PATH]
+    /* The literal is copied completely; digits use the actual nonnegative FD. */
+    lea rsi,[rip+nw_proc_prefix]
+    mov rdi,rdx
+    mov ecx,14
+    rep movsb
+    lea r8,[r12+NW_PATH+63]
+    mov byte ptr [r8],0
+    mov ecx,10
+nw_fd_digit:
+    xor edx,edx
+    div rcx
+    add dl,48
+    dec r8
+    mov [r8],dl
+    test rax,rax
+    jnz nw_fd_digit
+    lea rdi,[r12+NW_PATH+14]
+nw_fd_copy:
+    mov dl,[r8]
+    mov [rdi],dl
+    inc r8
+    inc rdi
+    test dl,dl
+    jnz nw_fd_copy
+    mov eax,1
+    ret
+nw_fd_path_bad:
+    xor eax,eax
+    ret
+nw_proc_prefix:
+    .ascii "/proc/self/fd/"
+
+
+/* Observers copy complete context and buffers; no policy result is read back. */
+nw_owner_observation:
+    lea rdi,[r12+NW_OBSERVE]
+    xor eax,eax
+    mov ecx,16
+    rep stosq
+    mov rax,0x31304e574f574e48 /* HNWOWN01 */
+    mov [r12+NW_OBSERVE],rax
+    mov rax,[r12+16]
+    mov [r12+NW_OBSERVE+24],rax
+    mov rax,[r12+144]
+    mov [r12+NW_OBSERVE+32],rax
+    mov rax,[r12+72]
+    mov [r12+NW_OBSERVE+40],rax
+    lea rax,[r12+NW_INPUT]
+    mov [r12+NW_OBSERVE+48],rax
+    mov rax,[r12+112]
+    mov [r12+NW_OBSERVE+56],rax
+    lea rax,[r12+NW_OUTPUT]
+    mov [r12+NW_OBSERVE+64],rax
+    mov qword ptr [r12+NW_OBSERVE+72],128
+    lea rax,[r12+NW_WORK]
+    mov [r12+NW_OBSERVE+80],rax
+    mov qword ptr [r12+NW_OBSERVE+88],NW_WORK_BYTES
+    mov rax,[r12+64]
+    mov [r12+NW_OBSERVE+96],rax
+    mov rax,[r12+128]
+    mov [r12+NW_OBSERVE+104],rax
+    mov rax,[r12+96]
+    mov [r12+NW_OBSERVE+112],rax
+    mov rax,[r12+104]
+    mov [r12+NW_OBSERVE+120],rax
+    ret
+nw_boundary_observation:
+    lea rdi,[r12+NW_OBSERVE]
+    xor eax,eax
+    mov ecx,16
+    rep stosq
+    mov rax,0x3130304e42574e48 /* HNWBN001 */
+    mov [r12+NW_OBSERVE],rax
+    mov rax,[r12+16]
+    mov [r12+NW_OBSERVE+24],rax
+    mov rax,[r12+144]
+    mov [r12+NW_OBSERVE+32],rax
+    mov rax,[r14+40]
+    mov [r12+NW_OBSERVE+40],rax
+    mov rax,[r12+72]
+    mov [r12+NW_OBSERVE+48],rax
+    mov rax,[r14+48]
+    mov [r12+NW_OBSERVE+56],rax
+    mov rax,[r14+56]
+    mov [r12+NW_OBSERVE+64],rax
+    mov rax,[r14+64]
+    mov [r12+NW_OBSERVE+72],rax
+    mov rax,[r12+96]
+    mov [r12+NW_OBSERVE+80],rax
+    mov rax,[r12+24]
+    mov [r12+NW_OBSERVE+88],rax
+    mov rax,[r12+104]
+    mov [r12+NW_OBSERVE+112],rax
+    mov rax,[r12+128]
+    mov [r12+NW_OBSERVE+120],rax
+    ret
+nw_observe:
+    cmp qword ptr [r12+40],0
+    je nw_observe_return
+    sub rsp,8
+    mov rdi,[r12+48]
+    mov rsi,r12
+    mov edx,NW_BYTES
+    lea rcx,[r12+NW_OBSERVE]
+    mov r8d,128
+    call qword ptr [r12+40]
+    mov rax,[r12+56]
+    test rax,rax
+    jz nw_observe_restore_done
+    mov edx,[r12+136]
+    mov [rax],edx
+nw_observe_restore_done:
+    add rsp,8
+nw_observe_return:
+    ret
+
+/* Native ownership admission only; source Watch/LRU policy remains in HIA. */
+nw_native_pins_valid:
+    xor r8d,r8d
+nw_native_pin_next:
+    cmp r8,[r12+104]
+    jae nw_native_pins_good
+    mov rax,r8
+    shl rax,4
+    lea r9,[r12+NW_PINS+rax]
+    mov rdi,[r9]
+    test rdi,rdi
+    jz nw_native_pins_bad
+    test rdi,4095
+    jnz nw_native_pins_bad
+    mov rax,NW_PIN_MAGIC
+    cmp [rdi],rax
+    jne nw_native_pins_bad
+    cmp qword ptr [rdi+8],0
+    je nw_native_pins_bad
+    cmp qword ptr [rdi+16],0x7fffffff
+    ja nw_native_pins_bad
+    cmp qword ptr [rdi+24],4096
+    jne nw_native_pins_bad
+    mov rax,[r15+48]
+    cmp [rdi+32],rax
+    jne nw_native_pins_bad
+    mov rax,[r15+56]
+    cmp [rdi+40],rax
+    jne nw_native_pins_bad
+    cmp qword ptr [r9+8],-1
+    je nw_native_pin_duplicate
+    cmp qword ptr [r9+8],0x7fffffff
+    ja nw_native_pins_bad
+nw_native_pin_duplicate:
+    xor ecx,ecx
+nw_native_pin_duplicate_loop:
+    cmp rcx,r8
+    jae nw_native_pin_checked
+    mov rax,rcx
+    shl rax,4
+    cmp [r12+NW_PINS+rax],rdi
+    je nw_native_pins_bad
+    inc ecx
+    jmp nw_native_pin_duplicate_loop
+nw_native_pin_checked:
+    inc r8
+    jmp nw_native_pin_next
+nw_native_pins_good:
+    mov eax,1
+    ret
+nw_native_pins_bad:
+    xor eax,eax
+    ret
+
+/* Private transport failures never impersonate an original business error. */
+nw_busy_or_poison:
+    cmp qword ptr [r12+8],1
+    je nw_busy
+nw_poison_return:
+    mov eax,0xfffffffc
+    NW_RETURN
+nw_busy:
+    mov eax,0xfffffffb
+    NW_RETURN
+nw_invalid:
+    mov eax,0xffffffff
+    NW_RETURN
+nw_capacity:
+    mov eax,0xfffffffe
+    NW_RETURN
+
+nw_poison:
+    mov qword ptr [r12+8],2
+    mov qword ptr [r12+152],1
+    cmp qword ptr [r12+96],-1
+    je nw_poison_pins
+    mov rbp,9
+    call nw_cleanup_observation
+    call nw_observe
+    mov edi,[r12+96]
+    call qword ptr [r15+48]
+    movsxd rax,eax
+    mov [r12+80],rax
+    mov rdx,[r12+56]
+    test rdx,rdx
+    jz nw_poison_close_no_errno
+    mov edx,[rdx]
+    mov [r12+88],rdx
+    mov [r12+136],rdx
+nw_poison_close_no_errno:
+    mov qword ptr [r12+96],-1
+    call nw_cleanup_after
+nw_poison_pins:
+    cmp qword ptr [r12+104],0
+    je nw_poison_done
+    mov rax,[r12+104]
+    dec rax
+    shl rax,4
+    lea rbx,[r12+NW_PINS+rax]
+    mov rbp,10
+    call nw_cleanup_observation
+    mov rax,[rbx]
+    mov [r12+NW_OBSERVE+56],rax
+    call nw_observe
+    mov rdi,[rbx]
+    lea rsi,[r12+NW_PIN_RESULT]
+    call .NW_pin_release
+    test eax,eax
+    jnz nw_poison_pin_rejected
+    mov rax,[r12+NW_PIN_RESULT+32]
+    mov [r12+80],rax
+    mov rax,[r12+NW_PIN_RESULT+40]
+    mov [r12+88],rax
+    mov [r12+136],rax
+    mov qword ptr [rbx],0
+    mov qword ptr [rbx+8],0
+    dec qword ptr [r12+104]
+    call nw_cleanup_after
+    jmp nw_poison_pins
+nw_poison_pin_rejected:
+    mov [r12+80],rax
+    mov qword ptr [r12+88],0
+    call nw_cleanup_after
+    /* A corrupted private pin is retained, not falsely reported as disposed. */
+nw_poison_done:
+    mov rax,[r12+56]
+    test rax,rax
+    jz nw_poison_no_tls
+    mov edx,[r12+136]
+    mov [rax],edx
+nw_poison_no_tls:
+    mov qword ptr [r12+56],0
+    mov qword ptr [r12+136],0
+    mov eax,0xfffffffc
+    NW_RETURN
+nw_cleanup_observation:
+    lea rdi,[r12+NW_OBSERVE]
+    xor eax,eax
+    mov ecx,16
+    rep stosq
+    mov rax,0x31304c434e574e48 /* HNWNCL01: exceptional transport cleanup */
+    mov [r12+NW_OBSERVE],rax
+    mov rax,[r12+16]
+    mov [r12+NW_OBSERVE+24],rax
+    mov rax,[r12+144]
+    mov [r12+NW_OBSERVE+32],rax
+    mov [r12+NW_OBSERVE+40],rbp
+    mov rax,[r12+96]
+    mov [r12+NW_OBSERVE+48],rax
+    mov rax,[r12+104]
+    mov [r12+NW_OBSERVE+112],rax
+    ret
+nw_cleanup_after:
+    mov qword ptr [r12+NW_OBSERVE+8],1
+    mov rax,[r12+80]
+    mov [r12+NW_OBSERVE+16],rax
+    mov [r12+NW_OBSERVE+96],rax
+    mov rax,[r12+88]
+    mov [r12+NW_OBSERVE+104],rax
+    mov rax,[r12+104]
+    mov [r12+NW_OBSERVE+112],rax
+    jmp nw_observe
+
+.p2align 4
+.global namespace_watcher_initialize
+namespace_watcher_initialize:
+    test rdi,rdi
+    jz nw_simple_invalid
+    test rdi,7
+    jnz nw_simple_invalid
+    cmp rsi,NW_BYTES
+    jb nw_simple_capacity
+    test rdx,rdx
+    jz nw_simple_invalid
+    lea rax,[rdi+NW_BYTES]
+    cmp rax,rdi
+    jb nw_simple_invalid
+    lea r9,[rdx+64]
+    cmp r9,rdx
+    jb nw_simple_invalid
+    cmp rdx,rax
+    jae nw_initialize_separate
+    cmp rdi,r9
+    jb nw_simple_invalid
+nw_initialize_separate:
+    mov rax,NW_MAGIC
+    cmp [rdi],rax
+    je nw_simple_invalid
+    xor eax,eax
+nw_initialize_table_check:
+    cmp qword ptr [rdx+rax],0
+    je nw_simple_invalid
+    add eax,8
+    cmp eax,64
+    jb nw_initialize_table_check
+    mov r9,rdi
+    mov r10,rcx
+    mov r11,r8
+    xor eax,eax
+    mov ecx,NW_BYTES/8
+    rep stosq
+    mov rax,NW_MAGIC
+    mov [r9],rax
+    mov qword ptr [r9+24],-1
+    mov qword ptr [r9+96],-1
+    mov [r9+40],r10
+    mov [r9+48],r11
+    mov rsi,rdx
+    lea rdi,[r9+NW_TABLE]
+    mov ecx,8
+    rep movsq
+    xor eax,eax
+    ret
+
+.p2align 4
+.global namespace_watcher_bind
+namespace_watcher_bind:
+    test rdi,rdi
+    jz nw_simple_invalid
+    test rdi,7
+    jnz nw_simple_invalid
+    cmp rsi,NW_BYTES
+    jb nw_simple_capacity
+    lea rax,[rdi+NW_BYTES]
+    cmp rax,rdi
+    jb nw_simple_invalid
+    mov rax,NW_MAGIC
+    cmp [rdi],rax
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+8],0
+    jne nw_simple_busy
+    cmp qword ptr [rdi+56],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+152],0
+    jne nw_simple_invalid
+    cmp rdx,-1
+    je nw_bind_clear
+    cmp rdx,0x7fffffff
+    ja nw_simple_invalid
+    test rcx,rcx
+    jz nw_bind_accept
+    test rcx,4095
+    jnz nw_simple_invalid
+    mov rax,NW_PIN_MAGIC
+    cmp [rcx],rax
+    jne nw_simple_invalid
+    cmp qword ptr [rcx+8],0
+    je nw_simple_invalid
+    cmp [rcx+16],rdx
+    jne nw_simple_invalid
+    cmp qword ptr [rcx+24],4096
+    jne nw_simple_invalid
+    mov rax,[rdi+NW_TABLE+48]
+    cmp [rcx+32],rax
+    jne nw_simple_invalid
+    mov rax,[rdi+NW_TABLE+56]
+    cmp [rcx+40],rax
+    jne nw_simple_invalid
+    jmp nw_bind_accept
+nw_bind_clear:
+    test rcx,rcx
+    jnz nw_simple_invalid
+nw_bind_accept:
+    mov [rdi+24],rdx
+    mov [rdi+32],rcx
+    xor eax,eax
+    ret
+
+.p2align 4
+.global namespace_watcher_dispose
+namespace_watcher_dispose:
+    test rdi,rdi
+    jz nw_simple_invalid
+    test rdi,7
+    jnz nw_simple_invalid
+    cmp rsi,NW_BYTES
+    jb nw_simple_capacity
+    lea rax,[rdi+NW_BYTES]
+    cmp rax,rdi
+    jb nw_simple_invalid
+    mov rax,NW_MAGIC
+    cmp [rdi],rax
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+8],0
+    jne nw_simple_busy
+    cmp qword ptr [rdi+56],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+96],-1
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+104],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+152],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+NW_WORK],0
+    je nw_dispose_clear
+    mov rax,0x3130305453574e48 /* HNWST001 */
+    cmp [rdi+NW_WORK],rax
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+NW_WORK+8],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+NW_WORK+16],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+NW_WORK+72],0
+    jne nw_simple_invalid
+    cmp qword ptr [rdi+NW_WORK+88],0
+    jne nw_simple_invalid
+nw_dispose_clear:
+    xor eax,eax
+    mov ecx,NW_BYTES/8
+    rep stosq
+    xor eax,eax
+    ret
+nw_simple_invalid:
+    mov eax,0xffffffff
+    ret
+nw_simple_capacity:
+    mov eax,0xfffffffe
+    ret
+nw_simple_busy:
+    mov eax,0xfffffffb
+    ret
+
+
+/* Actual shared File allocation: caller transfers its owned FD only on success.
+ * The private caller must hold a real live strong reference while cloning.
+ */
+.p2align 4
+.global namespace_file_pin_adopt
+namespace_file_pin_adopt:
+.NW_pin_adopt:
+    NW_SAVE
+    cmp rdi,0x7fffffff
+    ja nf_adopt_invalid
+    test rsi,rsi
+    jz nf_adopt_invalid
+    test rdx,rdx
+    jz nf_adopt_invalid
+    mov r12,rdi
+    mov r13,rsi
+    mov r14,rdx
+    mov eax,9 /* mmap: anonymous private native ownership page */
+    xor edi,edi
+    mov esi,4096
+    mov edx,3
+    mov r10d,0x22
+    mov r8,-1
+    xor r9d,r9d
+    syscall
+    cmp rax,-4095
+    jae nf_adopt_done
+    test rax,rax
+    jnz nf_adopt_install
+    xor edi,edi
+    mov esi,4096
+    mov eax,11
+    syscall
+    mov rax,-12
+    jmp nf_adopt_done
+nf_adopt_install:
+    mov rdx,NW_PIN_MAGIC
+    mov [rax],rdx
+    mov qword ptr [rax+8],1
+    mov [rax+16],r12
+    mov qword ptr [rax+24],4096
+    mov [rax+32],r13
+    mov [rax+40],r14
+nf_adopt_done:
+    NW_RETURN
+nf_adopt_invalid:
+    mov rax,-22
+    NW_RETURN
+
+.p2align 4
+.global namespace_file_pin_clone
+namespace_file_pin_clone:
+.NW_pin_clone:
+    test rdi,rdi
+    jz nf_clone_invalid
+    test rdi,4095
+    jnz nf_clone_invalid
+    mov rax,NW_PIN_MAGIC
+    cmp [rdi],rax
+    jne nf_clone_invalid
+    cmp qword ptr [rdi+16],0x7fffffff
+    ja nf_clone_invalid
+    cmp qword ptr [rdi+24],4096
+    jne nf_clone_invalid
+    cmp qword ptr [rdi+32],0
+    je nf_clone_invalid
+    cmp qword ptr [rdi+40],0
+    je nf_clone_invalid
+    mov rax,[rdi+8]
+nf_clone_retry:
+    test rax,rax
+    jz nf_clone_invalid
+    mov rdx,0x7fffffffffffffff
+    cmp rax,rdx
+    jae nf_clone_invalid
+    lea rdx,[rax+1]
+    lock cmpxchg qword ptr [rdi+8],rdx
+    jne nf_clone_retry
+    mov rax,rdi
+    ret
+nf_clone_invalid:
+    mov rax,-22
+    ret
+
+/* Release retains actual close and munmap facts. Rejected private frames do not
+ * decrement the strong count or write the output. Successful release returns0.
+ * close errors are source-ignored; an actual munmap failure remains explicit.
+ */
+.p2align 4
+.global namespace_file_pin_release
+namespace_file_pin_release:
+.NW_pin_release:
+    NW_SAVE
+    test rdi,rdi
+    jz nf_release_invalid
+    test rdi,4095
+    jnz nf_release_invalid
+    test rsi,rsi
+    jz nf_release_invalid
+    lea rax,[rdi+4096]
+    cmp rax,rdi
+    jb nf_release_invalid
+    lea rdx,[rsi+64]
+    cmp rdx,rsi
+    jb nf_release_invalid
+    cmp rdi,rdx
+    jae nf_release_disjoint
+    cmp rsi,rax
+    jb nf_release_invalid
+nf_release_disjoint:
+    mov rax,NW_PIN_MAGIC
+    cmp [rdi],rax
+    jne nf_release_invalid
+    cmp qword ptr [rdi+8],0
+    je nf_release_invalid
+    cmp qword ptr [rdi+16],0x7fffffff
+    ja nf_release_invalid
+    cmp qword ptr [rdi+24],4096
+    jne nf_release_invalid
+    cmp qword ptr [rdi+32],0
+    je nf_release_invalid
+    cmp qword ptr [rdi+40],0
+    je nf_release_invalid
+    mov r12,rdi
+    mov r13,rsi
+    mov r14,[rdi+16]
+    mov r15,[rdi+32]
+    call qword ptr [rdi+40]
+    test rax,rax
+    jz nf_release_invalid
+    mov [rsp],rax
+    mov edx,[rax]
+    mov [rsp+8],rdx
+    mov rax,[r12+8]
+nf_release_retry:
+    test rax,rax
+    jz nf_release_invalid
+    mov rdx,0x7fffffffffffffff
+    cmp rax,rdx
+    ja nf_release_invalid
+    lea rdx,[rax-1]
+    lock cmpxchg qword ptr [r12+8],rdx
+    jne nf_release_retry
+    mov rbp,rax
+    mov rdi,r13
+    xor eax,eax
+    mov ecx,8
+    rep stosq
+    mov rax,NW_PIN_RESULT_MAGIC
+    mov [r13],rax
+    mov [r13+8],rbp
+    lea rax,[rbp-1]
+    mov [r13+16],rax
+    mov [r13+24],r14
+    mov rax,[rsp+8]
+    mov [r13+40],rax
+    cmp rbp,1
+    jne nf_release_done
+    mov edi,r14d
+    call r15
+    movsxd rax,eax
+    mov [r13+32],rax
+    mov rdx,[rsp]
+    mov edx,[rdx]
+    mov [r13+40],rdx
+    mov rdi,r12
+    mov esi,4096
+    mov eax,11
+    syscall
+    mov [r13+48],rax
+nf_release_done:
+    xor eax,eax
+    NW_RETURN
+nf_release_invalid:
+    mov eax,0xffffffff
+    NW_RETURN
+
+.p2align 4
+.global namespace_watcher_owner
+namespace_watcher_owner:
+.NW_owner_image:
+    .zero @OWNER_BYTES@
+.global namespace_watcher_end
+namespace_watcher_end:
+.section .note.GNU-stack,"",@progbits

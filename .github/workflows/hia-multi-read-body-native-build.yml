@@ -1,0 +1,58 @@
+name: Build native bounded multi-file read callable
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-multi-read-body-native-build-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      MULTI_SOURCE: ${{ github.workspace }}/runtime/qualification/multi_read_body/v1/native_build
+      MULTI_MANIFEST: ab5b650b8f0ad3c841d6d265e26b2095b70edb043be787a77630e5fe7bf1237e
+    steps:
+      - name: Checkout frozen source author
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/native_build
+          persist-credentials: false
+      - name: Checkout exact HIA source tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source heads
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Build fixed callable and independently read all build bytes
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/build_gate.py" build \
+            --work "$RUNNER_TEMP/multi-read-body-callable-build" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Retain a complete archive even if native build admission failed
+        if: always()
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/build_gate.py" export \
+            --work "$RUNNER_TEMP/multi-read-body-callable-build" --output "$RUNNER_TEMP/multi-read-body-callable-build-export" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Upload complete build archive and all process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-read-body-callable-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-read-body-callable-build-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

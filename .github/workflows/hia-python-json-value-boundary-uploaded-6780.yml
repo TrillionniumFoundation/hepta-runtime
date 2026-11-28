@@ -1,0 +1,52 @@
+name: Independently read all HIA JSON C-boundary captures
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-value-boundary-uploaded-v2-6780-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [high-0, high-1, high-2, high-3, high-4, high-5, high-6, high-7, high-8, error-0, error-1, error-2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_value/v2/boundary_uploaded_read
+      PYJSON_MANIFEST: 2579b3ff823bd700079d3ee758ba185325681a39652678afeb4fe3b0ea08e2c7
+      PYJSON_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen pure readers and the complete qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_value/v2/boundary_uploaded_read
+          persist-credentials: false
+      - name: Fully read uploaded archives and original qualification evidence
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" read \
+            --work "$RUNNER_TEMP/python-json-value-boundary-independent-$PYJSON_GROUP" --group "$PYJSON_GROUP" --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Retain complete independent read proof and any initial failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PYJSON_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/python-json-value-boundary-independent-$PYJSON_GROUP" --group "$PYJSON_GROUP" --source-manifest-sha256 "$PYJSON_MANIFEST" \
+            --output "$RUNNER_TEMP/python-json-value-boundary-independent-$PYJSON_GROUP-export"
+      - name: Upload full independent read evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-json-value-boundary-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/python-json-value-boundary-independent-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

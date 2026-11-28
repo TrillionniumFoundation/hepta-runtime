@@ -1,0 +1,65 @@
+name: Current text publication body exact original qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publisher-body-qualification-6780-v1-20261117']
+    paths: ['tests/hia_native/text_file_publication_ci/**', '.github/workflows/hia-text-publisher-body-qualification.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  body-qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PB_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_file_publication_ci/source" "PB_OUTPUT=$RUNNER_TEMP/text-publication-body-qualification" "PB_EXPORT=$RUNNER_TEMP/text-publication-body-export" "PB_DRIVER=$RUNNER_TEMP/text-publication-body-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/text_file_publication_ci/source
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete candidate and compiler source
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PB_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 24927588d1125326a9cf8eb4e2279cb4fb4049714311246de851b3b238b239e4
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$PB_SOURCE/scripts/run_ci.py" check --source "$PB_SOURCE"
+      - name: Install exact Rust compiler for original reference
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          printf '%s\n' "PB_RUST_BIN=$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" >> "$GITHUB_ENV"
+      - name: Fresh HIA and original body, complete files and guarded reader
+        run: |
+          python3 -I -S -B "$PB_SOURCE/scripts/run_ci.py" run --source "$PB_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$PB_RUST_BIN" --output "$PB_OUTPUT" > "$PB_DRIVER.stdout" 2> "$PB_DRIVER.stderr"
+      - name: Preserve interrupted owned fixture state without execution
+        if: always()
+        run: |
+          python3 -I -S -B "$PB_SOURCE/scripts/finalize_fixture.py" --output "$PB_OUTPUT"
+      - name: Preserve complete source and build success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PB_SOURCE/scripts/archive.py" pack --source "$PB_SOURCE" --capture "$PB_OUTPUT" --output "$PB_EXPORT" --driver-prefix "$PB_DRIVER"
+      - name: Upload full evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-body-qualification-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

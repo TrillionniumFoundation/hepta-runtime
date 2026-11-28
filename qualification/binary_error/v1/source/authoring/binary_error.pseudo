@@ -1,0 +1,313 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=RESPONSE or load(s,8)!=3 or load(s,56)!=length(s)-64:
+        return INVALID
+    kind=load(s,24)
+    number=load(s,32)
+    count=load(s,40)
+    named=load(s,48)
+    size=length(s)-64
+    if kind<1 or kind>14 or number>4095 or named>1:
+        return INVALID
+    if number==0:
+        if named!=0 or count!=size:
+            return INVALID
+    else:
+        if count!=0:
+            return INVALID
+        if named==0 and size!=0:
+            return INVALID
+        if kind!=errno_class(number):
+            return INVALID
+    if utf8(s,64,size)==0:
+        return INVALID
+    if length(w)<WORK_SIZE:
+        return CAPACITY
+    install_data(w)
+    if number!=0:
+        kind=rendered_errno_class(number)
+    class_word=get(w,(kind-1)*8)
+    class_at=class_word&4294967295
+    class_size=class_word>>32
+    needed=class_size+2
+    quote=39
+    message_at=0
+    message_size=0
+    if number==0:
+        needed=needed+size
+    else:
+        if number<ERRNO_COUNT:
+            descriptor=get(w,ERRNO_TABLE+number*8)
+            message_at=descriptor&4294967295
+            message_size=descriptor>>32
+        if message_size==0:
+            message_size=UNKNOWN_SIZE+digits(number)
+        needed=needed+9+digits(number)+message_size
+        if named!=0:
+            quote=choose_quote(s,64,size)
+            needed=needed+2+repr_size(s,w,64,size,quote)
+    if needed>=LIMIT:
+        return INVALID
+    if length(o)<needed:
+        return CAPACITY
+    at=copy_out(w,o,class_at,0,class_size)
+    store(o,at,58)
+    store(o,at+1,32)
+    at=at+2
+    if number==0:
+        copy_in(s,o,64,at,size)
+        return at+size
+    copy_out(w,o,ERR_PREFIX,at,7)
+    at=decimal(o,at+7,number)
+    store(o,at,93)
+    store(o,at+1,32)
+    at=at+2
+    if message_at==0:
+        copy_out(w,o,UNKNOWN_AT,at,UNKNOWN_SIZE)
+        at=decimal(o,at+UNKNOWN_SIZE,number)
+    else:
+        copy_out(w,o,message_at,at,message_size)
+        at=at+message_size
+    if named!=0:
+        store(o,at,58)
+        store(o,at+1,32)
+        at=repr_emit(s,w,o,64,size,at+2,quote)
+    return at
+
+def errno_class(number:u64) -> u64:
+    if number==1 or number==13:
+        return 2
+    if number==2:
+        return 4
+    if number==20:
+        return 5
+    if number==21:
+        return 6
+    if number==17:
+        return 7
+    if number==4:
+        return 8
+    if number==11 or number==114 or number==115:
+        return 9
+    if number==32 or number==108:
+        return 10
+    if number==110:
+        return 11
+    if number==104:
+        return 12
+    if number==103:
+        return 13
+    if number==111:
+        return 14
+    return 3
+
+def rendered_errno_class(number:u64) -> u64:
+    if number==3:
+        return 15
+    if number==10:
+        return 16
+    return errno_class(number)
+
+def digits(number:u64) -> u64:
+    if number<10:
+        return 1
+    if number<100:
+        return 2
+    if number<1000:
+        return 3
+    return 4
+
+def decimal(o:mutbuf,at:u64,number:u64) -> u64:
+    scale=1000
+    started=0
+    while scale!=0:
+        digit=0
+        while number>=scale:
+            number=number-scale
+            digit=digit+1
+        if digit!=0 or started!=0 or scale==1:
+            store(o,at,digit+48)
+            at=at+1
+            started=1
+        if scale==1000:
+            scale=100
+        else:
+            if scale==100:
+                scale=10
+            else:
+                if scale==10:
+                    scale=1
+                else:
+                    scale=0
+    return at
+
+def width(s:readbuf,at:u64) -> u64:
+    value=byte(s,at)
+    if value<128:
+        return 1
+    if value<224:
+        return 2
+    if value<240:
+        return 3
+    return 4
+
+def point(s:readbuf,at:u64,size:u64) -> u64:
+    if size==1:
+        return byte(s,at)
+    if size==2:
+        return ((byte(s,at)&31)<<6)|(byte(s,at+1)&63)
+    if size==3:
+        return ((byte(s,at)&15)<<12)|((byte(s,at+1)&63)<<6)|(byte(s,at+2)&63)
+    return ((byte(s,at)&7)<<18)|((byte(s,at+1)&63)<<12)|((byte(s,at+2)&63)<<6)|(byte(s,at+3)&63)
+
+def printable(w:mutbuf,value:u64) -> u64:
+    if value>=32 and value<=126:
+        return 1
+    lo=0
+    hi=RANGE_COUNT
+    while lo<hi:
+        mid=(lo+hi)>>1
+        word=get(w,RANGES_AT+mid*8)
+        first=word&4294967295
+        last=word>>32
+        if value<first:
+            hi=mid
+        else:
+            if value>last:
+                lo=mid+1
+            else:
+                return 0
+    return 1
+
+def choose_quote(s:readbuf,start:u64,size:u64) -> u64:
+    single=0
+    double=0
+    at=0
+    while at<size:
+        value=byte(s,start+at)
+        if value==39:
+            single=1
+        if value==34:
+            double=1
+        at=at+1
+    if single!=0 and double==0:
+        return 34
+    return 39
+
+def repr_size(s:readbuf,w:mutbuf,start:u64,size:u64,quote:u64) -> u64:
+    at=0
+    total=2
+    while at<size:
+        count=width(s,start+at)
+        value=point(s,start+at,count)
+        if value==92 or value==quote or value==9 or value==10 or value==13:
+            total=total+2
+        else:
+            if printable(w,value)!=0:
+                total=total+count
+            else:
+                if value<256:
+                    total=total+4
+                else:
+                    if value<65536:
+                        total=total+6
+                    else:
+                        total=total+10
+        at=at+count
+    return total
+
+def hex_digit(value:u64) -> u64:
+    if value<10:
+        return value+48
+    return value+87
+
+def repr_emit(s:readbuf,w:mutbuf,o:mutbuf,start:u64,size:u64,out:u64,quote:u64) -> u64:
+    store(o,out,quote)
+    out=out+1
+    at=0
+    while at<size:
+        count=width(s,start+at)
+        value=point(s,start+at,count)
+        special=0
+        if value==92 or value==quote:
+            special=value
+        if value==9:
+            special=116
+        if value==10:
+            special=110
+        if value==13:
+            special=114
+        if special!=0:
+            store(o,out,92)
+            store(o,out+1,special)
+            out=out+2
+        else:
+            if printable(w,value)!=0:
+                copy_in(s,o,start+at,out,count)
+                out=out+count
+            else:
+                store(o,out,92)
+                digits=8
+                prefix=85
+                if value<256:
+                    digits=2
+                    prefix=120
+                else:
+                    if value<65536:
+                        digits=4
+                        prefix=117
+                store(o,out+1,prefix)
+                out=out+2
+                shift=digits*4
+                while shift!=0:
+                    shift=shift-4
+                    store(o,out,hex_digit((value>>shift)&15))
+                    out=out+1
+        at=at+count
+    store(o,out,quote)
+    return out+1
+
+def load(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value)
+    store(w,at+1,value>>8)
+    store(w,at+2,value>>16)
+    store(w,at+3,value>>24)
+    store(w,at+4,value>>32)
+    store(w,at+5,value>>40)
+    store(w,at+6,value>>48)
+    store(w,at+7,value>>56)
+    return 0
+
+def u32_at(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)
+
+def copy_in(s:readbuf,w:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(w,dst+at,load(s,src+at))
+        at=at+8
+    while at<size:
+        store(w,dst+at,byte(s,src+at))
+        at=at+1
+    return size
+
+def copy_out(w:mutbuf,o:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(o,dst+at,get(w,src+at))
+        at=at+8
+    while at<size:
+        store(o,dst+at,byte(w,src+at))
+        at=at+1
+    return size
+

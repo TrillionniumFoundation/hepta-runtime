@@ -1,0 +1,328 @@
+def child(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 128 or read64(s, 0) != REQUEST_MAGIC:
+        return 4294967295
+    at = 80
+    while at < 128:
+        if read64(s, at) != 0:
+            return 4294967295
+        at = at + 8
+    op = read64(s, 8)
+    identity = read64(s, 16)
+    capability = read64(s, 24)
+    generation = read64(s, 32)
+    seq = read64(s, 40)
+    a = read64(s, 48)
+    b = read64(s, 56)
+    if op > 14 or identity == 0 or capability == 0 or generation == 0:
+        return 4294967295
+    if op != 6 and op != 8:
+        if read64(s, 64) != 0 or read64(s, 72) != 0:
+            return 4294967295
+    if length(o) < 576 or length(w) < 512:
+        return 4294967294
+    if op == 0:
+        if seq != 0 or a > 1 or b != 0:
+            return 4294967295
+        at = 0
+        while at < 512:
+            if get(w, at) != 0:
+                return 4294967295
+            at = at + 8
+        put(w, 0, STATE_MAGIC)
+        put(w, 8, identity)
+        put(w, 16, capability)
+        put(w, 24, generation)
+        put(w, 88, a)
+        put(w, 96, 1)
+        return reply(o, w, op, 0, 0, 0)
+    if valid(w) == False:
+        return 4294967295
+    if get(w, 8) != identity or get(w, 16) != capability or get(w, 24) != generation:
+        return 4294967295
+    if op == 6 or op == 7 or op == 8 or op == 9 or op == 11 or op == 13 or op == 4:
+        if seq == 0 or seq != get(w, 40):
+            return 4294967295
+    else:
+        if seq != 0:
+            return 4294967295
+    if op == 12:
+        if a != 0 or b != 0:
+            return 4294967295
+        return reply(o, w, op, 0, 0, 0)
+    if op == 6 or op == 7 or op == 8 or op == 9 or op == 11 or op == 13:
+        return acknowledge(s, o, w, op, a, b)
+    if a != 0 or b != 0:
+        return 4294967295
+    if op == 4:
+        if get(w, 32) != 1 or get(w, 224) == 18446744073709551615:
+            return 4294967295
+        put(w, 32, 0)
+        put(w, 224, get(w, 224) + 1)
+        put(w, 216, seq)
+        return reply(o, w, op, 0, 0, 0)
+    if get(w, 32) != 0 and op != 14:
+        return 4294967295
+    if op == 1:
+        if get(w, 96) != 1 or get(w, 104) != 0:
+            return 4294967295
+        put(w, 104, 1)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 2:
+        if get(w, 104) != 1:
+            return 4294967295
+        put(w, 104, 0)
+        return reply(o, w, op, 0, 0, 0)
+    if op == 3:
+        if get(w, 56) == 1:
+            return reply(o, w, op, 3, 1, 0)
+        if get(w, 48) == 1:
+            return reply(o, w, op, 0, 0, 0)
+        if get(w, 184) == 18446744073709551615:
+            return 4294967295
+        if can_issue(w) == False:
+            return 4294967295
+        put(w, 184, get(w, 184) + 1)
+        return issue(o, w, op, 1)
+    if op == 5:
+        if get(w, 104) != 0:
+            return 4294967295
+        if get(w, 48) == 1:
+            return reply(o, w, op, 0, 0, 0)
+        if get(w, 56) == 1:
+            return reply(o, w, op, 3, 2, 0)
+        if get(w, 200) == 18446744073709551615 or can_issue(w) == False:
+            return 4294967295
+        put(w, 200, get(w, 200) + 1)
+        return issue(o, w, op, 2)
+    if op == 10:
+        if get(w, 104) != 0:
+            return 4294967295
+        if get(w, 48) != 1:
+            return reply(o, w, op, 3, 7, 0)
+        if get(w, 96) != 1 or can_issue(w) == False:
+            return 4294967295
+        if get(w, 208) == 18446744073709551615:
+            return 4294967295
+        put(w, 208, get(w, 208) + 1)
+        return issue(o, w, op, 5)
+    if op == 14:
+        if get(w, 32) != 7 or get(w, 96) != 0 or get(w, 88) != 0 or get(w, 104) != 0:
+            return 4294967295
+        at = 0
+        while at < 512:
+            put(w, at, 0)
+            at = at + 8
+        return reply(o, w, op, 0, 0, 0)
+    return 4294967295
+
+def acknowledge(s:readbuf, o:mutbuf, w:mutbuf, op:u64, a:u64, b:u64) -> u32:
+    phase = get(w, 32)
+    if op == 6:
+        if phase != 2:
+            return 4294967295
+        return try_ack(s, o, w, a, b)
+    if op == 7:
+        if phase != 3 or a > 4095 or b != 0 or can_issue(w) == False:
+            return 4294967295
+        put(w, 128, a)
+        put(w, 216, get(w, 40))
+        return issue(o, w, op, 4)
+    if op == 8:
+        if phase != 4 or a > 2:
+            return 4294967295
+        if a == 2:
+            if b != 0 or clock_valid(s, w) == False:
+                return 4294967295
+            if before(read64(s, 64), read64(s, 72), get(w, 72), get(w, 80)):
+                return 4294967295
+            save_clock(s, w)
+            put(w, 32, 0)
+            put(w, 216, get(w, 40))
+            return reply(o, w, op, 3, 6, get(w, 128))
+        if read64(s, 64) != 0 or read64(s, 72) != 0:
+            return 4294967295
+        return wait_ack(o, w, op, a, b)
+    if op == 9:
+        if phase != 1 or a > 1:
+            return 4294967295
+        return wait_ack(o, w, op, a, b)
+    if op == 11:
+        if phase != 5 or a > 1 or b != 0:
+            return 4294967295
+        if a == 1:
+            put(w, 32, 0)
+            put(w, 216, get(w, 40))
+            return reply(o, w, op, 3, 8, 0)
+        if can_issue(w) == False:
+            return 4294967295
+        put(w, 96, 0)
+        put(w, 216, get(w, 40))
+        return issue(o, w, op, 6)
+    if op == 13:
+        if phase != 6 or a != 0 or b != 0:
+            return 4294967295
+        put(w, 88, 0)
+        put(w, 32, 7)
+        put(w, 216, get(w, 40))
+        return reply(o, w, op, 0, 0, 0)
+    return 4294967295
+
+def try_ack(s:readbuf, o:mutbuf, w:mutbuf, a:u64, b:u64) -> u32:
+    if a > 2:
+        return 4294967295
+    if a != 0:
+        if read64(s, 64) != 0 or read64(s, 72) != 0:
+            return 4294967295
+        if a == 1:
+            return wait_ack(o, w, 6, 0, b)
+        return wait_ack(o, w, 6, 1, b)
+    if b != 0 or clock_valid(s, w) == False:
+        return 4294967295
+    lo = read64(s, 64)
+    hi = read64(s, 72)
+    dl = get(w, 72)
+    dh = get(w, 80)
+    if get(w, 64) == 0:
+        if hi == 18446744073709551615 and lo > 18446744070709551615:
+            return 4294967295
+        dl = lo + 3000000000
+        dh = hi
+        if dl < lo:
+            dh = hi + 1
+    if before(lo, hi, dl, dh) == False:
+        save_clock(s, w)
+        put(w, 32, 0)
+        put(w, 216, get(w, 40))
+        return reply(o, w, 6, 3, 3, 0)
+    if can_issue(w) == False or get(w, 192) == 18446744073709551615:
+        return 4294967295
+    save_clock(s, w)
+    put(w, 64, 1)
+    put(w, 72, dl)
+    put(w, 80, dh)
+    put(w, 128, 0)
+    put(w, 192, get(w, 192) + 1)
+    put(w, 216, get(w, 40))
+    return issue(o, w, 6, 3)
+
+def wait_ack(o:mutbuf, w:mutbuf, op:u64, kind:u64, value:u64) -> u32:
+    if kind == 0:
+        if value > 4294967295:
+            return 4294967295
+        put(w, 48, 1)
+        put(w, 112, 1)
+        put(w, 120, value)
+        put(w, 176, 1)
+        put(w, 32, 0)
+        put(w, 216, get(w, 40))
+        return reply(o, w, op, 0, 0, 0)
+    if kind != 1 or value == 0 or value > 4095:
+        return 4294967295
+    put(w, 56, 1)
+    put(w, 32, 0)
+    put(w, 216, get(w, 40))
+    reason = 4
+    if op == 8:
+        reason = 5
+    return reply(o, w, op, 3, reason, value)
+
+def before(al:u64, ah:u64, bl:u64, bh:u64) -> bool:
+    return ah < bh or (ah == bh and al < bl)
+
+def clock_valid(s:readbuf, w:mutbuf) -> bool:
+    if get(w, 168) == 1:
+        if before(read64(s, 64), read64(s, 72), get(w, 152), get(w, 160)):
+            return False
+    return True
+
+def save_clock(s:readbuf, w:mutbuf) -> u64:
+    put(w, 152, read64(s, 64))
+    put(w, 160, read64(s, 72))
+    put(w, 168, 1)
+    return 0
+
+def can_issue(w:mutbuf) -> bool:
+    return get(w, 40) < 18446744073709551615
+
+def issue(o:mutbuf, w:mutbuf, op:u64, phase:u64) -> u32:
+    put(w, 40, get(w, 40) + 1)
+    put(w, 32, phase)
+    return reply(o, w, op, 1, 0, 0)
+
+def reply(o:mutbuf, w:mutbuf, op:u64, status:u64, reason:u64, error:u64) -> u32:
+    if get(w, 0) == STATE_MAGIC:
+        put(w, 136, reason)
+        put(w, 144, error)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, 576)
+    put(o, 16, op)
+    put(o, 24, status)
+    effect = 0
+    if status == 1:
+        effect = get(w, 32)
+    put(o, 32, effect)
+    put(o, 40, get(w, 40))
+    put(o, 48, reason)
+    put(o, 56, error)
+    copy_range(o, w, 64, 0, 512)
+    return 576
+
+def valid(w:mutbuf) -> bool:
+    if get(w, 0) != STATE_MAGIC or get(w, 8) == 0 or get(w, 16) == 0 or get(w, 24) == 0:
+        return False
+    phase = get(w, 32)
+    if phase > 7:
+        return False
+    at = 48
+    while at <= 112:
+        if at != 72 and at != 80:
+            if get(w, at) > 1:
+                return False
+        at = at + 8
+    if get(w, 168) > 1 or get(w, 176) > 1:
+        return False
+    if get(w, 120) > 4294967295 or get(w, 128) > 4095 or get(w, 136) > 8 or get(w, 144) > 4095:
+        return False
+    if get(w, 48) + get(w, 56) > 1 or get(w, 112) != get(w, 48) or get(w, 176) != get(w, 48):
+        return False
+    if get(w, 112) == 0 and get(w, 120) != 0:
+        return False
+    if get(w, 64) == 0:
+        if get(w, 72) != 0 or get(w, 80) != 0 or get(w, 128) != 0:
+            return False
+    elif get(w, 168) != 1:
+        return False
+    if get(w, 168) == 0 and (get(w, 152) != 0 or get(w, 160) != 0):
+        return False
+    if get(w, 216) > get(w, 40):
+        return False
+    if phase > 0 and phase < 7:
+        if get(w, 40) == 0 or get(w, 216) >= get(w, 40):
+            return False
+    if phase >= 2 and get(w, 104) != 0:
+        return False
+    if phase >= 1 and phase <= 4:
+        if get(w, 48) != 0 or get(w, 56) != 0 or get(w, 96) != 1:
+            return False
+    if phase == 3 or phase == 4:
+        if get(w, 64) != 1:
+            return False
+    if phase == 5 or phase == 6 or phase == 7:
+        if get(w, 48) != 1:
+            return False
+    if phase < 6:
+        if get(w, 96) != 1:
+            return False
+    elif get(w, 96) != 0:
+        return False
+    if phase == 7 and get(w, 88) != 0:
+        return False
+    if phase == 0 or phase == 7:
+        if get(w, 216) != get(w, 40):
+            return False
+    at = 232
+    while at < 512:
+        if get(w, at) != 0:
+            return False
+        at = at + 8
+    return True

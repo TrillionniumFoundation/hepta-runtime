@@ -1,0 +1,71 @@
+{
+  "proof": {
+    "schema": "hepta.runtime.publisher.session-runtime-separation.v1",
+    "baseline": "a4d92ceadabb59376088be7301f26b06e44cf849",
+    "changes": [
+      {
+        "path": "scripts/runtime_mcp_task_storage.S",
+        "before": {
+          "bytes": 25754,
+          "sha256": "751b374047e35381ecd7bbd013fca05c5b6a3c4e5fbb1c5cdb348350bd632d93",
+          "git_blob": "f5d79b98f62cf14afb5145f07ece70ded2b2f79c"
+        },
+        "after": {
+          "bytes": 26124,
+          "sha256": "77e2b0dbf79458ea9042ace1a0b0017ba132762ddc250f2bdf51e7569b5771df",
+          "git_blob": "2245f1cea25b5bcdd07b2dfc1c5f41886c50a3fe"
+        }
+      },
+      {
+        "path": "scripts/runtime_mcp_task_teardown.S",
+        "before": {
+          "bytes": 4064,
+          "sha256": "aa65121c2e98420b971f697d445f2781038e756b7b47ac966809dd1a02ae1ca1",
+          "git_blob": "e6a95ae4fe8d0cef4c0be3a4a0a4aae0038d89f6"
+        },
+        "after": {
+          "bytes": 5160,
+          "sha256": "410c5a1203affd90c349d1d9538161ab803547d9d4915ab4165c4e19f5b4ff1d",
+          "git_blob": "f13a28292bee6bafd2b036cf1bb9c2e77184d49a"
+        }
+      }
+    ],
+    "original_single_session_order": [
+      "actual registry EOF",
+      "old sends and bounded drain",
+      "writer close",
+      "context cancellation",
+      "handler future Drop",
+      "registry retirement",
+      "port detach",
+      "port shutdown",
+      "publication pool close",
+      "port reap",
+      "publication pool reap",
+      "journal close",
+      "scratch retirement"
+    ],
+    "production_hia_bytes_changed": 0,
+    "public_async_qualified": false,
+    "explicit_shared_port_admission": "pump_initialize_shared receives only an actual private native port capability; pump_port_attach validates it",
+    "lifetime": "pump_finish_service detaches; the process host calls pump_finish_runtime once after all services and pump_finish_storage per session; ordinary pump_finish calls these in original order",
+    "not_public_control": true
+  },
+  "edits": [
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "old": "/* One process-owned fixed port. All future sessions must share this handle. */\npump_initialize:\n    PM_SAVE\n",
+      "new": "/* The process host owns the fixed port. The ordinary stdio host creates it;\n * another session receives that exact private capability through this entry.\n * No public request can select or replace the process-owned handle. */\npump_initialize:\n    xor edi,edi\npump_initialize_shared:\n    PM_SAVE\n    mov r14,rdi\n"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_storage.S",
+      "old": "    mov rdi,[r12+PM_JOURNAL]\n    call pump_port_create\n    mov rdx,rax\n",
+      "new": "    test r14,r14\n    jnz pump_initialize_existing_port\n    mov rdi,[r12+PM_JOURNAL]\n    call pump_port_create\n    jmp pump_initialize_port_result\npump_initialize_existing_port:\n    mov rax,r14\npump_initialize_port_result:\n    mov rdx,rax\n"
+    },
+    {
+      "path": "scripts/runtime_mcp_task_teardown.S",
+      "old": "/* Current SDK EOF: old sends, queued responses, bounded drain, loop token,\n * transport lock/close, then process-runtime future destruction and worker reap.\n * The registry is the current async shutdown policy owner. Historical slot53\n * remains installed unchanged; this path never feeds it fabricated zero counts. */\n.intel_syntax noprefix\n.section .text\npump_finish:\n    PM_SAVE\n    cmp qword ptr [r12+PM_PHASE],0\n    jne pump_finish_loop\n    call pump_clock\n    mov [r12+PM_DRAIN_START],rax\n    mov rcx,rax\n    mov edi,6\n    xor esi,esi\n    mov edx,1\n    xor r8d,r8d\n    xor r9d,r9d\n    call pump_registry\n    cmp eax,6\n    jne public_span_fail\n    mov qword ptr [r12+PM_PHASE],1\npump_finish_loop:\n    call pump_tick\n    cmp qword ptr [r12+PM_PHASE],2\n    jb pump_finish_wait\n    cmp qword ptr [r12+PM_SEND_HEAD],0\n    jne pump_finish_wait\n    /* AsyncRwTransport.close takes the writer mutex. Pre-existing main-loop\n     * send tasks retain their lock queue after drain timeout; none is dropped\n     * merely to make close appear complete. Only drain-owned sends are aborted. */\n    mov edi,1\n    mov esi,4\n    mov rdx,[r12+PM_OUT_FLAGS]\n    mov eax,72\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    and qword ptr [r12+PM_FLAGS_SET],-3\n    mov edi,1\n    mov eax,3\n    syscall\n    cmp rax,-4\n    je pump_writer_closed\n    test rax,rax\n    jnz public_span_fail\npump_writer_closed:\n    mov qword ptr [r12+PM_PHASE],3\n    call pump_trace_closed\n    xor edi,edi\n    mov esi,4\n    mov rdx,[r12+PM_IN_FLAGS]\n    mov eax,72\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    and qword ptr [r12+PM_FLAGS_SET],-2\n    call pump_deliver_context_cancellation\n    call pump_claim_responses\npump_drop_handler_next:\n    mov rbp,[r12+PM_ALL]\n    test rbp,rbp\n    jz pump_handlers_retired\n    cmp qword ptr [rbp+PN_STATE],1\n    jne public_span_fail\n    mov rdi,rbp\n    mov esi,3\n    call pump_resume_node\n    jmp pump_drop_handler_next\npump_handlers_retired:\n    cmp qword ptr [r12+PM_PENDING],0\n    jne public_span_fail\n    mov edi,12\n    xor esi,esi\n    xor edx,edx\n    xor ecx,ecx\n    xor r8d,r8d\n    xor r9d,r9d\n    call pump_registry\n    test eax,eax\n    jnz public_span_fail\n    cmp qword ptr [rdx+56],2\n    jne public_span_fail\n    mov rax,[rdx+64]\n    or rax,[rdx+72]\n    or rax,[rdx+80]\n    or rax,[rdx+88]\n    or rax,[rdx+160]\n    jnz public_span_fail\n    mov rdi,[r12+PM_PORT]\n    mov rsi,r15\n    call pump_port_detach\n    test rax,rax\n    jnz public_span_fail\n    mov rdi,[r12+PM_PORT]\n    call pump_port_shutdown\n    test rax,rax\n    jnz public_span_fail\n    call pump_publication_close\n    mov qword ptr [r12+PM_PHASE],4\npump_reap_workers:\n    call pump_service_worker\n    mov rdi,[r12+PM_PORT]\n    call pump_port_destroy\n    test rax,rax\n    jz pump_port_retired\n    cmp eax,0xfffffff8\n    jne public_span_fail\n    call pump_wait\n    jmp pump_reap_workers\npump_port_retired:\n    mov qword ptr [r12+PM_PORT],0\n    mov qword ptr [r12+PM_WAKE],-1\npump_reap_publication:\n    call pump_publication_destroy\n    test eax,eax\n    jz pump_publication_retired\n    cmp eax,1\n    jne public_span_fail\n    call pump_wait\n    jmp pump_reap_publication\npump_publication_retired:\n    cmp qword ptr [r12+PM_JOURNAL_OWNED],0\n    je pump_journal_closed\n    mov rdi,[r12+PM_JOURNAL]\n    mov eax,3\n    syscall\n    cmp rax,-4\n    je pump_journal_closed\n    test rax,rax\n    jnz public_span_fail\npump_journal_closed:\n    mov qword ptr [r12+PM_JOURNAL],-1\n    mov qword ptr [r12+PM_JOURNAL_OWNED],0\n    mov qword ptr [r12+PM_WAKE],-1\n    mov rdi,[r12+PM_SCRATCH]\n    mov rsi,[r12+PM_SCRATCH_CAP]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov qword ptr [r12+PM_SCRATCH],0\n    mov rdi,[r12+PM_READY_COPY]\n    test rdi,rdi\n    jz pump_storage_retired\n    mov rsi,[r12+PM_READY_CAP]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov qword ptr [r12+PM_READY_COPY],0\npump_storage_retired:\n    xor eax,eax\n    PM_RETURN\npump_finish_wait:\n    call pump_wait\n    jmp pump_finish_loop\n",
+      "new": "/* Current SDK EOF: old sends, queued responses, bounded drain, loop token,\n * transport lock/close, then handler-future destruction. The process host separately reaps its\n * shared runtime workers after every service has retired.\n * The registry is the current async shutdown policy owner. Historical slot53\n * remains installed unchanged; this path never feeds it fabricated zero counts. */\n.intel_syntax noprefix\n.section .text\n/* The ordinary one-session entry preserves the complete original order. */\npump_finish:\n    PM_SAVE\n    call pump_finish_service\n    call pump_finish_runtime\n    call pump_finish_storage\n    PM_RETURN\n\n/* Start real SDK receive EOF without blocking the host event loop. */\npump_begin_finish:\n    PM_SAVE\n    cmp qword ptr [r12+PM_PHASE],0\n    jne pump_begin_finish_done\n    call pump_clock\n    mov [r12+PM_DRAIN_START],rax\n    mov rcx,rax\n    mov edi,6\n    xor esi,esi\n    mov edx,1\n    xor r8d,r8d\n    xor r9d,r9d\n    call pump_registry\n    cmp eax,6\n    jne public_span_fail\n    mov qword ptr [r12+PM_PHASE],1\npump_begin_finish_done:\n    PM_RETURN\n\n/* Close only this service and drop only its retained handler futures. */\npump_finish_service:\n    PM_SAVE\n    call pump_begin_finish\npump_finish_loop:\n    call pump_tick\n    cmp qword ptr [r12+PM_PHASE],2\n    jb pump_finish_wait\n    cmp qword ptr [r12+PM_SEND_HEAD],0\n    jne pump_finish_wait\n    /* AsyncRwTransport.close takes the writer mutex. Pre-existing main-loop\n     * send tasks retain their lock queue after drain timeout; none is dropped\n     * merely to make close appear complete. Only drain-owned sends are aborted. */\n    mov edi,1\n    mov esi,4\n    mov rdx,[r12+PM_OUT_FLAGS]\n    mov eax,72\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    and qword ptr [r12+PM_FLAGS_SET],-3\n    mov edi,1\n    mov eax,3\n    syscall\n    cmp rax,-4\n    je pump_writer_closed\n    test rax,rax\n    jnz public_span_fail\npump_writer_closed:\n    mov qword ptr [r12+PM_PHASE],3\n    call pump_trace_closed\n    xor edi,edi\n    mov esi,4\n    mov rdx,[r12+PM_IN_FLAGS]\n    mov eax,72\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    and qword ptr [r12+PM_FLAGS_SET],-2\n    call pump_deliver_context_cancellation\n    call pump_claim_responses\npump_drop_handler_next:\n    mov rbp,[r12+PM_ALL]\n    test rbp,rbp\n    jz pump_handlers_retired\n    cmp qword ptr [rbp+PN_STATE],1\n    jne public_span_fail\n    mov rdi,rbp\n    mov esi,3\n    call pump_resume_node\n    jmp pump_drop_handler_next\npump_handlers_retired:\n    cmp qword ptr [r12+PM_PENDING],0\n    jne public_span_fail\n    mov edi,12\n    xor esi,esi\n    xor edx,edx\n    xor ecx,ecx\n    xor r8d,r8d\n    xor r9d,r9d\n    call pump_registry\n    test eax,eax\n    jnz public_span_fail\n    cmp qword ptr [rdx+56],2\n    jne public_span_fail\n    mov rax,[rdx+64]\n    or rax,[rdx+72]\n    or rax,[rdx+80]\n    or rax,[rdx+88]\n    or rax,[rdx+160]\n    jnz public_span_fail\n    mov rdi,[r12+PM_PORT]\n    mov rsi,r15\n    call pump_port_detach\n    test rax,rax\n    jnz public_span_fail\n    mov qword ptr [r12+PM_PHASE],4\n    xor eax,eax\n    PM_RETURN\n\n/* The owning process invokes this once, after all shared-port sessions have\n * detached. Port shutdown validates that ownership; publication children are\n * serviced and actually reaped before their process-owned pool is destroyed. */\npump_finish_runtime:\n    PM_SAVE\n    cmp qword ptr [r12+PM_PHASE],4\n    jne public_span_fail\n    mov rdi,[r12+PM_PORT]\n    call pump_port_shutdown\n    test rax,rax\n    jnz public_span_fail\n    call pump_publication_close\npump_reap_workers:\n    call pump_service_worker\n    mov rdi,[r12+PM_PORT]\n    call pump_port_destroy\n    test rax,rax\n    jz pump_port_retired\n    cmp eax,0xfffffff8\n    jne public_span_fail\n    call pump_wait\n    jmp pump_reap_workers\npump_port_retired:\n    mov qword ptr [r12+PM_PORT],0\n    mov qword ptr [r12+PM_WAKE],-1\npump_reap_publication:\n    call pump_publication_destroy\n    test eax,eax\n    jz pump_publication_retired\n    cmp eax,1\n    jne public_span_fail\n    call pump_wait\n    jmp pump_reap_publication\npump_publication_retired:\n    xor eax,eax\n    PM_RETURN\n\n/* Journal and scratch borrows stay alive until the process runtime is gone. */\npump_finish_storage:\n    PM_SAVE\n    cmp qword ptr [r12+PM_PHASE],4\n    jne public_span_fail\n    cmp qword ptr [r12+PM_JOURNAL_OWNED],0\n    je pump_journal_closed\n    mov rdi,[r12+PM_JOURNAL]\n    mov eax,3\n    syscall\n    cmp rax,-4\n    je pump_journal_closed\n    test rax,rax\n    jnz public_span_fail\npump_journal_closed:\n    mov qword ptr [r12+PM_JOURNAL],-1\n    mov qword ptr [r12+PM_JOURNAL_OWNED],0\n    mov qword ptr [r12+PM_WAKE],-1\n    mov rdi,[r12+PM_SCRATCH]\n    mov rsi,[r12+PM_SCRATCH_CAP]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov qword ptr [r12+PM_SCRATCH],0\n    mov rdi,[r12+PM_READY_COPY]\n    test rdi,rdi\n    jz pump_storage_retired\n    mov rsi,[r12+PM_READY_CAP]\n    add rsi,4096\n    mov eax,11\n    syscall\n    test rax,rax\n    jnz public_span_fail\n    mov qword ptr [r12+PM_READY_COPY],0\npump_storage_retired:\n    xor eax,eax\n    PM_RETURN\npump_finish_wait:\n    call pump_wait\n    jmp pump_finish_loop\n"
+    }
+  ]
+}

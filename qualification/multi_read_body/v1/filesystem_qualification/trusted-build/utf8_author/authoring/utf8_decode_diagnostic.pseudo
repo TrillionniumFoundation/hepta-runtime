@@ -1,0 +1,151 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<16 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=length(s)-16:
+        return INVALID
+    if length(o)<256 or length(w)<512:
+        return CAPACITY
+    invalid=scan(s,w)
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,48,length(s)-16)
+    if invalid==0:
+        return 64
+    size=diagnostic(s,w)
+    if size>192:
+        return INVALID
+    put(o,8,3)
+    put(o,16,get(w,384))
+    put(o,24,get(w,392))
+    put(o,32,get(w,400))
+    put(o,40,size)
+    put(o,56,size)
+    copy_out(w,o,0,64,size)
+    return 64+size
+
+def bad(w:mutbuf,start:u64,end:u64,reason:u64) -> u64:
+    put(w,384,start)
+    put(w,392,end)
+    put(w,400,reason)
+    return 1
+
+def scan(s:readbuf,w:mutbuf) -> u64:
+    size=length(s)-16
+    at=0
+    while at<size:
+        first=byte(s,16+at)
+        if first<128:
+            at=at+1
+        else:
+            need=0
+            if first>=194 and first<=223:
+                need=2
+            if first>=224 and first<=239:
+                need=3
+            if first>=240 and first<=244:
+                need=4
+            if need==0:
+                return bad(w,at,at+1,1)
+            step=1
+            while step<need:
+                if step>=size-at:
+                    return bad(w,at,size,3)
+                c=byte(s,16+at+step)
+                low=128
+                high=191
+                if step==1:
+                    if first==224:
+                        low=160
+                    if first==237:
+                        high=159
+                    if first==240:
+                        low=144
+                    if first==244:
+                        high=143
+                if c<low or c>high:
+                    return bad(w,at,at+step,2)
+                step=step+1
+            at=at+need
+    return 0
+
+def diagnostic(s:readbuf,w:mutbuf) -> u64:
+    start=get(w,384)
+    end=get(w,392)
+    reason=get(w,400)
+    if end==start+1:
+        at=literal_byte(w,0)
+        c=byte(s,16+start)
+        store(w,at,hex_digit(c>>4))
+        store(w,at+1,hex_digit(c&15))
+        at=literal_position(w,at+2)
+        at=decimal(w,at,start)
+    else:
+        at=literal_bytes(w,0)
+        at=decimal(w,at,start)
+        store(w,at,45)
+        at=decimal(w,at+1,end-1)
+    at=literal_colon(w,at)
+    if reason==1:
+        return literal_start(w,at)
+    if reason==2:
+        return literal_continuation(w,at)
+    return literal_end(w,at)
+
+def load(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value)
+    store(w,at+1,value>>8)
+    store(w,at+2,value>>16)
+    store(w,at+3,value>>24)
+    store(w,at+4,value>>32)
+    store(w,at+5,value>>40)
+    store(w,at+6,value>>48)
+    store(w,at+7,value>>56)
+    return 0
+
+def copy_out(w:mutbuf,o:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(o,dst+at,get(w,src+at))
+        at=at+8
+    while at<size:
+        store(o,dst+at,byte(w,src+at))
+        at=at+1
+    return size
+
+def hex_digit(value:u64) -> u64:
+    if value<10:
+        return value+48
+    return value+87
+
+def decimal(w:mutbuf,at:u64,value:u64) -> u64:
+    if value==0:
+        store(w,at,48)
+        return at+1
+    size=0
+    while value!=0:
+        quotient=0
+        remainder=0
+        shift=64
+        while shift!=0:
+            shift=shift-1
+            remainder=(remainder<<1)|((value>>shift)&1)
+            if remainder>=10:
+                remainder=remainder-10
+                quotient=quotient|(1<<shift)
+        store(w,DECIMAL+size,48+remainder)
+        size=size+1
+        value=quotient
+    while size!=0:
+        size=size-1
+        store(w,at,byte(w,DECIMAL+size))
+        at=at+1
+    return at

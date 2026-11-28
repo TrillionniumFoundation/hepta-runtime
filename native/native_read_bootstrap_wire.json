@@ -1,0 +1,20 @@
+{
+  "schema": "hepta.runtime.native-read-bootstrap-wire.v1",
+  "bootstrap_literals": {
+    "1": "umask 077; d=$(mktemp -d /tmp/.hepta-hia-read-XXXXXXXXXX) || exit 125; trap 's=$?; trap - 0 1 2 15; rm -f \"$d/h\" || s=125; rmdir \"$d\" || s=125; exit \"$s\"' 0; trap 'exit 125' 1 2 15; dd bs=65536 count=",
+    "2": " iflag=fullblock of=\"$d/h\" status=none || exit 125; ",
+    "3": "dd bs=",
+    "4": " count=1 iflag=fullblock of=\"$d/h\" oflag=append conv=notrunc status=none || exit 125; ",
+    "5": "test \"$(wc -c < \"$d/h\")\" -eq ",
+    "6": " || exit 125; chmod 700 \"$d/h\" || exit 125; \"$d/h\" --local-read-profile ",
+    "7": " <&0 & h=$!; wait \"$h\""
+  },
+  "root_source": "trusted installed configuration only; never raw public tool arguments",
+  "root_max_bytes": 4095,
+  "elf_size_max": 4294901759,
+  "request_magic": "HLRBQ001",
+  "response_magic": "HLRBR001",
+  "root_header_offset": 16,
+  "root_payload_offset": 64,
+  "whole_runtime_replaced": false
+}

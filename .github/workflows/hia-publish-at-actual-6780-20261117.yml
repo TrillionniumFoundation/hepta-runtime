@@ -1,0 +1,100 @@
+name: Qualify original and HIA publish-at effects
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-publish-at-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  initial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [absent-a, versions-a]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_SOURCE: ${{ github.workspace }}/runtime/qualification/publish_at/v1/source
+      PUBLISH_MANIFEST: c02dab93895596ccbb8fcb6dcda56fb50f1b67a544e786a6dd2a5aa4472823eb
+      PUBLISH_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen production, complete readers and input domain
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/publish_at/v1/source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Admit complete uploaded build then execute this fresh actual group
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/scripts/gate.py" qualify \
+            --work "$RUNNER_TEMP/publish-actual" --group "$PUBLISH_GROUP" \
+            --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Retain every complete capture including failed or partial groups
+        if: always()
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/publish-actual" --group "$PUBLISH_GROUP" \
+            --output "$RUNNER_TEMP/publish-export" --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Upload complete bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publish-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publish-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  remaining:
+    needs: initial
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [absent-b, versions-b, metadata-a, metadata-b, metadata-refusals, temp-refusals-a, temp-refusals-b, temp-order, destination-refusals, version-races-a, version-races-b, held-parent, metadata-races-a, metadata-races-b, metadata-races-c, second-check, link-races, rename-races-a, rename-races-b, partial-publication, descriptor-a, descriptor-b, orphan-current, orphan-temp, orphan-source, orphan-second, observer-off-a, observer-off-b, observer-off-c]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_SOURCE: ${{ github.workspace }}/runtime/qualification/publish_at/v1/source
+      PUBLISH_MANIFEST: c02dab93895596ccbb8fcb6dcda56fb50f1b67a544e786a6dd2a5aa4472823eb
+      PUBLISH_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen production, complete readers and input domain
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/publish_at/v1/source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Admit complete uploaded build then execute this fresh actual group
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/scripts/gate.py" qualify \
+            --work "$RUNNER_TEMP/publish-actual" --group "$PUBLISH_GROUP" \
+            --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Retain every complete capture including failed or partial groups
+        if: always()
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/publish-actual" --group "$PUBLISH_GROUP" \
+            --output "$RUNNER_TEMP/publish-export" --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Upload complete bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publish-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publish-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

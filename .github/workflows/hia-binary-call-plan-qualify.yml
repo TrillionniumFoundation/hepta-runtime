@@ -1,0 +1,101 @@
+name: Five binary HIA caller plans
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-call-plan-qualify-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  binary-call-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_call_plan/v1/source
+      BINARY_MANIFEST: 8accdac82c86924dbc48f344ea7bb8910d9797fa79bf0019d28baa5864b54bed
+    steps:
+      - name: Checkout frozen source, input domain and complete readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_call_plan/v1/source
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact frozen source heads before native execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          source=Path(os.environ["BINARY_SOURCE"])
+          assert hashlib.sha256((source/"SOURCE_MANIFEST.json").read_bytes()).hexdigest()==os.environ["BINARY_MANIFEST"]
+          for path in source.rglob("*.py"):compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Prepare the exact original Rust compiler and ordinary build tools
+        run: |
+          command -v cc
+          command -v as
+          command -v ld
+          timeout 900 rustup toolchain install 1.95.0 --profile minimal --no-self-update
+          binary_rustc="$(rustup which --toolchain 1.95.0 rustc)"
+          printf 'BINARY_RUST_BIN=%s\n' "$(dirname "$binary_rustc")" >> "$GITHUB_ENV"
+      - name: Execute actual original and HIA comparisons with frozen limits
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ulimit -c 0
+          python3 -I -S -B "$BINARY_SOURCE/scripts/run_gate.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$BINARY_RUST_BIN" \
+            --output "$RUNNER_TEMP/binary-call-plan-run" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Preserve exact failure diagnostics without replay
+        if: failure()
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ["RUNNER_TEMP"])/"binary-call-plan-run"
+          for path in [root/"GATE.json",*sorted(root.rglob("*.stderr"))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:print(json.dumps(dict(path=str(path.relative_to(root)),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),complete_utf8=raw.decode("utf-8",errors="replace")),sort_keys=True))
+          PY
+      - name: Retain all success or failure bytes and independently read complete archive
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/binary-call-plan-run"
+          python3 -I -S -B "$BINARY_SOURCE/scripts/archive_gate.py" \
+            --capture "$RUNNER_TEMP/binary-call-plan-run" \
+            --output "$RUNNER_TEMP/binary-call-plan-export" \
+            --restore "$RUNNER_TEMP/binary-call-plan-restored" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain archive reader diagnostics without semantic replay
+        if: failure()
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ["RUNNER_TEMP"])/"binary-call-plan-export"
+          for path in [root/"ARCHIVE_GATE.json",*sorted(root.rglob("*.stderr"))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:print(json.dumps(dict(path=str(path.relative_to(root)),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),complete_utf8=raw.decode("utf-8",errors="replace")),sort_keys=True))
+          PY
+      - name: Upload complete evidence and all pure-reader proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-call-plan-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-call-plan-export
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

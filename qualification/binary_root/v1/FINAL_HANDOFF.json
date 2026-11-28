@@ -1,0 +1,251 @@
+{
+  "schema": "hepta.runtime.binary-root.final-handoff.v1",
+  "status": "COMPLETE_PRIVATE_INSTALLED_ROOT_POLICY_PASS",
+  "target": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "integration_head": "99d107c062a6eb3f226dd82b05283aeecbd3c495",
+    "default_components": 111,
+    "default_public_tools": 9
+  },
+  "compiler": {
+    "repository": "TrillionniumFoundation/Hepta",
+    "commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+    "tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+    "complete_source_files": 1080,
+    "b1_b2_b3_bytes": 673413,
+    "b1_b2_b3_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+  },
+  "owner": {
+    "source": {
+      "path": "native/config_directory_owner_span.hepta",
+      "bytes": 319711,
+      "sha256": "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5",
+      "git_blob": "a3fd5c4a7f9a57644015f144e0c2a1e0aea31e55",
+      "mode": "100644"
+    },
+    "composition": {
+      "path": "native/config_binary_root_span_composition.json",
+      "bytes": 11580,
+      "sha256": "e0dbbcd11de170db02660a67d98fe92018d6a79f8a65817bfba6805d266ccf86",
+      "git_blob": "2f0aebd47822942a5e4d4ead41c964519796024d",
+      "mode": "100644"
+    },
+    "functions": 60,
+    "instructions": 6022,
+    "retained_exact_baseline_functions": 50,
+    "exact_relocated_function": {
+      "from": "f8",
+      "to": "f52"
+    },
+    "changed_functions": [
+      "f0",
+      "f8"
+    ],
+    "new_query_operation": 9,
+    "baseline_source_bytes": 288259,
+    "baseline_source_sha256": "6a0e7817013c32bd7189864c91dc768764ae44988cabe4391446ceafea9b5d81"
+  },
+  "actual_capture": {
+    "source": {
+      "commit": "36d89dd2656077248c7e5e5a387cddb3a9268e83",
+      "tree": "2330f236b9005588ae70b94ba8f9177c03eb21e6",
+      "parent": "0186420fa5ef2791a91dcf92de7d844c98c5cd6f",
+      "prefix": "qualification/binary_root/v1/source",
+      "branch": "hia-binary-root-qualify-6780-20261117",
+      "manifest_sha256": "c869076896701c067fea9484fc5788e3550d5280241aba8620893c0632c971f7",
+      "files": 74,
+      "full_readbacks": 74,
+      "branch_created": true
+    },
+    "run_id": 44038410121,
+    "job_id": 133886787926,
+    "overall_status": "FAIL",
+    "original_and_native_groups": 10,
+    "original_cases": 135,
+    "private_wire_controls": 12,
+    "original_capacity_native_calls": 0,
+    "failure": "The first direct capacity fixture rejected a bytearray in ctypes.memmove before the first native entry; every original query group had already completed.",
+    "artifact": {
+      "id": 14308845637,
+      "bytes": 90882610,
+      "sha256": "af6b82924e17f580541cf193e10953728fbe06f9e09934212d117cb896299e1d"
+    }
+  },
+  "capacity_continuation": {
+    "source": {
+      "commit": "e0639e2be4b4c37e4caa18e813d58d3ace13b674",
+      "tree": "5558dc99e43b90968f1d8ab34730e0275fa089e0",
+      "parent": "36d89dd2656077248c7e5e5a387cddb3a9268e83",
+      "prefix": "qualification/binary_root/v1/continuation",
+      "branch": "hia-binary-root-continuation-6780-20261117",
+      "manifest_sha256": "e28ba781be560f3fa89d3bf07035db499072d7dcea9df86f1912d800862b29e0",
+      "files": 22,
+      "branch_created": true,
+      "full_readbacks": 22
+    },
+    "run_id": 44040644465,
+    "job_id": 133894114444,
+    "overall_status": "FAIL",
+    "capacity_process_status": "PASS",
+    "capacity_calls": 14,
+    "process_elapsed_seconds": 2.704726155,
+    "process_limit_seconds": 60,
+    "original_queries_replayed": 0,
+    "wire_controls_replayed": 0,
+    "rust_executions": 0,
+    "compiler_executions": 0,
+    "exact_fixture_change": {
+      "original_sha256": "5044d3797b5da44447d54bd45ecfbb3676fe1cedc8d4d357c191af1e712afaf8",
+      "patched_sha256": "539a05e5ab8d53838e3637224d7221a82e93d0586e2c305e99d76bd802299822",
+      "replacement": {
+        "before": "if raw:ctypes.memmove(self.pointer,raw,len(raw))",
+        "after": "if raw:ctypes.memmove(self.pointer,bytes(raw),len(raw))"
+      }
+    },
+    "failure": "All fourteen capacity controls completed; the later pure reader incorrectly required an explicit standard buffer_profile key in the linker manifest.",
+    "archive": {
+      "id": 14308609427,
+      "bytes": 269476191,
+      "sha256": "abd4d32ad68c1eb78968aa28df149de5e1e4a428f886b973e4c5dc4aaf0904b2"
+    }
+  },
+  "complete_comparison": {
+    "source": {
+      "commit": "1f7e0d3df56a42288ac6d4c74d2fee4b0fa62a9a",
+      "tree": "ae79d25d97528ef7694ca0be51cc3199548331cc",
+      "parent": "e0639e2be4b4c37e4caa18e813d58d3ace13b674",
+      "prefix": "qualification/binary_root/v1/pure_recovery",
+      "branch": "hia-binary-root-pure-recovery-6780-20261117",
+      "manifest_sha256": "f15e8e5cf084a7673d925244872ebfadd0ff918bd4c8c5529f06c1c6c156c8bf",
+      "files": 13,
+      "branch_created": true,
+      "full_readbacks": 13
+    },
+    "run_id": 44041213049,
+    "job_id": 133895976173,
+    "status": "PASS",
+    "native_calls": 161,
+    "original_cases": 135,
+    "private_wire_controls": 12,
+    "capacity_controls": 14,
+    "full_native_buffer_record_bytes": 6175274138,
+    "source_author_reproduced": true,
+    "native_config_startup_processes": 9,
+    "absent_config_processes": 1,
+    "native_images": 19,
+    "static_linker_images": 1,
+    "exact_original_spans": 8,
+    "registry_packages": 16,
+    "physical_reader_refusals": 6,
+    "complete_relocations": 2,
+    "retained_guard_probes": 110,
+    "read_elapsed_seconds": 12.498287053,
+    "controls_elapsed_seconds": 28.910925927,
+    "verify_elapsed_seconds": 19.292257523,
+    "pure_process_limit_seconds": 180,
+    "native_or_rust_reexecutions": 0,
+    "reader_change": {
+      "original_sha256": "d1ccff905de4ea480cd5f9d8ed7e2684e6894df9e7b38f2b57415b0002076354",
+      "patched_sha256": "3057cbad5769898cf7862fbc790ace9b2b9dca87bc606a512175b2855472b562",
+      "replacement": {
+        "before": "and metadata[\"buffer_profile\"]==\"standard\"and metadata[\"standalone\"]is None,\"native linker source/ABI changed\")",
+        "after": "and \"buffer_profile\"not in metadata and metadata[\"standalone\"]is None\n        and [metadata[k]for k in(\"input_capacity\",\"output_capacity\",\"workspace_capacity\")]==[8<<20,8<<20,32<<20],\n        \"native linker source/ABI changed\")"
+      }
+    },
+    "archive": {
+      "id": 14309851087,
+      "bytes": 819934158,
+      "sha256": "1ff51ea6c8856667bcc16c236759e19f2a7b7f3ec2948cd0d1c7380d070457e1"
+    },
+    "tar": {
+      "bytes": 819929716,
+      "sha256": "675b9d76cda38e1770732c4724856ce1c27b8a3fb6c623a87434287274edf08e",
+      "logical_files": 41992,
+      "directories": 4377,
+      "logical_bytes": 9749342278,
+      "unique_objects": 2609,
+      "unique_bytes": 1270659230
+    }
+  },
+  "independent_uploaded_read": {
+    "source": {
+      "commit": "82d86b028b93b26b0654f67b2b39cfbc8a805214",
+      "tree": "f6e549849303c4da6d152534fee1237d810a4d24",
+      "parent": "1f7e0d3df56a42288ac6d4c74d2fee4b0fa62a9a",
+      "prefix": "qualification/binary_root/v1/archive_reader",
+      "branch": "hia-binary-root-archive-read-6780-20261117",
+      "manifest_sha256": "e357b12836b0355a9167f388e639c75d31a17bc0c5dca99d5679b705479de929",
+      "files": 18,
+      "branch_created": true,
+      "full_readbacks": 18
+    },
+    "run_id": 44041927466,
+    "job_id": 133898300951,
+    "status": "PASS",
+    "fetch_elapsed_seconds": 51.341227162,
+    "fetch_limit_seconds": 60,
+    "full_read_elapsed_seconds": 53.140283117,
+    "pure_read_limit_seconds": 180,
+    "all_zip_and_tar_bytes_read": true,
+    "all_logical_files_and_directories_restored": true,
+    "full_native_and_original_comparison_rechecked": true,
+    "saved_guard_proofs": 10,
+    "saved_guard_probes": 110,
+    "fresh_guard_probes": 11,
+    "native_or_rust_executions": 0,
+    "proof_artifact": {
+      "id": 14309907076,
+      "bytes": 32451466,
+      "sha256": "5d7ff2a2d5b5ff487ee31ce79c5859c8fea2760a2a009ebc0ff4e3c98fd0dacc"
+    }
+  },
+  "behavior": {
+    "exact_named_host_lookup_before_alias_path_policy": true,
+    "operator_requirement": true,
+    "original_alias_first_path_policy": true,
+    "longest_raw_prefix_length": true,
+    "last_equal_length_prefix_wins": true,
+    "exact_original_errors": true,
+    "exact_original_utf8_roots": true,
+    "u64_preserved": true,
+    "installed_arena_unchanged": true,
+    "all_output_tails_checked": true,
+    "capacity_controls_seeded_from_actual_installed_workspace": true
+  },
+  "scope": {
+    "qualified": "Installed binary configured-root selection and observation_read_root policy on Linux x86_64, original functions and complete private ABI.",
+    "original_functions_called": [
+      "rpc through its original root/audit/transport boundary",
+      "observation_read_root"
+    ],
+    "original_runtime_config_validation_executed": true,
+    "original_startup_filesystem_executed": false,
+    "actual_native_config_startup": true,
+    "downstream_original_audit_and_ssh_boundaries": "Explicit recorded test stubs; their full original invocation arguments are compared. No audit or network implementation qualification is claimed.",
+    "public_binary_routes_registered": false,
+    "binary_file_bodies_qualified": false,
+    "remote_ssh_transport_qualified": false,
+    "async_lifecycle_qualified": false,
+    "whole_runtime_replaced": false,
+    "old_stack_removed": false,
+    "default_graph_changed": false,
+    "qualification_recorder_fd198_installed_in_production": false
+  },
+  "root_review": {
+    "all_frozen_source_files_and_workflows_read_back_from_git": true,
+    "all_completed_ci_logs_read_in_full": true,
+    "uploaded_artifact_fully_read_in_independent_ci": true,
+    "local_zip_downloaded": false,
+    "local_execution_environment_available": false,
+    "local_hia_or_rust_executions": 0,
+    "unknown_processes_replayed": false,
+    "failures_reclassified": false,
+    "destructive_cleanup_performed": false
+  },
+  "next": [
+    "Compose five qualified typed owners with exact caller preconditions and this installed root policy.",
+    "Qualify actual binary bodies, audit/SSH or observation transports and public SDK lifecycle before public installation.",
+    "Refresh the production graph/source bindings and run its complete actual public entry gates before removing the old stack."
+  ]
+}

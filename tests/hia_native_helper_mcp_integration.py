@@ -23,10 +23,18 @@ import re
 import select
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import time
 import traceback
+
+
+# Hepta's generate_hia_cold_build_entry.postverify captures each installed tool
+# with this bound; the post-cold entry reuses that same native capture path.
+# A packed source-builder ELF contains three separately bounded 1 MiB flats,
+# so the flat compiler bound is not a bound on the complete executable.
+NATIVE_INSTALLED_TOOL_CAPTURE_BYTES = 64 * 1024 * 1024
 
 
 def encoded(value):
@@ -161,10 +169,10 @@ def source_identity(root, expected):
     return {"commit": actual, "tree": tree}
 
 
-def admit_cold_compiler(hepta, cold_report):
-    """Bind the original cold export and B3 to the actual selected Hepta files."""
+def admit_hepta_source_contract(hepta):
+    """Bind the complete source closure to actual files and immutable Git blobs."""
     contract_name = "docs/HIA_SELFHOST_CORE_SUPPORT.json"
-    contract_bytes = (hepta / contract_name).read_bytes()
+    contract_bytes = ordinary_bytes(hepta / contract_name, 64 * 1024 * 1024)
     contract = json.loads(contract_bytes)
     require(type(contract) is dict
             and contract.get("schema") == "hepta.hia.selfhost-core-support.v1"
@@ -183,7 +191,7 @@ def admit_cold_compiler(hepta, cold_report):
                 and all(part not in {"", ".", ".."} for part in name.split("/"))
                 and type(expected) is str and re.fullmatch(r"[0-9a-f]{64}", expected) is not None,
                 "selected Hepta source contract contains an invalid source identity")
-        raw = (hepta / name).read_bytes()
+        raw = ordinary_bytes(hepta / name, 64 * 1024 * 1024, allow_empty=True)
         require(sha256(raw).hexdigest() == expected,
                 "selected Hepta file differs from its source contract: " + name)
         actual_blobs[name] = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
@@ -201,6 +209,13 @@ def admit_cold_compiler(hepta, cold_report):
             expected_blobs[name.decode("ascii")] = blob.decode("ascii")
     require(actual_blobs == expected_blobs,
             "actual Hepta source closure differs from its selected Git commit")
+    return contract, sources
+
+
+def admit_cold_compiler(hepta, cold_report):
+    """Admit the retained hosted-v1 domain without treating native-v2 as v1."""
+    contract, sources = admit_hepta_source_contract(hepta)
+    contract_name = "docs/HIA_SELFHOST_CORE_SUPPORT.json"
 
     cold_bytes = cold_report.read_bytes()
     cold = json.loads(cold_bytes)
@@ -244,6 +259,237 @@ def admit_cold_compiler(hepta, cold_report):
                "support_contract_sha256": sources[contract_name], "compiler_sha256": compiler_sha,
                "nested_report_sha256": cold["nested_report_sha256"]}
     return compiler, cold_bytes, binding
+
+
+def ordinary_bytes(path, maximum, *, single_link=True, allow_empty=False):
+    """Read a bounded ordinary file without following any symlink."""
+    path = Path(path).absolute()
+    require(not any(part.is_symlink() for part in (path, *path.parents)),
+            "native receipt paths cannot contain symbolic links")
+    before = path.stat(follow_symlinks=False)
+    require(stat.S_ISREG(before.st_mode) and (not single_link or before.st_nlink == 1)
+            and (0 if allow_empty else 1) <= before.st_size <= maximum,
+            "native receipt file type or extent differs from its bounded contract")
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            opened = os.fstat(descriptor)
+            require((opened.st_dev, opened.st_ino) == (before.st_dev, before.st_ino),
+                    "native receipt file changed while opening")
+            raw = stream.read(maximum + 1)
+            after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
+                              value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+    require(len(raw) == before.st_size and identity(before) == identity(after)
+            == identity(path.stat(follow_symlinks=False)),
+            "native receipt file changed while reading")
+    return raw
+
+
+def native_file_manifest(raw):
+    """Decode exact HIASXM01 bytes; this is custody readback, not execution proof."""
+    require(len(raw) >= 32 and raw[:8] == b"HIASXM01",
+            "native file manifest has an invalid header")
+    count, version, reserved = struct.unpack_from("<3Q", raw, 8)
+    require(version == 1 and reserved == 0 and 1 <= count <= 4096,
+            "native file manifest has an invalid count or version")
+    rows, cursor, previous = {}, 32, b""
+    for _ in range(count):
+        require(cursor + 48 <= len(raw), "native file manifest record is truncated")
+        extent, size = struct.unpack_from("<2Q", raw, cursor)
+        pin = raw[cursor + 16:cursor + 48].hex()
+        cursor += 48
+        require(1 <= extent <= 4095 and cursor + extent <= len(raw)
+                and size <= 64 * 1024 * 1024 and pin != "0" * 64,
+                "native file manifest record has an invalid bound or digest")
+        name = raw[cursor:cursor + extent]
+        require(re.fullmatch(rb"[A-Za-z0-9_./-]+", name) is not None
+                and all(part not in {b"", b".", b"..", b".git", b"__pycache__"}
+                        for part in name.split(b"/")) and name > previous,
+                "native file manifest paths must be safe, unique and sorted")
+        rows[name.decode("ascii")] = {"bytes": size, "sha256": pin}
+        previous, cursor = name, cursor + extent
+    require(cursor == len(raw), "native file manifest contains trailing bytes")
+    return rows
+
+
+def native_json(raw):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, "native JSON receipt contains a duplicate key")
+            result[key] = value
+        return result
+
+    def invalid_constant(value):
+        raise RuntimeError("native JSON receipt contains a non-JSON number: " + value)
+
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=invalid_constant)
+
+
+def admit_native_cold_compiler(hepta, cold_report, source_bootstrap):
+    """Read back the actual source-bound native post-cold admission outputs.
+
+    The workflow executes hia-source-bootstrap before this observer. Its HIA
+    recipe owns the strict sixty-phase report admission and compiler use. These
+    retained files bind that operation to this source, report, B3 and installer;
+    synthetic unit fixtures exercise only this external custody reader.
+    """
+    contract, sources = admit_hepta_source_contract(hepta)
+    native = contract.get("native_cold_qualification")
+    require(type(native) is dict and native.get("schema") == "hepta.hia.selfhost-cold-replay.v2",
+            "native integration requires the selected native-v2 source contract")
+    cold_bytes = ordinary_bytes(cold_report, 64 * 1024 * 1024)
+    cold = native_json(cold_bytes)
+    require(cold_report.name == "final-cold.json" and type(cold) is dict
+            and cold.get("schema") == "hepta.hia.selfhost-cold-replay.v2"
+            and cold.get("status") == "NATIVE_COLD_SELFHOST_REPLAY_PASS"
+            and type(cold.get("returncode")) is int and cold["returncode"] == 0
+            and type(cold.get("qualification_wall_limit_seconds")) is int
+            and cold["qualification_wall_limit_seconds"] == 180
+            and type(cold.get("cleanup_wall_limit_seconds")) is int
+            and cold["cleanup_wall_limit_seconds"] == 3
+            and type(cold.get("checks")) is dict and len(cold["checks"]) == 14
+            and set(cold["checks"]) == set(native.get("checks", []))
+            and all(value is True for value in cold["checks"].values()),
+            "unchanged-budget native cold qualification is incomplete; integration remains HOLD")
+    require(cold.get("profile") == contract["profile"] and cold.get("source_manifest") == sources,
+            "native cold qualification belongs to different Hepta source or support profile")
+    compiler = cold_report.parent / "qualification/base/B3.flat"
+    compiler_sha = sha256(ordinary_bytes(compiler, 1024 * 1024)).hexdigest()
+    require(cold.get("generation_sha256") == [compiler_sha] * 3,
+            "native compiler differs from the retained cold fixed-point chain")
+    receipt = ordinary_bytes(source_bootstrap / "build.receipt", 128)
+    require(len(receipt) == 128 and receipt[:8] == b"HIASBOK1",
+            "native post-cold public receipt is absent or belongs to another domain")
+    version, stages, source_count, tool_count, source_size, tool_size, reserved = struct.unpack_from(
+        "<7Q", receipt, 8)
+    require(version == 1 and 1 <= stages <= 64 and reserved == 0
+            and source_count == len(sources) and 1 <= tool_count <= 4096,
+            "native post-cold receipt counts or version differ")
+    source_raw = ordinary_bytes(source_bootstrap / "source.manifest.hiasxm", 1024 * 1024)
+    tool_raw = ordinary_bytes(source_bootstrap / "toolchain.manifest.hiasxm", 1024 * 1024)
+    require((len(source_raw), len(tool_raw)) == (source_size, tool_size)
+            and sha256(source_raw).digest() == receipt[64:96]
+            and sha256(tool_raw).digest() == receipt[96:128],
+            "native post-cold receipt does not bind its retained manifests")
+    source_rows, tool_rows = native_file_manifest(source_raw), native_file_manifest(tool_raw)
+    require(source_rows == {name: {"bytes": (hepta / name).stat().st_size, "sha256": pin}
+                            for name, pin in sources.items()},
+            "native post-cold source manifest differs from the selected Git source")
+    expected_tools = {"cold-inputs.receipt", "hia-source-build", "hia-release-owner",
+                      "hia-subprocess", "hia-source-capture", "hia-release-build",
+                      "hia-source-bootstrap", "hia-release"}
+    require(set(tool_rows) == expected_tools and len(tool_rows) == tool_count,
+            "native post-cold installed tool inventory differs")
+    for name, row in tool_rows.items():
+        raw = ordinary_bytes(source_bootstrap / name, NATIVE_INSTALLED_TOOL_CAPTURE_BYTES)
+        require(len(raw) == row["bytes"] and sha256(raw).hexdigest() == row["sha256"],
+                "native post-cold installed tool differs from its receipt: " + name)
+    inputs = ordinary_bytes(source_bootstrap / "cold-inputs.receipt", 120)
+    expected = (b"HIASBIN1" + bytes.fromhex(compiler_sha) + sha256(cold_bytes).digest()
+                + b"HIAADC01" + bytes.fromhex(compiler_sha) + struct.pack("<Q", len(sources)))
+    require(inputs == expected,
+            "native post-cold admission does not bind this report, B3 and source count")
+    binding = {"profile": contract["profile"], "compiler_sha256": compiler_sha,
+               "source_manifest_sha256": sha256(encoded(sources)).hexdigest(),
+               "support_contract_sha256": sources["docs/HIA_SELFHOST_CORE_SUPPORT.json"],
+               "cold_report_sha256": sha256(cold_bytes).hexdigest(),
+               "admission_domain": "native-v2-post-cold-HIAADC01",
+               "post_cold_build_receipt_sha256": sha256(receipt).hexdigest(),
+               "post_cold_source_manifest_sha256": sha256(source_raw).hexdigest(),
+               "post_cold_tool_manifest_sha256": sha256(tool_raw).hexdigest(),
+               "post_cold_inputs_receipt_sha256": sha256(inputs).hexdigest(),
+               "native_installer_sha256": tool_rows["hia-release"]["sha256"]}
+    return compiler, cold_bytes, binding
+
+
+def native_execution_observer():
+    """Load this Runtime's independently inventoried external trace reader."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "selected_runtime_native_execution_trace", Path(__file__).with_name("hia_native_execution_trace.py"))
+    observer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(observer)
+    return observer
+
+
+def admit_native_execution_observations(hepta, args, *, include_release=False):
+    """Require the trusted distribution→prebuild→cold/post→release chain."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "selected_runtime_native_execution_chain", Path(__file__).with_name("hia_native_execution_chain.py"))
+    chain = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(chain)
+    return chain.admit_chain(hepta=hepta, source=args.expected_hepta_source,
+        distribution=args.bootstrap_distribution, distribution_commit=args.expected_bootstrap_distribution,
+        staging=args.native_bootstrap, toolchain=args.native_toolchain, prebuild_execution=args.prebuild_execution,
+        cold_report=args.cold_report, cold_execution=args.cold_execution,
+        post=args.native_source_bootstrap, post_execution=args.post_execution,
+        release_execution=args.release_execution if include_release else None,
+        release_package=args.native_release_package if include_release else None,
+        release_receipt=args.native_release_receipt if include_release else None)
+
+
+def native_release_identity(hepta, source_bootstrap, package, finalize_receipt, output, binding):
+    """Install and independently verify the formal source-bound native package."""
+    # The finalizer intentionally retains three links to its published package.
+    # Capture the bytes and identity; do not impose the single-link input rule
+    # used by the post-cold manifests and installed helper files on this output.
+    package_bytes = ordinary_bytes(package, 256 * 1024 * 1024, single_link=False)
+    package_sha = sha256(package_bytes).hexdigest()
+    finalize_bytes = ordinary_bytes(finalize_receipt, 4096)
+    finalize = native_json(finalize_bytes)
+    require(type(finalize) is dict
+            and set(finalize) == {"schema", "sha256", "bytes", "files", "published", "source_attested"}
+            and finalize["schema"] == "hepta.hia.release-finalize.v1"
+            and finalize["sha256"] == package_sha and type(finalize["bytes"]) is int
+            and finalize["bytes"] == len(package_bytes)
+            and type(finalize["files"]) is int and 1 <= finalize["files"] <= 384
+            and finalize["published"] is True and finalize["source_attested"] is True,
+            "native release package lacks its exact complete source-attested publication receipt")
+    installer = source_bootstrap / "hia-release"
+    require(sha256(ordinary_bytes(installer, NATIVE_INSTALLED_TOOL_CAPTURE_BYTES)).hexdigest()
+            == binding["native_installer_sha256"],
+            "native release installer changed after post-cold admission")
+    installed_root = output / "installed-release"
+    installed_root.mkdir(mode=0o700)
+    receipts = {}
+    for operation in ("install", "verify"):
+        result = subprocess.run([str(installer), operation, str(installed_root), package_sha],
+                                input=package_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env={"PATH": "", "LANG": "C", "LC_ALL": "C", "TZ": "UTC"}, timeout=180)
+        (output / ("release-" + operation + ".stdout.json")).write_bytes(result.stdout)
+        (output / ("release-" + operation + ".stderr.log")).write_bytes(result.stderr)
+        require(result.returncode == 0, "native release " + operation + " did not complete")
+        receipt = native_json(result.stdout)
+        require(type(receipt) is dict and type(receipt.get("files")) is int
+                and type(receipt.get("bytes")) is int and type(receipt.get("published")) is bool
+                and receipt == {"schema": "hepta.hia.release-install.v1", "sha256": package_sha,
+                            "files": finalize["files"], "bytes": len(package_bytes),
+                            "published": operation == "install"},
+                "native release " + operation + " receipt differs from the actual package")
+        receipts[operation] = receipt
+    release = installed_root / package_sha
+    manifest = release / "agent-identity-manifest.json"
+    manifest_bytes = ordinary_bytes(manifest, 4096)
+    value = native_json(manifest_bytes)
+    image_sha = sha256(ordinary_bytes(release / "agent-identity.image.bin", 1024 * 1024)).hexdigest()
+    require(value == {"schema": "hepta.hia.agent-identity-native.v1",
+                      "source_sha256": digest(hepta / "examples/hia_bootstrap/agent_identity.hepta"),
+                      "image_path": "agent-identity.image.bin", "image_sha256": image_sha,
+                      "compiler_sha256": binding["compiler_sha256"]},
+            "formal release identity helper differs from the selected source or admitted B3")
+    record = {"schema": "hepta.runtime.native-release-readback.v1", "status": "NATIVE_RELEASE_READBACK_PASS",
+              "package_sha256": package_sha, "package_bytes": len(package_bytes),
+              "finalize_receipt_sha256": sha256(finalize_bytes).hexdigest(),
+              "finalize": finalize, "native_installer_sha256": binding["native_installer_sha256"],
+              "installation": receipts, "manifest": value,
+              "manifest_sha256": sha256(manifest_bytes).hexdigest(), "production_activated": False,
+              "whole_agent_protocol_and_persistence_replaced": False, "whole_stack_rewritten_in_hia": False}
+    return manifest, record
 
 
 def consumer_main(argv):
@@ -556,9 +802,25 @@ def main(argv=None):
     parser.add_argument("--expected-runtime-source", required=True)
     parser.add_argument("--expected-hepta-source", required=True)
     parser.add_argument("--cold-report", type=Path, required=True)
+    parser.add_argument("--native-source-bootstrap", type=Path)
+    parser.add_argument("--bootstrap-distribution", type=Path)
+    parser.add_argument("--expected-bootstrap-distribution")
+    parser.add_argument("--native-bootstrap", type=Path)
+    parser.add_argument("--native-toolchain", type=Path)
+    parser.add_argument("--prebuild-execution", type=Path)
+    parser.add_argument("--cold-execution", type=Path)
+    parser.add_argument("--post-execution", type=Path)
+    parser.add_argument("--release-execution", type=Path)
+    parser.add_argument("--native-release-package", type=Path)
+    parser.add_argument("--native-release-receipt", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--allow-disposable-sshd", action="store_true")
     args = parser.parse_args(argv)
+    native_arguments = (args.native_source_bootstrap, args.native_release_package, args.native_release_receipt,
+        args.bootstrap_distribution, args.expected_bootstrap_distribution, args.native_bootstrap,
+        args.native_toolchain, args.prebuild_execution, args.cold_execution, args.post_execution, args.release_execution)
+    require(all(native_arguments) or not any(native_arguments),
+            "native integration requires its complete post-cold, package and publication inputs")
     require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True,
             "joint qualification requires Python -I -B")
     require(args.allow_disposable_sshd and os.environ.get("GITHUB_ACTIONS") == "true"
@@ -641,11 +903,19 @@ def main(argv=None):
         report["python_source_imports"] = prepare_source_imports(
             [hepta, runtime_source], private / "qualification-import-cache")
         sys.path.insert(0, str(hepta))
-        compiler, cold_bytes, report["cold_source_binding"] = admit_cold_compiler(
-            hepta, args.cold_report)
-        from tools.build_hia_agent_identity import build
         from tools.hia_agent_native_qualification import ToolClient, Session, scripted_loop, campaign_binding
-        manifest = build(output / "native-helper", compiler, args.cold_report.resolve())
+        if args.native_source_bootstrap is not None:
+            compiler, cold_bytes, report["cold_source_binding"] = admit_native_cold_compiler(
+                hepta, args.cold_report, args.native_source_bootstrap)
+            report["native_execution_observations"] = admit_native_execution_observations(hepta, args, include_release=True)
+            manifest, report["native_build"] = native_release_identity(
+                hepta, args.native_source_bootstrap, args.native_release_package,
+                args.native_release_receipt, output, report["cold_source_binding"])
+        else:
+            compiler, cold_bytes, report["cold_source_binding"] = admit_cold_compiler(hepta, args.cold_report)
+            from tools.build_hia_agent_identity import build
+            manifest = build(output / "native-helper", compiler, args.cold_report.resolve())
+            report["native_build"] = json.loads((manifest.parent / "build.json").read_bytes())
         bundle = output / "native-helpers.json"
         write_json(bundle, {"schema": "hepta.hia.native-helpers.v1",
             "target": "linux-x86_64-lp64", "abi": "hia-byte-six-argument-v1",
@@ -667,7 +937,6 @@ def main(argv=None):
                 "Runtime and Hepta do not share exactly the same catalog bytes")
         report["installation"] = pins
         report["cold_report_sha256"] = sha256(cold_bytes).hexdigest()
-        report["native_build"] = json.loads((manifest.parent / "build.json").read_bytes())
         report["checks"]["common_catalog_and_native_installation"] = True
         save()
 

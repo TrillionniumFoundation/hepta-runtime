@@ -1,0 +1,49 @@
+name: Format frozen audit retention reference source
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-retention-format-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  format-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_retention
+      - name: Install pinned formatter
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+      - name: Format test source without building or executing it
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,subprocess,sys
+          root=Path('tests/hia_native/audit_retention').resolve()
+          sys.path.insert(0,str(root))
+          from process import Recorder
+          recorder=Recorder(root,Path(os.environ['RUNNER_TEMP'])/'format-processes')
+          names=['reference/oracle.rs','reference/original_types.rs']
+          recorder.run('format',['rustup','run','1.95.0','rustfmt','--edition','2021','--config','hard_tabs=true,max_width=100',*[root/name for name in names]],timeout=60)
+          manifest={}
+          for name in names:
+              raw=(root/name).read_bytes()
+              manifest[name]=dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),git_blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest())
+              print('FORMATTED_FILE_BEGIN '+name)
+              print(raw.decode(),end='')
+              print('FORMATTED_FILE_END '+name)
+          print('FORMATTED_MANIFEST '+json.dumps(manifest,sort_keys=True))
+          print(json.dumps(dict(source_formatting_only=True,rust_build_or_execution=0,hia_execution=0,processes=recorder.records),sort_keys=True))
+          PY
+      - name: Preserve source and complete formatting processes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-retention-format-${{ github.sha }}
+          path: |
+            tests/hia_native/audit_retention/reference
+            ${{ runner.temp }}/format-processes
+          if-no-files-found: error
+          retention-days: 14

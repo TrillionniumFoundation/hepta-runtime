@@ -1,0 +1,83 @@
+{
+  "application_decisions_in_hia": true,
+  "complete_mechanical_inverse": true,
+  "edits": [
+    {
+      "count": 1,
+      "new": "One-shot byte transport for the fixed HIA binary-write parent operation.",
+      "old": "One-shot byte transport for the fixed HIA binary-read operation."
+    },
+    {
+      "count": 1,
+      "new": " * and process lifetime. No observer or request-selected capability is installed.",
+      "old": " * and process lifetime. HBRH_OBSERVE is a fixed build-time fixture constant;\n * the production image has no journal entry or descriptor selection path."
+    },
+    {
+      "count": 1,
+      "new": "0x3130305157504248 /* HBPWQ001 */",
+      "old": "0x3130305144524248 /* HBRDQ001 */"
+    },
+    {
+      "count": 1,
+      "new": "0x3130305257504248 /* HBPWR001 */",
+      "old": "0x3130305344524248 /* HBRDS001 */"
+    },
+    {
+      "count": 1,
+      "new": "    call hia_process_orphans_create\n    cmp rax, -4095\n    jae .Lbrh_fatal\n    mov [r15+192], rax\n    xor edi, edi\n    xor esi, esi\n    mov rdx, rax\n    call binary_entropy_create\n    cmp rax, -4095\n    jae .Lbrh_fatal\n    mov [r15+200], rax\n    xor edi, edi\n    xor esi, esi\n    mov rdx, [r15+192]\n    mov rcx, [r15+200]\n    call binary_parent_owner_create",
+      "old": "    xor edi, edi\n    xor esi, esi\n    call binary_read_body_create"
+    },
+    {
+      "count": 1,
+      "new": "    call binary_parent_owner_invoke",
+      "old": "    call binary_read_body_invoke"
+    },
+    {
+      "count": 1,
+      "new": "    call binary_parent_owner_release",
+      "old": "    call binary_read_body_release"
+    },
+    {
+      "count": 1,
+      "new": "    call binary_parent_owner_destroy",
+      "old": "    call binary_read_body_destroy"
+    },
+    {
+      "count": 1,
+      "new": "    cmp qword ptr [r13+8], 3\n    jne .Lbrh_fatal\n    cmp r14, 128\n    jb .Lbrh_fatal",
+      "old": "    cmp qword ptr [r13+8], 3\n    jne .Lbrh_fatal"
+    },
+    {
+      "count": 1,
+      "new": "    lea rdi, [r13+64]\n    lea rsi, [r14-64]\n    mov rdx, [r15+32]",
+      "old": "    mov rdi, r13\n    mov rsi, r14\n    mov rdx, [r15+32]"
+    },
+    {
+      "count": 2,
+      "new": "public_binary_write_error_call_displacement",
+      "old": "binary_read_helper_error_call_displacement"
+    },
+    {
+      "count": 83,
+      "new": ".Lbwh",
+      "old": ".Lbrh"
+    }
+  ],
+  "original_parent_and_body_sources_unchanged": true,
+  "original_production_projection": {
+    "bytes": 6307,
+    "sha256": "007d40db1b90a55e530b443334fe66fb478ce7d7de4422359fb05fe3f78a9df5"
+  },
+  "original_read_transport": {
+    "bytes": 9480,
+    "sha256": "744157c487a40f753eec5a6940a6954d5f8196b3b8957f5837d0a9f6487a13fb"
+  },
+  "parent_death_signal_and_race_check_retained": true,
+  "process_orphan_pool_and_entropy_retire_at_process_exit": true,
+  "public_binary_write_registered": false,
+  "schema": "hepta.runtime.public-binary-write.stdio-author.v1",
+  "source": {
+    "bytes": 6592,
+    "sha256": "8c99862c1019750bda86bc80ea543c860afadff6257da7abca608f2320d91644"
+  }
+}

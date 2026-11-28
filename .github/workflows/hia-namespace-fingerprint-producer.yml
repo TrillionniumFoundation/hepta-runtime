@@ -1,0 +1,75 @@
+name: Capture real namespace fingerprint fallback
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-namespace-fingerprint-producer-v2-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  anchor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/namespace_fingerprint_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Install the unchanged original toolchain and syscall observer
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          sudo apt-get update -qq
+          sudo apt-get install -y strace binutils
+      - name: Admit the frozen complete source
+        run: |
+          export FINGERPRINT_ROOT="$RUNNER_TEMP/namespace-fingerprint-v2"
+          printf 'FINGERPRINT_ROOT=%s\n' "$FINGERPRINT_ROOT" >> "$GITHUB_ENV"
+          printf 'FINGERPRINT_RUST=%s\n' "$(rustup which --toolchain 1.95.0 rustc | xargs dirname)" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,os,shutil
+          from pathlib import Path
+          root=Path(os.environ["FINGERPRINT_ROOT"]);root.mkdir(exist_ok=False)
+          shutil.copytree("runtime/tests/hia_native/namespace_fingerprint_ci",root/"source")
+          assert hashlib.sha256((root/"source/SOURCE.json").read_bytes()).hexdigest()=="682909fbec91ce42d145ebe8ee55c6943d385f1113b9ad25f03d9c3f694bf320"
+          (root/"run").mkdir()
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$FINGERPRINT_ROOT/source/source_check.py"
+      - name: Fresh HIA build and all same-tree observed, observer-free and exact Rust fingerprint cases
+        run: |
+          python3 -I -B "$FINGERPRINT_ROOT/source/run_capture.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --rust-bin "$FINGERPRINT_RUST" \
+            --output "$FINGERPRINT_ROOT/run/semantic" --temporary "$RUNNER_TEMP/namespace-fingerprint-owned-v2" \
+            > "$FINGERPRINT_ROOT/run/producer.stdout" 2> "$FINGERPRINT_ROOT/run/producer.stderr"
+          cat "$FINGERPRINT_ROOT/run/producer.stdout"
+      - name: Preserve and reread every successful or failed captured byte
+        if: always()
+        run: |
+          if test -f "$FINGERPRINT_ROOT/source/export.py"; then
+            python3 -I -B "$FINGERPRINT_ROOT/source/export.py" --workspace "$FINGERPRINT_ROOT" \
+              --archive "$RUNNER_TEMP/namespace-fingerprint-v2.tar.gz"
+          fi
+      - name: Upload complete private namespace evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: namespace-fingerprint-v2-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/namespace-fingerprint-v2.tar.gz
+            ${{ runner.temp }}/namespace-fingerprint-v2.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

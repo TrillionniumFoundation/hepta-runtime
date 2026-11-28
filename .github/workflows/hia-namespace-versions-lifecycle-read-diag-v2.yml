@@ -1,0 +1,81 @@
+name: Pure exact diagnostics of completed sixteen-worker syscall joins
+on:
+  push:
+    branches: [hia-namespace-versions-lifecycle-read-diag-v2-6780-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Freeze all pure recovery sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAMESPACE_RECOVERY_ROOT="$RUNNER_TEMP/namespace-versions-lifecycle-read-diag-v2"
+          printf 'NAMESPACE_RECOVERY_ROOT=%s\n' "$NAMESPACE_RECOVERY_ROOT" >> "$GITHUB_ENV"
+          mkdir "$NAMESPACE_RECOVERY_ROOT"
+          cp -a qualification/namespace_versions/v1/lifecycle_read_diag_v2 "$NAMESPACE_RECOVERY_ROOT/source"
+          mkdir "$NAMESPACE_RECOVERY_ROOT/outer" "$NAMESPACE_RECOVERY_ROOT/run"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"namespace-versions-lifecycle-read-diag-v2/source"
+          raw=(r/"SOURCE_MANIFEST.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="18b6a9ac9795650172bd054ab5b09f2eb9f00ea3a33557006d6973c90cbcdc53"
+          m=json.loads(raw)
+          assert {p.relative_to(r).as_posix()for p in r.rglob("*")if p.is_file()}=={x["path"]for x in m["files"]}|{"SOURCE_MANIFEST.json"}
+          for row in m["files"]:
+              b=(r/row["path"]).read_bytes()
+              assert len(b)==row["bytes"]and hashlib.sha256(b).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==row["git_blob"]
+              if row["path"].endswith(".py"):compile(b,str(r/row["path"]),"exec")
+          PY
+      - name: Restore and reread every already uploaded actual byte
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_RECOVERY_ROOT/source/restore_actual_archive.py" \
+            --workspace "$NAMESPACE_RECOVERY_ROOT" > "$NAMESPACE_RECOVERY_ROOT/outer/restore.stdout" 2> "$NAMESPACE_RECOVERY_ROOT/outer/restore.stderr"
+      - name: Independently read complete actual buffers and syscalls with no application
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_RECOVERY_ROOT/source/recover_actual.py" \
+            --workspace "$NAMESPACE_RECOVERY_ROOT" > "$NAMESPACE_RECOVERY_ROOT/outer/read.stdout" 2> "$NAMESPACE_RECOVERY_ROOT/outer/read.stderr"
+      - name: Preserve every pure success and failure stream
+        if: always()
+        shell: bash
+        run: |
+          for name in restore.stdout restore.stderr read.stdout read.stderr; do
+            if test -f "$NAMESPACE_RECOVERY_ROOT/outer/$name"; then cat "$NAMESPACE_RECOVERY_ROOT/outer/$name"; fi
+          done
+      - name: Archive every byte and reread all files, directories and modes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=KILL 180 python3 -I -B "$NAMESPACE_RECOVERY_ROOT/source/export.py" \
+            --workspace "$NAMESPACE_RECOVERY_ROOT" --archive "$RUNNER_TEMP/namespace-versions-lifecycle-read-diag-v2.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-versions-lifecycle-read-diag-v2
+          path: |
+            ${{ runner.temp }}/namespace-versions-lifecycle-read-diag-v2.tar.gz
+            ${{ runner.temp }}/namespace-versions-lifecycle-read-diag-v2.tar.gz.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

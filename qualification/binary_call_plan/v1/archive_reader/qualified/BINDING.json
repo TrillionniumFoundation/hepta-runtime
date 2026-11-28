@@ -1,0 +1,62 @@
+{
+  "schema": "hepta.runtime.binary-call-plan.pure-count-recovery-binding.v1",
+  "commit": "6ea9dcd316533456b2cf52428d9793820e664cca",
+  "run_id": 44049400825,
+  "job_id": 133923115196,
+  "artifact": {
+    "id": 14312329599,
+    "bytes": 369249859,
+    "sha256": "acf7a273faf70e732fff8afd134e7d25f325984baa2ff0394aef182a4b869a7c"
+  },
+  "tar": {
+    "bytes": 369245260,
+    "sha256": "afb1816a090cb949734f4fe5dd0a9f4980406374cee31e10f4a1f8ba069c4a7b",
+    "logical_files": 9171,
+    "logical_bytes": 1996837422,
+    "directories": 878,
+    "unique_objects": 3868,
+    "unique_bytes": 1257787926
+  },
+  "manifest_sha256": "8accdac82c86924dbc48f344ea7bb8910d9797fa79bf0019d28baa5864b54bed",
+  "reader_changes": [
+    {
+      "path": "scripts/read_plan.py",
+      "replacements": [
+        {
+          "before": "len(controls)==(28 if group[\"name\"]==\"operator-00\"else 0)",
+          "after": "len(controls)==(27 if group[\"name\"]==\"operator-00\"else 0)"
+        },
+        {
+          "before": "[\"invalid-frame\"]*13",
+          "after": "[\"invalid-frame\"]*12"
+        }
+      ],
+      "original_sha256": "88f53b7a6ad3512e8c1c07239eda4ef79b3befbb344324f609bda118f925e0a5",
+      "patched_sha256": "9e6dd3c4fcf92ff638c76b6f4236c03efd1ce9da50a1c16d1497c25f330b0ca0",
+      "baseline": "scripts/read_plan_original.py.txt"
+    },
+    {
+      "path": "scripts/run_ci.py",
+      "replacements": [
+        {
+          "before": "native[\"controls\"]==28",
+          "after": "native[\"controls\"]==27"
+        }
+      ],
+      "original_sha256": "b27461b67c216591d27cb8294df0b017f3939426fb43d15a811a184a0cdc2f30",
+      "patched_sha256": "04c4b779ee46e20f5d97f5ab935db9488d8635d57710c84f7fff0d622765c339",
+      "baseline": "scripts/run_ci_original.py.txt"
+    }
+  ],
+  "original_status": "FAIL",
+  "original_failed_stage": "read-only-admission",
+  "completed_producer_status": "ACTUAL_CALL_PLAN_PRODUCERS_COMPLETE",
+  "actual_cases": 433,
+  "actual_groups": 24,
+  "actual_private_controls": 27,
+  "invalid_frame_controls": 12,
+  "declared_old_gate_control_count": 28,
+  "reason": "The immutable producer defines 3 initial malformed frames plus 9 word mutations = 12 invalid controls; 1 bound reference + 4 short + 4 output + 3 workspace + 12 invalid + 3 dirty = 27. Only pure-reader counts are corrected; no input, HIA source, original Rust or native capture changes.",
+  "native_or_rust_executions": 0,
+  "unknown_processes_replayed": false
+}

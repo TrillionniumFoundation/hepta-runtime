@@ -1,0 +1,136 @@
+name: TextEditor Local complete candidate
+
+on:
+  push:
+    branches: [hia-text-local-qualification-6780-20261116]
+
+permissions:
+  contents: read
+
+jobs:
+  local-four-command:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      LC_ALL: C.UTF-8
+      RUSTUP_TOOLCHAIN: 1.95.0
+      TEXT_LOCAL_SOURCE: ${{ github.workspace }}/runtime/tests/hia_native/text_editor_local_ci
+    steps:
+      - name: Set runtime paths from the runner environment
+        run: |
+          printf '%s\n' \
+            "TEXT_LOCAL_OUTPUT=$RUNNER_TEMP/text-editor-local-complete-output" \
+            "TEXT_LOCAL_ARCHIVE=$RUNNER_TEMP/text-editor-local-complete-evidence" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout the exact candidate revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout pinned Hepta source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Checkout exact current original Rust source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original-target
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Cargo.toml
+            /Cargo.lock
+            /src/mcp/
+            /src/utils/line_hash.rs
+
+      - name: Verify exact source closure, case ASTs, and original Git identities
+        run: |
+          python3 -I -B "$TEXT_LOCAL_SOURCE/scripts/run_ci.py" --source "$TEXT_LOCAL_SOURCE" --check-only
+          python3 -I -B - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          workspace = Path(os.environ['GITHUB_WORKSPACE'])
+          source = Path(os.environ['TEXT_LOCAL_SOURCE'])
+          deps = json.loads((source/'ci/dependencies.json').read_bytes())
+          def revision(path, expression):
+              return subprocess.check_output(['git', '-C', str(path), 'rev-parse', expression], text=True).strip()
+          assert revision(workspace/'runtime', 'HEAD') == os.environ['GITHUB_SHA']
+          for directory, identity in [('compiler', deps['compiler']), ('original-target', deps['original_target'])]:
+              assert revision(workspace/directory, 'HEAD') == identity['commit']
+              assert revision(workspace/directory, 'HEAD^{tree}') == identity['tree']
+          for relative, pin in deps['original_target']['target_files'].items():
+              raw = (workspace/'original-target'/relative).read_bytes()
+              assert raw == (source/'reference-v1/target'/relative).read_bytes()
+              assert len(raw) == pin['bytes'] and hashlib.sha256(raw).hexdigest() == pin['sha256']
+              assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest() == pin['git_blob']
+          print(json.dumps({'status':'EXACT_SOURCE_CHECKOUTS_PASS','original_target_files':len(deps['original_target']['target_files'])},sort_keys=True))
+          PY
+
+      - name: Install build tools and exact Rust
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+          rustup toolchain install 1.95.0 --profile minimal
+
+      - name: Fresh 75 owners, fresh original, seven profiles, and read-only evidence comparison
+        run: |
+          text_local_rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -I -B "$TEXT_LOCAL_SOURCE/scripts/run_ci.py" \
+            --source "$TEXT_LOCAL_SOURCE" \
+            --output "$TEXT_LOCAL_OUTPUT" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --rust-bin "$text_local_rust_bin"
+
+      - name: Require exactly the private serial Local domain
+        run: |
+          python3 -I -B - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['TEXT_LOCAL_OUTPUT'])
+          recipe = json.loads((root/'RECIPE.json').read_bytes())
+          verified = json.loads((root/'verification.json').read_bytes())
+          assert recipe['status'] == 'PASS'
+          assert recipe['fresh_native_graph_built'] is True and recipe['fresh_original_reference_built'] is True
+          assert recipe['retained_evidence_verified'] is True and recipe['private_serial_local_four_command_qualified'] is True
+          assert recipe['ordinary_cases_verified'] == verified['ordinary_cases'] == 357
+          assert recipe['actual_native_records_verified'] == verified['actual_native_records'] == 1428
+          assert verified['fresh_native_owner_images'] == 75 and len(verified['profiles']) == 7
+          assert recipe['outer_subprocess_timeout_seconds'] is None
+          assert recipe['internal_native_original_timeout_seconds'] == 60
+          assert recipe['internal_reference_step_timeout_seconds'] == 180
+          for key in ['existing_binary_inputs', 'bootstrap_reused', 'full_sdk_qualified',
+                      'full_136_route_qualified', 'full_async_runtime_qualified',
+                      'native_task_registry_qualified', 'native_future_cancellation_qualified',
+                      'fresh_cold_qualified', 'public_text_editor_route', 'production_activated',
+                      'old_path_removed', 'whole_runtime_replaced']:
+              assert recipe[key] is False, key
+          assert verified['verification_invoked_graph_or_original'] is False
+          assert verified['verification_wrote_files'] is False
+          PY
+
+      - name: Preserve complete successful or failed evidence
+        if: always()
+        run: |
+          python3 -I -B "$TEXT_LOCAL_SOURCE/scripts/export_ci_evidence.py" \
+            --source "$TEXT_LOCAL_SOURCE" \
+            --output "$TEXT_LOCAL_OUTPUT" \
+            --archive-directory "$TEXT_LOCAL_ARCHIVE"
+
+      - name: Upload retained original artifacts and read-only verifier inputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-editor-local-complete-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/text-editor-local-complete-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

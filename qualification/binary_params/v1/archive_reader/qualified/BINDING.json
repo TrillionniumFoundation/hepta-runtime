@@ -1,0 +1,51 @@
+{
+  "commit": "6bd6b3092854cdf1f5429a246fe31922aed603db",
+  "tree": "ea932ec4af0af3c88f2e51134cbc62895c149951",
+  "source_prefix": "qualification/binary_params/v1/source",
+  "manifest_sha256": "c34c98f2d1d2832564ccafe813ed01d58a3c6990d9bbaa60203ce686c7b1fdd8",
+  "run_id": 44027343867,
+  "job_id": 133850739792,
+  "status": "FAIL",
+  "failed_stage": "physical-controls",
+  "actual_producers": "PASS",
+  "initial_read_only_admission": "PASS",
+  "cases": 1388,
+  "native_calls": 8143,
+  "boundary_controls": 170,
+  "full_record_bytes": 924760099,
+  "value_admitted": 1308,
+  "typed_successes": 501,
+  "artifact": {
+    "id": 14303991539,
+    "bytes": 101834964,
+    "sha256": "f076fa4ba62c39023a9c3a650fff3aa23f48b61f32a656a1b61857a4d47b4be8"
+  },
+  "tar": {
+    "bytes": 101830403,
+    "sha256": "26e762bb6730fd779247aec7ee0b0cb94f79b74171e080c06f953582a388e772",
+    "logical_files": 22669,
+    "logical_bytes": 3947004117,
+    "unique_objects": 2311,
+    "unique_bytes": 454759377
+  },
+  "native_cases_replayed": false,
+  "reader_change": {
+    "path": "scripts/reader_controls.py",
+    "original_sha256": "f3ff9eb081a9ea87b4506b70a17ec4fa2520dc2897dbedc4cb04dc31d62194ed",
+    "patched_sha256": "439a97c9b8527afdedc2825c4186a7d5560dcfcad8143c522ad7d48247be7575",
+    "replacement": {
+      "before": "proof=guarded(operation,roots=[clone])",
+      "after": "proof=guarded(operation,roots=[source,clone])"
+    },
+    "reason": "The immutable frozen case generator reads its owned SCHEMAS.json. Bind that exact source directory together with the complete physical variant in each guard."
+  },
+  "per_process_limits": {
+    "fetch": 60,
+    "unpack": 180,
+    "read": 180,
+    "controls": 180,
+    "verify": 180,
+    "export": 180
+  },
+  "semantic_replay": false
+}

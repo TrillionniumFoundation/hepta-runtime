@@ -1,0 +1,51 @@
+name: HIA Batch current SDK reference development
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'hia-batch-sdk-reference-*'
+permissions:
+  contents: read
+jobs:
+  fresh-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact new reference source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/batch_sdk_reference_ci/source
+      - name: Checkout independent current original
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: original
+          ref: d3d75c30719db966b004756f610007a7c723729e
+          persist-credentials: false
+      - name: Install exact Rust compiler
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Build and execute the unchanged target methods through SDK
+        run: |
+          rust_bin="$(dirname "$(rustup which --toolchain 1.95.0 rustc)")"
+          python3 -B runtime/tests/hia_native/batch_sdk_reference_ci/source/run_reference.py \
+            --target "$GITHUB_WORKSPACE/original" --rust-bin "$rust_bin" \
+            --output "$RUNNER_TEMP/batch-sdk-reference"
+      - name: Archive complete reference sources and process streams
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/batch-sdk-reference"; then
+            python3 -B runtime/tests/hia_native/batch_sdk_reference_ci/source/export_evidence.py \
+              --input "$RUNNER_TEMP/batch-sdk-reference" --output "$RUNNER_TEMP/batch-sdk-reference-archive"
+          fi
+      - name: Retain complete development evidence and failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-batch-sdk-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/batch-sdk-reference-archive/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

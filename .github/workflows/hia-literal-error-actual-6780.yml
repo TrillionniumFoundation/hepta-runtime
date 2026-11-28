@@ -1,0 +1,48 @@
+name: Qualify HIA literal diagnostics against retained originals
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-literal-error-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      LITERAL_SOURCE: ${{ github.workspace }}/runtime/qualification/literal_error/v1/actual_source
+      LITERAL_MANIFEST: d3605fa237ee31a12a066751291a99f0c945cc408e2a18d6c552b133a61c6619
+    steps:
+      - name: Checkout complete frozen domain producers and independent readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/literal_error/v1/actual_source
+          persist-credentials: false
+      - name: Verify frozen candidate head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Admit both archives and execute each new group once
+        run: |
+          python3 -I -S -B "$LITERAL_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/literal-error-actual" \
+            --source-manifest-sha256 "$LITERAL_MANIFEST"
+      - name: Retain every complete failed or unknown group and physical copy
+        if: always()
+        run: |
+          python3 -I -S -B "$LITERAL_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/literal-error-actual" --output "$RUNNER_TEMP/literal-error-actual-export" \
+            --source-manifest-sha256 "$LITERAL_MANIFEST"
+      - name: Upload complete actual evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: literal-error-actual-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/literal-error-actual-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -1,0 +1,80 @@
+name: Build actual SSH native owner and bind unfinished installed relocation
+on:
+  push:
+    branches: ['hia-ssh-native-owner-build-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set fixed source and evidence paths
+        run: |
+          printf '%s\n' "SA_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/ssh_direct/v1/native_actor_build" "SA_RUN=$RUNNER_TEMP/ssh-native-owner-build" "SA_EXPORT=$RUNNER_TEMP/ssh-native-owner-export" "SA_DRIVER=$RUNNER_TEMP/ssh-native-owner-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/native_actor_build
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Compile and assemble without running any application
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SA_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 0bcf9d592e776a613ab28ee7824d57a88bc6e44d8ef4191b9796d04d48c91ab1
+          set +e
+          timeout --signal=TERM --kill-after=5s 780s python3 -I -S -B "$SA_SOURCE/recipe/build.py" --source "$SA_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$SA_RUN" > "$SA_DRIVER.stdout" 2> "$SA_DRIVER.stderr"
+          sa_status=$?
+          cat "$SA_DRIVER.stderr"
+          cat "$SA_DRIVER.stdout"
+          exit "$sa_status"
+      - name: Archive and reread every source, compiler, build and diagnostic byte
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SA_SOURCE/recipe/archive.py" pack --source "$SA_SOURCE" --capture "$SA_RUN" --output "$SA_EXPORT" --driver-prefix "$SA_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-native-owner-build-${{ github.sha }}
+          path: ${{ env.SA_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  bind-installed-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set exact retained source paths
+        run: |
+          printf '%s\n' "SI_SOURCE=$GITHUB_WORKSPACE/runtime/qualification/ssh_direct/v1/native_actor_build" "SI_ZIP=$RUNNER_TEMP/installed-original-failure.zip" "SI_OUT=$RUNNER_TEMP/installed-source-bound" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/native_actor_build
+      - name: Check every frozen source byte without running retained code
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SI_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 0bcf9d592e776a613ab28ee7824d57a88bc6e44d8ef4191b9796d04d48c91ab1
+          python3 -I -S -B -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); sys.path.insert(0,str(p/"recipe")); from common import source_evidence; print(source_evidence(p)); [compile(x.read_bytes(),str(x),"exec") for x in p.rglob("*.py")]' "$SI_SOURCE"
+      - name: Fetch only immutable original failure bytes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14375126162/zip > "$SI_ZIP"
+      - name: Bind actual archived reader sources only
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SI_SOURCE/recipe/bind_installed_source.py" --archive "$SI_ZIP" --output "$SI_OUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: installed-remaining-relocation-source-${{ github.sha }}
+          path: ${{ env.SI_OUT }}
+          compression-level: 0
+          if-no-files-found: error

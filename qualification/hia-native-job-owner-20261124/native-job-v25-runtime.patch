@@ -1,0 +1,355 @@
+diff --git a/src/mcp/hia_controller_release.rs b/src/mcp/hia_controller_release.rs
+index 43e3ec7..66c9b36 100644
+--- a/src/mcp/hia_controller_release.rs
++++ b/src/mcp/hia_controller_release.rs
+@@ -42,6 +42,8 @@ const OWNER_RECORD_SCHEMA: &str = "hepta.hia.mcp.controller.v21";
+ const OWNER_FILE_LOCK_SCHEMA: &str = "hepta.hia.mcp.controller.v22";
+ const OWNER_MARKER_SCHEMA: &str = "hepta.hia.mcp.controller.v23";
+ const OWNER_CUSTODY_SCHEMA: &str = "hepta.hia.mcp.controller.v24";
++const NATIVE_JOB_OWNER_SCHEMA: &str = "hepta.hia.mcp.controller.v25";
++const JOB_SUPERVISOR: &str = "hia-job-supervisor";
+ const WITNESS_ROLE: &str = "JOB_WITNESS";
+ const WITNESS_PATH: &str = "HIA_LOCAL_MCP_JOB_WITNESS_IMAGE";
+ const RECEIPT_ROLE: &str = "JOB_RECEIPT";
+@@ -161,10 +163,12 @@ impl Release {
+ 			| OWNER_RECORD_SCHEMA
+ 			| OWNER_FILE_LOCK_SCHEMA
+ 			| OWNER_MARKER_SCHEMA
+-			| OWNER_CUSTODY_SCHEMA => true,
++			| OWNER_CUSTODY_SCHEMA
++			| NATIVE_JOB_OWNER_SCHEMA => true,
+ 			_ => anyhow::bail!("invalid installed HIA controller schema"),
+ 		};
+ 		let supervisor_protocol = match admitted.schema.as_str() {
++			NATIVE_JOB_OWNER_SCHEMA => 25,
+ 			OWNER_CUSTODY_SCHEMA => 24,
+ 			OWNER_MARKER_SCHEMA => 23,
+ 			OWNER_FILE_LOCK_SCHEMA => 22,
+@@ -186,6 +190,7 @@ impl Release {
+ 			WITNESS_PUBLISHER_SCHEMA => 6,
+ 			_ => 0,
+ 		};
++		let native_job_owner = supervisor_protocol >= 25;
+ 		let witness_publisher = supervisor_protocol >= 6;
+ 		let lifecycle_owner = admitted.schema == LIFECYCLE_OWNER_SCHEMA || witness_publisher;
+ 		let with_terminal_receipt = admitted.schema == TERMINAL_RECEIPT_SCHEMA || lifecycle_owner;
+@@ -194,7 +199,8 @@ impl Release {
+ 			admitted.files.len()
+ 				== FILTERS.len()
+ 					+ 2 + usize::from(with_receipt)
+-					+ usize::from(with_terminal_receipt),
++					+ usize::from(with_terminal_receipt)
++					+ usize::from(native_job_owner),
+ 			"invalid installed HIA controller role inventory"
+ 		);
+ 		let load = |name: &str, limit: usize| -> Result<Vec<u8>> {
+@@ -222,6 +228,7 @@ impl Release {
+ 			.chain([WORKER_PREPARE])
+ 			.chain(with_receipt.then_some(JOB_RECEIPT))
+ 			.chain(with_terminal_receipt.then_some(JOB_TERMINAL_RECEIPT))
++			.chain(native_job_owner.then_some(JOB_SUPERVISOR))
+ 		{
+ 			let bytes = load(name, 1 << 20)?;
+ 			ensure!(
+@@ -234,6 +241,7 @@ impl Release {
+ 				match name {
+ 					WORKER_PREPARE => Some("encoder"),
+ 					JOB_RECEIPT => Some("writer"),
++					JOB_SUPERVISOR => Some("supervisor"),
+ 					_ => None,
+ 				},
+ 			) {
+@@ -423,6 +431,48 @@ mod tests {
+ 				.unwrap()
+ 				.lifecycle_owner
+ 		);
++		let incomplete_v25 =
++			serde_json::to_vec(&serde_json::json!({"schema":NATIVE_JOB_OWNER_SCHEMA,"files":pins}))
++				.unwrap();
++		std::fs::write(&manifest, &incomplete_v25).unwrap();
++		assert!(Release::load(&manifest, &hia_contract::sha256(&incomplete_v25)).is_err());
++		std::fs::write(directory.join(JOB_SUPERVISOR), &image).unwrap();
++		pins.insert(JOB_SUPERVISOR, hia_contract::sha256(&image));
++		let complete_v25 =
++			serde_json::to_vec(&serde_json::json!({"schema":NATIVE_JOB_OWNER_SCHEMA,"files":pins}))
++				.unwrap();
++		std::fs::write(&manifest, &complete_v25).unwrap();
++		let v25_pin = hia_contract::sha256(&complete_v25);
++		let release_v25 = Release::load(&manifest, &v25_pin).unwrap();
++		assert_eq!(release_v25.images.len(), 13);
++		assert_eq!(release_v25.supervisor_protocol, 25);
++		assert!(release_v25.lifecycle_owner);
++		let supervisor = release_v25.terminal_artifacts.as_ref().unwrap();
++		assert_eq!(
++			supervisor["supervisor"]["sha256"],
++			serde_json::Value::String(hia_contract::sha256(&image))
++		);
++		assert_eq!(
++			supervisor["supervisor"]["hex"].as_str().unwrap().len(),
++			image.len() * 2
++		);
++		let extra_v24 =
++			serde_json::to_vec(&serde_json::json!({"schema":OWNER_CUSTODY_SCHEMA,"files":pins}))
++				.unwrap();
++		std::fs::write(&manifest, &extra_v24).unwrap();
++		assert!(Release::load(&manifest, &hia_contract::sha256(&extra_v24)).is_err());
++		std::fs::write(&manifest, &complete_v25).unwrap();
++		std::fs::write(directory.join(JOB_SUPERVISOR), b"different").unwrap();
++		assert!(Release::load(&manifest, &v25_pin).is_err());
++		let sealed_supervisor = release_v25.images.get(JOB_SUPERVISOR).unwrap();
++		let mut retained_supervisor = vec![0; image.len()];
++		assert_eq!(
++			sealed_supervisor
++				.read_at(&mut retained_supervisor, 0)
++				.unwrap(),
++			image.len()
++		);
++		assert_eq!(retained_supervisor, image);
+ 		std::fs::write(directory.join(JOB_TERMINAL_RECEIPT), b"different").unwrap();
+ 		assert!(Release::load(&manifest, &hia_contract::sha256(&v5)).is_err());
+ 		std::fs::write(&manifest, &v4).unwrap();
+diff --git a/src/mcp/runtime/jobs.rs b/src/mcp/runtime/jobs.rs
+index dfe0e55..59f1279 100644
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -2476,6 +2476,7 @@ owner_record_encoding = req.pop("hia_owner_record_encoding", False)
+ owner_file_lock = req.pop("hia_owner_file_lock", False)
+ owner_marker_observation = req.pop("hia_owner_marker_observation", False)
+ owner_custody = req.pop("hia_owner_custody", False)
++job_owner = req.pop("hia_native_job_owner", False)
+ req["default_cwd"] = os.getcwd()
+ os.umask(0o077)
+ job = private_job_directory(req["job_dir"], create=True)
+@@ -2563,8 +2564,12 @@ else:
+         raise SystemExit("invalid HIA owner marker selection; no launch submitted")
+     if type(owner_custody) is not bool or (owner_custody and not owner_marker_observation):
+         raise SystemExit("invalid HIA owner custody selection; no launch submitted")
++    if type(job_owner) is not bool or (job_owner and not owner_custody):
++        raise SystemExit("invalid HIA native job owner selection; no launch submitted")
+     terminal_names = {"encoder": "hia-terminal-encoder", "writer": "hia-terminal-writer"}
+-    old_artifacts = ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log")
++    if job_owner:
++        terminal_names["supervisor"] = "hia-terminal-supervisor"
++    old_artifacts = ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log","native-exit.bin")
+     if any(os.path.lexists(job / name) for name in (*old_artifacts, *terminal_names.values())):
+         raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
+     if terminal_artifacts is not None:
+@@ -2619,6 +2624,8 @@ else:
+             req["hia_owner_marker_observation"] = True
+         if owner_custody:
+             req["hia_owner_custody"] = True
++        if job_owner:
++            req["hia_native_job_owner"] = True
+     req["launch_nonce"] = os.urandom(16).hex()
+     req["terminal_publication_protocol"] = 1
+     # Only the fixed Java worker can adopt this namespace. No caller chooses
+@@ -2688,7 +2695,7 @@ def load_terminal_image(role, expected):
+         raise SystemExit("HIA terminal image changed; no workload submitted")
+     return private_sealed_file(name, raw, 0o500)
+ 
+-terminal_encoder = terminal_writer = None
++terminal_encoder = terminal_writer = terminal_supervisor_image = None
+ if binding.get("hia_terminal_publisher") != req.get("hia_terminal_publisher"):
+     raise SystemExit("changed HIA terminal publisher binding; no workload submitted")
+ native_outcome = binding.get("hia_terminal_supervisor", False)
+@@ -2750,12 +2757,19 @@ native_custody = binding.get("hia_owner_custody", False)
+ if (type(native_custody) is not bool or native_custody is not req.get("hia_owner_custody", False) or
+         (native_custody and not native_markers)):
+     raise SystemExit("changed HIA owner custody binding; no workload submitted")
++native_job_owner = binding.get("hia_native_job_owner", False)
++if (type(native_job_owner) is not bool or native_job_owner is not req.get("hia_native_job_owner", False) or
++        (native_job_owner and not native_custody)):
++    raise SystemExit("changed HIA native job owner binding; no workload submitted")
+ if "hia_terminal_publisher" in binding:
+     pins = binding["hia_terminal_publisher"]
+-    if not isinstance(pins, dict) or pins.keys() != {"encoder", "writer"}:
++    expected_roles = {"encoder", "writer", "supervisor"} if native_job_owner else {"encoder", "writer"}
++    if not isinstance(pins, dict) or pins.keys() != expected_roles:
+         raise SystemExit("invalid HIA terminal publisher; no workload submitted")
+     terminal_encoder = load_terminal_image("encoder", pins["encoder"])
+     terminal_writer = load_terminal_image("writer", pins["writer"])
++    if native_job_owner:
++        terminal_supervisor_image = load_terminal_image("supervisor", pins["supervisor"])
+ elif native_outcome:
+     raise SystemExit("missing HIA terminal supervisor image; no workload submitted")
+ 
+@@ -3287,7 +3301,123 @@ def process_identity(pid):
+     except Exception:
+         return None
+ 
++def pin_workload_cwd():
++    # Keep the supervisor in its descriptor-pinned job directory: all receipt
++    # paths below are relative to that owner, never the workload directory.
++    roots = req.get("allowed_cwd_prefixes", [])
++    if not isinstance(roots, list) or any(
++        not isinstance(root, str) or not os.path.isabs(root) for root in roots
++    ):
++        raise PermissionError("invalid remote cwd policy")
++    if roots and not req.get("cwd"):
++        raise PermissionError("cwd required by remote execution policy")
++    cwd = req.get("cwd") or req.get("default_cwd") or "."
++    access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else getattr(os, "O_SEARCH", os.O_RDONLY)
++    owner = os.open(cwd, access | os.O_DIRECTORY | os.O_CLOEXEC)
++    try:
++        physical_roots = [os.path.realpath(root) for root in roots]
++        os.fchdir(owner)
++        actual_cwd = os.getcwd()
++        if native_workdir:
++            admitted = native_workdir_allowed(actual_cwd, physical_roots)
++        else:
++            admitted = not physical_roots or any(
++                os.path.commonpath([actual_cwd, root]) == root for root in physical_roots)
++        if not admitted:
++            raise PermissionError("cwd resolves outside allowed execution roots")
++    except BaseException:
++        os.close(owner)
++        raise
++    finally:
++        os.fchdir(_hepta_directory_pins[-1])
++    return owner
++
++def exec_native_job_owner():
++    # The SSH/systemd bootstrap only binds bytes and descriptors. This exec
++    # preserves the unit MainPID while HIA owns lock, fork, capture, deadline,
++    # cancellation, wait and the durable owner/child/terminal publications.
++    if terminal_supervisor_image is None or sys.platform != "linux":
++        raise SystemExit("HIA native job owner unavailable; no workload submitted")
++    if req.get("engine_scratch_protocol"):
++        raise SystemExit("HIA native job owner requires an explicit scratch transport; no workload submitted")
++    if launch_backend == "detached" and req.get("nice"):
++        os.nice(int(req["nice"]))
++    owner_cwd = pin_workload_cwd()
++    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
++    source_fd = os.open(req["executable"], flags)
++    with os.fdopen(source_fd, "rb") as stream:
++        before = os.fstat(stream.fileno())
++        if (not stat.S_ISREG(before.st_mode) or not 64 <= before.st_size <= 64 << 20 or
++                before.st_mode & 0o022):
++            raise SystemExit("unsafe native workload executable; no workload submitted")
++        executable = stream.read((64 << 20) + 1)
++        after = os.fstat(stream.fileno())
++        current = os.stat(req["executable"], follow_symlinks=False)
++        entry_anchor = os.dup(stream.fileno())
++    def stamp(info):
++        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
++                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
++    if (len(executable) != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(current) or
++            not executable.startswith(b"\x7fELF\x02\x01\x01")):
++        raise SystemExit("native workload executable changed; no workload submitted")
++    workload = private_sealed_file("hia-workload", executable, 0o500)
++    payload = b""
++    if req.get("stdin_path"):
++        source_fd = private_open_job_file("stdin.bin")
++        if source_fd is None:
++            raise SystemExit("missing native workload input; no workload submitted")
++        with os.fdopen(source_fd, "rb") as stream:
++            before = os.fstat(stream.fileno())
++            if before.st_size > 512 << 20:
++                raise SystemExit("native workload input exceeds bounded transport")
++            payload = stream.read((512 << 20) + 1)
++            after = os.fstat(stream.fileno())
++            current = os.stat("stdin.bin", dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
++        if len(payload) != before.st_size or stamp(before) != stamp(after) or stamp(after) != stamp(current):
++            raise SystemExit("native workload input changed; no workload submitted")
++    source = private_sealed_file("hia-workload-input", payload, 0o400)
++    environment = os.environ.copy()
++    environment.update(req.get("env", {}))
++    environment["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
++    environment.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
++    environment["HEPTA_RUNTIME_WORKER_ENTRY_FD"] = str(entry_anchor)
++    arguments = [req["executable"], *req.get("args", [])]
++    strings = [os.fsencode(value) for value in arguments]
++    strings += [os.fsencode(key + "=" + value) for key, value in sorted(environment.items())]
++    if not 1 <= len(arguments) <= 64 or len(environment) > 64 or any(len(value) > 8192 or b"\0" in value for value in strings):
++        raise SystemExit("native workload arguments exceed bounded transport; no workload submitted")
++    directory = _hepta_directory_pins[-1]
++    def destination(name):
++        return os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
++                       0o600, dir_fd=directory)
++    output = destination("stdout.log")
++    errors = destination("stderr.log")
++    receipt = destination("native-exit.bin")
++    os.fsync(directory)
++    timeout = req.get("timeout_seconds")
++    deadline = time.monotonic_ns() + int(timeout * 1_000_000_000) if timeout else (1 << 63) - 1
++    # A durable job intentionally survives its short-lived submission parent.
++    # The original child remains parent-death bound to this HIA owner.
++    frame = struct.pack("<8s15Q", b"HIAJOB01", 0, deadline, workload.fileno(), source.fileno(),
++                        output, errors, owner_cwd, receipt, len(arguments), len(environment),
++                        64 << 20, 16 << 20, 2_000_000_000, 0, 0)
++    job_id = req["job_id"].encode("ascii")
++    invocation = os.environ.get("INVOCATION_ID", "").encode("ascii")
++    frame += struct.pack("<QQ32sQ32s", directory, len(job_id), req["launch_nonce"].encode("ascii"),
++                         len(invocation), invocation) + job_id
++    frame += b"".join(struct.pack("<Q", len(value)) + value + b"\0" for value in strings)
++    frame += struct.pack("<8sQQ", b"HIAPFD01", 1, entry_anchor)
++    if len(frame) > 65536:
++        raise SystemExit("native workload request exceeds bounded transport; no workload submitted")
++    request_image = private_sealed_file("hia-job-owner-request", frame, 0o400)
++    for fd in (workload.fileno(), source.fileno(), output, errors, owner_cwd, receipt, directory, entry_anchor):
++        os.set_inheritable(fd, True)
++    os.dup2(request_image.fileno(), 0, inheritable=True)
++    os.execve(terminal_supervisor_image.fileno(), ["hia-job-supervisor"], {})
++
+ os.umask(0o077)
++if native_job_owner:
++    exec_native_job_owner()
+ if native_custody:
+     owner_fd = hia_owner_custody()
+ else:
+@@ -3367,36 +3497,6 @@ env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
+ # The launcher alone chooses this binding, overriding caller or inherited env.
+ env.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
+ 
+-def pin_workload_cwd():
+-    # Keep the supervisor in its descriptor-pinned job directory: all receipt
+-    # paths below are relative to that owner, never the workload directory.
+-    roots = req.get("allowed_cwd_prefixes", [])
+-    if not isinstance(roots, list) or any(
+-        not isinstance(root, str) or not os.path.isabs(root) for root in roots
+-    ):
+-        raise PermissionError("invalid remote cwd policy")
+-    if roots and not req.get("cwd"):
+-        raise PermissionError("cwd required by remote execution policy")
+-    cwd = req.get("cwd") or req.get("default_cwd") or "."
+-    access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else getattr(os, "O_SEARCH", os.O_RDONLY)
+-    owner = os.open(cwd, access | os.O_DIRECTORY | os.O_CLOEXEC)
+-    try:
+-        physical_roots = [os.path.realpath(root) for root in roots]
+-        os.fchdir(owner)
+-        actual_cwd = os.getcwd()
+-        if native_workdir:
+-            admitted = native_workdir_allowed(actual_cwd, physical_roots)
+-        else:
+-            admitted = not physical_roots or any(
+-                os.path.commonpath([actual_cwd, root]) == root for root in physical_roots)
+-        if not admitted:
+-            raise PermissionError("cwd resolves outside allowed execution roots")
+-    except BaseException:
+-        os.close(owner)
+-        raise
+-    finally:
+-        os.fchdir(_hepta_directory_pins[-1])
+-    return owner
+ 
+ class NativeWorkload:
+     def __init__(self):
+@@ -4073,6 +4173,8 @@ if owner_marker_observation:
+     binding["hia_owner_marker_observation"] = True
+ if owner_custody:
+     binding["hia_owner_custody"] = True
++if job_owner:
++    binding["hia_native_job_owner"] = True
+ binding = json.dumps(binding, sort_keys=True)
+ uid = os.getuid()
+ env = os.environ.copy()
+@@ -5771,6 +5873,9 @@ where
+ 				if supervisor_protocol >= 24 {
+ 					request["hia_owner_custody"] = serde_json::Value::Bool(true);
+ 				}
++				if supervisor_protocol >= 25 {
++					request["hia_native_job_owner"] = serde_json::Value::Bool(true);
++				}
+ 			}
+ 		}
+ 	}
