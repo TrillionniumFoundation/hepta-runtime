@@ -1,0 +1,139 @@
+--- frozen-v2/scripts/run_public_recipe.py
++++ v3/scripts/run_full_public_recipe.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Rebuild and qualify G5 plus the actual eight-tool graph from portable sources.
++"""Rebuild five original SDK fixtures, retained G1-G5, and the actual eight-tool graph.
+ 
+ Required execution host: authorized Linux x86-64 CI/build worker, pinned Hepta,
+ Rust 1.95.0 and a populated exact Cargo cache. No precompiled files are inputs.
+@@ -47,6 +47,8 @@
+         assert new.count(addition)==1 and new.replace(addition,'',1)==old
+     assert sha((source/'native/sdk_public_protocol.hepta').read_bytes())=='ec5ed4c001b7b9446bd700c230751557f2252edaf5009aefc90e6ee6a19ebd64'
+     assert sha((g5/'target/Cargo.lock').read_bytes())=='1509860cac0e7f26e6a845edfec1c87ae3bd92380ecaa357457e5263e861d631'
++    dependencies=module_from('_sdk_ci_source_dependencies',source/'scripts/ci_source_dependencies.py')
++    dependencies.verify(source)
+     return manifest
+ 
+ def main():
+@@ -58,7 +60,8 @@
+     if a.check_only:
+         print(json.dumps({'status':'SOURCE_CHECK_PASS','files':len(manifest['files']),
+             'g5_cases':654,'context_cases':104,'native_or_rust_executed':False,
+-            'actual_eight_tool_loop_qualified':False},sort_keys=True));return
++            'actual_eight_tool_loop_qualified':False,
++            'five_original_rust_source_closures_checked':True},sort_keys=True));return
+     assert a.output is not None and a.hepta is not None and a.rust_bin is not None
+     output=a.output.resolve();assert not output.exists() and not output.is_relative_to(source)
+     output.mkdir(parents=True)
+@@ -68,7 +71,7 @@
+     (output/'evidence').mkdir(exist_ok=True)
+     sys.path.insert(0,str(output/'scripts'))
+     from exact_rust_build import Recorder,build_exact_oracle
+-    start=time.monotonic();report={'schema':'hepta.g5.public-source-rebuild.v1','status':'RUNNING',
++    start=time.monotonic();report={'schema':'hepta.sdk-five-originals.public-source-rebuild.v3','status':'RUNNING',
+         'source_manifest_sha256':sha((source/'source-manifest.json').read_bytes()),
+         'existing_binary_inputs':False,'fresh_compiler_bootstrap_from_source':False,
+         'fresh_cold_qualified':False,'historical_3_4_evidence_promoted':False,
+@@ -76,6 +79,7 @@
+         'target_response_owner_integrated':False,'target_async_transport_integrated':False,
+         'retained_g1_g2_g3_g4_domains_reexecuted':False,
+         'full_sdk_qualified':False,'full_async_runtime_qualified':False,
++        'full_136_route_qualified':False,'five_original_target_oracles_rebuilt':False,
+         'native_task_registry_qualified':False,'native_future_cancellation_qualified':False,
+         'production_activated':False,'old_path_removed':False,
+         'actual_eight_tool_loop_qualified':False}
+@@ -83,27 +87,54 @@
+     save()
+     try:
+         g5=output/'g5';(g5/'evidence').mkdir(exist_ok=True)
+-        jobs=[(g5,'oracle','g5-target-catalog-oracle','','rust-build-catalog',
+-               'cases/normal.jsonl','evidence/oracle-normal.jsonl','evidence/oracle-build.json'),
+-              (g5,'context-oracle','g5-target-context-oracle','context-','rust-build-context',
+-               'cases/context.bin','evidence/oracle-context.bin','evidence/context-oracle-build.json'),
+-              (g5/'retained/g4','oracle','g4-target-response-oracle','','rust-build-response',
+-               'cases/normal.jsonl','evidence/oracle-normal.jsonl','evidence/oracle-build.json')]
+-        for root,project,name,prefix,target,cases,observations,receipt_path in jobs:
+-            binary,receipt,rec=build_exact_oracle(root,project,name,a.rust_bin,
+-                evidence_prefix=prefix,target_relative=target)
+-            raw=(root/cases).read_bytes();observed=rec.run('ordinary-oracle',[binary],stdin=raw,timeout=180)
+-            (root/observations).write_bytes(observed)
++        g4=g5/'retained/g4';g3=g4/'transport-regression';g2=g3/'joined-g2'
++        steps=Recorder(output,'evidence/recipe-processes')
++        dependencies=json.loads((output/'ci/dependencies.json').read_bytes())
++        frozen_generated={rel:(g3/rel).read_bytes() for rel in ['cases/normal.jsonl','cases/manifest.json']}
++        steps.run('generate-normal-transport-inputs',[sys.executable,g3/'scripts/make_normal_cases.py'],cwd=g3)
++        for rel,raw in frozen_generated.items():assert (g3/rel).read_bytes()==raw,rel
++        generated_manifest=json.loads(frozen_generated['cases/manifest.json'])
++        for rel,pin in generated_manifest['files'].items():
++            raw=(g3/rel).read_bytes();assert len(raw)==pin['bytes'] and sha(raw)==pin['sha256'],rel
++        put(output/'evidence/generated-ordinary-inputs.json',{
++            'status':'PASS','files':generated_manifest['files'],
++            'generator_sha256':sha((g3/'scripts/make_normal_cases.py').read_bytes()),
++            'generated_in_output_only':True,'frozen_manifest_sha256':sha(frozen_generated['cases/manifest.json'])})
++        original_receipts=[]
++        for spec in dependencies['rust_projects']:
++            root=output/spec['root']
++            binary,receipt,rec=build_exact_oracle(root,spec['project'],spec['binary'],a.rust_bin,
++                evidence_prefix=spec['evidence_prefix'],target_relative=spec['target_directory'])
++            raw=(root/spec['cases']).read_bytes()
++            observed=rec.run('ordinary-oracle',[binary],stdin=raw,timeout=300)
++            (root/spec['observations']).write_bytes(observed)
+             receipt.update(actual_target_sdk_executed=True,cases_sha256=sha(raw),
+-                observations_sha256=sha(observed),source_rebuilt=True)
+-            put(root/receipt_path,receipt)
+-        report['actual_target_oracles_rebuilt']=3;save()
++                observations_sha256=sha(observed),source_rebuilt=True,
++                current_original_target_commit=dependencies['original_target']['commit'],
++                target_lock_sha256=dependencies['original_target']['cargo_lock_sha256'])
++            if spec['id']=='connection':
++                receipt['get_info_sha256']=sha((root/'oracle/generated_get_info.rs').read_bytes())
++            put(root/spec['receipt'],receipt)
++            if spec['id']=='connection':
++                put(root/'evidence/oracle-observation.json',{
++                    'schema':'hepta.g2.fresh-source-ci-observation.v1',
++                    'oracle_build_sha256':sha((root/spec['receipt']).read_bytes()),
++                    'binary_sha256':receipt['binary_sha256'],'cases_sha256':sha(raw),
++                    'observations_sha256':sha(observed),'fresh_build_reused_unchanged':True,
++                    'fresh_observation':True,'actual_target_sdk_executed':True,
++                    'process_receipt':str((rec.directory/'processes.json').relative_to(root))})
++            original_receipts.append({'id':spec['id'],'binary':spec['binary'],
++                'receipt':str((root/spec['receipt']).relative_to(output)),
++                'receipt_sha256':sha((root/spec['receipt']).read_bytes()),
++                'binary_sha256':receipt['binary_sha256']})
++        assert len(original_receipts)==5
++        report.update(actual_target_oracles_rebuilt=5,five_original_target_oracles_rebuilt=True,
++            original_oracles=original_receipts);save()
+         sys.path.insert(0,str(g5/'scripts'))
+         from hia_native_build import NativeBuild
+         buildroot=output/'native-build';build=NativeBuild(a.hepta,buildroot);build.bootstrap()
+         assert build.compiler_sha256=='bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0'
+         report['fresh_compiler_bootstrap_from_source']=True;save()
+-        steps=Recorder(output,'evidence/recipe-processes')
+         historical=output/'historical-public-source';shutil.copytree(output/'base-source',historical)
+         graph=output/'source';shutil.copytree(output/'base-source',graph)
+         # The sole build/loader change declares the already-pinned SDK buffer
+@@ -160,6 +191,10 @@
+         for name,pin in pins.items():front[name]=g5_compile(name,pin)
+         put(g5/'evidence/frontend-modules.json',{'schema':'hepta.g5.source-rebuilt-frontend-modules.v1','members':front})
+         steps.run('g5-frontend-context',[sys.executable,g5/'scripts/qualify_frontend.py','--run-name','source-frontend'])
++        retained_module=module_from('_sdk_retained_contracts',output/'scripts/run_retained_contracts.py')
++        retained_result=retained_module.run_retained(output,a.hepta,buildroot,compile_one,steps)
++        assert retained_result['status']=='PASS'
++        report.update(retained_g1_g2_g3_g4_domains_reexecuted=True,retained_counts=retained_result);save()
+         steps.run('author-public-controller',[sys.executable,output/'scripts/author_public_protocol.py','--hepta',a.hepta])
+         assert sha((output/'native/sdk_public_protocol.hepta').read_bytes())=='ec5ed4c001b7b9446bd700c230751557f2252edaf5009aefc90e6ee6a19ebd64'
+         controller=compile_one('g5-public-protocol',output/'native/sdk_public_protocol.hepta','sdk-message-target.v1')
+@@ -221,10 +256,11 @@
+         normal=json.loads((g5/'evidence/normal-v2/summary.json').read_bytes())
+         frontend=json.loads((g5/'evidence/source-frontend/summary.json').read_bytes())
+         controller_result=json.loads((output/'evidence/source-controller/summary.json').read_bytes())
+-        assert all(r['status']=='PASS' for r in [loop,normal,frontend,controller_result])
++        assert all(r['status']=='PASS' for r in [loop,normal,frontend,controller_result,retained_result])
+         build._recheck()
+         report.update(status='PASS',actual_eight_tool_loop_qualified=True,
+             physical_images=62,compiled_source_profile_count=len(compiled),
++            five_original_target_oracles_rebuilt=True,retained_g1_g2_g3_g4_domains_reexecuted=True,
+             historical_native_elf_sha256=hist['elf_sha256'],public_elf_sha256=data['elf_sha256'],
+             g5_counts=normal['counts'],frontend_counts=frontend['counts'],
+             controller_counts=controller_result['counts'],actual_public_loop_counts=loop['counts'],

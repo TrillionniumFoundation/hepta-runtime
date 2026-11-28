@@ -1,0 +1,17 @@
+[package]
+name = "g5-target-catalog-oracle"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "g5-target-catalog-oracle"
+path = "main.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+rmcp = { version = "=3.9.0", default-features = false, features = ["server", "transport-io"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+tokio = { version = "=1.53.3", features = ["rt", "time", "io-util", "macros", "sync"] }
+tokio-util = { version = "=0.7.19", features = ["codec", "rt"] }
+futures = "=0.3.34"
