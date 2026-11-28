@@ -1,0 +1,3 @@
+# Independent complete uploaded read-orphan evidence
+
+This immutable reader restores all complete uploaded recovery archives and the exact reused native build archive. It reads every source, original application capture, native buffer, raw effect, descriptor record, orphan inventory, EOF witness, retained failed reader, bounded process stream and physical-control byte. Eleven read-only guard probes run for each independent lane. No application, compiler or native image is invoked. The application domain remains the same 45 inputs / 49 entry calls captured by 7ac93962dffebb51f04a5cd24c5319f5c55d2161. File-info, stdio, public routes and Remote transport are not rebound by this private gate.

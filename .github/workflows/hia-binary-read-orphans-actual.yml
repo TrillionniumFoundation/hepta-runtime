@@ -1,0 +1,72 @@
+name: Qualify actual read first-fstat orphan ownership and EOF
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/source
+      ORPHAN_MANIFEST: 3e8d3b45bbdcecdd73a150fa0517096fe17305f5b2d4516509922c7347ec5ecb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_orphans/v1/source
+          persist-credentials: false
+      - name: Bind all source and the complete fixed input domain before application calls
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/domain_author_driver.py" --output "$RUNNER_TEMP/read-orphans-complete-source" --manifest "$ORPHAN_MANIFEST"
+      - name: Retain source-only gate
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: read-orphans-complete-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/read-orphans-complete-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  actual-read:
+    needs: frozen-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [ordinary, first-path, first-at, second-path, second-at, last-path, last-at, descriptor, sharing, eof, refusals, unicode, observer-off]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      ORPHAN_SOURCE: ${{ github.workspace }}/qualification/binary_read_orphans/v1/source
+      ORPHAN_MANIFEST: 3e8d3b45bbdcecdd73a150fa0517096fe17305f5b2d4516509922c7347ec5ecb
+      ORPHAN_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete trusted upstream build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_orphans/v1/source
+          persist-credentials: false
+      - name: Capture actual original and HIA once then perform complete guarded reads and controls
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/gate.py" qualify --work "$RUNNER_TEMP/read-orphans-actual" --group "$ORPHAN_GROUP" --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Archive every actual application byte and complete source and controls
+        if: always()
+        run: |
+          python3 -I -S -B "$ORPHAN_SOURCE/scripts/gate.py" export --work "$RUNNER_TEMP/read-orphans-actual" --group "$ORPHAN_GROUP" --output "$RUNNER_TEMP/read-orphans-actual-export" --source-manifest-sha256 "$ORPHAN_MANIFEST"
+      - name: Upload complete original and native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: read-orphans-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/read-orphans-actual-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

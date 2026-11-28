@@ -1,0 +1,19 @@
+{
+  "schema": "hepta.runtime.read-orphans.retained-producer-reader.v1",
+  "before": "reference/read_evidence_before.py",
+  "after": "scripts/read_evidence.py",
+  "changes": [
+    {
+      "before": "\"INFO_SOURCE_AND_INPUT_ONLY_PASS\"",
+      "after": "\"READ_ORPHANS_SOURCE_AND_INPUT_ONLY_PASS\""
+    },
+    {
+      "before": "require(b[\"value\"][\"size\"]==a[\"value\"][\"size\"]+1,\"physical success alteration\");b[\"value\"][\"size\"]=a[\"value\"][\"size\"]",
+      "after": "require(\"__physically_resealed_bad_field__\"not in a[\"value\"]and b[\"value\"].pop(\"__physically_resealed_bad_field__\")is True,\"physical success alteration\")"
+    },
+    {
+      "before": "\"COMPLETE_UPLOADED_INFO_QUALIFICATION_PASS\"",
+      "after": "\"COMPLETE_UPLOADED_READ_ORPHANS_QUALIFICATION_PASS\""
+    }
+  ]
+}

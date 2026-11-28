@@ -1,0 +1,85 @@
+name: Qualify actual read EIO with complete original capture reuse
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-info-read67-actual-fault-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/actual_fault_qualification
+      INFO_MANIFEST: 5a5d570e031406b12d304d0d80ee77482769ec0e257a06572383ce77c6241a29
+    steps:
+      - name: Checkout exact frozen qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v2/actual_fault_qualification
+          persist-credentials: false
+      - name: Check source and input-only domain without applications
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$INFO_SOURCE/scripts/domain_author_driver.py" \
+            --output "$RUNNER_TEMP/info-read67-source" --manifest "$INFO_MANIFEST"
+      - name: Retain source admission process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-read67-actual-fault-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-read67-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  qualify:
+    needs: source
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        group: [child-orphans, shm]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/actual_fault_qualification
+      INFO_MANIFEST: 5a5d570e031406b12d304d0d80ee77482769ec0e257a06572383ce77c6241a29
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete frozen readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v2/actual_fault_qualification
+          persist-credentials: false
+      - name: Compare actual original and native composition
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" qualify \
+            --work "$RUNNER_TEMP/info-read67-$INFO_GROUP" --group "$INFO_GROUP" \
+            --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Preserve complete evidence including initial failure
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/info-read67-$INFO_GROUP" --group "$INFO_GROUP" \
+            --output "$RUNNER_TEMP/info-read67-$INFO_GROUP-export" \
+            --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Upload complete original and native archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-read67-actual-fault-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-read67-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

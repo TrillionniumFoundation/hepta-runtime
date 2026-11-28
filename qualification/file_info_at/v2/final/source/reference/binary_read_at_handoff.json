@@ -1,0 +1,330 @@
+{
+  "schema": "hepta.runtime.binary-read-at.qualified-handoff.v1",
+  "status": "PRIVATE_BORROWED_DIRECTORY_BINARY_CALLABLE_AND_ACTUAL_MUTATION_DOMAIN_QUALIFIED",
+  "target": {
+    "runtime_commit": "d3d75c30719db966b004756f610007a7c723729e",
+    "runtime_tree": "612e145513961556ac8844b5cc978f9b5175e4d4",
+    "hepta_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+    "hepta_tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+    "b1_b2_b3_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+  },
+  "source": {
+    "author": {
+      "commit": "7178cfaa20df1970209b5ce5178ee1f78acb1757",
+      "tree": "2ee00e3c77c17eecd53fe1d0b06b1a27396f5579",
+      "parent": "bd953bbf6751cdd13ecc956c9caf5f0b1e25f562",
+      "prefix": "qualification/binary_read_at/v1/author",
+      "branch": "hia-binary-read-at-author-6780-20261117",
+      "manifest_sha256": "fa6fc54582f8c494e138c8cc424d11fd6ed1231f9ce2e367d3e34f0b586e3b98",
+      "files": 14,
+      "branch_created": true,
+      "full_readbacks": 14
+    },
+    "qualification": {
+      "commit": "aa658e1141d8b34f1ac48dde0267ba737b2d9d67",
+      "tree": "efc6bc705c985c5b7660b756880d53aa2eebbd9c",
+      "parent": "905769e4dde945cb0c4a2bd6ff917300814f27a0",
+      "prefix": "qualification/binary_read_at/v1/source",
+      "branch": "hia-binary-read-at-6780-20261117",
+      "manifest_sha256": "1db027f9a0b83d7be09ac5ac70cb992d77b79d63e96b30e09f79d4d2ef88fa9d",
+      "files": 57,
+      "full_readbacks": 57,
+      "branch_created": true
+    },
+    "generated": {
+      "hia": {
+        "bytes": 221436,
+        "sha256": "75719ec36492fd265fefc61f8a66cc6550657306e0b7cc91072df94681b5808d"
+      },
+      "composition": {
+        "bytes": 8878,
+        "sha256": "9feb305803088a7f96efead6c5632763432b737c66bf8c0891bec5521c6ef884"
+      },
+      "native_bridge": {
+        "bytes": 20530,
+        "sha256": "6441013cb96a0b81084a6e8eb0bd633bbedc25dca034bfc1cb141496db22e5db"
+      },
+      "functions": 67,
+      "instructions": 4034
+    },
+    "exact_preserved_predecessor": {
+      "commit": "bd953bbf6751cdd13ecc956c9caf5f0b1e25f562",
+      "functions": 63,
+      "old_f0_relocated_to_f63": true,
+      "other_62_function_irs_unchanged": true,
+      "original_114_case_immutable_qualification_retained_without_replay": true
+    }
+  },
+  "build": {
+    "schema": "hepta.runtime.binary-read-at.build-reuse-binding.v1",
+    "commit": "905769e4dde945cb0c4a2bd6ff917300814f27a0",
+    "tree": "02d9961205a3d8cd0c11abf04f7900aadfc25ad5",
+    "manifest_sha256": "9ae8ffaa986e930d75b71ea6c7665b4c17984a39c9529df19a39ded9c5b5e7dc",
+    "run_id": 44071229409,
+    "job_id": 133997669239,
+    "status": "PASS",
+    "artifact": {
+      "id": 14322064042,
+      "bytes": 13767890,
+      "sha256": "2c070cfb1ef08ecb434f9b70303d6736e11cbc50f554b8e7536032619346632d"
+    },
+    "tar": {
+      "bytes": 13763023,
+      "sha256": "b1adcb55b2e3809db255978418672cf5bab7512fd7b7b097b84d0d918a5b6bd2",
+      "logical_files": 1217,
+      "logical_bytes": 97100054,
+      "directories": 51,
+      "unique_objects": 1187,
+      "unique_bytes": 90750657
+    },
+    "elf": {
+      "bytes": 413696,
+      "sha256": "9397e9c9813c42171485a940397ccfcbf5e6f653c8f903bafbd113bc6f12a580"
+    },
+    "actual_semantics_executed": 0,
+    "actual_successful_hia_compiles": 5,
+    "actual_hia_elf_link": true,
+    "actual_hia_image_pack": true,
+    "runtime_images": 3,
+    "guard_probes": 11,
+    "unchanged_entries": 1257,
+    "application_calls_during_build": 0
+  },
+  "abi": {
+    "normal_entry": "binary_read_body_invoke(ctx, immutable_HBRDQ001_packet, length)",
+    "borrowed_entry": "binary_read_body_invoke_at(ctx, borrowed_parent_fd, immutable_HBRDFD01_packet, length)",
+    "borrowed_packet": {
+      "header_bytes": 96,
+      "magic": "HBRDFD01",
+      "command_offset": 8,
+      "start_command": 1,
+      "sequence_offset": 16,
+      "start_sequence": 0,
+      "mode_offset": 24,
+      "modes": {
+        "fingerprint": 2,
+        "private_read": 3
+      },
+      "caller_parent_word_offset": 32,
+      "caller_parent_word_must_be_zero": true,
+      "basename_length_offset": 40,
+      "reserved_zero_offsets": [
+        48,
+        56,
+        64,
+        72,
+        80
+      ],
+      "payload_length_offset": 88,
+      "payload": "complete UTF-8 basename; slash is not admitted"
+    },
+    "normal_resume": "HBRDQ001 command 2 with exact sequence and full owned result bytes",
+    "borrow_capability": {
+      "native_parent_fd_offset": 344,
+      "native_active_flag_offset": 352,
+      "workspace_marker_offset": 424,
+      "duplicate_parent": false,
+      "parent_ownership_retained_by_caller": true,
+      "parent_not_in_owned_file_slots": true,
+      "raw_close_of_borrowed_parent_refused": true,
+      "parent_fields_cleared_before_result_loan": true,
+      "caller_parent_survives_release_and_destroy": true
+    },
+    "result": "HBRDS001 complete canonical JSON or structured exception; same prior owned growth/child/effect protocol",
+    "fixtures_not_public": "Commands 10..13 and FD4/FD5 barrier ports are private evidence fixtures; no public request selects a file descriptor or effect result."
+  },
+  "domain": {
+    "original_cases": 59,
+    "native_observed_cases": 59,
+    "borrowed_parent_cases": 52,
+    "unchanged_path_entry_cases": 7,
+    "immutable_shared_fixture_pairs": 38,
+    "actual_mutation_pairs": 21,
+    "one_free_fd_pairs": 2,
+    "observer_off_cases": 8,
+    "protocol_refusals": 8,
+    "groups": 8,
+    "mutations": [
+      "rename_parent",
+      "append",
+      "truncate",
+      "overwrite",
+      "chmod",
+      "utime",
+      "hardlink",
+      "unlink",
+      "replace"
+    ],
+    "barriers": {
+      "rename_parent": "before first actual file openat, after directory authority has been held",
+      "other_mutations": "before third actual fstat, after actual read/hash"
+    },
+    "original_fingerprint_function_unedited": true,
+    "original_private_branch_ast_exact": true,
+    "independent_fixture_actor": true,
+    "effect_results_are_actual_os_results": true,
+    "comparison": {
+      "immutable": "full structured result equality on the same real fixture",
+      "mutable": "independent real fixtures; only exact input path and initial-stat version are rebound; all raw outputs retained and other fields compare exactly"
+    },
+    "one_free_fd": "actual child RLIMIT_NOFILE, no holes below highest occupied FD, exactly one free FD, limit restored",
+    "runtime_python_required": false,
+    "runtime_libc_required": false
+  },
+  "execution": {
+    "run_id": 44074505231,
+    "job_id": 134008959834,
+    "status": "PASS",
+    "observed_body_calls": 670,
+    "observed_child_calls": 96,
+    "total_observed_hia_calls": 766,
+    "observed_raw_os_effects": 466,
+    "complete_journal_spans": 4922,
+    "complete_journal_buffer_bytes": 2923196921,
+    "all_native_exchanges": 803,
+    "original_complete_buffer_bytes": 43544902,
+    "native_complete_buffer_bytes": 359408660,
+    "observer_off_internal_calls_not_counted_in_journal": true,
+    "semantic_replays": 0,
+    "ordinary_process_limit_seconds": 60,
+    "pure_reader_limit_seconds": 180
+  },
+  "physical_controls": {
+    "refused": 8,
+    "relocated_complete_captures": 2,
+    "names": [
+      "case-count",
+      "module-image",
+      "original-result",
+      "source-byte",
+      "output-tail",
+      "resource-evidence",
+      "borrowed-parent",
+      "mutation-barrier",
+      "relocated-one",
+      "relocated-two"
+    ],
+    "full_bytes_modes_file_and_directory_sets_checked": true
+  },
+  "archive": {
+    "schema": "hepta.runtime.binary-read-at.uploaded-read-binding.v1",
+    "commit": "aa658e1141d8b34f1ac48dde0267ba737b2d9d67",
+    "tree": "efc6bc705c985c5b7660b756880d53aa2eebbd9c",
+    "manifest_sha256": "1db027f9a0b83d7be09ac5ac70cb992d77b79d63e96b30e09f79d4d2ef88fa9d",
+    "run_id": 44074505231,
+    "job_id": 134008959834,
+    "artifact": {
+      "id": 14323802763,
+      "bytes": 68863901,
+      "sha256": "0cb4c6e337d9a806240108a4ec43a375f54b0d513f14318554aac44457fc83e2"
+    },
+    "tar": {
+      "bytes": 68859070,
+      "sha256": "7070d57d1f3e3cbb14a2ba67ff67b8385d10b53c95a766503c1abb54c29aec32",
+      "logical_files": 55684,
+      "logical_bytes": 2777462902,
+      "directories": 1201,
+      "unique_objects": 3252,
+      "unique_bytes": 226083793
+    }
+  },
+  "independent_uploaded_read": {
+    "commit": "214b52c89f1cb29b634edab7bafebceb6ca4c4e6",
+    "tree": "700a5964a854a585ee0d2fad12819e17201797a2",
+    "prefix": "qualification/binary_read_at/v1/archive_reader",
+    "manifest_sha256": "fed567f1360cd9b6ba2c2f7ded6917d0b95e2433022e2526285beac345e79eae",
+    "run_id": 44076116042,
+    "job_id": 134014450285,
+    "status": "PASS",
+    "processes": [
+      {
+        "name": "fetch",
+        "limit_seconds": 60,
+        "elapsed_seconds": 1.2215320040000037,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "name": "restore",
+        "limit_seconds": 180,
+        "elapsed_seconds": 11.019492846000006,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      {
+        "name": "read",
+        "limit_seconds": 180,
+        "elapsed_seconds": 44.738653451000005,
+        "exit_code": 0,
+        "timed_out": false
+      }
+    ],
+    "logical_files": 55684,
+    "directories": 1201,
+    "logical_bytes": 2777462902,
+    "unchanged_entries": 60226,
+    "guard_probes": 11,
+    "all_uploaded_zip_and_tar_bytes_checked": true,
+    "all_object_and_logical_bytes_modes_and_sets_checked": true,
+    "all_original_native_and_physical_control_evidence_reread": true,
+    "application_hia_executions": 0,
+    "rust_executions": 0,
+    "proof_artifact": {
+      "id": 14324882423,
+      "bytes": 11229897,
+      "sha256": "42c5c3024e97cce2ba9d919452412cde540696487ab1dc5a8b872240beb04c3e"
+    },
+    "proof_tar": {
+      "all_logical_files_and_directories_bound": true,
+      "all_object_bytes_and_modes_reread": true,
+      "archive": "evidence.tar.gz",
+      "bytes": 11225540,
+      "directories": 13,
+      "gate_status": "PASS",
+      "logical_bytes": 44812751,
+      "logical_files": 72,
+      "mode": 420,
+      "no_new_application_execution_during_export": true,
+      "schema": "hepta.runtime.binary-read-at-uploaded-read.complete-archive-read.v1",
+      "sha256": "972d60777915205030469eb148d63ad267cfc1a0d6c5b12f5cd64e163ee8246c",
+      "unique_bytes": 44796968,
+      "unique_objects": 67,
+      "whole_runtime_replaced": false
+    }
+  },
+  "preserved_failures": [
+    {
+      "commit": "3f002fb7ae3c47d6f0727e105847b4d40cebc197",
+      "run_id": 44068777830,
+      "job_id": 133989299136,
+      "status": "FAIL",
+      "reason": "stale body source digest in build-only admission",
+      "artifact": {
+        "id": 14322320083,
+        "bytes": 1729247,
+        "sha256": "e31918f430413112896f63d2bf2dbe5e381ffafb6a70b9c801b8b75cdcc39bb2"
+      },
+      "body_bridge_and_fixture_sources_unchanged_by_fix": true,
+      "application_hia_executions": 0,
+      "rust_executions": 0
+    }
+  ],
+  "integration": {
+    "main_head": "5a5a35b355b7b58a23da797acd0002a832fc919b",
+    "main_unchanged": true,
+    "private_call_ready": true,
+    "public_binary_read_route_installed": false,
+    "public_file_info_route_installed": false,
+    "all_136_handlers": false,
+    "old_stack_removed": false
+  },
+  "limitations": [
+    "Only the explicit frozen Linux filesystem domains are qualified.",
+    "Public OS diagnostic string formatting remains unqualified; the complete typed exception is qualified.",
+    "Shared SDK async/cancellation/remote transport integration remains separate.",
+    "File metadata capture/preserve, binary writes/uploads and inode transactions remain separate owners.",
+    "No global final-version cleanup or whole-runtime replacement is claimed."
+  ],
+  "source_rows": "SOURCE_ROWS.json",
+  "root_review": "ROOT_REVIEW.md"
+}

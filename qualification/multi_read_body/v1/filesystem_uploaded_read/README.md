@@ -1,0 +1,7 @@
+# Independent complete multi-read filesystem qualification
+
+This pure source reads the uploaded complete artifacts for all 27 original groups: 22 recovered original captures and five original groups that had already passed. It preserves all 84 inputs and 89 invocations per side without replaying an application or a physical control. The two terminal HTTP 503 download failures remain bound separately; their subsequent successful jobs reused the exact same 38-file reader.
+
+Each group restores its original complete ZIP/TAR and the qualified unchanged native build. Recovered groups also restore their uploaded recovery artifact. The full original/native process streams, work/output/input buffers, FD/orphan custody, real filesystem changes, eight physical refusals, two relocations, and every saved guarded file identity are read again under the eleven operation-denial probes. The fixed original successful qualification reader is retained byte-for-byte; the only parent-close reader change is already bound by the recovery proof. Application, compiler, Rust and original target execution are all zero in this workflow.
+
+Fetch/source processes retain the 60-second limit, unpack/read/export the 180-second limit, and each CI job the 15-minute limit. Private filesystem scope remains separate from configured hosts, SSH, public MCP routes and whole runtime replacement. Every uploaded original source, complete logical file, byte hash and mode is bound; all first failures remain preserved in the final handoff.

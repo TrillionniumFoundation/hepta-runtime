@@ -1,0 +1,27 @@
+{
+  "schema": "hepta.runtime.multi-read-filesystem.control-reader-derivation.v1",
+  "before": {
+    "git_blob": "d25e0c2bd806c7226655aaa2ea17c7d3c80dc1be",
+    "bytes": 10237,
+    "sha256": "858ba60ec50a8ad63eb9bd5c19b30c72590c7c286840bbfa924ea98b2ce86d34"
+  },
+  "start": "    controls=decode((capture/\"controls/RESULT.json\").read_bytes())",
+  "end": "    return dict(status=\"COMPLETE_UPLOADED_MULTI_FILESYSTEM_QUALIFICATION_PASS\"",
+  "edits": [
+    {
+      "old": "controls==returns[\"physical-controls\"]==gate[\"controls\"]",
+      "new": "controls==returned",
+      "occurrences": 1
+    },
+    {
+      "old": "    controls_origin=processes[7][\"argv\"][processes[7][\"argv\"].index(\"--output\")+1]\n",
+      "new": "",
+      "occurrences": 1
+    }
+  ],
+  "preserved": "All full mutation, honestly resealed result, complete directory/file byte/mode, actual guarded rejection, and complete relocation checks are retained; only caller-owned process record parameters move to explicit arguments.",
+  "after": {
+    "bytes": 6471,
+    "sha256": "c2cae2c33a628f0709d7997851127bde5d2d0d108de3b030bb5374ccaf746f0b"
+  }
+}

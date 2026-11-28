@@ -1,0 +1,109 @@
+{
+  "schema": "hepta.runtime.multi-read-utf8.final-handoff.v1",
+  "status": "PRIVATE_UTF8_DECODE_DIAGNOSTIC_QUALIFIED",
+  "scope": "Strict UTF-8 decode and exact CPython UnicodeDecodeError diagnostic used by the multi-read body; direct private leaf only.",
+  "production": {
+    "commit": "1473d9b72f51f79154014724a96f3769d32b61cc",
+    "prefix": "qualification/multi_read_body/v1/native_build",
+    "source_manifest": "f58c530ca7a71e6b8614f5b9a8496bb2abf28ce5",
+    "leaf": {
+      "path": "native/utf8_decode_diagnostic.hepta",
+      "mode": "100644",
+      "git_blob": "71959df053997e7bb41e46ed94978002f9256541",
+      "bytes": 32850,
+      "sha256": "403661e408569d8e75cc1da794610581e0fd2bfef97b1ea137593fd188856426",
+      "source_commit": "1473d9b72f51f79154014724a96f3769d32b61cc",
+      "source_prefix": "qualification/multi_read_body/v1/native_build",
+      "installation_status": "private qualified leaf; not public routing"
+    },
+    "composition": {
+      "path": "native/utf8_decode_diagnostic_composition.json",
+      "mode": "100644",
+      "git_blob": "3c9013312713b2e91b8461d19b806435be04605f",
+      "bytes": 3102,
+      "sha256": "6b6464d50d5ed8b08887c44116b755ac6cef9125d71da60353cde26f6c18b310",
+      "source_commit": "1473d9b72f51f79154014724a96f3769d32b61cc",
+      "source_prefix": "qualification/multi_read_body/v1/native_build",
+      "installation_status": "private qualified leaf; not public routing"
+    },
+    "build_run": 44149501391,
+    "build_job": 134273591977,
+    "actual_fixture_elf": {
+      "bytes": 831488,
+      "sha256": "f3b5bd8ff2943f4ae589e83d634899875ed3ed2618dd9054a2edd07e7dc46fba",
+      "mode": "0500"
+    },
+    "later_body_build_same_utf8_leaf": {
+      "commit": "ae1cf0bf13295a9fcec7c9279a70c7edf5e0caf3",
+      "run": 44164917361,
+      "utf8_source_unchanged": true,
+      "body_filesystem_semantics_qualified": false
+    }
+  },
+  "original": {
+    "commit": "2f340d95af89d927a54495e01ac8a81c590da94e",
+    "run": 44160803459,
+    "groups": 23,
+    "all_application_processes_complete": true,
+    "gate": "FAIL retained; reader expected ELF mode0755 but retained immutable executable is0500",
+    "binding": "ORIGINAL_CAPTURE_BINDING.json",
+    "original_decodes": 76414,
+    "native_calls": 76662,
+    "private_controls": 248,
+    "original_python": {
+      "version": "3.12.3",
+      "bytes": 8020928,
+      "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+    }
+  },
+  "recovery": {
+    "commit": "45f44f9be91481e375def6f24cdcd2662eee14e2",
+    "run": 44163083908,
+    "groups": 23,
+    "all_success": true,
+    "application_replays": 0,
+    "reader_change": "Only ELF mode0755 to0500; original captures/whole reader semantics unchanged",
+    "reader_before": "99b4f7e3ae37b734105db8c503b94975124d225b",
+    "reader_after": "8fd748cd2887e9d72def15786119fa15c880e586",
+    "binding": "RECOVERY_BINDING.json",
+    "physical_refusals": 184,
+    "full_relocations": 46
+  },
+  "independent": {
+    "commit": "49faab1f73c49106ca688533780872c22d18cc49",
+    "run": 44167277571,
+    "groups": 23,
+    "all_success": true,
+    "application_replays": 0,
+    "physical_control_replays": 0,
+    "full_uploaded_original_recovery_build_archives_read": true,
+    "whole_source_full_byte_read": true,
+    "binding": "INDEPENDENT_BINDING.json",
+    "guarded_entries": 568362,
+    "guard_probes": 253
+  },
+  "domain": [
+    "All 65536 two-byte inputs",
+    "All single bytes and fixed singleton/empty/long cases",
+    "All1112064 Unicode scalar values encoded into retained full actual input buffers plus bounded error/long-position cases",
+    "6480 multi-byte combinations",
+    "4096 trailing sequences",
+    "192 actual capacity controls and56 malformed frames; 248 private controls"
+  ],
+  "evidence": "Every actual input/output/workspace arena, raw original exception span/object/reason/message, process stream, frozen source, full bad-evidence controls and relocated readers is retained and completely read.",
+  "budgets": {
+    "fetch_seconds": 60,
+    "exchange_seconds": 60,
+    "lane_seconds": 180,
+    "reader_seconds": 180,
+    "export_seconds": 180,
+    "compile_seconds": 900,
+    "job_minutes": 15
+  },
+  "not_claimed": [
+    "No public multi-read/SSH route qualification",
+    "No multi-read filesystem body qualification from these direct decoder calls",
+    "No whole runtime replacement or old implementation removal"
+  ],
+  "next": "Complete actual multi-read filesystem domain, then explicitly rebind file_info and stdio to new read67 shared-pool ABI."
+}

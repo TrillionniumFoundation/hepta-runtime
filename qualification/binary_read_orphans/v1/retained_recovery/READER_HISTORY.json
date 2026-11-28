@@ -1,0 +1,21 @@
+{
+  "schema": "hepta.runtime.read-orphans.retained-reader-history.v1",
+  "original_application_run": 44132298233,
+  "applications_replayed": 0,
+  "diagnostic": {
+    "commit": "8609f86f417015925a61dcf0641a52a91adaffd3",
+    "run": 44133832660,
+    "result": "all six groups pure diagnostic PASS; relative fixture-root component differs"
+  },
+  "first_recovery": {
+    "commit": "36356a8cdbb14359f18774966ac77ae56a141306",
+    "run": 44134628841,
+    "result": "preserved pure-reader failure: descriptor projection wrongly treated opcode 9/geteuid as close; exact actual target Proxy and native protocol use opcode 5/close"
+  },
+  "correction": {
+    "before": "        else:\n            require(fd in paths,\"actual operation requires its live opened or borrowed descriptor\")\n            if op==9 and row[\"ok\"]:del paths[fd]\n",
+    "after": "        elif op==9:\n            require(fd==0 and not row[\"args\"],\"actual geteuid has no descriptor operand\")\n        else:\n            require(fd in paths,\"actual operation requires its live opened or borrowed descriptor\")\n            if op==5 and row[\"ok\"]:del paths[fd]\n",
+    "evidence": "trusted-qualification/scripts/reference_worker.py Proxy.close emits operation 5; Proxy.geteuid emits operation 9 with fd=0. Both actual original and native complete effect journals use those exact operation numbers."
+  },
+  "production_or_inputs_changed": false
+}

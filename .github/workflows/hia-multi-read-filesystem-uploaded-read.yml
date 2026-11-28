@@ -1,0 +1,54 @@
+name: Independently read complete uploaded multi-read filesystem qualification
+on:
+  push:
+    branches: [hia-multi-read-filesystem-uploaded-read-6780-20261117]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: ["ceilings-a","ceilings-b","ceilings-c","controls","eof","fault-a","fault-b","kinds-a","kinds-b","late-mutation","limits","mutate-confirm","mutate-read-a","mutate-read-b","observer-off","ordinary-a","ordinary-b","orphan-two","ownership-a","policy","shm","sixteen","utf8-files","validate-a","validate-b","validate-c","validate-d"]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      MULTI_SOURCE: ${{ github.workspace }}/runtime/qualification/multi_read_body/v1/filesystem_uploaded_read
+      MULTI_MANIFEST: 738e8184f51e24c5a1b5a6ee024be629f7044d652cdc9fd34fbf88655958a7b4
+    steps:
+      - name: Checkout exact frozen pure reader source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/filesystem_uploaded_read
+          persist-credentials: false
+      - name: Verify exact source commit
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Read every uploaded original, recovery and native build byte
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" read \
+            --work "$RUNNER_TEMP/multi-filesystem-independent-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Retain complete independent read and original failure bindings
+        if: always()
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/multi-filesystem-independent-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/multi-filesystem-independent-${{ matrix.group }}-export" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Upload all files and mode evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-filesystem-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-filesystem-independent-${{ matrix.group }}-export
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0

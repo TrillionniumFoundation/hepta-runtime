@@ -1,0 +1,67 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.read67-pool-rebind.v2",
+  "previous_production": "6fadcb3e85ce80607e22c18fe650c0a0acd71587",
+  "read67_production": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+  "read67_final": "8bb4e020fc8a728ec7b06e8ffa510052d5e8fa64",
+  "formatter34_production": "2464624eee505339adfd6b6297a7f7eb00672bd8",
+  "formatter34_final": "96a3ecccb3b054a9bf0059659040d4bb9e38e4a9",
+  "before": {
+    "path": "reference/binary_read_stdio_before.S",
+    "git_blob": "fe9841bb24ebdc8595af0a53d0571a556ce61fd4",
+    "bytes": 9020,
+    "sha256": "6cb152a1ab72667e33bb6e9904ffc0c35c61ba83f4de6bec2bbce6fb47436770"
+  },
+  "after": {
+    "path": "asm/binary_read_stdio.S",
+    "bytes": 12152,
+    "sha256": "392e08f7077d7d5275b40c8c018920712dedc8f84c85a5386d0a5f250f3d0178"
+  },
+  "edits": [
+    {
+      "old": "    cmp qword ptr [r12+24], 1\n    jne .Lbrh_fatal\n.if HBRH_OBSERVE\n",
+      "new": "    cmp qword ptr [r12+24], 1\n    jne .Lbrh_fatal\n    call hia_process_orphans_create\n    cmp rax, -4095\n    jae .Lbrh_fatal\n    mov [r15+112], rax\n.if HBRH_OBSERVE\n",
+      "occurrences": 1,
+      "scope": "production-one-process-pool"
+    },
+    {
+      "old": "    call binary_read_body_create\n",
+      "new": "    mov rdx, [r15+112]\n    call binary_read_body_create\n",
+      "occurrences": 1,
+      "scope": "production-third-create-argument"
+    },
+    {
+      "old": "    mov edi, 4\n    mov esi, 1\n    xor edx, edx\n    mov eax, 72\n    syscall\n    cmp rax, -4095\n    jae .Lbrh_fatal\n.endif\n",
+      "new": "    mov edi, 4\n    mov esi, 1\n    xor edx, edx\n    mov eax, 72\n    syscall\n    cmp rax, -4095\n    jae .Lbrh_fatal\n    mov edi, 5\n    mov esi, 1\n    xor edx, edx\n    mov eax, 72\n    syscall\n    cmp rax, -4095\n    jae .Lbrh_fatal\n.endif\n",
+      "occurrences": 1,
+      "scope": "observed-fixed-final-ack-pipe"
+    },
+    {
+      "old": "    mov rdi, [r15]\n    call binary_read_body_release\n",
+      "new": ".if HBRH_OBSERVE\n    mov rdi, r15\n    mov esi, 1\n    mov rdx, [r15]\n    mov ecx, 4096\n    xor r8d, r8d\n    call .Lbrh_lifecycle_journal\n    test rax, rax\n    jnz .Lbrh_fatal\n.endif\n    mov rdi, [r15]\n    call binary_read_body_release\n",
+      "occurrences": 1,
+      "scope": "observed-complete-live-context"
+    },
+    {
+      "old": "    mov rdi, [r15]\n    call binary_read_body_destroy\n",
+      "new": ".if HBRH_OBSERVE\n    mov rdi, r15\n    mov esi, 2\n    mov rdx, [r15]\n    mov ecx, 4096\n    xor r8d, r8d\n    call .Lbrh_lifecycle_journal\n    test rax, rax\n    jnz .Lbrh_fatal\n.endif\n    mov rdi, [r15]\n    call binary_read_body_destroy\n",
+      "occurrences": 1,
+      "scope": "observed-complete-released-context"
+    },
+    {
+      "old": "    mov r12, [r15+72]\n",
+      "new": ".if HBRH_OBSERVE\n    mov rdi, r15\n    call .Lbrh_lifecycle_eof\n    test rax, rax\n    jnz .Lbrh_fatal\n.endif\n    mov r12, [r15+72]\n",
+      "occurrences": 1,
+      "scope": "observed-pool-after-all-owner-cleanup"
+    },
+    {
+      "old": ".Lbrh_format_journal_return:\n    add rsp, 64\n    B_LEAVE\n.endif\n",
+      "new": ".Lbrh_format_journal_return:\n    add rsp, 64\n    B_LEAVE\n\n/* HBRLJR01: event, full span length, actual span pointer, shared pool, auxiliary,\n * two reserved zero words. This whole routine is absent from production. */\n.Lbrh_lifecycle_journal:\n    B_ENTER\n    sub rsp, 64\n    mov r12, rdi\n    mov r13, rsi\n    mov r14, rdx\n    mov r15, rcx\n    mov rax, 0x3130524a4c524248 /* HBRLJR01 */\n    mov [rsp], rax\n    mov [rsp+8], r13\n    mov [rsp+16], r15\n    mov [rsp+24], r14\n    mov rax, [r12+112]\n    mov [rsp+32], rax\n    mov [rsp+40], r8\n    mov qword ptr [rsp+48], 0\n    mov qword ptr [rsp+56], 0\n    mov edi, 3\n    mov rsi, rsp\n    mov edx, 64\n    call .Lbrh_write_all\n    test rax, rax\n    jnz .Lbrh_lifecycle_return\n    mov edi, 3\n    mov rsi, r14\n    mov rdx, r15\n    call .Lbrh_write_all\n.Lbrh_lifecycle_return:\n    add rsp, 64\n    B_LEAVE\n\n/* All body and helper arenas except the driver are already retired here.\n * The process pool and every orphan FD remain alive until whole OS exit. */\n.Lbrh_lifecycle_eof:\n    B_ENTER\n    sub rsp, 16\n    mov r12, rdi\n    mov r13, [r12+112]\n    mov rdi, r12\n    mov esi, 3\n    mov rdx, r13\n    mov ecx, 4096\n    mov r8, [r13+48]\n    call .Lbrh_lifecycle_journal\n    test rax, rax\n    jnz .Lbrh_lifecycle_eof_return\n    mov r14, [r13+32]\n    mov r15, [r13+56]\n    cmp r15, 65533\n    ja .Lbrh_lifecycle_eof_bad\n    xor ebx, ebx\n.Lbrh_lifecycle_pages:\n    test r15, r15\n    jz .Lbrh_lifecycle_complete\n    test r14, r14\n    jz .Lbrh_lifecycle_eof_bad\n    mov rdi, r12\n    mov esi, 4\n    mov rdx, r14\n    mov ecx, 4096\n    mov r8, rbx\n    call .Lbrh_lifecycle_journal\n    test rax, rax\n    jnz .Lbrh_lifecycle_eof_return\n    mov r14, [r14+16]\n    inc rbx\n    dec r15\n    jmp .Lbrh_lifecycle_pages\n.Lbrh_lifecycle_complete:\n    test r14, r14\n    jnz .Lbrh_lifecycle_eof_bad\n    mov rdi, r12\n    mov esi, 5\n    xor edx, edx\n    xor ecx, ecx\n    mov r8, [r13+48]\n    call .Lbrh_lifecycle_journal\n    test rax, rax\n    jnz .Lbrh_lifecycle_eof_return\n    xor ebx, ebx\n.Lbrh_lifecycle_ack:\n    mov edi, 5\n    lea rsi, [rsp+rbx]\n    mov edx, 8\n    sub rdx, rbx\n    xor eax, eax\n    syscall\n    cmp rax, -4\n    je .Lbrh_lifecycle_ack\n    test rax, rax\n    jle .Lbrh_lifecycle_eof_bad\n    add rbx, rax\n    cmp rbx, 8\n    jb .Lbrh_lifecycle_ack\n    cmp qword ptr [rsp], 0\n    jne .Lbrh_lifecycle_eof_bad\n    xor eax, eax\n    jmp .Lbrh_lifecycle_eof_return\n.Lbrh_lifecycle_eof_bad:\n    mov rax, -22\n.Lbrh_lifecycle_eof_return:\n    add rsp, 16\n    B_LEAVE\n.endif\n",
+      "occurrences": 1,
+      "scope": "observed-full-lifecycle-and-one-zero-ack"
+    }
+  ],
+  "production_pool_field": 112,
+  "observation_absent_from_production": true,
+  "application_executions": 0,
+  "new_composition_qualification_pending": true
+}

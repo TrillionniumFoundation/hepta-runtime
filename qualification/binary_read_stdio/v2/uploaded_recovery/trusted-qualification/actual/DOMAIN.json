@@ -1,0 +1,354 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.read67-pool-input-domain.v2",
+  "before_any_application": true,
+  "reference": "d3d75c30719db966b004756f610007a7c723729e",
+  "new_inputs_not_old_48_replay": true,
+  "cases": [
+    {
+      "id": 1,
+      "name": "empty-new-pool",
+      "mode": "read",
+      "size": 0,
+      "seed": 103,
+      "root": "base",
+      "path": "file",
+      "expected": "none",
+      "offset": 0,
+      "limit": 23,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 1,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 2,
+      "name": "fragmented-new-bytes",
+      "mode": "read",
+      "size": 8193,
+      "seed": 110,
+      "root": "base",
+      "path": "file",
+      "expected": "current",
+      "offset": 17,
+      "limit": 4129,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 7,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 3,
+      "name": "unicode-name-new-bytes",
+      "mode": "read",
+      "size": 12489,
+      "seed": 117,
+      "root": "base",
+      "path": "unicode",
+      "expected": "none",
+      "offset": 3,
+      "limit": 999,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 31,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 4,
+      "name": "past-eof",
+      "mode": "read",
+      "size": 83,
+      "seed": 124,
+      "root": "base",
+      "path": "file",
+      "expected": "current",
+      "offset": 901,
+      "limit": 107,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 4093,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 5,
+      "name": "expected-version-refusal",
+      "mode": "read",
+      "size": 631,
+      "seed": 131,
+      "root": "base",
+      "path": "file",
+      "expected": "mismatch",
+      "offset": 0,
+      "limit": 127,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 1,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 6,
+      "name": "missing-file",
+      "mode": "read",
+      "size": 67,
+      "seed": 138,
+      "root": "base",
+      "path": "missing",
+      "expected": "none",
+      "offset": 0,
+      "limit": 127,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 7,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 7,
+      "name": "directory-type-refusal",
+      "mode": "read",
+      "size": 93,
+      "seed": 145,
+      "root": "base",
+      "path": "directory",
+      "expected": "none",
+      "offset": 0,
+      "limit": 128,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 31,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 8,
+      "name": "fifo-type-refusal",
+      "mode": "read",
+      "size": 99,
+      "seed": 152,
+      "root": "base",
+      "path": "fifo",
+      "expected": "none",
+      "offset": 0,
+      "limit": 128,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 4093,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 9,
+      "name": "symlink-refusal",
+      "mode": "read",
+      "size": 171,
+      "seed": 159,
+      "root": "base",
+      "path": "symlink",
+      "expected": "none",
+      "offset": 0,
+      "limit": 201,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 1,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 10,
+      "name": "hardlink-ordinary",
+      "mode": "read",
+      "size": 5023,
+      "seed": 166,
+      "root": "base",
+      "path": "hardlink",
+      "expected": "current",
+      "offset": 9,
+      "limit": 801,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 7,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 11,
+      "name": "kernel-first-fstat-orphan",
+      "mode": "read",
+      "size": 907,
+      "seed": 173,
+      "root": "base",
+      "path": "file",
+      "expected": "none",
+      "offset": 0,
+      "limit": 201,
+      "fault": true,
+      "storage": "disk",
+      "input_chunk_bytes": 31,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 12,
+      "name": "kernel-first-fstat-unicode-orphan",
+      "mode": "read",
+      "size": 977,
+      "seed": 180,
+      "root": "base",
+      "path": "unicode",
+      "expected": "current",
+      "offset": 17,
+      "limit": 181,
+      "fault": true,
+      "storage": "disk",
+      "input_chunk_bytes": 4093,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 13,
+      "name": "shm-kernel-first-fstat-orphan",
+      "mode": "read",
+      "size": 1073,
+      "seed": 187,
+      "root": "base",
+      "path": "file",
+      "expected": "none",
+      "offset": 3,
+      "limit": 151,
+      "fault": true,
+      "storage": "shm",
+      "input_chunk_bytes": 1,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 14,
+      "name": "kernel-first-fstat-hardlink-orphan",
+      "mode": "read",
+      "size": 1171,
+      "seed": 194,
+      "root": "base",
+      "path": "hardlink",
+      "expected": "current",
+      "offset": 0,
+      "limit": 231,
+      "fault": true,
+      "storage": "disk",
+      "input_chunk_bytes": 7,
+      "output_chunk_bytes": 7
+    },
+    {
+      "id": 15,
+      "name": "formatter34-control-name-growth",
+      "mode": "read",
+      "size": 53,
+      "seed": 201,
+      "root": "base",
+      "path": "long-control-error",
+      "expected": "none",
+      "offset": 0,
+      "limit": 101,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 31,
+      "output_chunk_bytes": 65536
+    },
+    {
+      "id": 16,
+      "name": "formatter34-unicode-name-growth",
+      "mode": "read",
+      "size": 59,
+      "seed": 208,
+      "root": "base",
+      "path": "long-unicode-error",
+      "expected": "none",
+      "offset": 0,
+      "limit": 103,
+      "fault": false,
+      "storage": "disk",
+      "input_chunk_bytes": 4093,
+      "output_chunk_bytes": 7
+    }
+  ],
+  "groups": [
+    {
+      "name": "ordinary",
+      "case_ids": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "values",
+      "case_ids": [
+        3,
+        4
+      ]
+    },
+    {
+      "name": "errors",
+      "case_ids": [
+        5,
+        6
+      ]
+    },
+    {
+      "name": "types",
+      "case_ids": [
+        7,
+        8
+      ]
+    },
+    {
+      "name": "links",
+      "case_ids": [
+        9,
+        10
+      ]
+    },
+    {
+      "name": "child-orphans",
+      "case_ids": [
+        11,
+        12
+      ]
+    },
+    {
+      "name": "shm-orphans",
+      "case_ids": [
+        13,
+        14
+      ]
+    },
+    {
+      "name": "diagnostics",
+      "case_ids": [
+        15,
+        16
+      ]
+    }
+  ],
+  "fixtures": {
+    "file": "data.bin",
+    "unicode": "stdio-pool34-雪-é- .bin",
+    "control": "stdio-pool34-\n-\u0001.bin",
+    "long_path_components": 24,
+    "long_path_component_bytes": 200,
+    "data_pattern": "(byte_index * 73 + seed) modulo 256; repeat exact 256-byte period",
+    "regular_mode": 420,
+    "private_mode": 384,
+    "quoted_missing": "both'and\"-\\-\n-\u0001-雪- ",
+    "double_quoted_missing": "double\"-quote-missing",
+    "long_ascii_error_bytes": 2000,
+    "long_control_error_scalars": 1100,
+    "long_unicode_error_scalars": 700
+  },
+  "controls": [],
+  "application_processes": 48,
+  "original_processes": 16,
+  "production_processes": 16,
+  "observed_processes": 16,
+  "real_kernel_first_fstat_fault_inputs": 4,
+  "application_seconds": 60,
+  "scope": {
+    "whole_process_stdio": true,
+    "immutable_owned_filesystem": true,
+    "first_regular_fstat_EIO": true,
+    "process_orphan_lifetime": true,
+    "passive_single_direct_child_kernel_trace": true,
+    "complete_C_layer_failure_equivalence": false,
+    "ssh": false,
+    "public_routes": false
+  }
+}

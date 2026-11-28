@@ -1,0 +1,88 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.read67-source-derivation.v2",
+  "before_first_target_application": true,
+  "compiled_graph": {
+    "commit": "e7c1abb64973b314eaba1b6fd38672a5aef6887a",
+    "prefix": "qualification/binary_read_stdio/v2/read67_build",
+    "manifest_git_blob": "12b97c7b8e64fafa6b541d9855962bfa3879d750",
+    "runtime_changed": false,
+    "new_build_executions": 0
+  },
+  "prior_qualification": {
+    "final": "69d54e3a21d8f3ca20bff6165b3547bc78afa9b3",
+    "source": "937dc8ffd42d27a8537269df1010b9807c3b374c",
+    "old_48_triples_replayed": false
+  },
+  "copied_source": {
+    "kernel_trace": {
+      "git_blob": "5601192a103e257605b566121fedfd697564fa21",
+      "whole_file_unchanged": true,
+      "upstream": "d9ff9e69b0817ed6df2e6e0701591fc82a333506"
+    },
+    "read_journal": {
+      "git_blob": "5c0330a3ec9bbc4fb1a0272c7497970beef9f9e8",
+      "whole_file_unchanged": true,
+      "qualification_final": "8bb4e020fc8a728ec7b06e8ffa510052d5e8fa64"
+    },
+    "pool_reader": {
+      "source_git_blob": "9019ea2cdf5938f1776b264c89078e711fea1322",
+      "function": "pool",
+      "exact_function_source_sha256": "0ae1e058f75fa9311cac0eac00eb50f06207ed53dec3c4c071e271ebbed45091",
+      "qualification_final": "ea0f3315022107ce494425b60c496f2bd35d41a5"
+    },
+    "formatter_reader": {
+      "source_git_blob": "3f68b150e4d08295e8de253b84c86e3846fc287d",
+      "function": "formatter",
+      "exact_function_source_sha256": "37fab7cd8f7b025069dc94aa8265ed86c86bfc59e89bb5fd0132f8f094a0c155"
+    }
+  },
+  "new_inputs": {
+    "cases": 16,
+    "groups": 8,
+    "roles": [
+      "original",
+      "production",
+      "observed"
+    ],
+    "actual_target_processes": 48,
+    "real_kernel_EIO_cases": 4,
+    "first_execution_only": true
+  },
+  "observer": {
+    "direct_single_child": true,
+    "parent_requests": [
+      24,
+      16896,
+      16910
+    ],
+    "child_traceme_request": 0,
+    "memory_reader": "process_vm_readv",
+    "target_memory_or_register_writes": 0,
+    "syscall_result_injections": 0,
+    "stdio_extension": [
+      "every returned read buffer including FD3 and FD5",
+      "every complete stdout/stderr write/writev buffer",
+      "stable actual syscall-stop FD/maps inventories at stdin EOF and OS exit",
+      "exact HIA capability-to-native syscall correspondence"
+    ],
+    "fault": "real child seccomp, fixed six BPF instructions, errno EIO on fstat/newfstatat",
+    "production_ELF_edited": false,
+    "observed_only_zero_ACK": "documented e7c1 observer fd5, after complete HBRLJR01 event5",
+    "no_complete_cpython_internal_failure_claim": true
+  },
+  "preflight": {
+    "new_independent_CPython_probes": 2,
+    "original_target_calls": 0,
+    "HIA_calls": 0,
+    "inputs": [
+      "owned stdin EOF plus actual read on FD3",
+      "real seccomp first-fstat EIO retains opened FD until whole process exit"
+    ]
+  },
+  "complete_readers_frozen_before_target_execution": true,
+  "budgets": {
+    "target_seconds": 60,
+    "lane_read_export_seconds": 180,
+    "workflow_minutes": 15
+  }
+}

@@ -1,0 +1,47 @@
+name: Independently recover all completed stdio read67 captures
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-stdio-read67-uploaded-recovery-6780-20261118]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [ordinary, values, errors, types, links, child-orphans, shm-orphans, diagnostics]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      STDIO_SOURCE: ${{ github.workspace }}/qualification/binary_read_stdio/v2/uploaded_recovery
+      STDIO_MANIFEST: 75158b0fc0ac2a19d6d414d8a8950950071b1129626092816df4569e91fa6d6c
+      STDIO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen pure readers and exact completed qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_read_stdio/v2/uploaded_recovery
+          persist-credentials: false
+      - name: Fully read original uploaded captures without application or control replay
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/driver.py" read --work "$RUNNER_TEMP/stdio-independent-$STDIO_GROUP" --group "$STDIO_GROUP" --source-manifest-sha256 "$STDIO_MANIFEST"
+      - name: Retain complete pure read proof and original failure scope
+        if: always()
+        run: |
+          python3 -I -S -B "$STDIO_SOURCE/scripts/driver.py" export --work "$RUNNER_TEMP/stdio-independent-$STDIO_GROUP" --group "$STDIO_GROUP" --source-manifest-sha256 "$STDIO_MANIFEST" --output "$RUNNER_TEMP/stdio-independent-$STDIO_GROUP-export"
+      - name: Upload full independent read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stdio-read67-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/stdio-independent-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0

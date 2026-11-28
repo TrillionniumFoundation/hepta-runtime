@@ -1,0 +1,142 @@
+{
+  "schema": "hepta.runtime.binary-read-orphans.unique-production-install-rows.v1",
+  "commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+  "prefix": "qualification/binary_read_orphans/v1/native_build",
+  "package_relative_destinations": true,
+  "default_repository_install_performed": false,
+  "unique_rows": [
+    {
+      "package_destination": "native/binary_read_body.hepta",
+      "path": "native/binary_read_body.hepta",
+      "mode": "100644",
+      "git_blob": "13cf0c74b10279c419c19ce40baa49e98ea735d8",
+      "bytes": 223207,
+      "sha256": "0ff27a8ba9a8a53ca7cd97054a8394c04023fd7cb84fe2406bf8d2b7e867f4ba",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "native/binary_read_body_composition.json",
+      "path": "native/binary_read_body_composition.json",
+      "mode": "100644",
+      "git_blob": "48349fa039c5333d8bb9b18f8128facf27840dbd",
+      "bytes": 14242,
+      "sha256": "cf570ffc2ed2ada878b30c53f8685c4e8b24f0779bb3a9352de9bfe0fa9e4945",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "asm/binary_read_body_callable.S",
+      "path": "asm/binary_read_body_callable.S",
+      "mode": "100644",
+      "git_blob": "80fd9586876da32a7adf43cfdf67805a3a090654",
+      "bytes": 22048,
+      "sha256": "07177c2a6861f88916bc47e89c462e28dd2dcc3a1ffaa101d1594be5b100274b",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "asm/process_orphans.S",
+      "path": "asm/process_orphans.S",
+      "mode": "100644",
+      "git_blob": "92461ce73f40377f9185ee81c5fcc8c01b76c8c7",
+      "bytes": 4691,
+      "sha256": "f1d4e92b9d2ce68c68dcbc730950eaddaf3aa1093f143d34924c3eafc302e050",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "native/binary_codec.hepta",
+      "path": "native/binary_codec.hepta",
+      "mode": "100644",
+      "git_blob": "c0abe3665e88dc6a341ca3107226b0a296b51541",
+      "bytes": 61996,
+      "sha256": "f58ab824ecb47545f19cd1d0daded9e41fca5457110693677d84e393e3098f23",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "native/stat_version.hepta",
+      "path": "native/stat_version.hepta",
+      "mode": "100644",
+      "git_blob": "99b4651353b3e53ef323f6093f704c0131d98f40",
+      "bytes": 26089,
+      "sha256": "d5fedc22505bed6a6f8b12dffcfa699be46aeffb890d8a821710c05f0aaf3a3f",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    }
+  ],
+  "build_only_shared_rows": [
+    {
+      "package_destination": "compiler/elf_static_linker.hepta",
+      "path": "compiler/elf_static_linker.hepta",
+      "mode": "100644",
+      "git_blob": "57b5b51e4714ba9f9f304e8cb3c04cbbee0ae3c2",
+      "bytes": 95933,
+      "sha256": "66063b0e8d9b244a8ccec27a31554fe8e77f309ac1fc981286e63befa7559cef",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    },
+    {
+      "package_destination": "native/runtime_mcp_image_packer.hepta",
+      "path": "native/runtime_mcp_image_packer.hepta",
+      "mode": "100644",
+      "git_blob": "193e196563a68a3387466001374f156a3235212b",
+      "bytes": 35890,
+      "sha256": "db45ecd1a0e52bb5410ce45106f90b0e2a032f553b5b816cb9388b4e45c2286b",
+      "source_commit": "6ba1cbe2d46cc82416596f838b738df70478de7a",
+      "source_prefix": "qualification/binary_read_orphans/v1/native_build"
+    }
+  ],
+  "components": [
+    {
+      "id": "binary_read_body",
+      "source": "native/binary_read_body.hepta",
+      "composition": "native/binary_read_body_composition.json",
+      "native_custodian": "asm/binary_read_body_callable.S",
+      "requires": [
+        "binary_codec",
+        "stat_version",
+        "process_orphans"
+      ],
+      "create_abi": "binary_read_body_create(callback, callback_context, shared_process_pool)",
+      "exports": [
+        "binary_read_body_invoke",
+        "binary_read_body_invoke_at",
+        "binary_read_body_release",
+        "binary_read_body_destroy"
+      ]
+    },
+    {
+      "id": "binary_codec",
+      "source": "native/binary_codec.hepta",
+      "unchanged": true
+    },
+    {
+      "id": "stat_version",
+      "source": "native/stat_version.hepta",
+      "unchanged": true
+    },
+    {
+      "id": "process_orphans",
+      "source": "asm/process_orphans.S",
+      "upstream_commit": "c8113282ace81deafdaa3eea1199fce3a44ac7c8",
+      "unchanged": true,
+      "link_once_per_process_image": true,
+      "trusted_graph_must_supply_one_shared_pool_per_process": true,
+      "requires_no_per_context_pool_destroy": true
+    }
+  ],
+  "all_production_dependencies_bound": true,
+  "whole_52_file_rebuild_index": "SOURCE_ROWS.json#/sections/native_build",
+  "excluded_from_production": [
+    "asm/binary_read_body_fixture.S",
+    "reference/",
+    "target/",
+    "baseline/",
+    "authoring/",
+    "retained-author/",
+    "qualification-only scripts"
+  ],
+  "downstream_status_file": "DEPENDENCY_IMPACT.json"
+}

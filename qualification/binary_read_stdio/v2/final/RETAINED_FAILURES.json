@@ -1,0 +1,33 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.retained-failures.v2",
+  "failures": [
+    {
+      "commit": "7859ca32f9f6ec94a5dd0dd4ea0345623a1d4867",
+      "run": 44213951398,
+      "job": 134498967622,
+      "completed_probe_processes": 2,
+      "target_application_calls": 0,
+      "error": "ValueError: whole process exits at observed syscall",
+      "cause": "Pure observer reader compared decorated ENTER record with actual EXIT open_exit payload; complete probe captures preserved",
+      "recovery_commit": "ac15fa21fd329311594b7eac02ce232472fb86f3",
+      "recovery_run": 44214509357,
+      "new_probe_or_application_calls": 0
+    },
+    {
+      "commit": "55026edf5beab09a335e59b3dcd53f91ad36c565",
+      "run": 44214811482,
+      "groups": 8,
+      "completed_application_processes": 48,
+      "completed_physical_control_processes": 80,
+      "error": "ValueError: complete physical changed bytes",
+      "cause": "The kernel-result control recorded a byte-identical rewrite of production/<group>/CAPTURE.json after a trace change that preserved raw byte length. The old verification rejected that recorded no-op write after every actual semantic comparison and physical control had completed successfully.",
+      "correction_source": "c595fd58225d3da5a871bf0b785ad1d23e62376e",
+      "recovery_commit": "2f1d83fe00601f24cbf3546c4bd63e3058b924fa",
+      "recovery_run": 44215767597,
+      "exception_admission": "Exactly one kernel-result CAPTURE.json byte-identical recorded rewrite per group; complete before/after bytes/modes and every other physical change remain strictly bound.",
+      "new_application_processes": 0,
+      "new_physical_control_processes": 0
+    }
+  ],
+  "unknown_replayed": false
+}

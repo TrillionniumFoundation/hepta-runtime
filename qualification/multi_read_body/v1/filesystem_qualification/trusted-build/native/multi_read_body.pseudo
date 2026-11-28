@@ -1,0 +1,1034 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=1048576:
+        return 4294967295
+    if load(s,0)!=3544386032337309000 or load(s,88)!=length(s)-96:
+        return 4294967295
+    command=load(s,8)
+    if command!=1 and command!=2:
+        return 4294967295
+    if length(o)<64:
+        return 4294967294
+    if command==1:
+        if framing(s)==0:
+            return 4294967295
+        needed=4096+length(s)-96+1048576
+        if length(w)<needed:
+            return short_header(o,4,needed)
+        if length(o)<8352:
+            return short_header(o,5,8352)
+        if get(w,0)==3544386058107112776 and get(w,8)!=99:
+            return 4294967295
+        fill_range(w,0,4096,0)
+        put(w,0,3544386058107112776)
+        put(w,8,1)
+        put(w,56,load(s,24))
+        put(w,64,load(s,32))
+        file_limit=16384
+        response_limit=65536
+        if (load(s,24)&1)!=0:
+            file_limit=load(s,40)
+        if (load(s,24)&2)!=0:
+            response_limit=load(s,48)
+        put(w,72,file_limit)
+        put(w,80,response_limit)
+        put(w,96,18446744073709551615)
+        put(w,104,18446744073709551615)
+        put(w,112,18446744073709551615)
+        put(w,120,18446744073709551615)
+        put(w,264,length(s)-96)
+        put(w,304,4096+length(s)-96)
+        put(w,384,needed)
+        copy_in(s,w,96,4096,length(s)-96)
+    else:
+        if length(w)<4096 or get(w,0)!=3544386058107112776:
+            return 4294967295
+        if length(w)<get(w,384):
+            return short_header(o,4,get(w,384))
+        if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+            return 4294967295
+        if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+            return 4294967295
+        if length(s)-96>65616:
+            return 4294967295
+        if negative(load(s,24))!=0 and length(s)!=96:
+            return 4294967295
+        sequence=load(s,16)
+        if get(w,24)!=0:
+            if sequence!=get(w,24):
+                return 4294967295
+            copy_in(s,w,96,(get(w,304)+131712),length(s)-96)
+            put(w,32,sequence)
+            put(w,40,load(s,24))
+            put(w,48,length(s)-96)
+            put(w,24,0)
+        else:
+            if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                return 4294967295
+            at=0
+            while at<get(w,48):
+                if byte(s,96+at)!=byte(w,(get(w,304)+131712)+at):
+                    return 4294967295
+                at=at+1
+    status=4294967293
+    while status==4294967293:
+        phase=get(w,8)
+        if phase<20:
+            status=begin_flow(o,w)
+        else:
+            if phase<30:
+                status=regular_flow(o,w)
+            else:
+                if phase<40:
+                    status=read_flow(o,w)
+                else:
+                    if phase<50:
+                        status=decode_flow(o,w)
+                    else:
+                        if phase<70:
+                            status=confirm_flow(o,w)
+                        else:
+                            if phase<90:
+                                status=result_flow(o,w)
+                            else:
+                                status=finish(o,w)
+    return status
+
+def framing(s:readbuf) -> u64:
+    if load(s,16)!=0 or load(s,24)>3:
+        return 0
+    if (load(s,24)&1)==0 and load(s,40)!=0:
+        return 0
+    if (load(s,24)&2)==0 and load(s,48)!=0:
+        return 0
+    if load(s,56)!=0 or load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+        return 0
+    count=load(s,32)
+    if count<1 or count>16:
+        return 1
+    at=96
+    i=0
+    while i<count:
+        if length(s)-at<16:
+            return 0
+        root=load(s,at)
+        path=load(s,at+8)
+        at=at+16
+        if root>length(s)-at:
+            return 0
+        if utf8(s,at,root)==0:
+            return 0
+        at=at+root
+        if path>length(s)-at:
+            return 0
+        if utf8(s,at,path)==0:
+            return 0
+        at=at+path
+        i=i+1
+    if at!=length(s):
+        return 0
+    return 1
+
+def batch_path(w:mutbuf,at:u64,size:u64) -> u64:
+    if size<2 or size>4096 or byte(w,at)!=47:
+        return 0
+    part=at+1
+    end=at+size
+    cursor=part
+    while cursor<=end:
+        if cursor==end or byte(w,cursor)==47:
+            count=cursor-part
+            if count==0:
+                return 0
+            if count==1 and byte(w,part)==46:
+                return 0
+            if count==2 and byte(w,part)==46 and byte(w,part+1)==46:
+                return 0
+            part=cursor+1
+        else:
+            if byte(w,cursor)==0:
+                return 0
+        cursor=cursor+1
+    return 1
+
+def validate_batch(w:mutbuf) -> u64:
+    count=get(w,64)
+    if count<1 or count>16 or get(w,72)<1 or get(w,72)>65536:
+        return 1
+    if get(w,80)<1024 or get(w,80)>262144:
+        return 1
+    at=4096
+    i=0
+    while i<count:
+        root=get(w,at)
+        path=get(w,at+8)
+        root_at=at+16
+        path_at=root_at+root
+        if batch_path(w,path_at,path)==0:
+            return 2
+        if root!=1 or byte(w,root_at)!=47:
+            if batch_path(w,root_at,root)==0:
+                return 2
+        j=0
+        while j<i:
+            previous=512+j*32
+            if get(w,previous+24)==path and equal(w,get(w,previous+16),path_at,path)!=0:
+                return 3
+            j=j+1
+        put(w,512+i*32,root_at)
+        put(w,520+i*32,root)
+        put(w,528+i*32,path_at)
+        put(w,536+i*32,path)
+        at=path_at+path
+        i=i+1
+    return 0
+
+def short_header(o:mutbuf,kind:u64,needed:u64) -> u32:
+    fill_range(o,0,64,0)
+    put(o,0,3544386040927243592)
+    put(o,8,kind)
+    put(o,32,needed)
+    return 64
+
+def request(w:mutbuf,o:mutbuf,phase:u64,kind:u64,op:u64,a:u64,b:u64,c:u64,at:u64,size:u64) -> u64:
+    if size>length(w) or at>length(w)-size:
+        return 4294967295
+    if length(o)<64+size:
+        return short_header(o,5,64+size)
+    sequence=get(w,16)+1
+    if sequence==0:
+        return 4294967295
+    fill_range(o,0,64,0)
+    put(o,0,3544386040927243592)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,op)
+    put(o,32,a)
+    put(o,40,b)
+    put(o,48,c)
+    put(o,56,size)
+    copy_out(w,o,at,64,size)
+    put(w,16,sequence)
+    put(w,24,sequence)
+    put(w,8,phase)
+    return 64
+
+def parent_packet(w:mutbuf) -> u64:
+    fill_range(w,(get(w,304)+66048),96,0)
+    put(w,(get(w,304)+66048),3544386032337309768)
+    put(w,(get(w,304)+66048)+8,1)
+    put(w,(get(w,304)+66048)+24,1)
+    put(w,(get(w,304)+66048)+32,get(w,280))
+    put(w,(get(w,304)+66048)+40,get(w,296))
+    put(w,(get(w,304)+66048)+88,get(w,280)+get(w,296))
+    copy_within(w,(get(w,304)+66048)+96,get(w,272),get(w,280))
+    copy_within(w,(get(w,304)+66048)+96+get(w,280),get(w,288),get(w,296))
+    return 96+get(w,280)+get(w,296)
+
+def parent_reply(w:mutbuf,slot:u64) -> u64:
+    size=get(w,48)
+    if get(w,40)!=size or size<64 or size>4160:
+        return 4294967295
+    if get(w,(get(w,304)+131712))!=3544386040927240776 or get(w,(get(w,304)+131712)+56)!=size-64:
+        return 4294967295
+    if get(w,(get(w,304)+131712)+8)==3:
+        return nested_error(w)
+    if get(w,(get(w,304)+131712)+8)!=6 or get(w,(get(w,304)+131712)+24)>2147483647:
+        return 4294967295
+    if get(w,(get(w,304)+131712)+32)!=size-64 or get(w,(get(w,304)+131712)+40)!=0 or get(w,(get(w,304)+131712)+48)!=0:
+        return 4294967295
+    if size<=64 or size>4160:
+        return 4294967295
+    name=(get(w,304)+205632)
+    if slot!=0:
+        name=(get(w,304)+209792)
+    copy_within(w,name,(get(w,304)+131712)+64,size-64)
+    store(w,name+size-64,0)
+    put(w,312+slot*8,size-64)
+    put(w,112+slot*8,get(w,(get(w,304)+131712)+24))
+    put(w,128+slot*8,1)
+    put(w,200,slot)
+    continuation=30
+    if slot!=0:
+        continuation=60
+    put(w,208,continuation)
+    put(w,8,20)
+    return 4294967293
+
+def begin_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    if phase==1:
+        error=validate_batch(w)
+        if error!=0:
+            return value_error(w,error)
+        put(w,168,wire_prefix(w,(get(w,304)+214016)))
+        put(w,8,10)
+        return 4294967293
+    if phase==10:
+        index=get(w,88)
+        if index>=get(w,64):
+            return 4294967295
+        at=512+index*32
+        put(w,272,get(w,at))
+        put(w,280,get(w,at+8))
+        put(w,288,get(w,at+16))
+        put(w,296,get(w,at+24))
+        put(w,144,0)
+        put(w,160,0)
+        put(w,192,0)
+        ignored=parent_packet(w)
+        put(w,8,11)
+        return 4294967293
+    if phase==11:
+        return request(w,o,12,2,3,0,0,0,(get(w,304)+66048),96+get(w,280)+get(w,296))
+    if phase==12:
+        return parent_reply(w,0)
+    return 4294967295
+
+def regular_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    slot=get(w,200)
+    if slot>1:
+        return 4294967295
+    file=96+slot*8
+    name=(get(w,304)+205632)
+    if slot!=0:
+        name=(get(w,304)+209792)
+    if phase==20:
+        return request(w,o,21,1,1,get(w,112+slot*8),0,0,name,get(w,312+slot*8)+1)
+    if phase==21:
+        if result==18446744073709551615-3:
+            put(w,8,20)
+            return 4294967293
+        if negative(result)!=0:
+            return os_error(w,0-result,1)
+        if result>2147483647 or get(w,48)!=0:
+            return 4294967295
+        put(w,file,result)
+        put(w,8,22)
+        return 4294967293
+    if phase==22:
+        return request(w,o,23,1,2,get(w,file),0,0,0,0)
+    if phase==23:
+        if result==18446744073709551615-3:
+            put(w,8,22)
+            return 4294967293
+        if negative(result)!=0:
+            ignored=os_error(w,0-result,0)
+            put(w,8,24)
+            return 4294967293
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        if (u32_at(w,(get(w,304)+131712)+24)&61440)!=32768:
+            return value_error(w,9)
+        put(w,8,get(w,208))
+        return 4294967293
+    if phase==24:
+        return request(w,o,25,1,4,get(w,file),0,0,0,0)
+    if phase==25:
+        if result!=0 or get(w,48)!=0:
+            return 4294967295
+        put(w,file,18446744073709551615)
+        put(w,8,90)
+        return 4294967293
+    return 4294967295
+
+def version_packet(w:mutbuf,stat:u64) -> u64:
+    put(w,(get(w,304)+66048),3544423364495168328)
+    put(w,(get(w,304)+66048)+8,1)
+    put(w,(get(w,304)+66048)+16,get(w,stat))
+    put(w,(get(w,304)+66048)+24,get(w,stat+8))
+    put(w,(get(w,304)+66048)+32,get(w,stat+48))
+    put(w,(get(w,304)+66048)+40,get(w,stat+88))
+    put(w,(get(w,304)+66048)+48,get(w,stat+96))
+    put(w,(get(w,304)+66048)+56,get(w,stat+104))
+    put(w,(get(w,304)+66048)+64,get(w,stat+112))
+    return 72
+
+def read_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==30:
+        return request(w,o,31,1,2,get(w,96),0,0,0,0)
+    if phase==31:
+        if result==18446744073709551615-3:
+            put(w,8,30)
+            return 4294967293
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        copy_within(w,(get(w,304)+65680),(get(w,304)+131712),144)
+        if get(w,(get(w,304)+65680)+16)!=1:
+            return value_error(w,4)
+        if get(w,(get(w,304)+65680)+48)>get(w,72):
+            return value_error(w,5)
+        ignored=version_packet(w,(get(w,304)+65680))
+        put(w,8,32)
+        return 4294967293
+    if phase==32:
+        return request(w,o,33,2,2,0,0,0,(get(w,304)+66048),72)
+    if phase==33:
+        if result<1 or result>122 or result!=get(w,48):
+            return 4294967295
+        copy_within(w,(get(w,304)+65544),(get(w,304)+131712),result)
+        put(w,160,result)
+        put(w,152,get(w,72)+1)
+        put(w,8,34)
+        return 4294967293
+    if phase==34:
+        if get(w,152)==0:
+            put(w,8,40)
+            return 4294967293
+        return request(w,o,35,1,5,get(w,96),get(w,152),0,0,0)
+    if phase==35:
+        if result==18446744073709551615-3:
+            put(w,8,34)
+            return 4294967293
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=get(w,48) or result>get(w,152):
+            return 4294967295
+        if result==0:
+            put(w,8,40)
+            return 4294967293
+        copy_within(w,(get(w,304)+0)+get(w,144),(get(w,304)+131712),result)
+        put(w,144,get(w,144)+result)
+        put(w,152,get(w,152)-result)
+        put(w,8,34)
+        return 4294967293
+    return 4294967295
+
+def decode_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==40:
+        return request(w,o,41,1,2,get(w,96),0,0,0,0)
+    if phase==41:
+        if result==18446744073709551615-3:
+            put(w,8,40)
+            return 4294967293
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        if same_identity(w,(get(w,304)+65680),(get(w,304)+131712))==0 or get(w,(get(w,304)+131712)+16)!=1 or get(w,144)!=get(w,(get(w,304)+65680)+48):
+            return value_error(w,6)
+        if get(w,144)>get(w,72):
+            return value_error(w,5)
+        put(w,(get(w,304)+66048),3544386032370996552)
+        put(w,(get(w,304)+66048)+8,get(w,144))
+        copy_within(w,(get(w,304)+66048)+16,(get(w,304)+0),get(w,144))
+        put(w,8,42)
+        return 4294967293
+    if phase==42:
+        return request(w,o,43,2,5,0,0,0,(get(w,304)+66048),16+get(w,144))
+    if phase==43:
+        if result!=get(w,48) or result<64 or result>256:
+            return 4294967295
+        if get(w,(get(w,304)+131712))!=3544385976536421704 or get(w,(get(w,304)+131712)+48)!=get(w,144):
+            return 4294967295
+        if get(w,(get(w,304)+131712)+56)!=result-64 or get(w,(get(w,304)+131712)+40)!=result-64:
+            return 4294967295
+        if get(w,(get(w,304)+131712)+8)==3:
+            if get(w,(get(w,304)+131712)+16)>=get(w,(get(w,304)+131712)+24) or get(w,(get(w,304)+131712)+24)>get(w,144):
+                return 4294967295
+            if get(w,(get(w,304)+131712)+32)<1 or get(w,(get(w,304)+131712)+32)>3:
+                return 4294967295
+            copy_within(w,(get(w,304)+197376),(get(w,304)+131712),result)
+            put(w,184,result)
+            put(w,192,0)
+            put(w,8,90)
+            return 4294967293
+        if get(w,(get(w,304)+131712)+8)!=0 or result!=64:
+            return 4294967295
+        if get(w,(get(w,304)+131712)+16)!=0 or get(w,(get(w,304)+131712)+24)!=0 or get(w,(get(w,304)+131712)+32)!=0:
+            return 4294967295
+        ignored=parent_packet(w)
+        put(w,8,50)
+        return 4294967293
+    return 4294967295
+
+def confirm_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==50:
+        return request(w,o,51,2,3,1,0,0,(get(w,304)+66048),96+get(w,280)+get(w,296))
+    if phase==51:
+        return parent_reply(w,1)
+    if phase==60:
+        return request(w,o,61,1,2,get(w,104),0,0,0,0)
+    if phase==61:
+        if result==18446744073709551615-3:
+            put(w,8,60)
+            return 4294967293
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return 4294967295
+        if same_identity(w,(get(w,304)+65680),(get(w,304)+131712))==0 or get(w,(get(w,304)+131712)+16)!=1:
+            return value_error(w,7)
+        put(w,8,62)
+        return 4294967293
+    if phase==62:
+        return request(w,o,63,1,3,get(w,104),0,0,0,0)
+    if phase==63:
+        if get(w,48)!=0:
+            return 4294967295
+        put(w,104,18446744073709551615)
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=0:
+            return 4294967295
+        put(w,8,64)
+        return 4294967293
+    if phase==64:
+        return request(w,o,65,2,4,1,0,0,0,0)
+    if phase==65:
+        put(w,136,0)
+        put(w,120,18446744073709551615)
+        status=parent_closed(w)
+        if status!=1:
+            return status
+        put(w,8,70)
+        return 4294967293
+    return 4294967295
+
+def parent_closed(w:mutbuf) -> u64:
+    size=get(w,48)
+    if get(w,40)!=size or size<64 or size>4160:
+        return 4294967295
+    if get(w,(get(w,304)+131712))!=3544386040927240776 or get(w,(get(w,304)+131712)+56)!=size-64:
+        return 4294967295
+    if get(w,(get(w,304)+131712)+8)==3:
+        return nested_error(w)
+    if get(w,(get(w,304)+131712)+8)!=0 or size!=64:
+        return 4294967295
+    if get(w,(get(w,304)+131712)+24)!=0 or get(w,(get(w,304)+131712)+32)!=0 or get(w,(get(w,304)+131712)+40)!=0 or get(w,(get(w,304)+131712)+48)!=0:
+        return 4294967295
+    return 1
+
+def result_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==70:
+        put(w,(get(w,304)+66048),3549757090987987528)
+        put(w,(get(w,304)+66048)+8,2)
+        put(w,(get(w,304)+66048)+16,0)
+        copy_within(w,(get(w,304)+66048)+24,(get(w,304)+0),get(w,144))
+        put(w,8,71)
+        return 4294967293
+    if phase==71:
+        return request(w,o,72,2,1,0,0,0,(get(w,304)+66048),24+get(w,144))
+    if phase==72:
+        if result!=64 or get(w,48)!=64:
+            return 4294967295
+        i=0
+        while i<64:
+            c=byte(w,(get(w,304)+131712)+i)
+            if (c<48 or c>57) and (c<97 or c>102):
+                return 4294967295
+            i=i+1
+        copy_within(w,(get(w,304)+65968),(get(w,304)+131712),64)
+        size=render_result(w)
+        put(w,176,size)
+        if quoted_size(w,(get(w,304)+214016),size)+53>get(w,80):
+            return value_error(w,8)
+        put(w,192,10)
+        put(w,8,90)
+        return 4294967293
+    return 4294967295
+
+def render_result(w:mutbuf) -> u64:
+    at=get(w,168)
+    if get(w,88)!=0:
+        store(w,at,44)
+        at=at+1
+    at=wire_file(w,at)
+    at=quoted(w,at,get(w,288),get(w,296))
+    at=wire_sha(w,at)
+    at=quoted(w,at,(get(w,304)+65968),64)
+    at=wire_size(w,at)
+    at=decimal(w,at,get(w,144))
+    at=wire_text(w,at)
+    at=quoted(w,at,(get(w,304)+0),get(w,144))
+    at=wire_version(w,at)
+    at=quoted(w,at,(get(w,304)+65544),get(w,160))
+    store(w,at,125)
+    at=at+1
+    put(w,168,at)
+    at=wire_suffix(w,at)
+    return at-(get(w,304)+214016)
+
+def quoted_size(w:mutbuf,at:u64,size:u64) -> u64:
+    answer=2
+    i=0
+    while i<size:
+        c=byte(w,at+i)
+        step=1
+        if c==34 or c==92 or c==8 or c==9 or c==10 or c==12 or c==13:
+            step=2
+        else:
+            if c<32:
+                step=6
+        answer=answer+step
+        i=i+1
+    return answer
+
+def nested_error(w:mutbuf) -> u64:
+    size=get(w,48)
+    if size<64 or size>8192 or get(w,40)!=size:
+        return 4294967295
+    if get(w,(get(w,304)+131712))!=3544386040927240776 or get(w,(get(w,304)+131712)+8)!=3 or get(w,(get(w,304)+131712)+56)!=size-64:
+        return 4294967295
+    code=get(w,(get(w,304)+131712)+24)
+    number=get(w,(get(w,304)+131712)+32)
+    message=get(w,(get(w,304)+131712)+40)
+    named=get(w,(get(w,304)+131712)+48)
+    if code<1 or code>14 or number>4095 or message>size-64:
+        return 4294967295
+    if named==0:
+        if message!=size-64:
+            return 4294967295
+    else:
+        if named!=1 or number==0 or message!=0:
+            return 4294967295
+    copy_within(w,(get(w,304)+197376),(get(w,304)+131712),size)
+    put(w,184,size)
+    put(w,192,0)
+    put(w,8,90)
+    return 4294967293
+
+def value_error(w:mutbuf,code:u64) -> u64:
+    fill_range(w,(get(w,304)+197376),64,0)
+    put(w,(get(w,304)+197376),3544386040927240776)
+    put(w,(get(w,304)+197376)+8,3)
+    put(w,(get(w,304)+197376)+24,1)
+    size=error_literal(w,(get(w,304)+197376)+64,code)-(get(w,304)+197376)-64
+    put(w,(get(w,304)+197376)+40,size)
+    put(w,(get(w,304)+197376)+56,size)
+    put(w,184,64+size)
+    put(w,192,0)
+    put(w,8,90)
+    return 4294967293
+
+def os_error(w:mutbuf,number:u64,named:u64) -> u64:
+    if number==0 or number>4095:
+        return 4294967295
+    fill_range(w,(get(w,304)+197376),64,0)
+    put(w,(get(w,304)+197376),3544386040927240776)
+    put(w,(get(w,304)+197376)+8,3)
+    put(w,(get(w,304)+197376)+24,error_class(number))
+    put(w,(get(w,304)+197376)+32,number)
+    put(w,(get(w,304)+197376)+48,named)
+    size=0
+    if named!=0:
+        slot=get(w,200)
+        size=get(w,312+slot*8)
+        name=(get(w,304)+205632)
+        if slot!=0:
+            name=(get(w,304)+209792)
+        copy_within(w,(get(w,304)+197376)+64,name,size)
+    put(w,(get(w,304)+197376)+56,size)
+    put(w,184,64+size)
+    put(w,192,0)
+    put(w,8,90)
+    return 4294967293
+
+def finish(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==90:
+        if get(w,104)!=18446744073709551615:
+            return request(w,o,91,1,3,get(w,104),0,0,0,0)
+        if get(w,136)!=0:
+            return request(w,o,92,2,4,1,0,0,0,0)
+        if get(w,96)!=18446744073709551615:
+            return request(w,o,93,1,3,get(w,96),0,0,0,0)
+        if get(w,128)!=0:
+            return request(w,o,94,2,4,0,0,0,0,0)
+        if get(w,184)==0 and get(w,192)==10:
+            put(w,88,get(w,88)+1)
+            put(w,192,0)
+            if get(w,88)<get(w,64):
+                put(w,8,10)
+                return 4294967293
+        put(w,8,99)
+        return 4294967293
+    if phase==91 or phase==93:
+        if get(w,48)!=0:
+            return 4294967295
+        file=104
+        if phase==93:
+            file=96
+        put(w,file,18446744073709551615)
+        if negative(result)!=0:
+            return os_error(w,0-result,0)
+        if result!=0:
+            return 4294967295
+        put(w,8,90)
+        return 4294967293
+    if phase==92 or phase==94:
+        slot=1
+        if phase==94:
+            slot=0
+        put(w,128+slot*8,0)
+        put(w,112+slot*8,18446744073709551615)
+        status=parent_closed(w)
+        if status!=1:
+            return status
+        put(w,8,90)
+        return 4294967293
+    if phase==99:
+        size=get(w,176)
+        at=(get(w,304)+214016)
+        kind=0
+        if get(w,184)!=0:
+            size=get(w,184)
+            at=(get(w,304)+197376)
+            kind=3
+        if length(o)<64+size:
+            return short_header(o,5,64+size)
+        fill_range(o,0,64,0)
+        put(o,0,3544386040927243592)
+        put(o,8,kind)
+        put(o,16,get(w,16))
+        put(o,56,size)
+        copy_out(w,o,at,64,size)
+        return 64
+    return 4294967295
+
+def negative(value:u64) -> u64:
+    if value>=9223372036854775808:
+        return 1
+    return 0
+
+def equal(w:mutbuf,a:u64,b:u64,size:u64) -> u64:
+    at=0
+    while at<size:
+        if byte(w,a+at)!=byte(w,b+at):
+            return 0
+        at=at+1
+    return 1
+
+def load(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value)
+    store(w,at+1,value>>8)
+    store(w,at+2,value>>16)
+    store(w,at+3,value>>24)
+    store(w,at+4,value>>32)
+    store(w,at+5,value>>40)
+    store(w,at+6,value>>48)
+    store(w,at+7,value>>56)
+    return 0
+
+def u32_at(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)
+
+def copy_in(s:readbuf,w:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(w,dst+at,load(s,src+at))
+        at=at+8
+    while at<size:
+        store(w,dst+at,byte(s,src+at))
+        at=at+1
+    return size
+
+def copy_out(w:mutbuf,o:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(o,dst+at,get(w,src+at))
+        at=at+8
+    while at<size:
+        store(o,dst+at,byte(w,src+at))
+        at=at+1
+    return size
+
+def hex_digit(value:u64) -> u64:
+    if value<10:
+        return value+48
+    return value+87
+
+def decimal(w:mutbuf,at:u64,value:u64) -> u64:
+    if value==0:
+        store(w,at,48)
+        return at+1
+    size=0
+    while value!=0:
+        quotient=0
+        remainder=0
+        shift=64
+        while shift!=0:
+            shift=shift-1
+            remainder=(remainder<<1)|((value>>shift)&1)
+            if remainder>=10:
+                remainder=remainder-10
+                quotient=quotient|(1<<shift)
+        store(w,3072+size,48+remainder)
+        size=size+1
+        value=quotient
+    while size!=0:
+        size=size-1
+        store(w,at,byte(w,3072+size))
+        at=at+1
+    return at
+
+def quoted(w:mutbuf,at:u64,source:u64,size:u64) -> u64:
+    store(w,at,34)
+    at=at+1
+    i=0
+    while i<size:
+        c=byte(w,source+i)
+        if c==34 or c==92:
+            store(w,at,92)
+            store(w,at+1,c)
+            at=at+2
+        else:
+            if c==8 or c==9 or c==10 or c==12 or c==13:
+                escaped=98
+                if c==9:
+                    escaped=116
+                if c==10:
+                    escaped=110
+                if c==12:
+                    escaped=102
+                if c==13:
+                    escaped=114
+                store(w,at,92)
+                store(w,at+1,escaped)
+                at=at+2
+            else:
+                if c<32:
+                    store(w,at,92)
+                    store(w,at+1,117)
+                    store(w,at+2,48)
+                    store(w,at+3,48)
+                    store(w,at+4,hex_digit(c>>4))
+                    store(w,at+5,hex_digit(c&15))
+                    at=at+6
+                else:
+                    store(w,at,c)
+                    at=at+1
+        i=i+1
+    store(w,at,34)
+    return at+1
+
+def same_identity(w:mutbuf,a:u64,b:u64) -> u64:
+    if get(w,a)!=get(w,b) or get(w,a+8)!=get(w,b+8) or get(w,a+48)!=get(w,b+48):
+        return 0
+    if get(w,a+88)!=get(w,b+88) or get(w,a+96)!=get(w,b+96):
+        return 0
+    if get(w,a+104)!=get(w,b+104) or get(w,a+112)!=get(w,b+112):
+        return 0
+    return 1
+
+def error_class(number:u64) -> u64:
+    if number==1 or number==13:
+        return 2
+    if number==2:
+        return 4
+    if number==20:
+        return 5
+    if number==21:
+        return 6
+    if number==17:
+        return 7
+    if number==4:
+        return 8
+    if number==11 or number==114 or number==115:
+        return 9
+    if number==32 or number==108:
+        return 10
+    if number==110:
+        return 11
+    if number==104:
+        return 12
+    if number==103:
+        return 13
+    if number==111:
+        return 14
+    return 3
+
+def wire_prefix(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7163377007770804859)
+    put(w,at+8,8027793262296068959)
+    put(w,at+16,7310305785735160436)
+    put(w,at+24,7594317344498065964)
+    put(w,at+32,7382654479031756654)
+    put(w,at+40,7811887325606197293)
+    store(w,at+48,101)
+    store(w,at+49,115)
+    store(w,at+50,34)
+    store(w,at+51,58)
+    store(w,at+52,91)
+    return at+53
+
+def wire_file(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,8375044280399766139)
+    put(w,at+8,8386107273216619890)
+    store(w,at+16,104)
+    store(w,at+17,34)
+    store(w,at+18,58)
+    return at+19
+
+def wire_sha(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,3906083645759365676)
+    store(w,at+8,34)
+    store(w,at+9,58)
+    return at+10
+
+def wire_size(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,4189022179837551148)
+    return at+8
+
+def wire_text(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,4189038663854989868)
+    return at+8
+
+def wire_version(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,8028074745930326572)
+    store(w,at+8,110)
+    store(w,at+9,34)
+    store(w,at+10,58)
+    return at+11
+
+def wire_suffix(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,8318255638759222365)
+    put(w,at+8,8101803601836666728)
+    put(w,at+16,7306085893326643813)
+    put(w,at+24,6878243912657298800)
+    put(w,at+32,8368299583849916774)
+    put(w,at+40,7234316338069402994)
+    put(w,at+48,9035755136716519970)
+    return at+56
+
+def error_1(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,2334106421097295465)
+    put(w,at+8,2334101988909084514)
+    put(w,at+16,7594807752555001197)
+    put(w,at+24,7310874250626229612)
+    store(w,at+32,115)
+    store(w,at+33,116)
+    return at+34
+
+def error_2(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,2334101988909084514)
+    put(w,at+8,7310597203715908193)
+    put(w,at+16,7596553519221403168)
+    put(w,at+24,8386107265566208865)
+    put(w,at+32,8244249722772136040)
+    store(w,at+40,101)
+    store(w,at+41,100)
+    return at+42
+
+def error_3(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7021147451787862370)
+    put(w,at+8,8391179642277685364)
+    put(w,at+16,8391166409482527264)
+    store(w,at+24,105)
+    store(w,at+25,110)
+    store(w,at+26,99)
+    store(w,at+27,116)
+    return at+28
+
+def error_4(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7741240723759063400)
+    put(w,at+8,8315171486950253669)
+    put(w,at+16,8391735665606418720)
+    put(w,at+24,7595448454049196403)
+    put(w,at+32,7142819378486190195)
+    put(w,at+40,8388354980832178273)
+    store(w,at+48,121)
+    return at+49
+
+def error_5(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7167589996775106918)
+    put(w,at+8,7815265017932309861)
+    put(w,at+16,7070761784448265580)
+    put(w,at+24,7811886505070523513)
+    put(w,at+32,7310315401448484457)
+    put(w,at+40,6879655668574937632)
+    store(w,at+48,114)
+    store(w,at+49,101)
+    store(w,at+50,97)
+    store(w,at+51,100)
+    return at+52
+
+def error_6(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7018969010048624998)
+    put(w,at+8,8247608382885029742)
+    put(w,at+16,7812748535071731305)
+    store(w,at+24,32)
+    store(w,at+25,114)
+    store(w,at+26,101)
+    store(w,at+27,97)
+    store(w,at+28,100)
+    return at+29
+
+def error_7(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,8079569209299136371)
+    put(w,at+8,7954874719497909345)
+    put(w,at+16,7018969010384693620)
+    put(w,at+24,8247608382885029742)
+    put(w,at+32,7233174017378053737)
+    return at+40
+
+def error_8(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,7594807752555001197)
+    put(w,at+8,8030045015145211244)
+    put(w,at+16,7305815396255626094)
+    put(w,at+24,7598247066467525733)
+    put(w,at+32,5557552327183395937)
+    put(w,at+40,7815279607914975299)
+    put(w,at+48,7070762965898764404)
+    store(w,at+56,117)
+    store(w,at+57,100)
+    store(w,at+58,103)
+    store(w,at+59,101)
+    store(w,at+60,116)
+    return at+61
+
+def error_9(w:mutbuf,at:u64) -> u64:
+    put(w,at+0,2334106421097295465)
+    put(w,at+8,2338038275012781426)
+    put(w,at+16,2338053341489949030)
+    put(w,at+24,2334399943808742000)
+    store(w,at+32,115)
+    store(w,at+33,105)
+    store(w,at+34,100)
+    store(w,at+35,101)
+    store(w,at+36,99)
+    store(w,at+37,97)
+    store(w,at+38,114)
+    return at+39
+
+def error_literal(w:mutbuf,at:u64,code:u64) -> u64:
+    if code==1:
+        return error_1(w,at)
+    if code==2:
+        return error_2(w,at)
+    if code==3:
+        return error_3(w,at)
+    if code==4:
+        return error_4(w,at)
+    if code==5:
+        return error_5(w,at)
+    if code==6:
+        return error_6(w,at)
+    if code==7:
+        return error_7(w,at)
+    if code==8:
+        return error_8(w,at)
+    if code==9:
+        return error_9(w,at)
+    return at

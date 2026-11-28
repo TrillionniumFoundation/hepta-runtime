@@ -1,0 +1,42 @@
+{
+  "schema": "hepta.runtime.binary-read-orphans.pure-reader-derivation.v1",
+  "before": "reference/read_journal_before.py",
+  "after": "scripts/read_journal.py",
+  "changes": [
+    {
+      "label": "record complete effects",
+      "before": "    positions={};stream_state=None;stream_hash=None;stream_count=0;hook_index=0\n",
+      "after": "    positions={};stream_state=None;stream_hash=None;stream_count=0;hook_index=0;effects=[];orphans=[];last_sequence=0\n"
+    },
+    {
+      "label": "return all observed effects",
+      "before": "            return dict(workspace=wa,output=oa,body_calls=call,frame=frame)",
+      "after": "            return dict(workspace=wa,output=oa,body_calls=call,frame=frame,effects=effects,orphans=orphans)"
+    },
+    {
+      "label": "exact sequence",
+      "before": "        require(sequence>0,\"missing effect sequence\")",
+      "after": "        require(sequence==last_sequence+1,\"complete monotonically owned effect sequence\");last_sequence=sequence"
+    },
+    {
+      "label": "orphan opcode admission",
+      "before": "            require(operation in(1,2,3,5,6,9,11,19),\"undeclared filesystem operation\")",
+      "after": "            require(operation in(1,2,3,4,5,6,9,11,19),\"undeclared filesystem operation\")"
+    },
+    {
+      "label": "actual orphan FD transfer",
+      "before": "            elif operation==5:\n",
+      "after": "            elif operation==4:\n                require(rawret==0 and not payload and(borrowed is None or fd!=borrowed[0])\n                    and U(wa,8)==35 and U(wa,96)==fd,\"exact first-fstat orphan request and acknowledgement\")\n                require(effects and effects[-1][\"operation\"]==6 and effects[-1][\"phase\"]==25\n                    and effects[-1][\"fd\"]==fd and effects[-1][\"raw_return\"]<0\n                    and effects[-1][\"raw_return\"]!=-4,\"orphan only after original regular first-fstat non-EINTR failure\")\n                orphans.append(dict(fd=fd,generation=generation,sequence=sequence,path=fds[fd]))\n                del fds[fd];positions.pop(fd,None)\n            elif operation==5:\n"
+    },
+    {
+      "label": "full stat fields",
+      "before": "                        stat_reply(payload,hook[\"fd_stat\"])",
+      "after": "                        stat_reply(payload,hook[\"fd_stat\"])\n                        from protocol import stat_decode\n                        require(stat_decode(payload)==hook[\"after\"][\"stat\"],\"complete actual fstat fields\")"
+    },
+    {
+      "label": "complete effects before reader projection",
+      "before": "            require(hr[10]==owned_count(),\"effect FD ownership count differs\")",
+      "after": "            require(hr[10]==owned_count(),\"effect FD ownership count differs\")\n            effects.append(dict(operation=operation,fd=fd,a=a,b=b,request=name.hex(),phase=U(wa,8),\n                raw_return=rawret,payload=payload.hex(),returned_bytes=len(payload),returned_sha256=hashlib.sha256(payload).hexdigest()))\n"
+    }
+  ]
+}

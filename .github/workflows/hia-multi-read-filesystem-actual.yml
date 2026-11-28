@@ -1,0 +1,81 @@
+name: Qualify actual multi-read filesystem and orphan lifetimes
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout exact frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/filesystem_qualification
+          persist-credentials: false
+      - name: Complete bounded source-only admission
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(sha256sum runtime/qualification/multi_read_body/v1/filesystem_qualification/SOURCE_MANIFEST.json | cut -d ' ' -f 1)" = dbc753eadceff9d0ac923eeaf46034ab8fc101aec131628e7e5cc5dab73f4f79
+          python3 -I -S -B runtime/qualification/multi_read_body/v1/filesystem_qualification/scripts/preflight.py --output "$RUNNER_TEMP/multi-filesystem-source"
+      - name: Preserve exact source-only process evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-filesystem-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-filesystem-source
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
+  actual:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: ["ordinary-a","ordinary-b","sixteen","ceilings-a","ceilings-b","ceilings-c","validate-a","validate-b","validate-c","validate-d","policy","kinds-a","kinds-b","utf8-files","mutate-read-a","mutate-read-b","mutate-confirm","late-mutation","fault-a","fault-b","orphan-two","ownership-a","limits","eof","observer-off","controls","shm"]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      MULTI_SOURCE: ${{ github.workspace }}/runtime/qualification/multi_read_body/v1/filesystem_qualification
+      MULTI_MANIFEST: dbc753eadceff9d0ac923eeaf46034ab8fc101aec131628e7e5cc5dab73f4f79
+    steps:
+      - name: Checkout frozen actual domain and all source-owned readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/multi_read_body/v1/filesystem_qualification
+          persist-credentials: false
+      - name: Verify exact source commit
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Compare actual original and native full filesystem calls
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" qualify \
+            --work "$RUNNER_TEMP/multi-filesystem-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Retain complete captures and first failure without application replay
+        if: always()
+        run: |
+          python3 -I -S -B "$MULTI_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/multi-filesystem-${{ matrix.group }}" --group "${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/multi-filesystem-${{ matrix.group }}-export" \
+            --source-manifest-sha256 "$MULTI_MANIFEST"
+      - name: Upload complete file and mode evidence archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: multi-filesystem-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/multi-filesystem-${{ matrix.group }}-export
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0

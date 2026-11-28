@@ -1,0 +1,52 @@
+name: Read complete partial file-info captures without replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-info-read67-fault-boundary-r2-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        group: [child-orphans, shm]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/runtime/qualification/file_info_at/v2/fault_boundary_read
+      INFO_MANIFEST: d9b2219ac012afe1efcc70deef6caee2cc1dc724ac7f85f877be7f4808d8381f
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout frozen pure readers and complete original source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v2/fault_boundary_read
+          persist-credentials: false
+      - name: Fully read original archives and exact execution boundary
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" read \
+            --work "$RUNNER_TEMP/info-partial-$INFO_GROUP" --group "$INFO_GROUP" --manifest "$INFO_MANIFEST"
+      - name: Retain complete partial-read archive and any initial failure
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/info-partial-$INFO_GROUP" --group "$INFO_GROUP" --manifest "$INFO_MANIFEST" \
+            --output "$RUNNER_TEMP/info-partial-$INFO_GROUP-export"
+      - name: Upload full read evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-partial-read-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-partial-${{ matrix.group }}-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
