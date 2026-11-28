@@ -1,0 +1,269 @@
+# This HIA author input emits a scalar x86-64 implementation of the private
+# 1184-byte SHA state. It is an explicit successor lowering stage. It does not
+# change the pinned B3 compiler or describe its output as direct B3 output.
+
+def entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(i) != IMAGE_BYTES + 16:
+        return 4294967295
+    if read64(i, 0) != FRAME_MAGIC or read64(i, 8) != IMAGE_BYTES:
+        return 4294967295
+    if length(w) < 65536:
+        return 4294967294
+    sha_init(w)
+    append_image(i, w)
+    sha_final(w)
+    if image_digest_matches(w) == 0:
+        return 4294967295
+    if original_prologue_matches(i) == 0:
+        return 4294967295
+    put(w, 4096, 0)
+    generate(w)
+    fallback = get(w, 4096)
+    copy_range(w, i, 8192 + fallback, 16 + FUNCTION_OFFSET, 11)
+    put(w, 4096, fallback + 11)
+    emit(w, 233)
+    back = FUNCTION_OFFSET + 11 - (IMAGE_BYTES + get(w, 4096) + 4)
+    emit_bytes(w, back, 4)
+    write32(w, 8202, fallback - 14)
+    put(w, 4104, generate_word(i, w, WORD_GET_OFFSET, 0))
+    put(w, 4112, generate_word(i, w, WORD_PUT_OFFSET, 1))
+    put(w, 4120, generate_word(i, w, CODEC_GET_OFFSET, 0))
+    put(w, 4128, generate_word(i, w, CODEC_PUT_OFFSET, 1))
+    code_bytes = get(w, 4096)
+    if code_bytes > 32768:
+        return 4294967295
+    total = IMAGE_BYTES + code_bytes
+    if length(o) < total:
+        return 4294967294
+    copy_range(o, i, 0, 16, IMAGE_BYTES)
+    copy_range(o, w, IMAGE_BYTES, 8192, code_bytes)
+    patch_entry(o, FUNCTION_OFFSET, IMAGE_BYTES)
+    patch_entry(o, WORD_GET_OFFSET, IMAGE_BYTES + get(w, 4104))
+    patch_entry(o, WORD_PUT_OFFSET, IMAGE_BYTES + get(w, 4112))
+    patch_entry(o, CODEC_GET_OFFSET, IMAGE_BYTES + get(w, 4120))
+    patch_entry(o, CODEC_PUT_OFFSET, IMAGE_BYTES + get(w, 4128))
+    return total
+
+def patch_entry(o:mutbuf, offset:u64, target:u64) -> u64:
+    store(o, offset, 233)
+    write32(o, offset + 1, target - offset - 5)
+    j = 5
+    while j < 11:
+        store(o, offset + j, 144)
+        j = j + 1
+    return 0
+
+def generate_word(i:readbuf, w:mutbuf, offset:u64, kind:u64) -> u64:
+    start = get(w, 4096)
+    # Admit exactly an eight-byte range inside the declared view. All other
+    # extents and indexes take the original code before any state access.
+    literal(w, 4)
+    if kind == 0:
+        literal(w, 5)
+    else:
+        literal(w, 6)
+    fallback = get(w, 4096)
+    copy_range(w, i, 8192 + fallback, 16 + offset, 11)
+    put(w, 4096, fallback + 11)
+    emit(w, 233)
+    back = offset + 11 - (IMAGE_BYTES + get(w, 4096) + 4)
+    emit_bytes(w, back, 4)
+    write32(w, 8192 + start + 10, fallback - start - 14)
+    write32(w, 8192 + start + 27, fallback - start - 31)
+    return start
+
+def append_image(i:readbuf, w:mutbuf) -> u64:
+    at = 0
+    while at + 64 <= IMAGE_BYTES:
+        copy_range(w, i, 1112, 16 + at, 64)
+        sha_compress(w)
+        at = at + 64
+    remaining = IMAGE_BYTES - at
+    if remaining > 0:
+        copy_range(w, i, 1112, 16 + at, remaining)
+    put(w, 1088, IMAGE_BYTES)
+    put(w, 1096, remaining)
+    return 0
+
+def read64(i:readbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 8:
+        value = value | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def write32(w:mutbuf, at:u64, value:u64) -> u64:
+    j = 0
+    while j < 4:
+        store(w, at + j, value & 255)
+        value = value >> 8
+        j = j + 1
+    return 0
+
+def emit(w:mutbuf, value:u64) -> u64:
+    at = get(w, 4096)
+    store(w, 8192 + at, value & 255)
+    put(w, 4096, at + 1)
+    return 0
+
+def emit_bytes(w:mutbuf, value:u64, count:u64) -> u64:
+    j = 0
+    while j < count:
+        emit(w, value & 255)
+        value = value >> 8
+        j = j + 1
+    return 0
+
+def register32(w:mutbuf, opcode:u64, destination:u64, source:u64) -> u64:
+    rex = 64 | ((source >> 3) << 2) | (destination >> 3)
+    if rex != 64:
+        emit(w, rex)
+    emit(w, opcode)
+    emit(w, 192 | ((source & 7) << 3) | (destination & 7))
+    return 0
+
+def memory32(w:mutbuf, opcode:u64, register:u64, offset:u64) -> u64:
+    emit(w, 65 | ((register >> 3) << 2))
+    emit(w, opcode)
+    emit(w, 135 | ((register & 7) << 3))
+    emit_bytes(w, offset, 4)
+    return 0
+
+def rotate32(w:mutbuf, register:u64, shift:u64) -> u64:
+    if register >= 8:
+        emit(w, 65)
+    emit(w, 193)
+    emit(w, 200 | (register & 7))
+    emit(w, shift)
+    return 0
+
+def shift32(w:mutbuf, register:u64, shift:u64) -> u64:
+    if register >= 8:
+        emit(w, 65)
+    emit(w, 193)
+    emit(w, 232 | (register & 7))
+    emit(w, shift)
+    return 0
+
+def add32(w:mutbuf, register:u64, value:u64) -> u64:
+    if register >= 8:
+        emit(w, 65)
+    emit(w, 129)
+    emit(w, 192 | (register & 7))
+    emit_bytes(w, value, 4)
+    return 0
+
+def state_register(index:u64) -> u64:
+    if index == 0:
+        return 0
+    if index == 1:
+        return 3
+    if index == 2:
+        return 1
+    if index == 3:
+        return 2
+    return index + 4
+
+def schedule_word(w:mutbuf, index:u64) -> u64:
+    # eax = sigma0(W[j-15]); ecx = sigma1(W[j-2]).
+    memory32(w, 139, 0, 512 + (index - 15) * 8)
+    register32(w, 137, 2, 0)
+    rotate32(w, 0, 7)
+    rotate32(w, 2, 18)
+    register32(w, 49, 0, 2)
+    memory32(w, 139, 2, 512 + (index - 15) * 8)
+    shift32(w, 2, 3)
+    register32(w, 49, 0, 2)
+    memory32(w, 139, 1, 512 + (index - 2) * 8)
+    register32(w, 137, 3, 1)
+    rotate32(w, 1, 17)
+    rotate32(w, 3, 19)
+    register32(w, 49, 1, 3)
+    memory32(w, 139, 3, 512 + (index - 2) * 8)
+    shift32(w, 3, 10)
+    register32(w, 49, 1, 3)
+    register32(w, 1, 0, 1)
+    memory32(w, 3, 0, 512 + (index - 16) * 8)
+    memory32(w, 3, 0, 512 + (index - 7) * 8)
+    memory32(w, 137, 0, 512 + index * 8)
+    return 0
+
+def round(w:mutbuf, index:u64) -> u64:
+    # The eight state registers rotate logically; r12d/r13d/r14d are temporary.
+    a = state_register((64 - index) & 7)
+    b = state_register((65 - index) & 7)
+    c = state_register((66 - index) & 7)
+    d = state_register((67 - index) & 7)
+    e = state_register((68 - index) & 7)
+    f = state_register((69 - index) & 7)
+    g = state_register((70 - index) & 7)
+    h = state_register((71 - index) & 7)
+    register32(w, 137, 12, e)
+    rotate32(w, 12, 6)
+    register32(w, 137, 13, e)
+    rotate32(w, 13, 11)
+    register32(w, 49, 12, 13)
+    register32(w, 137, 13, e)
+    rotate32(w, 13, 25)
+    register32(w, 49, 12, 13)
+    register32(w, 137, 13, f)
+    register32(w, 49, 13, g)
+    register32(w, 33, 13, e)
+    register32(w, 49, 13, g)
+    register32(w, 1, 12, 13)
+    register32(w, 1, 12, h)
+    add32(w, 12, round_constant(index))
+    memory32(w, 3, 12, 512 + index * 8)
+    register32(w, 1, d, 12)
+    register32(w, 137, 13, a)
+    rotate32(w, 13, 2)
+    register32(w, 137, 14, a)
+    rotate32(w, 14, 13)
+    register32(w, 49, 13, 14)
+    register32(w, 137, 14, a)
+    rotate32(w, 14, 22)
+    register32(w, 49, 13, 14)
+    register32(w, 137, 14, a)
+    register32(w, 33, 14, b)
+    register32(w, 137, h, a)
+    register32(w, 9, h, b)
+    register32(w, 33, h, c)
+    register32(w, 9, 14, h)
+    register32(w, 1, 13, 14)
+    register32(w, 1, 12, 13)
+    register32(w, 137, h, 12)
+    return 0
+
+def generate(w:mutbuf) -> u64:
+    # cmp qword [rdi+8],1184; jb original-prologue-trampoline.
+    literal(w, 1)
+    # Save the six callee-saved registers and the result-cell pointer, retain
+    # the private state pointer in r15, and copy ROUND words into schedule.
+    literal(w, 2)
+    j = 0
+    while j < 16:
+        memory32(w, 139, 0, 1112 + j * 4)
+        emit(w, 15)
+        emit(w, 200)
+        memory32(w, 137, 0, 512 + j * 8)
+        j = j + 1
+    while j < 64:
+        schedule_word(w, j)
+        j = j + 1
+    j = 0
+    while j < 8:
+        memory32(w, 139, state_register(j), 1024 + j * 8)
+        j = j + 1
+    j = 0
+    while j < 64:
+        round(w, j)
+        j = j + 1
+    j = 0
+    while j < 8:
+        memory32(w, 3, state_register(j), 1024 + j * 8)
+        memory32(w, 137, state_register(j), 1024 + j * 8)
+        j = j + 1
+    # Restore all saved registers, write exactly one u64 result, and return.
+    literal(w, 3)
+    return 0

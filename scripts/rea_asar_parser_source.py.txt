@@ -1,0 +1,1586 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+
+def entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < WORKSPACE:
+        return CAPACITY
+    if get(w, H) == 0:
+        if length(i) < 136 or read64(i, 0) != REQUEST:
+            return INVALID
+        n = read64(i, 40)
+        if n > length(i) - 136 or length(i) != 136 + n:
+            return INVALID
+        if read64(i, 8) < 1 or read64(i, 8) > 2 or read64(i, 32) > 1:
+            return INVALID
+        if read64(i, 8) == 1 and (n != 0 or read64(i, 32) != 0):
+            return INVALID
+        if utf8(i, 136, n) != 1:
+            return INVALID
+        fill_range(w, H, 2048, 0)
+        put(w, H, PRIVATE)
+        if n > 4096:
+            fail(w, 15)
+            return finish(o, w)
+        copy_range(w, i, INIT, 0, 136 + n)
+        validate_request(w)
+        if get(w, H + 16) == 0:
+            make_version(w)
+            queue(w, 1, 0, 16, 1)
+    else:
+        if get(w, H) != PRIVATE or get(w, H + 8) == 99:
+            return INVALID
+        if length(i) < 32 or read64(i, 0) != COMPLETION:
+            return INVALID
+        if read64(i, 8) != get(w, H + 24):
+            return INVALID
+        n = read64(i, 16)
+        if n > get(w, H + 48) or length(i) != 32 + n:
+            return INVALID
+        if read64(i, 24) != 0 or n != get(w, H + 48):
+            fail(w, get(w, H + 56))
+        else:
+            phase = get(w, H + 8)
+            if phase == 1:
+                prefix(i, w)
+            else:
+                if phase == 2:
+                    header(i, w)
+                else:
+                    if phase == 3:
+                        member_chunk(i, w)
+                    else:
+                        if phase == 4:
+                            final_metadata(i, w)
+                        else:
+                            return INVALID
+    if get(w, H + 16) != 0:
+        return finish(o, w)
+    if get(w, H + 8) == 99:
+        return finish(o, w)
+    return PENDING
+
+def read64(i:readbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 8:
+        value = value | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def read32(i:readbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 4:
+        value = value | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def load32(w:mutbuf, at:u64) -> u64:
+    return byte(w, at) | (byte(w, at + 1) << 8) | (byte(w, at + 2) << 16) | (byte(w, at + 3) << 24)
+
+def put32(w:mutbuf, at:u64, value:u64) -> u64:
+    j = 0
+    while j < 4:
+        store(w, at + j, (value >> (j * 8)) & 255)
+        j = j + 1
+    return 0
+
+def fail(w:mutbuf, code:u64) -> u64:
+    if get(w, H + 16) == 0:
+        put(w, H + 16, code)
+    return 0
+
+def queue(w:mutbuf, action:u64, offset:u64, amount:u64, phase:u64) -> u64:
+    put(w, H + 24, get(w, H + 24) + 1)
+    put(w, H + 8, phase)
+    put(w, H + 32, action)
+    put(w, H + 40, offset)
+    put(w, H + 48, amount)
+    error = 3
+    if phase == 2:
+        error = 6
+    if phase == 3:
+        error = 43
+    if phase == 4:
+        error = 54
+    put(w, H + 56, error)
+    put(w, P, EFFECT)
+    put(w, P + 8, get(w, H + 24))
+    put(w, P + 16, action)
+    put(w, P + 24, offset)
+    put(w, P + 32, amount)
+    return 0
+
+def validate_request(w:mutbuf) -> u64:
+    if get(w, INIT + 8) == 1:
+        if get(w, INIT + 16) > 50000 or get(w, INIT + 24) < 1 or get(w, INIT + 24) > 256:
+            return fail(w, 1)
+    else:
+        validate_path(w, INIT + 136, get(w, INIT + 40))
+        if get(w, H + 16) != 0:
+            return 0
+        if get(w, INIT + 24) < 1 or get(w, INIT + 24) > 1048576 or get(w, INIT + 16) > 67108864:
+            return fail(w, 2)
+        if get(w, INIT + 32) == 1 and get(w, INIT + 16) != 0:
+            return fail(w, 4)
+    if (get(w, INIT + 72) & 61440) != 32768 or get(w, INIT + 64) < 16 or get(w, INIT + 64) > 9007199254740991:
+        return fail(w, 5)
+    return 0
+
+def prefix(i:readbuf, w:mutbuf) -> u64:
+    head = read32(i, 36)
+    payload = read32(i, 40)
+    n = read32(i, 44)
+    if read32(i, 32) != 4 or head < 8 or head > 16777216 or (head & 3) != 0 or payload != head - 4:
+        return fail(w, 7)
+    if n == 0 or n > 2147483647 or 4 + ((n + 3) // 4) * 4 != payload:
+        return fail(w, 7)
+    if head + 8 > get(w, INIT + 64):
+        return fail(w, 8)
+    put(w, H + 64, head + 8)
+    put(w, H + 72, n)
+    put(w, H + 80, get(w, INIT + 64) - head - 8)
+    sha_init(w)
+    sha_append_input(i, w, 32, 16)
+    copy_range(w, w, HEADER_SHA, 0, 1184)
+    return queue(w, 1, 16, head - 8, 2)
+
+def header(i:readbuf, w:mutbuf) -> u64:
+    n = get(w, H + 72)
+    j = 32 + n
+    while j < length(i):
+        if byte(i, j) != 0:
+            return fail(w, 9)
+        j = j + 1
+    if utf8(i, 32, n) != 1:
+        return fail(w, 10)
+    copy_range(w, w, 0, HEADER_SHA, 1184)
+    sha_append_input(i, w, 32, length(i) - 32)
+    sha_final(w)
+    copy_digest(w, HEADER_DIGEST, 1)
+    parse_json(i, w, 32, 32 + n)
+    if get(w, H + 16) != 0:
+        return 0
+    inventory(w)
+    if get(w, H + 16) != 0:
+        return 0
+    coverage(w)
+    if get(w, H + 16) != 0:
+        return 0
+    if get(w, INIT + 8) == 1:
+        if get(w, INIT + 16) > get(w, H + 96):
+            return fail(w, 38)
+        return queue(w, 2, 0, 88, 4)
+    return begin_member(w)
+
+def skip_space(i:readbuf, at:u64, end:u64) -> u64:
+    running = 1
+    while at < end and running == 1:
+        c = byte(i, at)
+        if c == 32 or c == 9 or c == 10 or c == 13:
+            at = at + 1
+        else:
+            running = 0
+    return at
+
+def json_fail(w:mutbuf) -> u64:
+    return fail(w, 11)
+
+def hex_digit(c:u64) -> u64:
+    if c >= 48 and c <= 57:
+        return c - 48
+    if c >= 97 and c <= 102:
+        return c - 87
+    if c >= 65 and c <= 70:
+        return c - 55
+    return 256
+
+def unicode_word(i:readbuf, at:u64, end:u64) -> u64:
+    if at > end or end - at < 4:
+        return 1114112
+    value = 0
+    j = 0
+    while j < 4:
+        c = hex_digit(byte(i, at + j))
+        if c > 15:
+            return 1114112
+        value = value * 16 + c
+        j = j + 1
+    return value
+
+def decoded_byte(w:mutbuf, value:u64) -> u64:
+    at = get(w, H + 208)
+    if at >= STRINGS_END:
+        return json_fail(w)
+    store(w, at, value)
+    put(w, H + 208, at + 1)
+    return 0
+
+def json_string(i:readbuf, w:mutbuf, at:u64, end:u64) -> u64:
+    start = get(w, H + 208)
+    decoded = start
+    at = at + 1
+    closed = 0
+    while at < end and closed == 0 and get(w, H + 16) == 0:
+        c = byte(i, at)
+        at = at + 1
+        if c == 34:
+            closed = 1
+        else:
+            if c < 32:
+                return json_fail(w)
+            if c != 92:
+                if decoded >= STRINGS_END:
+                    return json_fail(w)
+                store(w, decoded, c)
+                decoded = decoded + 1
+            else:
+                put(w, H + 208, decoded)
+                if at >= end:
+                    return json_fail(w)
+                c = byte(i, at)
+                at = at + 1
+                if c == 34 or c == 92 or c == 47:
+                    decoded_byte(w, c)
+                else:
+                    if c == 98 or c == 102 or c == 110 or c == 114 or c == 116:
+                        v = 8
+                        if c == 102:
+                            v = 12
+                        if c == 110:
+                            v = 10
+                        if c == 114:
+                            v = 13
+                        if c == 116:
+                            v = 9
+                        decoded_byte(w, v)
+                    else:
+                        if c != 117:
+                            return json_fail(w)
+                        value = unicode_word(i, at, end)
+                        if value == 1114112:
+                            return json_fail(w)
+                        at = at + 4
+                        if value >= 55296 and value <= 56319:
+                            if at > end or end - at < 6:
+                                return json_fail(w)
+                            if byte(i, at) != 92 or byte(i, at + 1) != 117:
+                                return json_fail(w)
+                            low = unicode_word(i, at + 2, end)
+                            if low < 56320 or low > 57343:
+                                return json_fail(w)
+                            value = 65536 + (value - 55296) * 1024 + low - 56320
+                            at = at + 6
+                        else:
+                            if value >= 56320 and value <= 57343:
+                                return json_fail(w)
+                        if value < 128:
+                            decoded_byte(w, value)
+                        else:
+                            if value < 2048:
+                                decoded_byte(w, 192 | (value >> 6))
+                                decoded_byte(w, 128 | (value & 63))
+                            else:
+                                if value < 65536:
+                                    decoded_byte(w, 224 | (value >> 12))
+                                    decoded_byte(w, 128 | ((value >> 6) & 63))
+                                    decoded_byte(w, 128 | (value & 63))
+                                else:
+                                    decoded_byte(w, 240 | (value >> 18))
+                                    decoded_byte(w, 128 | ((value >> 12) & 63))
+                                    decoded_byte(w, 128 | ((value >> 6) & 63))
+                                    decoded_byte(w, 128 | (value & 63))
+                decoded = get(w, H + 208)
+    if closed == 0:
+        return json_fail(w)
+    put(w, H + 208, decoded)
+    put(w, H + 184, at)
+    put(w, H + 232, start)
+    put(w, H + 240, get(w, H + 208) - start)
+    return 0
+
+def json_number(i:readbuf, w:mutbuf, at:u64, end:u64) -> u64:
+    start = at
+    if byte(i, at) == 45:
+        at = at + 1
+    if at >= end:
+        return json_fail(w)
+    c = byte(i, at)
+    if c == 48:
+        at = at + 1
+    else:
+        if c < 49 or c > 57:
+            return json_fail(w)
+        while at < end and byte(i, at) >= 48 and byte(i, at) <= 57:
+            at = at + 1
+    if at < end and byte(i, at) == 46:
+        at = at + 1
+        digits = at
+        while at < end and byte(i, at) >= 48 and byte(i, at) <= 57:
+            at = at + 1
+        if at == digits:
+            return json_fail(w)
+    if at < end and (byte(i, at) == 101 or byte(i, at) == 69):
+        at = at + 1
+        if at < end and (byte(i, at) == 43 or byte(i, at) == 45):
+            at = at + 1
+        digits = at
+        while at < end and byte(i, at) >= 48 and byte(i, at) <= 57:
+            at = at + 1
+        if at == digits:
+            return json_fail(w)
+    if classify_number(i, w, start, at) != 0:
+        return json_fail(w)
+    put(w, H + 184, at)
+    return 0
+
+def json_value(i:readbuf, w:mutbuf, parent:u64, key:u64, keylen:u64) -> u64:
+    at = skip_space(i, get(w, H + 184), get(w, H + 192))
+    end = get(w, H + 192)
+    if at >= end:
+        return json_fail(w)
+    id = get(w, H + 200)
+    if id >= 8388608:
+        return json_fail(w)
+    put(w, H + 200, id + 1)
+    n = NODES + id * 24
+    fill_range(w, n, 24, 0)
+    put32(w, n + 16, key)
+    put32(w, n + 20, keylen)
+    c = byte(i, at)
+    kind = 0
+    if c == 34:
+        json_string(i, w, at, end)
+        if get(w, H + 16) != 0:
+            return 0
+        kind = 6
+        put32(w, n + 8, get(w, H + 232))
+        put32(w, n + 12, get(w, H + 240))
+    else:
+        if c == 91 or c == 123:
+            kind = choose(c == 91, 7, 8)
+            put(w, H + 184, at + 1)
+        else:
+            if c == 116:
+                if end - at < 4 or read32(i, at) != 1702195828:
+                    return json_fail(w)
+                kind = 2
+                put(w, H + 184, at + 4)
+            else:
+                if c == 102:
+                    if end - at < 5 or read32(i, at) != 1936482662 or byte(i, at + 4) != 101:
+                        return json_fail(w)
+                    kind = 1
+                    put(w, H + 184, at + 5)
+                else:
+                    if c == 110:
+                        if end - at < 4 or read32(i, at) != 1819047278:
+                            return json_fail(w)
+                        put(w, H + 184, at + 4)
+                    else:
+                        if c != 45 and (c < 48 or c > 57):
+                            return json_fail(w)
+                        json_number(i, w, at, end)
+                        if get(w, H + 16) != 0:
+                            return 0
+                        kind = get(w, 7008)
+                        put(w, n + 8, get(w, 7000))
+    put32(w, n + 4, kind)
+    if parent == 0:
+        put(w, H + 224, id)
+    else:
+        owner = NODES + load32(w, parent) * 24
+        last = load32(w, parent + 4)
+        if last == 0:
+            put32(w, owner + 8, id)
+        else:
+            put32(w, NODES + last * 24, id)
+        put32(w, parent + 4, id)
+        put32(w, owner + 12, load32(w, owner + 12) + 1)
+        put32(w, parent + 8, 2)
+    if kind == 7 or kind == 8:
+        depth = get(w, H + 216)
+        if depth >= 127:
+            return json_fail(w)
+        frame = JSON_STACK + depth * 32
+        fill_range(w, frame, 32, 0)
+        put32(w, frame, id)
+        put(w, H + 216, depth + 1)
+    return 0
+
+def parse_json(i:readbuf, w:mutbuf, start:u64, end:u64) -> u64:
+    put(w, H + 184, start)
+    put(w, H + 192, end)
+    put(w, H + 200, 1)
+    put(w, H + 208, STRINGS)
+    put(w, H + 216, 0)
+    put(w, H + 224, 0)
+    json_value(i, w, 0, 0, 0)
+    while get(w, H + 16) == 0 and get(w, H + 216) > 0:
+        frame = JSON_STACK + (get(w, H + 216) - 1) * 32
+        id = load32(w, frame)
+        node = NODES + id * 24
+        kind = load32(w, node + 4)
+        state = load32(w, frame + 8)
+        at = skip_space(i, get(w, H + 184), end)
+        if at >= end:
+            return json_fail(w)
+        c = byte(i, at)
+        closing = choose(kind == 8, 125, 93)
+        if c == closing and state != 1:
+            if kind == 8:
+                sort_object(w, node)
+            put(w, H + 184, at + 1)
+            put(w, H + 216, get(w, H + 216) - 1)
+        else:
+            if state == 2:
+                if c != 44:
+                    return json_fail(w)
+                put(w, H + 184, at + 1)
+                put32(w, frame + 8, 1)
+            else:
+                key = 0
+                keylen = 0
+                if kind == 8:
+                    if c != 34:
+                        return json_fail(w)
+                    json_string(i, w, at, end)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    key = get(w, H + 232)
+                    keylen = get(w, H + 240)
+                    at = skip_space(i, get(w, H + 184), end)
+                    if at >= end or byte(i, at) != 58:
+                        return json_fail(w)
+                    at = at + 1
+                put(w, H + 184, at)
+                json_value(i, w, frame, key, keylen)
+    if get(w, H + 16) == 0 and skip_space(i, get(w, H + 184), end) != end:
+        return json_fail(w)
+    return 0
+
+def bytes_compare(w:mutbuf, left:u64, ln:u64, right:u64, rn:u64) -> u64:
+    n = choose(ln < rn, ln, rn)
+    j = common_prefix(w, left, ln, right, rn)
+    if j < n:
+        a = byte(w, left + j)
+        b = byte(w, right + j)
+        if a < b:
+            return 0
+        return 2
+    if ln < rn:
+        return 0
+    if ln > rn:
+        return 2
+    return 1
+
+def key_compare(w:mutbuf, a:u64, b:u64) -> u64:
+    left = NODES + a * 24
+    right = NODES + b * 24
+    skip = get(w, H + 352)
+    return bytes_compare(w, load32(w, left + 16) + skip, load32(w, left + 20) - skip, load32(w, right + 16) + skip, load32(w, right + 20) - skip)
+
+def key_sift(w:mutbuf, root:u64, count:u64) -> u64:
+    running = 1
+    while root * 2 + 1 < count and running == 1:
+        child = root * 2 + 1
+        if child + 1 < count:
+            if key_compare(w, load32(w, SORT + child * 4), load32(w, SORT + (child + 1) * 4)) == 0:
+                child = child + 1
+        a = load32(w, SORT + root * 4)
+        b = load32(w, SORT + child * 4)
+        if key_compare(w, a, b) == 0:
+            put32(w, SORT + root * 4, b)
+            put32(w, SORT + child * 4, a)
+            root = child
+        else:
+            running = 0
+    return 0
+
+def sort_object(w:mutbuf, node:u64) -> u64:
+    count = load32(w, node + 12)
+    if count < 2:
+        return 0
+    if count > 4194304:
+        return json_fail(w)
+    id = load32(w, node + 8)
+    first = NODES + id * 24
+    first_at = load32(w, first + 16)
+    common = load32(w, first + 20)
+    j = 0
+    while j < count:
+        put32(w, SORT + j * 4, id)
+        current = NODES + id * 24
+        if j > 0 and common > 0:
+            common = common_prefix(w, first_at, common, load32(w, current + 16), load32(w, current + 20))
+        id = load32(w, current)
+        j = j + 1
+    put(w, H + 352, common)
+    j = count // 2
+    while j > 0:
+        j = j - 1
+        key_sift(w, j, count)
+    j = count
+    while j > 1:
+        j = j - 1
+        a = load32(w, SORT)
+        b = load32(w, SORT + j * 4)
+        put32(w, SORT, b)
+        put32(w, SORT + j * 4, a)
+        key_sift(w, 0, j)
+    put32(w, node + 8, load32(w, SORT))
+    j = 0
+    while j < count:
+        id = load32(w, SORT + j * 4)
+        next = 0
+        if j + 1 < count:
+            next = load32(w, SORT + (j + 1) * 4)
+            if key_compare(w, id, next) == 1:
+                return json_fail(w)
+        put32(w, NODES + id * 24, next)
+        j = j + 1
+    return 0
+
+def validate_segment(w:mutbuf, at:u64, n:u64) -> u64:
+    if n == 0:
+        return fail(w, 16)
+    if n == 1 and byte(w, at) == 46:
+        return fail(w, 16)
+    if n == 2 and byte(w, at) == 46 and byte(w, at + 1) == 46:
+        return fail(w, 16)
+    j = 0
+    while j < n:
+        c = byte(w, at + j)
+        if c < 32 or c == 127 or c == 47 or c == 92 or c == 58:
+            return fail(w, 16)
+        if c == 194 and j + 1 < n:
+            c = byte(w, at + j + 1)
+            if c >= 128 and c <= 159:
+                return fail(w, 16)
+        j = j + 1
+    return 0
+
+def validate_path(w:mutbuf, at:u64, n:u64) -> u64:
+    if n == 0 or n > 4096:
+        return fail(w, 15)
+    start = 0
+    j = 0
+    while j <= n:
+        if j == n or byte(w, at + j) == 47:
+            validate_segment(w, at + start, j - start)
+            if get(w, H + 16) != 0:
+                return 0
+            start = j + 1
+        j = j + 1
+    return 0
+
+def key_is(w:mutbuf, node:u64, code:u64) -> u64:
+    at = NODES + node * 24
+    return matches(w, load32(w, at + 16), load32(w, at + 20), code)
+
+def lookup(w:mutbuf, id:u64, code:u64) -> u64:
+    child = load32(w, NODES + id * 24 + 8)
+    while child != 0:
+        if key_is(w, child, code) == 1:
+            return child
+        child = load32(w, NODES + child * 24)
+    return 0
+
+def fields(w:mutbuf, id:u64, profile:u64) -> u64:
+    child = load32(w, NODES + id * 24 + 8)
+    while child != 0:
+        allowed = 0
+        if profile == 1:
+            allowed = key_is(w, child, K_FILES)
+        if profile == 2:
+            allowed = key_is(w, child, K_FILES) | key_is(w, child, K_UNPACKED)
+        if profile == 3:
+            allowed = key_is(w, child, K_LINK) | key_is(w, child, K_UNPACKED)
+        if profile == 4:
+            allowed = key_is(w, child, K_SIZE) | key_is(w, child, K_OFFSET) | key_is(w, child, K_UNPACKED) | key_is(w, child, K_EXECUTABLE) | key_is(w, child, K_INTEGRITY)
+        if profile == 5:
+            allowed = key_is(w, child, K_ALGORITHM) | key_is(w, child, K_HASH) | key_is(w, child, K_BLOCKSIZE) | key_is(w, child, K_BLOCKS)
+        if allowed == 0:
+            return fail(w, 13)
+        child = load32(w, NODES + child * 24)
+    return 0
+
+def boolean_field(w:mutbuf, id:u64, code:u64, error:u64) -> u64:
+    value = lookup(w, id, code)
+    if value == 0:
+        return 0
+    kind = load32(w, NODES + value * 24 + 4)
+    if kind != 1 and kind != 2:
+        fail(w, error)
+        return 0
+    return kind - 1
+
+def exact_integer(w:mutbuf, id:u64, error:u64) -> u64:
+    if id == 0 or load32(w, NODES + id * 24 + 4) != 3:
+        fail(w, error)
+        return 0
+    value = get(w, NODES + id * 24 + 8)
+    if value > 9007199254740991:
+        fail(w, error)
+        return 0
+    return value
+
+def canonical_offset(w:mutbuf, id:u64) -> u64:
+    if id == 0 or load32(w, NODES + id * 24 + 4) != 6:
+        fail(w, 25)
+        return 0
+    at = load32(w, NODES + id * 24 + 8)
+    n = load32(w, NODES + id * 24 + 12)
+    if n == 0 or n > 16 or (n > 1 and byte(w, at) == 48):
+        fail(w, 26)
+        return 0
+    j = 0
+    value = 0
+    while j < n:
+        c = byte(w, at + j)
+        if c < 48 or c > 57:
+            fail(w, 26)
+            return 0
+        value = value * 10 + c - 48
+        j = j + 1
+    if value > 9007199254740991:
+        fail(w, 27)
+        return 0
+    return value
+
+def valid_digest(w:mutbuf, id:u64) -> u64:
+    if id == 0 or load32(w, NODES + id * 24 + 4) != 6:
+        return 0
+    at = load32(w, NODES + id * 24 + 8)
+    if load32(w, NODES + id * 24 + 12) != 64:
+        return 0
+    j = 0
+    while j < 64:
+        c = byte(w, at + j)
+        if (c < 48 or c > 57) and (c < 97 or c > 102):
+            return 0
+        j = j + 1
+    return 1
+
+def integrity(w:mutbuf, id:u64, entry:u64, size:u64) -> u64:
+    if load32(w, NODES + id * 24 + 4) != 8:
+        return fail(w, 29)
+    fields(w, id, 5)
+    if get(w, H + 16) != 0:
+        return 0
+    algorithm = lookup(w, id, K_ALGORITHM)
+    if algorithm == 0 or load32(w, NODES + algorithm * 24 + 4) != 6:
+        return fail(w, 30)
+    if matches(w, load32(w, NODES + algorithm * 24 + 8), load32(w, NODES + algorithm * 24 + 12), N_SHA256) != 1:
+        return fail(w, 30)
+    hash = lookup(w, id, K_HASH)
+    if valid_digest(w, hash) != 1:
+        return fail(w, 31)
+    block = exact_integer(w, lookup(w, id, K_BLOCKSIZE), 32)
+    if get(w, H + 16) != 0:
+        return 0
+    if block == 0 or block > 67108864:
+        return fail(w, 33)
+    array = lookup(w, id, K_BLOCKS)
+    if array == 0 or load32(w, NODES + array * 24 + 4) != 7:
+        return fail(w, 34)
+    count = load32(w, NODES + array * 24 + 12)
+    expected = (size + block - 1) // block
+    if expected == 0:
+        expected = 1
+    if count != expected or count > 200000:
+        return fail(w, 35)
+    total = get(w, H + 104) + count
+    if total > 200000:
+        return fail(w, 36)
+    put(w, H + 104, total)
+    child = load32(w, NODES + array * 24 + 8)
+    while child != 0:
+        if valid_digest(w, child) != 1:
+            return fail(w, 37)
+        child = load32(w, NODES + child * 24)
+    put32(w, entry + 28, 1)
+    put32(w, entry + 56, load32(w, NODES + hash * 24 + 8))
+    put32(w, entry + 60, load32(w, NODES + array * 24 + 8))
+    put(w, entry + 64, block)
+    put(w, entry + 72, count)
+    return 0
+
+def inventory(w:mutbuf) -> u64:
+    root = get(w, H + 224)
+    if load32(w, NODES + root * 24 + 4) != 8:
+        return fail(w, 12)
+    fields(w, root, 1)
+    if get(w, H + 16) != 0:
+        return 0
+    files = lookup(w, root, K_FILES)
+    if files == 0 or load32(w, NODES + files * 24 + 4) != 8:
+        return fail(w, 14)
+    fill_range(w, VISIT_STACK, 34 * 32, 0)
+    put32(w, VISIT_STACK, load32(w, NODES + files * 24 + 8))
+    depth = 1
+    while depth > 0 and get(w, H + 16) == 0:
+        frame = VISIT_STACK + (depth - 1) * 32
+        id = load32(w, frame)
+        if id == 0:
+            depth = depth - 1
+        else:
+            node = NODES + id * 24
+            put32(w, frame, load32(w, node))
+            name = load32(w, node + 16)
+            n = load32(w, node + 20)
+            validate_segment(w, name, n)
+            if get(w, H + 16) != 0:
+                return 0
+            parent = load32(w, frame + 4)
+            pathlen = n
+            if parent != 0:
+                pathlen = pathlen + 1 + load32(w, ENTRIES + parent * 104 + 12)
+            if pathlen > 4096:
+                return fail(w, 15)
+            if get(w, H + 96) >= 50000:
+                return fail(w, 18)
+            if load32(w, node + 4) != 8:
+                return fail(w, 19)
+            unpacked = boolean_field(w, id, K_UNPACKED, 20)
+            unpacked = unpacked | load32(w, frame + 12)
+            if get(w, H + 16) != 0:
+                return 0
+            entry_id = get(w, H + 96) + 1
+            entry = ENTRIES + entry_id * 104
+            fill_range(w, entry, 104, 0)
+            put32(w, entry, parent)
+            put32(w, entry + 4, name)
+            put32(w, entry + 8, n)
+            put32(w, entry + 12, pathlen)
+            put32(w, entry + 20, unpacked)
+            children = lookup(w, id, K_FILES)
+            link = lookup(w, id, K_LINK)
+            if children != 0:
+                fields(w, id, 2)
+                if get(w, H + 16) != 0:
+                    return 0
+                if load32(w, NODES + children * 24 + 4) != 8:
+                    return fail(w, 21)
+                put32(w, entry + 16, 0)
+                put(w, H + 96, entry_id)
+                put(w, H + 120, get(w, H + 120) + 1)
+                next_depth = load32(w, frame + 8) + 1
+                if next_depth > 32:
+                    return fail(w, 17)
+                next = VISIT_STACK + depth * 32
+                put32(w, next, load32(w, NODES + children * 24 + 8))
+                put32(w, next + 4, entry_id)
+                put32(w, next + 8, next_depth)
+                put32(w, next + 12, unpacked)
+                depth = depth + 1
+            else:
+                if link != 0:
+                    fields(w, id, 3)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    if load32(w, NODES + link * 24 + 4) != 6:
+                        return fail(w, 22)
+                    at = load32(w, NODES + link * 24 + 8)
+                    n = load32(w, NODES + link * 24 + 12)
+                    validate_path(w, at, n)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    put32(w, entry + 16, 1)
+                    put32(w, entry + 48, at)
+                    put32(w, entry + 52, n)
+                    put(w, H + 128, get(w, H + 128) + 1)
+                else:
+                    fields(w, id, 4)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    size = exact_integer(w, lookup(w, id, K_SIZE), 23)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    put(w, entry + 32, size)
+                    offset_node = lookup(w, id, K_OFFSET)
+                    if unpacked == 1:
+                        if offset_node != 0:
+                            return fail(w, 24)
+                        put32(w, entry + 16, 3)
+                        put(w, H + 144, get(w, H + 144) + 1)
+                    else:
+                        offset = canonical_offset(w, offset_node)
+                        if get(w, H + 16) != 0:
+                            return 0
+                        if offset > get(w, H + 80) or size > get(w, H + 80) - offset:
+                            return fail(w, 28)
+                        put32(w, entry + 16, 2)
+                        put(w, entry + 40, offset)
+                        put(w, H + 136, get(w, H + 136) + 1)
+                    declared = lookup(w, id, K_INTEGRITY)
+                    if declared != 0:
+                        integrity(w, declared, entry, size)
+                    if get(w, H + 16) != 0:
+                        return 0
+                    executable = boolean_field(w, id, K_EXECUTABLE, 50)
+                    put32(w, entry + 24, executable)
+                put(w, H + 96, entry_id)
+    return 0
+
+def build_path(w:mutbuf, id:u64, target:u64) -> u64:
+    length = load32(w, ENTRIES + id * 104 + 12)
+    at = length
+    while id != 0:
+        entry = ENTRIES + id * 104
+        n = load32(w, entry + 8)
+        at = at - n
+        copy_range(w, w, target + at, load32(w, entry + 4), n)
+        id = load32(w, entry)
+        if id != 0:
+            at = at - 1
+            store(w, target + at, 47)
+    return length
+
+def entry_compare(w:mutbuf, a:u64, b:u64, kind:u64) -> u64:
+    if kind == 1:
+        if load32(w, ENTRIES + a * 104) == load32(w, ENTRIES + b * 104):
+            if a < b:
+                return 0
+            if a > b:
+                return 2
+            return 1
+        ln = build_path(w, a, PATH_A)
+        rn = build_path(w, b, PATH_B)
+        return bytes_compare(w, PATH_A, ln, PATH_B, rn)
+    left = ENTRIES + a * 104
+    right = ENTRIES + b * 104
+    av = get(w, left + 40)
+    bv = get(w, right + 40)
+    if av < bv:
+        return 0
+    if av > bv:
+        return 2
+    av = av + get(w, left + 32)
+    bv = bv + get(w, right + 32)
+    if av < bv:
+        return 0
+    if av > bv:
+        return 2
+    return 1
+
+def entry_sift(w:mutbuf, array:u64, root:u64, count:u64, kind:u64) -> u64:
+    running = 1
+    while root * 2 + 1 < count and running == 1:
+        child = root * 2 + 1
+        if child + 1 < count:
+            if entry_compare(w, load32(w, array + child * 4), load32(w, array + (child + 1) * 4), kind) == 0:
+                child = child + 1
+        a = load32(w, array + root * 4)
+        b = load32(w, array + child * 4)
+        if entry_compare(w, a, b, kind) == 0:
+            put32(w, array + root * 4, b)
+            put32(w, array + child * 4, a)
+            root = child
+        else:
+            running = 0
+    return 0
+
+def sort_entries(w:mutbuf, array:u64, count:u64, kind:u64) -> u64:
+    j = 1
+    ordered = 1
+    while j < count and ordered == 1:
+        if entry_compare(w, load32(w, array + (j - 1) * 4), load32(w, array + j * 4), kind) == 2:
+            ordered = 0
+        j = j + 1
+    if ordered == 1:
+        return 0
+    j = count // 2
+    while j > 0:
+        j = j - 1
+        entry_sift(w, array, j, count, kind)
+    j = count
+    while j > 1:
+        j = j - 1
+        a = load32(w, array)
+        b = load32(w, array + j * 4)
+        put32(w, array, b)
+        put32(w, array + j * 4, a)
+        entry_sift(w, array, 0, j, kind)
+    return 0
+
+def coverage(w:mutbuf) -> u64:
+    count = get(w, H + 96)
+    ranges = 0
+    j = 0
+    while j < count:
+        id = j + 1
+        entry = ENTRIES + id * 104
+        put32(w, ORDER + j * 4, id)
+        if load32(w, entry + 16) == 2 and get(w, entry + 32) > 0:
+            put32(w, RANGES + ranges * 4, id)
+            ranges = ranges + 1
+        j = j + 1
+    sort_entries(w, RANGES, ranges, 0)
+    j = 0
+    previous = 0
+    covered = 0
+    while j < ranges:
+        entry = ENTRIES + load32(w, RANGES + j * 4) * 104
+        start = get(w, entry + 40)
+        if start < previous:
+            return fail(w, 49)
+        covered = covered + get(w, entry + 32)
+        previous = start + get(w, entry + 32)
+        j = j + 1
+    put(w, H + 112, covered)
+    sort_entries(w, ORDER, count, 1)
+    return 0
+
+def begin_member(w:mutbuf) -> u64:
+    j = 0
+    selected = 0
+    while j < get(w, H + 96) and selected == 0:
+        id = load32(w, ORDER + j * 4)
+        n = build_path(w, id, PATH_A)
+        if bytes_compare(w, PATH_A, n, INIT + 136, get(w, INIT + 40)) == 1:
+            selected = id
+        j = j + 1
+    if selected == 0:
+        return fail(w, 39)
+    entry = ENTRIES + selected * 104
+    if load32(w, entry + 16) != 2:
+        return fail(w, 40)
+    size = get(w, entry + 32)
+    offset = get(w, INIT + 16)
+    length = get(w, INIT + 24)
+    if size > 67108864:
+        return fail(w, 41)
+    if offset > size:
+        return fail(w, 42)
+    if get(w, INIT + 32) == 1 and (offset != 0 or size > length):
+        return fail(w, 44)
+    take = choose(size - offset < length, size - offset, length)
+    put(w, H + 256, selected)
+    put(w, H + 264, size)
+    put(w, H + 272, 0)
+    put(w, H + 280, 0)
+    put(w, H + 288, 0)
+    put(w, H + 296, load32(w, entry + 60))
+    put(w, H + 304, take)
+    put(w, H + 312, 0)
+    put(w, H + 320, offset + take)
+    sha_init(w)
+    copy_range(w, w, FULL_SHA, 0, 1184)
+    copy_range(w, w, BLOCK_SHA, 0, 1184)
+    if size == 0:
+        return finish_member(w)
+    return next_member_chunk(w)
+
+def next_member_chunk(w:mutbuf) -> u64:
+    entry = ENTRIES + get(w, H + 256) * 104
+    n = get(w, H + 264) - get(w, H + 272)
+    if n > 65536:
+        n = 65536
+    if load32(w, entry + 28) == 1:
+        left = get(w, entry + 64) - get(w, H + 280)
+        if n > left:
+            n = left
+    offset = get(w, H + 64) + get(w, entry + 40) + get(w, H + 272)
+    return queue(w, 1, offset, n, 3)
+
+def block_matches(w:mutbuf, expected:u64) -> u64:
+    if expected == 0:
+        return 0
+    at = load32(w, NODES + expected * 24 + 8)
+    return choose(bytes_compare(w, DIGEST_TEMP, 64, at, 64) == 1, 1, 0)
+
+def member_chunk(i:readbuf, w:mutbuf) -> u64:
+    entry = ENTRIES + get(w, H + 256) * 104
+    n = length(i) - 32
+    copy_range(w, w, 0, FULL_SHA, 1184)
+    sha_append_input(i, w, 32, n)
+    copy_range(w, w, FULL_SHA, 0, 1184)
+    if load32(w, entry + 28) == 1:
+        copy_range(w, w, 0, BLOCK_SHA, 1184)
+        sha_append_input(i, w, 32, n)
+        put(w, H + 280, get(w, H + 280) + n)
+        if get(w, H + 280) == get(w, entry + 64):
+            sha_final(w)
+            copy_digest(w, DIGEST_TEMP, 1)
+            block = get(w, H + 296)
+            if block_matches(w, block) != 1:
+                return fail(w, 45)
+            put(w, H + 288, get(w, H + 288) + 1)
+            put(w, H + 296, load32(w, NODES + block * 24))
+            put(w, H + 280, 0)
+            sha_init(w)
+        copy_range(w, w, BLOCK_SHA, 0, 1184)
+    consumed = get(w, H + 272)
+    offset = get(w, INIT + 16)
+    start = choose(consumed > offset, consumed, offset)
+    end = consumed + n
+    if end > get(w, H + 320):
+        end = get(w, H + 320)
+    if start < end:
+        copy_range(w, i, CAPTURE + get(w, H + 312), 32 + start - consumed, end - start)
+        put(w, H + 312, get(w, H + 312) + end - start)
+    put(w, H + 272, consumed + n)
+    if get(w, H + 272) < get(w, H + 264):
+        return next_member_chunk(w)
+    return finish_member(w)
+
+def finish_member(w:mutbuf) -> u64:
+    entry = ENTRIES + get(w, H + 256) * 104
+    copy_range(w, w, 0, FULL_SHA, 1184)
+    sha_final(w)
+    copy_digest(w, MEMBER_DIGEST, 1)
+    if load32(w, entry + 28) == 1:
+        if get(w, H + 280) > 0 or get(w, H + 264) == 0:
+            copy_range(w, w, 0, BLOCK_SHA, 1184)
+            sha_final(w)
+            copy_digest(w, DIGEST_TEMP, 1)
+            if block_matches(w, get(w, H + 296)) != 1:
+                return fail(w, 46)
+            put(w, H + 288, get(w, H + 288) + 1)
+        if get(w, H + 288) != get(w, entry + 72):
+            return fail(w, 47)
+        if bytes_compare(w, MEMBER_DIGEST, 64, load32(w, entry + 56), 64) != 1:
+            return fail(w, 47)
+    if get(w, H + 312) != get(w, H + 304):
+        return fail(w, 48)
+    sha_init(w)
+    sha_append_private(w, CAPTURE, get(w, H + 304))
+    sha_final(w)
+    copy_digest(w, RANGE_DIGEST, 1)
+    return queue(w, 2, 0, 88, 4)
+
+def final_metadata(i:readbuf, w:mutbuf) -> u64:
+    j = 0
+    while j < 11:
+        if read64(i, 32 + j * 8) != get(w, INIT + 48 + j * 8):
+            return fail(w, 54)
+        j = j + 1
+    at = render_report(w)
+    put(w, H + 336, at - JSON_BASE)
+    put(w, H + 8, 99)
+    return 0
+
+def sha_append_input(i:readbuf, w:mutbuf, start:u64, amount:u64) -> u64:
+    have = get(w, 1096)
+    j = 0
+    while j < amount:
+        if have == 0 and amount - j >= 64:
+            copy_range(w, i, 1112, start + j, 64)
+            sha_compress(w)
+            j = j + 64
+        else:
+            store(w, 1112 + have, byte(i, start + j))
+            have = have + 1
+            if have == 64:
+                sha_compress(w)
+                have = 0
+            j = j + 1
+    put(w, 1096, have)
+    put(w, 1088, get(w, 1088) + amount)
+    return 0
+
+def make_version(w:mutbuf) -> u64:
+    at = literal(w, VERSION_TEXT, L_VERSION_PREFIX)
+    j = 0
+    while j < 11:
+        if j > 0:
+            at = emit(w, at, 58)
+        value = get(w, INIT + 48 + j * 8)
+        if j >= 7 and (value & 9223372036854775808) != 0:
+            at = emit(w, at, 45)
+            value = 0 - value
+        at = decimal(w, at, value)
+        j = j + 1
+    sha_init(w)
+    sha_append_private(w, VERSION_TEXT, at - VERSION_TEXT)
+    sha_final(w)
+    literal(w, VERSION_VALUE, L_VERSION_TOKEN)
+    copy_digest(w, VERSION_VALUE + 5, 1)
+    return 0
+
+def bool_json(w:mutbuf, at:u64, value:u64) -> u64:
+    if value == 0:
+        return literal(w, at, L_FALSE)
+    return literal(w, at, L_TRUE)
+
+def kind_json(w:mutbuf, at:u64, kind:u64) -> u64:
+    if kind == 0:
+        return literal(w, at, L_DIRECTORY)
+    if kind == 1:
+        return literal(w, at, L_LINK)
+    if kind == 2:
+        return literal(w, at, L_PACKED)
+    return literal(w, at, L_UNPACKED)
+
+def render_entry(w:mutbuf, at:u64, id:u64, verified:u64) -> u64:
+    entry = ENTRIES + id * 104
+    kind = load32(w, entry + 16)
+    n = build_path(w, id, PATH_A)
+    at = literal(w, at, L_PATH_HEAD)
+    at = quoted(w, at, PATH_A, n)
+    at = literal(w, at, L_KIND_KEY)
+    at = kind_json(w, at, kind)
+    at = literal(w, at, L_SIZE_KEY)
+    if kind >= 2:
+        at = decimal(w, at, get(w, entry + 32))
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_RELATIVE_KEY)
+    if kind == 2:
+        at = decimal(w, at, get(w, entry + 40))
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_PAYLOAD_KEY)
+    if kind == 2:
+        at = decimal(w, at, get(w, H + 64) + get(w, entry + 40))
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_UNPACKED_KEY)
+    at = bool_json(w, at, load32(w, entry + 20))
+    at = literal(w, at, L_EXECUTABLE_KEY)
+    at = bool_json(w, at, load32(w, entry + 24))
+    at = literal(w, at, L_LINK_KEY)
+    if kind == 1:
+        at = quoted(w, at, load32(w, entry + 48), load32(w, entry + 52))
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_INTEGRITY_KEY)
+    if load32(w, entry + 28) == 1:
+        at = literal(w, at, L_INTEGRITY_HEAD)
+        at = quoted(w, at, load32(w, entry + 56), 64)
+        at = literal(w, at, L_BLOCK_SIZE_KEY)
+        at = decimal(w, at, get(w, entry + 64))
+        at = literal(w, at, L_BLOCK_COUNT_KEY)
+        at = decimal(w, at, get(w, entry + 72))
+        at = literal(w, at, L_VERIFIED_KEY)
+        at = bool_json(w, at, verified)
+        at = emit(w, at, 125)
+    else:
+        at = literal(w, at, L_NULL)
+    return emit(w, at, 125)
+
+def render_request(w:mutbuf, at:u64) -> u64:
+    if get(w, INIT + 8) == 1:
+        at = literal(w, at, L_INDEX_REQUEST_HEAD)
+        at = decimal(w, at, get(w, INIT + 16))
+        at = literal(w, at, L_LIMIT_KEY)
+        at = decimal(w, at, get(w, INIT + 24))
+    else:
+        at = literal(w, at, L_READ_REQUEST_HEAD)
+        at = quoted(w, at, INIT + 136, get(w, INIT + 40))
+        at = literal(w, at, L_OFFSET_KEY)
+        at = decimal(w, at, get(w, INIT + 16))
+        at = literal(w, at, L_LENGTH_KEY)
+        at = decimal(w, at, get(w, INIT + 24))
+        at = literal(w, at, L_REQUIRE_COMPLETE_KEY)
+        at = bool_json(w, at, get(w, INIT + 32))
+    return emit(w, at, 125)
+
+def render_index(w:mutbuf, at:u64) -> u64:
+    offset = get(w, INIT + 16)
+    limit = get(w, INIT + 24)
+    count = get(w, H + 96)
+    end = offset + limit
+    if end > count:
+        end = count
+    at = literal(w, at, L_INDEX_RESULT_HEAD)
+    at = decimal(w, at, offset)
+    at = literal(w, at, L_LIMIT_KEY)
+    at = decimal(w, at, limit)
+    at = literal(w, at, L_TOTAL_KEY)
+    at = decimal(w, at, count)
+    at = literal(w, at, L_NEXT_KEY)
+    if end < count:
+        at = decimal(w, at, end)
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_ROWS_KEY)
+    j = offset
+    while j < end:
+        if j > offset:
+            at = emit(w, at, 44)
+        at = render_entry(w, at, load32(w, ORDER + j * 4), 0)
+        j = j + 1
+    at = emit(w, at, 93)
+    return emit(w, at, 125)
+
+def render_member(w:mutbuf, at:u64) -> u64:
+    id = get(w, H + 256)
+    entry = ENTRIES + id * 104
+    declared = load32(w, entry + 28)
+    at = literal(w, at, L_MEMBER_RESULT_HEAD)
+    at = render_entry(w, at, id, 1)
+    at = literal(w, at, L_MEMBER_HASH_KEY)
+    at = quoted(w, at, MEMBER_DIGEST, 64)
+    at = literal(w, at, L_MEMBER_BYTES_KEY)
+    at = decimal(w, at, get(w, H + 264))
+    at = literal(w, at, L_DECLARED_VERIFIED_KEY)
+    at = bool_json(w, at, declared)
+    at = literal(w, at, L_INTEGRITY_STATUS_KEY)
+    if declared == 1:
+        at = literal(w, at, L_MATCHED)
+    else:
+        at = literal(w, at, L_NOT_DECLARED)
+    at = literal(w, at, L_OFFSET_KEY)
+    at = decimal(w, at, get(w, INIT + 16))
+    at = literal(w, at, L_LENGTH_KEY)
+    at = decimal(w, at, get(w, H + 304))
+    at = literal(w, at, L_NEXT_KEY)
+    if get(w, H + 320) < get(w, H + 264):
+        at = decimal(w, at, get(w, H + 320))
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_HEX_KEY)
+    j = 0
+    while j < get(w, H + 304):
+        c = byte(w, CAPTURE + j)
+        at = emit(w, at, hexchar(c >> 4))
+        at = emit(w, at, hexchar(c & 15))
+        j = j + 1
+    at = literal(w, at, L_RANGE_HASH_KEY)
+    at = quoted(w, at, RANGE_DIGEST, 64)
+    at = literal(w, at, L_COMPLETE_KEY)
+    complete = get(w, INIT + 16) == 0 and get(w, H + 320) == get(w, H + 264)
+    complete_value = choose(complete, 1, 0)
+    at = bool_json(w, at, complete_value)
+    return literal(w, at, L_MEMBER_RESULT_END)
+
+def render_report(w:mutbuf) -> u64:
+    at = literal(w, JSON_BASE, L_REPORT_HEAD)
+    at = render_request(w, at)
+    at = literal(w, at, L_SOURCE_HEAD)
+    at = quoted(w, at, VERSION_VALUE, 69)
+    at = literal(w, at, L_SIZE_KEY)
+    at = decimal(w, at, get(w, INIT + 64))
+    at = literal(w, at, L_HEADER_BYTES_KEY)
+    at = decimal(w, at, get(w, H + 64))
+    at = literal(w, at, L_HEADER_HASH_KEY)
+    at = quoted(w, at, HEADER_DIGEST, 64)
+    at = literal(w, at, L_HEADER_SCOPE_PAYLOAD_KEY)
+    at = decimal(w, at, get(w, H + 64))
+    at = literal(w, at, L_PAYLOAD_BYTES_KEY)
+    at = decimal(w, at, get(w, H + 80))
+    at = literal(w, at, L_REFERENCED_KEY)
+    at = decimal(w, at, get(w, H + 112))
+    at = literal(w, at, L_UNREFERENCED_KEY)
+    at = decimal(w, at, get(w, H + 80) - get(w, H + 112))
+    at = literal(w, at, L_SOURCE_END_COUNT_KEY)
+    at = decimal(w, at, get(w, H + 96))
+    at = literal(w, at, L_COUNTS_HEAD)
+    at = decimal(w, at, get(w, H + 120))
+    at = literal(w, at, L_COUNTS_LINK)
+    at = decimal(w, at, get(w, H + 128))
+    at = literal(w, at, L_COUNTS_PACKED)
+    at = decimal(w, at, get(w, H + 136))
+    at = literal(w, at, L_COUNTS_UNPACKED)
+    at = decimal(w, at, get(w, H + 144))
+    at = literal(w, at, L_RESULT_KEY)
+    if get(w, INIT + 8) == 1:
+        at = render_index(w, at)
+    else:
+        at = render_member(w, at)
+    return literal(w, at, L_REPORT_END)
+
+def finish(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, H + 16) != 0 and get(w, H + 344) == 0:
+        put(w, H + 336, error_text(w, JSON_BASE, get(w, H + 16)) - JSON_BASE)
+        put(w, H + 344, 1)
+        put(w, H + 8, 99)
+    n = get(w, H + 336)
+    if length(o) < 32 + n:
+        return CAPACITY
+    put(o, 0, RESPONSE)
+    put(o, 8, choose(get(w, H + 16) == 0, 0, 1))
+    put(o, 16, get(w, H + 16))
+    put(o, 24, n)
+    copy_range(o, w, 32, JSON_BASE, n)
+    return 32 + n
+
+
+def sha_append_private(w:mutbuf, start:u64, amount:u64) -> u64:
+    have = get(w, 1096)
+    j = 0
+    while j < amount:
+        if have == 0 and amount - j >= 64:
+            copy_range(w, w, 1112, start + j, 64)
+            sha_compress(w)
+            j = j + 64
+        else:
+            store(w, 1112 + have, byte(w, start + j))
+            have = have + 1
+            if have == 64:
+                sha_compress(w)
+                have = 0
+            j = j + 1
+    put(w, 1096, have)
+    put(w, 1088, get(w, 1088) + amount)
+    return 0
+
+def copy_digest(w:mutbuf, at:u64, hexadecimal:u64) -> u64:
+    j = 0
+    while j < 32:
+        c = (get(w, 1024 + (j >> 2) * 8) >> ((3 - (j & 3)) * 8)) & 255
+        if hexadecimal == 1:
+            store(w, at + j * 2, hexchar(c >> 4))
+            store(w, at + j * 2 + 1, hexchar(c & 15))
+        else:
+            store(w, at + j, c)
+        j = j + 1
+    return 0
+
+def emit(w:mutbuf, at:u64, value:u64) -> u64:
+    if at < JSON_END:
+        store(w, at, value)
+    else:
+        fail(w, 51)
+    return at + 1
+
+def word(w:mutbuf, at:u64, value:u64) -> u64:
+    if at <= JSON_END - 8:
+        put(w, at, value)
+    else:
+        fail(w, 51)
+    return at + 8
+
+def partial_word(w:mutbuf, at:u64, value:u64, n:u64) -> u64:
+    j = 0
+    while j < n:
+        at = emit(w, at, value & 255)
+        value = value >> 8
+        j = j + 1
+    return at
+
+def decimal(w:mutbuf, at:u64, value:u64) -> u64:
+    n = 0
+    if value == 0:
+        return emit(w, at, 48)
+    while value > 0:
+        store(w, NUMBER + n, 48 + (value % 10))
+        value = value // 10
+        n = n + 1
+    while n > 0:
+        n = n - 1
+        at = emit(w, at, byte(w, NUMBER + n))
+    return at
+
+def hexchar(value:u64) -> u64:
+    if value < 10:
+        return 48 + value
+    return 87 + value
+
+def quoted(w:mutbuf, at:u64, source:u64, n:u64) -> u64:
+    at = emit(w, at, 34)
+    j = 0
+    while j < n:
+        c = byte(w, source + j)
+        if c == 34 or c == 92:
+            at = emit(w, at, 92)
+            at = emit(w, at, c)
+        else:
+            if c < 32:
+                at = emit(w, at, 92)
+                short = 0
+                if c == 8:
+                    short = 98
+                if c == 9:
+                    short = 116
+                if c == 10:
+                    short = 110
+                if c == 12:
+                    short = 102
+                if c == 13:
+                    short = 114
+                if short != 0:
+                    at = emit(w, at, short)
+                else:
+                    at = emit(w, at, 117)
+                    at = emit(w, at, 48)
+                    at = emit(w, at, 48)
+                    at = emit(w, at, hexchar(c >> 4))
+                    at = emit(w, at, hexchar(c & 15))
+            else:
+                at = emit(w, at, c)
+        j = j + 1
+    return emit(w, at, 34)
+
+
+def get(w:mutbuf, at:u64) -> u64:
+    return byte(w, at) | (byte(w, at + 1) << 8) | (byte(w, at + 2) << 16) | (byte(w, at + 3) << 24) | (byte(w, at + 4) << 32) | (byte(w, at + 5) << 40) | (byte(w, at + 6) << 48) | (byte(w, at + 7) << 56)
+
+def put(w:mutbuf, at:u64, value:u64) -> u64:
+    store(w, at + 0, (value >> 0) & 255)
+    store(w, at + 1, (value >> 8) & 255)
+    store(w, at + 2, (value >> 16) & 255)
+    store(w, at + 3, (value >> 24) & 255)
+    store(w, at + 4, (value >> 32) & 255)
+    store(w, at + 5, (value >> 40) & 255)
+    store(w, at + 6, (value >> 48) & 255)
+    store(w, at + 7, (value >> 56) & 255)
+    return 0
+
+def sha_compress(w:mutbuf) -> u64:
+    copy_range(w, w, 512, 0, 512)
+    q0 = sha_schedule_pair(w, 1112)
+    q1 = sha_schedule_pair(w, 1120)
+    q2 = sha_schedule_pair(w, 1128)
+    q3 = sha_schedule_pair(w, 1136)
+    q4 = sha_schedule_pair(w, 1144)
+    q5 = sha_schedule_pair(w, 1152)
+    q6 = sha_schedule_pair(w, 1160)
+    q7 = sha_schedule_pair(w, 1168)
+    state0 = (private32(w, 1024) << 32) | private32(w, 1032)
+    state1 = (private32(w, 1040) << 32) | private32(w, 1048)
+    state2 = (private32(w, 1056) << 32) | private32(w, 1064)
+    state3 = (private32(w, 1072) << 32) | private32(w, 1080)
+    j = 0
+    while j < 64:
+        if j < 16:
+            first = q0
+            second = q1
+            q0 = q2
+            q1 = q3
+            q2 = q4
+            q3 = q5
+            q4 = q6
+            q5 = q7
+            q6 = first
+            q7 = second
+        else:
+            x = q0 & 4294967295
+            y = q7 >> 32
+            xx = x * 4294967297
+            yy = y * 4294967297
+            sx = (xx >> 7) ^ (xx >> 18) ^ (x >> 3)
+            sy = (yy >> 17) ^ (yy >> 19) ^ (y >> 10)
+            value0 = ((q0 >> 32) + sx + (q4 & 4294967295) + sy) & 4294967295
+            x = q1 >> 32
+            y = q7 & 4294967295
+            xx = x * 4294967297
+            yy = y * 4294967297
+            sx = (xx >> 7) ^ (xx >> 18) ^ (x >> 3)
+            sy = (yy >> 17) ^ (yy >> 19) ^ (y >> 10)
+            value1 = ((q0 & 4294967295) + sx + (q5 >> 32) + sy) & 4294967295
+            x = q1 & 4294967295
+            y = value0
+            xx = x * 4294967297
+            yy = y * 4294967297
+            sx = (xx >> 7) ^ (xx >> 18) ^ (x >> 3)
+            sy = (yy >> 17) ^ (yy >> 19) ^ (y >> 10)
+            value2 = ((q1 >> 32) + sx + (q5 & 4294967295) + sy) & 4294967295
+            x = q2 >> 32
+            y = value1
+            xx = x * 4294967297
+            yy = y * 4294967297
+            sx = (xx >> 7) ^ (xx >> 18) ^ (x >> 3)
+            sy = (yy >> 17) ^ (yy >> 19) ^ (y >> 10)
+            value3 = ((q1 & 4294967295) + sx + (q6 >> 32) + sy) & 4294967295
+            q0 = q2
+            q1 = q3
+            q2 = q4
+            q3 = q5
+            q4 = q6
+            q5 = q7
+            q6 = (value0 << 32) | value1
+            q7 = (value2 << 32) | value3
+        word0 = q6 >> 32
+        word1 = q6 & 4294967295
+        word2 = q7 >> 32
+        word3 = q7 & 4294967295
+        at = 512 + j * 8
+        private_store32(w, at + 0, word0)
+        private_store32(w, at + 8, word1)
+        private_store32(w, at + 16, word2)
+        private_store32(w, at + 24, word3)
+        round_index = j >> 1
+        rounds0 = sha_round_constant(round_index)
+        rounds1 = sha_round_constant(round_index + 1)
+        a = state0 >> 32
+        b = state0 & 4294967295
+        c = state1 >> 32
+        d = state1 & 4294967295
+        e = state2 >> 32
+        f = state2 & 4294967295
+        g = state3 >> 32
+        h = state3 & 4294967295
+        xe = e * 4294967297
+        s1 = (xe >> 6) ^ (xe >> 11) ^ (xe >> 25)
+        ch = g ^ (e & (f ^ g))
+        t1 = h + s1 + ch + (rounds0 >> 32) + word0
+        xa = a * 4294967297
+        s0 = (xa >> 2) ^ (xa >> 13) ^ (xa >> 22)
+        maj = (a & b) | (c & (a | b))
+        t2 = s0 + maj
+        d = (d + t1) & 4294967295
+        h = (t1 + t2) & 4294967295
+        xe = d * 4294967297
+        s1 = (xe >> 6) ^ (xe >> 11) ^ (xe >> 25)
+        ch = f ^ (d & (e ^ f))
+        t1 = g + s1 + ch + (rounds0 & 4294967295) + word1
+        xa = h * 4294967297
+        s0 = (xa >> 2) ^ (xa >> 13) ^ (xa >> 22)
+        maj = (h & a) | (b & (h | a))
+        t2 = s0 + maj
+        c = (c + t1) & 4294967295
+        g = (t1 + t2) & 4294967295
+        xe = c * 4294967297
+        s1 = (xe >> 6) ^ (xe >> 11) ^ (xe >> 25)
+        ch = e ^ (c & (d ^ e))
+        t1 = f + s1 + ch + (rounds1 >> 32) + word2
+        xa = g * 4294967297
+        s0 = (xa >> 2) ^ (xa >> 13) ^ (xa >> 22)
+        maj = (g & h) | (a & (g | h))
+        t2 = s0 + maj
+        b = (b + t1) & 4294967295
+        f = (t1 + t2) & 4294967295
+        xe = b * 4294967297
+        s1 = (xe >> 6) ^ (xe >> 11) ^ (xe >> 25)
+        ch = d ^ (b & (c ^ d))
+        t1 = e + s1 + ch + (rounds1 & 4294967295) + word3
+        xa = f * 4294967297
+        s0 = (xa >> 2) ^ (xa >> 13) ^ (xa >> 22)
+        maj = (f & g) | (h & (f | g))
+        t2 = s0 + maj
+        a = (a + t1) & 4294967295
+        e = (t1 + t2) & 4294967295
+        state0 = (e << 32) | f
+        state1 = (g << 32) | h
+        state2 = (a << 32) | b
+        state3 = (c << 32) | d
+        j = j + 4
+    a = state0 >> 32
+    b = state0 & 4294967295
+    c = state1 >> 32
+    d = state1 & 4294967295
+    e = state2 >> 32
+    f = state2 & 4294967295
+    g = state3 >> 32
+    h = state3 & 4294967295
+    private_store32(w, 1024, (private32(w, 1024) + a) & 4294967295)
+    private_store32(w, 1032, (private32(w, 1032) + b) & 4294967295)
+    private_store32(w, 1040, (private32(w, 1040) + c) & 4294967295)
+    private_store32(w, 1048, (private32(w, 1048) + d) & 4294967295)
+    private_store32(w, 1056, (private32(w, 1056) + e) & 4294967295)
+    private_store32(w, 1064, (private32(w, 1064) + f) & 4294967295)
+    private_store32(w, 1072, (private32(w, 1072) + g) & 4294967295)
+    private_store32(w, 1080, (private32(w, 1080) + h) & 4294967295)
+    return 0
+
+def sha_schedule_pair(w:mutbuf, at:u64) -> u64:
+    return private64be(w, at)
+
+def common_prefix(w:mutbuf, left:u64, ln:u64, right:u64, rn:u64) -> u64:
+    n = choose(ln < rn, ln, rn)
+    j = 0
+    scan = 1
+    while j + 8 <= n and scan == 1:
+        if private64(w, left + j) == private64(w, right + j):
+            j = j + 8
+        else:
+            scan = 0
+    while j < n:
+        if byte(w, left + j) != byte(w, right + j):
+            return j
+        j = j + 1
+    return n

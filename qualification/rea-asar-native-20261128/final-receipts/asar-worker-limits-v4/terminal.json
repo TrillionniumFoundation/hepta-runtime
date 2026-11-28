@@ -1,0 +1,590 @@
+{
+  "all_source_and_fixture_bytes_stable": true,
+  "cases": 4,
+  "original_full_gate_replaced": false,
+  "original_worker_resource_limits_unchanged": true,
+  "passed": 4,
+  "production_worker_qualified": false,
+  "rows": [
+    {
+      "case": {
+        "label": "whole-member-verification/67108864",
+        "path": "/home/qian-qi/hia-runtime-rea-formats-20261128-2ac5/asar-limits-v2/fixtures/009.asar",
+        "request": {
+          "length": 1,
+          "member": "member",
+          "offset": 0,
+          "operation": "read",
+          "require_complete": false
+        }
+      },
+      "child_system_seconds": 0.19700399999999998,
+      "child_user_seconds": 0.7010149999999999,
+      "complete_observation": {
+        "effects": 1027,
+        "event": "complete",
+        "maximum_resident_kib": 287140,
+        "native_calls": 1028,
+        "native_cpu_seconds": 0.513001146,
+        "native_wall_seconds": 0.5017105080187321,
+        "process_system_seconds": 0.19592199999999999,
+        "process_user_seconds": 0.6907249999999999,
+        "response": {
+          "ok": true,
+          "value": {
+            "entry_count": 1,
+            "entry_counts": {
+              "directory": 0,
+              "link": 0,
+              "packed_file": 1,
+              "unpacked_file": 0
+            },
+            "external_files_opened": false,
+            "limitations": [
+              "The complete header is checked for supported structure, duplicate names and overlapping packed extents. Header identity does not bind unselected payload bytes or an unpacked sidecar tree.",
+              "Only explicitly selected packed members are read and hashed. A declared SHA256 and its blocks must match before any selected bytes are returned; other payload integrity remains unverified.",
+              "Links and unpacked files are literal declarations and are never followed. Unknown header fields, noncanonical Pickles, ambiguous paths and unsupported integrity algorithms are refused.",
+              "Matching self-declared integrity is consistency evidence, not a publisher signature, trusted Electron fuse check, runtime execution proof or REA Evidence identity.",
+              "header_sha256 covers archive bytes [0, payload_offset), including both Pickles and padding. Electron fuse checks use the JSON header string alone; their digests are not interchangeable.",
+              "Descriptor metadata detects ordinary concurrent modification, not privileged races that restore or defeat those observations. Header and selected byte digests describe the captured data."
+            ],
+            "members_extracted": false,
+            "profile": "electron-asar-canonical-pickle-sha256-v1",
+            "rea_evidence_compatible": false,
+            "record_format": "hepta.rea-asar.v1",
+            "request": {
+              "length": 1,
+              "member": "member",
+              "offset": 0,
+              "operation": "read",
+              "require_complete": false
+            },
+            "result": {
+              "bytes_hex": "00",
+              "complete_member": false,
+              "declared_integrity_verified": false,
+              "entry": {
+                "executable_declaration": false,
+                "integrity": null,
+                "kind": "packed_file",
+                "link_followed": false,
+                "link_target": null,
+                "path": "member",
+                "payload_offset": 68,
+                "relative_data_offset": 0,
+                "size_bytes": 67108864,
+                "unpacked": false
+              },
+              "integrity_status": "not_declared",
+              "length": 1,
+              "member_bytes_verified": 67108864,
+              "member_sha256": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351",
+              "next_offset": 1,
+              "offset": 0,
+              "publisher_authenticated": false,
+              "range_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+            },
+            "source": {
+              "full_sha256": null,
+              "header_bytes": 68,
+              "header_sha256": "740887f31abd83e039bb2dca58d1318c2e0dec8c46e85e18b3f2cf5bed0095dc",
+              "header_sha256_scope": "complete_pickle_header",
+              "identity_scope": "pickle_header_and_descriptor_observation",
+              "observed_version": "asv1_003bcc75ba23a0f00a295bee96f5a18f2decc2c1193ad45acce0a8f3f5adfae4",
+              "payload_bytes": 67108864,
+              "payload_offset": 68,
+              "referenced_payload_bytes": 67108864,
+              "size_bytes": 67108932,
+              "unreferenced_payload_bytes": 0
+            },
+            "target_code_executed": false
+          }
+        }
+      },
+      "full_response_equal": true,
+      "limits_observation": {
+        "event": "limits-applied",
+        "limits": {
+          "0": [
+            12,
+            12
+          ],
+          "1": [
+            4194304,
+            4194304
+          ],
+          "4": [
+            0,
+            0
+          ],
+          "7": [
+            64,
+            64
+          ],
+          "9": [
+            805306368,
+            805306368
+          ]
+        },
+        "parent_pid": 2483868,
+        "pid": 2483975
+      },
+      "passed": true,
+      "reference_observation": {
+        "child_system_seconds": 0.039151,
+        "child_user_seconds": 0.590279,
+        "passed": true,
+        "returncode": 0,
+        "seconds": 0.6350121491122991,
+        "stderr_bytes": 0,
+        "stdout_bytes": 2614,
+        "wall_timeout": false
+      },
+      "returncode": 0,
+      "seconds": 0.8986094649881124,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3175,
+      "wall_timeout": false
+    },
+    {
+      "case": {
+        "label": "whole-member-and-blocks/67108864/65536/1024",
+        "path": "/home/qian-qi/hia-runtime-rea-formats-20261128-2ac5/asar-worker-limits-v1/fixtures/integrity-0.asar",
+        "request": {
+          "length": 1,
+          "member": "member",
+          "offset": 0,
+          "operation": "read",
+          "require_complete": false
+        }
+      },
+      "child_system_seconds": 0.24464899999999995,
+      "child_user_seconds": 1.8813030000000004,
+      "complete_observation": {
+        "effects": 1027,
+        "event": "complete",
+        "maximum_resident_kib": 287140,
+        "native_calls": 1028,
+        "native_cpu_seconds": 1.6659157639999997,
+        "native_wall_seconds": 1.66989221656695,
+        "process_system_seconds": 0.24260299999999999,
+        "process_user_seconds": 1.868944,
+        "response": {
+          "ok": true,
+          "value": {
+            "entry_count": 1,
+            "entry_counts": {
+              "directory": 0,
+              "link": 0,
+              "packed_file": 1,
+              "unpacked_file": 0
+            },
+            "external_files_opened": false,
+            "limitations": [
+              "The complete header is checked for supported structure, duplicate names and overlapping packed extents. Header identity does not bind unselected payload bytes or an unpacked sidecar tree.",
+              "Only explicitly selected packed members are read and hashed. A declared SHA256 and its blocks must match before any selected bytes are returned; other payload integrity remains unverified.",
+              "Links and unpacked files are literal declarations and are never followed. Unknown header fields, noncanonical Pickles, ambiguous paths and unsupported integrity algorithms are refused.",
+              "Matching self-declared integrity is consistency evidence, not a publisher signature, trusted Electron fuse check, runtime execution proof or REA Evidence identity.",
+              "header_sha256 covers archive bytes [0, payload_offset), including both Pickles and padding. Electron fuse checks use the JSON header string alone; their digests are not interchangeable.",
+              "Descriptor metadata detects ordinary concurrent modification, not privileged races that restore or defeat those observations. Header and selected byte digests describe the captured data."
+            ],
+            "members_extracted": false,
+            "profile": "electron-asar-canonical-pickle-sha256-v1",
+            "rea_evidence_compatible": false,
+            "record_format": "hepta.rea-asar.v1",
+            "request": {
+              "length": 1,
+              "member": "member",
+              "offset": 0,
+              "operation": "read",
+              "require_complete": false
+            },
+            "result": {
+              "bytes_hex": "00",
+              "complete_member": false,
+              "declared_integrity_verified": true,
+              "entry": {
+                "executable_declaration": false,
+                "integrity": {
+                  "algorithm": "SHA256",
+                  "block_size": 65536,
+                  "content_verified": true,
+                  "declared_block_count": 1024,
+                  "declared_hash": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351"
+                },
+                "kind": "packed_file",
+                "link_followed": false,
+                "link_target": null,
+                "path": "member",
+                "payload_offset": 68816,
+                "relative_data_offset": 0,
+                "size_bytes": 67108864,
+                "unpacked": false
+              },
+              "integrity_status": "declared_sha256_and_blocks_match",
+              "length": 1,
+              "member_bytes_verified": 67108864,
+              "member_sha256": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351",
+              "next_offset": 1,
+              "offset": 0,
+              "publisher_authenticated": false,
+              "range_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+            },
+            "source": {
+              "full_sha256": null,
+              "header_bytes": 68816,
+              "header_sha256": "ccd4b4620978432f70983f9fd0291cb87e93094d4692c8029240ca5cc421c4b0",
+              "header_sha256_scope": "complete_pickle_header",
+              "identity_scope": "pickle_header_and_descriptor_observation",
+              "observed_version": "asv1_6ac627149e510d4e7f2f16f5d6f049ab3f7e02d825a76a6581495a612749fc03",
+              "payload_bytes": 67108864,
+              "payload_offset": 68816,
+              "referenced_payload_bytes": 67108864,
+              "size_bytes": 67177680,
+              "unreferenced_payload_bytes": 0
+            },
+            "target_code_executed": false
+          }
+        }
+      },
+      "full_response_equal": true,
+      "limits_observation": {
+        "event": "limits-applied",
+        "limits": {
+          "0": [
+            12,
+            12
+          ],
+          "1": [
+            4194304,
+            4194304
+          ],
+          "4": [
+            0,
+            0
+          ],
+          "7": [
+            64,
+            64
+          ],
+          "9": [
+            805306368,
+            805306368
+          ]
+        },
+        "parent_pid": 2483868,
+        "pid": 2484051
+      },
+      "passed": true,
+      "reference_observation": {
+        "child_system_seconds": 0.019981,
+        "child_user_seconds": 1.715374,
+        "passed": true,
+        "returncode": 0,
+        "seconds": 1.7396179419010878,
+        "stderr_bytes": 0,
+        "stdout_bytes": 2814,
+        "wall_timeout": false
+      },
+      "returncode": 0,
+      "seconds": 2.1306237829849124,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3379,
+      "wall_timeout": false
+    },
+    {
+      "case": {
+        "label": "whole-member-and-blocks/67108864/336/199729",
+        "path": "/home/qian-qi/hia-runtime-rea-formats-20261128-2ac5/asar-worker-limits-v1/fixtures/integrity-1.asar",
+        "request": {
+          "length": 1,
+          "member": "member",
+          "offset": 0,
+          "operation": "read",
+          "require_complete": false
+        }
+      },
+      "child_system_seconds": 0.603646,
+      "child_user_seconds": 10.501848,
+      "complete_observation": {
+        "effects": 199732,
+        "event": "complete",
+        "maximum_resident_kib": 338664,
+        "native_calls": 199733,
+        "native_cpu_seconds": 8.062224734000006,
+        "native_wall_seconds": 8.270924223354086,
+        "process_system_seconds": 0.5976389999999999,
+        "process_user_seconds": 10.487675,
+        "response": {
+          "ok": true,
+          "value": {
+            "entry_count": 1,
+            "entry_counts": {
+              "directory": 0,
+              "link": 0,
+              "packed_file": 1,
+              "unpacked_file": 0
+            },
+            "external_files_opened": false,
+            "limitations": [
+              "The complete header is checked for supported structure, duplicate names and overlapping packed extents. Header identity does not bind unselected payload bytes or an unpacked sidecar tree.",
+              "Only explicitly selected packed members are read and hashed. A declared SHA256 and its blocks must match before any selected bytes are returned; other payload integrity remains unverified.",
+              "Links and unpacked files are literal declarations and are never followed. Unknown header fields, noncanonical Pickles, ambiguous paths and unsupported integrity algorithms are refused.",
+              "Matching self-declared integrity is consistency evidence, not a publisher signature, trusted Electron fuse check, runtime execution proof or REA Evidence identity.",
+              "header_sha256 covers archive bytes [0, payload_offset), including both Pickles and padding. Electron fuse checks use the JSON header string alone; their digests are not interchangeable.",
+              "Descriptor metadata detects ordinary concurrent modification, not privileged races that restore or defeat those observations. Header and selected byte digests describe the captured data."
+            ],
+            "members_extracted": false,
+            "profile": "electron-asar-canonical-pickle-sha256-v1",
+            "rea_evidence_compatible": false,
+            "record_format": "hepta.rea-asar.v1",
+            "request": {
+              "length": 1,
+              "member": "member",
+              "offset": 0,
+              "operation": "read",
+              "require_complete": false
+            },
+            "result": {
+              "bytes_hex": "00",
+              "complete_member": false,
+              "declared_integrity_verified": true,
+              "entry": {
+                "executable_declaration": false,
+                "integrity": {
+                  "algorithm": "SHA256",
+                  "block_size": 336,
+                  "content_verified": true,
+                  "declared_block_count": 199729,
+                  "declared_hash": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351"
+                },
+                "kind": "packed_file",
+                "link_followed": false,
+                "link_target": null,
+                "path": "member",
+                "payload_offset": 13382048,
+                "relative_data_offset": 0,
+                "size_bytes": 67108864,
+                "unpacked": false
+              },
+              "integrity_status": "declared_sha256_and_blocks_match",
+              "length": 1,
+              "member_bytes_verified": 67108864,
+              "member_sha256": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351",
+              "next_offset": 1,
+              "offset": 0,
+              "publisher_authenticated": false,
+              "range_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+            },
+            "source": {
+              "full_sha256": null,
+              "header_bytes": 13382048,
+              "header_sha256": "1f7f5b39164022d2f04f7575ee14844b789f1a49ac0e329308b2a0f8dd1398df",
+              "header_sha256_scope": "complete_pickle_header",
+              "identity_scope": "pickle_header_and_descriptor_observation",
+              "observed_version": "asv1_e2bcb94d9e7d74a6f076216324d3dcb48214a9eb6311a9c115b71af8ec7fef55",
+              "payload_bytes": 67108864,
+              "payload_offset": 13382048,
+              "referenced_payload_bytes": 67108864,
+              "size_bytes": 80490912,
+              "unreferenced_payload_bytes": 0
+            },
+            "target_code_executed": false
+          }
+        }
+      },
+      "full_response_equal": true,
+      "limits_observation": {
+        "event": "limits-applied",
+        "limits": {
+          "0": [
+            12,
+            12
+          ],
+          "1": [
+            4194304,
+            4194304
+          ],
+          "4": [
+            0,
+            0
+          ],
+          "7": [
+            64,
+            64
+          ],
+          "9": [
+            805306368,
+            805306368
+          ]
+        },
+        "parent_pid": 2483868,
+        "pid": 2484205
+      },
+      "passed": true,
+      "reference_observation": {
+        "child_system_seconds": 0.24444,
+        "child_user_seconds": 2.3156879999999997,
+        "passed": true,
+        "returncode": 0,
+        "seconds": 2.575460499152541,
+        "stderr_bytes": 0,
+        "stdout_bytes": 2823,
+        "wall_timeout": false
+      },
+      "returncode": 0,
+      "seconds": 11.137622240930796,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3392,
+      "wall_timeout": false
+    },
+    {
+      "case": {
+        "label": "whole-member-and-blocks/200000/1/200000",
+        "path": "/home/qian-qi/hia-runtime-rea-formats-20261128-2ac5/asar-worker-limits-v1/fixtures/integrity-2.asar",
+        "request": {
+          "length": 1,
+          "member": "member",
+          "offset": 0,
+          "operation": "read",
+          "require_complete": false
+        }
+      },
+      "child_system_seconds": 0.6251830000000003,
+      "child_user_seconds": 9.016638999999998,
+      "complete_observation": {
+        "effects": 200003,
+        "event": "complete",
+        "maximum_resident_kib": 339072,
+        "native_calls": 200004,
+        "native_cpu_seconds": 6.517226902000014,
+        "native_wall_seconds": 6.711651675635949,
+        "process_system_seconds": 0.61814,
+        "process_user_seconds": 9.004052,
+        "response": {
+          "ok": true,
+          "value": {
+            "entry_count": 1,
+            "entry_counts": {
+              "directory": 0,
+              "link": 0,
+              "packed_file": 1,
+              "unpacked_file": 0
+            },
+            "external_files_opened": false,
+            "limitations": [
+              "The complete header is checked for supported structure, duplicate names and overlapping packed extents. Header identity does not bind unselected payload bytes or an unpacked sidecar tree.",
+              "Only explicitly selected packed members are read and hashed. A declared SHA256 and its blocks must match before any selected bytes are returned; other payload integrity remains unverified.",
+              "Links and unpacked files are literal declarations and are never followed. Unknown header fields, noncanonical Pickles, ambiguous paths and unsupported integrity algorithms are refused.",
+              "Matching self-declared integrity is consistency evidence, not a publisher signature, trusted Electron fuse check, runtime execution proof or REA Evidence identity.",
+              "header_sha256 covers archive bytes [0, payload_offset), including both Pickles and padding. Electron fuse checks use the JSON header string alone; their digests are not interchangeable.",
+              "Descriptor metadata detects ordinary concurrent modification, not privileged races that restore or defeat those observations. Header and selected byte digests describe the captured data."
+            ],
+            "members_extracted": false,
+            "profile": "electron-asar-canonical-pickle-sha256-v1",
+            "rea_evidence_compatible": false,
+            "record_format": "hepta.rea-asar.v1",
+            "request": {
+              "length": 1,
+              "member": "member",
+              "offset": 0,
+              "operation": "read",
+              "require_complete": false
+            },
+            "result": {
+              "bytes_hex": "00",
+              "complete_member": false,
+              "declared_integrity_verified": true,
+              "entry": {
+                "executable_declaration": false,
+                "integrity": {
+                  "algorithm": "SHA256",
+                  "block_size": 1,
+                  "content_verified": true,
+                  "declared_block_count": 200000,
+                  "declared_hash": "4cbbd9be0cba685835755f827758705db5a413c5494c34262cd25946a73e7582"
+                },
+                "kind": "packed_file",
+                "link_followed": false,
+                "link_target": null,
+                "path": "member",
+                "payload_offset": 13400200,
+                "relative_data_offset": 0,
+                "size_bytes": 200000,
+                "unpacked": false
+              },
+              "integrity_status": "declared_sha256_and_blocks_match",
+              "length": 1,
+              "member_bytes_verified": 200000,
+              "member_sha256": "4cbbd9be0cba685835755f827758705db5a413c5494c34262cd25946a73e7582",
+              "next_offset": 1,
+              "offset": 0,
+              "publisher_authenticated": false,
+              "range_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+            },
+            "source": {
+              "full_sha256": null,
+              "header_bytes": 13400200,
+              "header_sha256": "bfbf8ef615bade2345324968f1fe1a9fd94138a113e8b250563434f86b5b8994",
+              "header_sha256_scope": "complete_pickle_header",
+              "identity_scope": "pickle_header_and_descriptor_observation",
+              "observed_version": "asv1_e22fb90e61e9a6c4c24aaaa93a618c7c4d4f257d8e82de3e17c421101913dbc2",
+              "payload_bytes": 200000,
+              "payload_offset": 13400200,
+              "referenced_payload_bytes": 200000,
+              "size_bytes": 13600200,
+              "unreferenced_payload_bytes": 0
+            },
+            "target_code_executed": false
+          }
+        }
+      },
+      "full_response_equal": true,
+      "limits_observation": {
+        "event": "limits-applied",
+        "limits": {
+          "0": [
+            12,
+            12
+          ],
+          "1": [
+            4194304,
+            4194304
+          ],
+          "4": [
+            0,
+            0
+          ],
+          "7": [
+            64,
+            64
+          ],
+          "9": [
+            805306368,
+            805306368
+          ]
+        },
+        "parent_pid": 2483868,
+        "pid": 2484596
+      },
+      "passed": true,
+      "reference_observation": {
+        "child_system_seconds": 0.17318100000000003,
+        "child_user_seconds": 0.7658009999999997,
+        "passed": true,
+        "returncode": 0,
+        "seconds": 0.9510479560121894,
+        "stderr_bytes": 0,
+        "stdout_bytes": 2813,
+        "wall_timeout": false
+      },
+      "returncode": 0,
+      "seconds": 9.646314752986655,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3370,
+      "wall_timeout": false
+    }
+  ],
+  "seccomp_qualified": false,
+  "status": "PASS"
+}
