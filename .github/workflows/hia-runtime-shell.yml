@@ -50,11 +50,13 @@ jobs:
           sparse-checkout: |
             native
             scripts
-            authoring
-            runtime_support
             src
-            tests/hia_native
+            tests
             .github
+            authoring
+            vendor
+            runtime_support
+            asm
       - name: Materialize explicit historical qualification source
         run: |
           python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/hia-historical-public58-profile.json"

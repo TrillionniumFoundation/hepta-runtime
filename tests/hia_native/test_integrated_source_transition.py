@@ -10,7 +10,19 @@ import sys
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[2]
+import atexit
+
+# Run the unchanged v1/v2 controls against a real, complete admitted v2 root.
+# The independent catalog controls below still use the physical current root.
+PHYSICAL_ROOT = Path(__file__).resolve().parents[2]
+CURRENT_MODULE_PATH = PHYSICAL_ROOT / "tests/hia_native/historical_public58/materialize.py"
+current_spec = importlib.util.spec_from_file_location("current_catalog_fixture_materializer", CURRENT_MODULE_PATH)
+current_materialize = importlib.util.module_from_spec(current_spec)
+current_spec.loader.exec_module(current_materialize)
+_previous_temporary = tempfile.TemporaryDirectory(prefix="hia-complete-previous-v2-")
+atexit.register(_previous_temporary.cleanup)
+ROOT = Path(_previous_temporary.name) / "source"
+PREVIOUS_SOURCE_REPORT = current_materialize.prepare_previous_source(PHYSICAL_ROOT, ROOT)
 MODULE_PATH = ROOT / "tests/hia_native/historical_public58/materialize.py"
 spec = importlib.util.spec_from_file_location("integrated_source_materializer", MODULE_PATH)
 materialize = importlib.util.module_from_spec(spec)
@@ -301,6 +313,11 @@ def load_tests(loader, tests, pattern):
     registry = importlib.util.module_from_spec(registry_spec)
     registry_spec.loader.exec_module(registry)
     tests.addTests(loader.loadTestsFromModule(registry))
+    catalog_path = PHYSICAL_ROOT / "tests/hia_native/test_catalog_source_transition.py"
+    catalog_spec = importlib.util.spec_from_file_location("current_catalog_controls", catalog_path)
+    catalog = importlib.util.module_from_spec(catalog_spec)
+    catalog_spec.loader.exec_module(catalog)
+    tests.addTests(loader.loadTestsFromModule(catalog))
     return tests
 
 

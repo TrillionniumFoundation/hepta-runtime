@@ -7,7 +7,7 @@ reference domains. An independent extension restores the complete original
 production metadata domain. Every source outside the explicit restore sets is kept.
 """
 from pathlib import Path
-import argparse,ast,hashlib,importlib.util,json,shutil,stat,sys
+import argparse,ast,gzip,hashlib,importlib.util,json,shutil,stat,sys
 sys.dont_write_bytecode=True
 if not __debug__:raise RuntimeError("historical source materialization requires assertions enabled")
 PREFIX=Path("tests/hia_native/historical_public58")
@@ -350,7 +350,7 @@ def _transition_terminal(source, captured, directories, native_names=None):
         reference_require(actual == native_names,
             "current transition complete native roster changed at terminal readback")
 
-def _transition_profile(capture):
+def _previous_transition_profile(capture, expected_reader):
     raw = capture(CURRENT_SOURCE_TRANSITION)
     reference_require(pin(raw) == CURRENT_SOURCE_TRANSITION_PIN,
         "fixed integrated source transition authority changed")
@@ -366,7 +366,7 @@ def _transition_profile(capture):
     value = json.loads(previous_raw)
     reference_require(value["schema"] == "hepta.historical-public58.integrated-source-transition.v1",
         "preceding integrated source transition schema changed")
-    reference_require(capture(MATERIALIZER_PATH) == _LOADED_MATERIALIZER_BYTES,
+    reference_require(capture(MATERIALIZER_PATH) == expected_reader,
         "current transition captured materializer differs from the loaded reader")
     loader = extension["control_loader_transition"]
     name = "tests/hia_native/test_integrated_source_transition.py"
@@ -388,6 +388,15 @@ def _transition_profile(capture):
     return value
 
 def _transition_inverse(raw, relation, name):
+    if "steps" in relation:
+        reference_require(pin(raw) == relation["current"],
+            "current composed transition physical preimage changed: " + name)
+        result = raw
+        for step in relation["steps"]:
+            result = _transition_inverse(result, step, name)
+        reference_require(pin(result) == relation["predecessor"],
+            "composed transition full predecessor identity changed: " + name)
+        return result
     reference_require(pin(raw) == relation["current"],
         "current transition physical preimage changed: " + name)
     previous = 0
@@ -407,21 +416,218 @@ def _transition_inverse(raw, relation, name):
         "current transition full predecessor identity changed: " + name)
     return result
 
+# A later source domain adds the complete published catalog. The v1/v2
+# authorities remain physical inputs. Old controls execute a separately restored,
+# fully admitted v2 tree; current admission always uses the actual v3 root.
+CATALOG_SOURCE_TRANSITION = PREFIX / "CURRENT_SOURCE_TRANSITION_V3.json"
+CATALOG_SOURCE_TRANSITION_PIN = {'bytes': 13931, 'sha256': 'ba0cdbef35669b2dea713cf6d9b9627c19dbf8b1aa03ec1bef075c82256e4dea', 'git_blob': 'a9d83b7b2886cc75ba900a86588385633e864982'}
+PREVIOUS_SELECTED_INVENTORY_PIN = {'bytes': 2428046, 'sha256': 'b126aef0c663b22b55cfe436b3b69895aa0ae20579de29935340e02c7c7add97', 'git_blob': 'ed92d95fa9286599cc32a71d5595b2d9432546bb'}
+CATALOG_SELECTED_FILES = ("asm/full_catalog_capability.S",)
+
+def _catalog_inputs(capture):
+    raw = capture(CATALOG_SOURCE_TRANSITION)
+    reference_require(pin(raw) == CATALOG_SOURCE_TRANSITION_PIN,
+        "fixed catalog source transition authority changed")
+    value = json.loads(raw)
+    reference_require(value["schema"] == "hepta.historical-public58.catalog-source-transition.v3"
+        and value["source_commit"] == "a1ad1319f71265a16c92c4c6b5b95e005012cc91"
+        and value["previous_source_commit"] == "e8ed8bcfbaa21c316f72bc52147cb701e8609635",
+        "catalog current or preceding source identity changed")
+    reference_require(value["retained_authorities"] == {
+        CURRENT_SOURCE_TRANSITION.as_posix(): CURRENT_SOURCE_TRANSITION_PIN,
+        PREVIOUS_SOURCE_TRANSITION.as_posix(): PREVIOUS_SOURCE_TRANSITION_PIN},
+        "catalog retained source authorities changed")
+    for name, expected in value["retained_authorities"].items():
+        reference_require(pin(capture(name)) == expected,
+            "catalog retained source authority bytes changed: " + name)
+    reference_require(capture(MATERIALIZER_PATH) == _LOADED_MATERIALIZER_BYTES,
+        "catalog captured materializer differs from the loaded reader")
+    for name, expected in value["new_source_files"].items():
+        reference_require(pin(capture(name)) == expected,
+            "catalog supporting source changed: " + name)
+    inventory = value["previous_source_inventory"]
+    raw_inventory = gzip.decompress(capture(inventory["path"]))
+    reference_require(pin(raw_inventory) == PREVIOUS_SELECTED_INVENTORY_PIN
+        and inventory["decompressed"] == PREVIOUS_SELECTED_INVENTORY_PIN,
+        "complete preceding source inventory changed")
+    previous = json.loads(raw_inventory)
+    reference_require(previous["schema"] == "hepta.historical-public58.complete-previous-source-inventory.v2"
+        and previous["source_commit"] == value["previous_source_commit"]
+        and previous["source_tree"] == "257cb2b52e3c756d0c86aa92bd14a9483bea7eea"
+        and previous["source_file_count"] == len(previous["source_files"]) == 13025
+        and previous["source_bytes"] == sum(row["bytes"] for row in previous["source_files"].values()) == 642157774,
+        "complete preceding source domain changed")
+    archive = value["previous_reader"]
+    archived_reader = capture(archive["path"])
+    reference_require(pin(archived_reader) == archive["identity"]
+        and {key: archive["identity"][key] for key in ("bytes", "sha256")}
+            == {key: previous["source_files"][MATERIALIZER_PATH.as_posix()][key]
+                for key in ("bytes", "sha256")},
+        "complete preceding materializer identity changed")
+    reference_require(len(value["catalog_files"]) == 10
+        and value["catalog_native_files"] == ["native/full_catalog_pipeline.hepta"]
+        and set(value["catalog_native_files"]) < set(value["catalog_files"])
+        and set(CATALOG_SELECTED_FILES) < set(value["catalog_files"]),
+        "complete published catalog source scope changed")
+    for name, relation in value["source_transitions"].items():
+        reference_require(name in previous["source_files"]
+            and {key: relation["predecessor"][key] for key in ("bytes", "sha256")}
+                == {key: previous["source_files"][name][key] for key in ("bytes", "sha256")},
+            "catalog predecessor is outside the fixed preceding source: " + name)
+    return {"authority": value, "inventory": previous, "inventory_raw": raw_inventory,
+        "previous_reader": archived_reader}
+
+def _transition_profile(capture, catalog=None):
+    catalog = _catalog_inputs(capture) if catalog is None else catalog
+    extension = catalog["authority"]
+    control = "tests/hia_native/test_integrated_source_transition.py"
+    control_previous = _transition_inverse(capture(control),
+        extension["source_transitions"][control], control)
+    def previous_capture(name):
+        name = Path(name).as_posix()
+        if name == MATERIALIZER_PATH.as_posix():
+            return catalog["previous_reader"]
+        if name == control:
+            return control_previous
+        return capture(name)
+    value = _previous_transition_profile(previous_capture, catalog["previous_reader"])
+    profile = json.loads(capture(PREFIX / "PROFILE.json"))
+    historical_restore = set(profile["restore"])
+    for name, relation in extension["source_transitions"].items():
+        if name in value["transitions"]:
+            retained = value["transitions"][name]
+            reference_require(relation["predecessor"] == retained["current"],
+                "catalog transition does not meet the preceding source: " + name)
+            value["transitions"][name] = {"current": relation["current"],
+                "predecessor": retained["predecessor"], "steps": [relation, retained]}
+        elif name.startswith(".github/workflows/") and name not in historical_restore:
+            value["transitions"][name] = relation
+        if name in value["current_auxiliary_files"]:
+            value["current_auxiliary_files"][name] = relation["current"]
+    value["current_auxiliary_files"].update(extension["new_source_files"])
+    for name, identity in extension["catalog_files"].items():
+        value["current_auxiliary_files"][name] = {
+            key: identity[key] for key in ("bytes", "sha256", "git_blob")}
+    for name in extension["catalog_native_files"]:
+        value["current_native_files"][name] = extension["catalog_files"][name]
+    value["additional_current_only_files"] += extension["catalog_native_files"]
+    value["retained_profiles"][CURRENT_SOURCE_TRANSITION.as_posix()] = CURRENT_SOURCE_TRANSITION_PIN
+    value["catalog_source"] = extension
+    return value
+
+def _catalog_selected(source):
+    paths = selected(source)
+    return set(paths)
+
+def _catalog_admit_current(source, capture, captured, catalog):
+    authority = catalog["authority"]
+    previous = catalog["inventory"]["source_files"]
+    expected_names = (set(previous) | set(authority["catalog_files"])
+        | set(authority["new_source_files"]) | {CATALOG_SOURCE_TRANSITION.as_posix()})
+    reference_require(_catalog_selected(source) == expected_names,
+        "complete catalog current selected source roster changed")
+    projected = {MATERIALIZER_PATH.as_posix(): catalog["previous_reader"]}
+    for name, relation in authority["source_transitions"].items():
+        projected[name] = _transition_inverse(capture(name), relation, name)
+    for name, expected in authority["catalog_files"].items():
+        raw = capture(name)
+        reference_require(pin(raw) == {key: expected[key] for key in ("bytes", "sha256", "git_blob")},
+            "complete catalog current source changed: " + name)
+        mode = "100755" if captured[name]["identity"][2] & 0o111 else "100644"
+        reference_require(mode == expected["git_mode"],
+            "catalog source execution mode changed: " + name)
+    for name, expected in previous.items():
+        physical = capture(name)
+        logical = projected[name] if name in projected else physical
+        reference_require(len(logical) == expected["bytes"] and SHA(logical) == expected["sha256"],
+            "complete preceding source relation changed: " + name)
+        mode = "100755" if captured[name]["identity"][2] & 0o111 else "100644"
+        reference_require(mode == expected["git_mode"],
+            "complete preceding source execution mode changed: " + name)
+    for name in set(authority["new_source_files"]) | {CATALOG_SOURCE_TRANSITION.as_posix()}:
+        capture(name)
+        reference_require(not (captured[name]["identity"][2] & 0o111),
+            "catalog supporting source execution mode changed: " + name)
+    return projected, expected_names
+
+def _catalog_terminal_roster(source, expected_names, directories):
+    reference_require(_catalog_selected(source) == expected_names,
+        "complete catalog current source roster changed at terminal readback")
+    for name, expected in directories.items():
+        reference_require(_transition_identity(source / name) == expected,
+            "catalog source directory changed at terminal readback: " + name)
+
+def _verify_previous_source(root, inventory_raw):
+    reference_require(pin(inventory_raw) == PREVIOUS_SELECTED_INVENTORY_PIN,
+        "preceding fixture inventory is not the fixed complete authority")
+    inventory = json.loads(inventory_raw)
+    capture, captured, directories = _transition_capture(root)
+    reference_require(_catalog_selected(root) == set(inventory["source_files"]),
+        "complete preceding fixture source roster changed")
+    for name, expected in inventory["source_files"].items():
+        raw = capture(name)
+        reference_require(len(raw) == expected["bytes"] and SHA(raw) == expected["sha256"],
+            "complete preceding fixture source changed: " + name)
+        mode = "100755" if captured[name]["identity"][2] & 0o111 else "100644"
+        reference_require(mode == expected["git_mode"],
+            "preceding fixture execution mode changed: " + name)
+    _transition_terminal(root, captured, directories)
+    _catalog_terminal_roster(root, set(inventory["source_files"]), directories)
+    return {"source_commit": inventory["source_commit"], "source_tree": inventory["source_tree"],
+        "source_files": len(inventory["source_files"]), "source_bytes": inventory["source_bytes"],
+        "native_source_paths": len(list((root / "native").rglob("*.hepta")))}
+
+def prepare_previous_source(source, output):
+    """Restore the entire fixed v2 selected tree into one new owned root."""
+    transition = current_source_transition(source)
+    output = Path(output).absolute()
+    reference_require(not output.exists() and not output.is_symlink()
+        and not output.is_relative_to(source), "preceding fixture output must be new and outside current source")
+    inventory = transition["catalog"]["inventory"]
+    output.mkdir(parents=True)
+    for name, expected in inventory["source_files"].items():
+        raw = (transition["previous_inputs"][name] if name in transition["previous_inputs"]
+            else transition["captured"][name]["raw"])
+        destination = output / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("xb") as stream:
+            stream.write(raw)
+        destination.chmod(0o755 if expected["git_mode"] == "100755" else 0o644)
+    result = _verify_previous_source(output, transition["catalog"]["inventory_raw"])
+    reference_require(result["native_source_paths"] == 235,
+        "preceding fixture native roster changed")
+    _transition_terminal(source, transition["captured"], transition["directories"], transition["native_names"])
+    _catalog_terminal_roster(source, transition["selected_names"], transition["directories"])
+    return result
+
+def verify_previous_source(root, source):
+    capture, captured, directories = _transition_capture(source)
+    catalog = _catalog_inputs(capture)
+    result = _verify_previous_source(root, catalog["inventory_raw"])
+    _transition_terminal(source, captured, directories)
+    return result
+
 def current_source_transition(source):
     capture, captured, directories = _transition_capture(source)
-    value = _transition_profile(capture)
+    catalog = _catalog_inputs(capture)
+    value = _transition_profile(capture, catalog)
+    previous_inputs, selected_names = _catalog_admit_current(source, capture, captured, catalog)
     profile = json.loads(capture(PREFIX / "PROFILE.json"))
     reference = json.loads(capture(REFERENCE_PROFILE))
     transitions = value["transitions"]
     migration = reference["native_inventory_authority"]["path"]
-    reference_require(set(transitions) == {migration, ".github/workflows/hia-runtime-native.yml",
-        ".github/workflows/hia-runtime-original-shard.yml"},
+    expected_transitions = {migration, ".github/workflows/hia-runtime-native.yml",
+        ".github/workflows/hia-runtime-original-shard.yml"}
+    expected_transitions.update(name for name in catalog["authority"]["source_transitions"]
+        if name.startswith(".github/workflows/") and name not in profile["restore"])
+    reference_require(set(transitions) == expected_transitions,
         "integrated source transition restore scope changed")
     predecessors = {}
     for name, relation in transitions.items():
         expected = ({key: reference["native_inventory_authority"][key]
-                     for key in ("bytes", "sha256", "git_blob")}
-                    if name == migration else profile["current_workflow_files"][name])
+                     for key in ("bytes", "sha256", "git_blob")} if name == migration
+                    else profile["current_workflow_files"].get(name,
+                        catalog["authority"]["source_transitions"].get(name, {}).get("predecessor")))
         reference_require(relation["predecessor"] == expected,
             "integrated source transition changed a retained predecessor: " + name)
         predecessors[name] = _transition_inverse(capture(name), relation, name)
@@ -432,7 +638,7 @@ def current_source_transition(source):
     registry_predecessor = _transition_inverse(capture(registry["path"]), registry, registry["path"])
     native_names = {path.relative_to(source).as_posix()
         for path in (source / "native").rglob("*.hepta")}
-    reference_require(native_names == set(value["current_native_files"]) and len(native_names) == 235,
+    reference_require(native_names == set(value["current_native_files"]) and len(native_names) == 236,
         "current transition complete native roster changed")
     for name, identity in value["current_native_files"].items():
         raw = capture(name)
@@ -448,13 +654,14 @@ def current_source_transition(source):
         **profile["current_workflow_files"]}
     reference_require(len(bound) == 554, "retained complete current source domain changed")
     for name, identity in bound.items():
-        raw = predecessors[name] if name in predecessors else capture(name)
+        raw = (predecessors[name] if name in predecessors
+            else previous_inputs[name] if name in previous_inputs else capture(name))
         reference_require(pin(raw) == identity,
             "current transition retained source differs: " + name)
     extras = set(value["additional_current_only_files"])
     reference_require(extras == {"native/multi_read_call_plan.hepta", "native/multi_read_params.hepta",
         "native/native_read_bootstrap.hepta", "native/public_file_info_walk.hepta",
-        "native/public_multi_read_result.hepta"}
+        "native/public_multi_read_result.hepta", "native/full_catalog_pipeline.hepta"}
         and not extras.intersection(set(bound) | set(profile["restore"])
             | set(profile["remove_current_public_only"]) | set(reference["excluded_current_only_files"])),
         "integrated current-only source exclusion scope changed")
@@ -465,8 +672,10 @@ def current_source_transition(source):
     reference_require(projected == original_native and len(projected) == 195,
         "integrated source transition does not restore the complete original native roster")
     _transition_terminal(source, captured, directories, native_names)
-    return {"profile": value, "predecessors": predecessors, "registry_predecessor": registry_predecessor, "captured": captured,
-        "directories": directories, "native_names": native_names}
+    _catalog_terminal_roster(source, selected_names, directories)
+    return {"profile": value, "predecessors": predecessors, "registry_predecessor": registry_predecessor,
+        "captured": captured, "directories": directories, "native_names": native_names,
+        "previous_inputs": previous_inputs, "selected_names": selected_names, "catalog": catalog}
 
 def current_native_inventory_predecessor(source, raw, expected):
     if pin(raw) == expected:
@@ -482,13 +691,17 @@ def current_native_inventory_predecessor(source, raw, expected):
 
 def _transition_report(value):
     relations = {**value["transitions"], value["registry_transition"]["path"]: value["registry_transition"]}
-    return {"authority": CURRENT_SOURCE_TRANSITION_PIN,
-        "preceding_authority": PREVIOUS_SOURCE_TRANSITION_PIN,
-        "current_native_source_paths": 235, "historical_native_source_paths": 195,
+    catalog = value["catalog_source"]
+    return {"authority": CATALOG_SOURCE_TRANSITION_PIN,
+        "preceding_authority": CURRENT_SOURCE_TRANSITION_PIN,
+        "retained_first_authority": PREVIOUS_SOURCE_TRANSITION_PIN,
+        "current_native_source_paths": 236, "historical_native_source_paths": 195,
         "current_physical_inputs": {name: relation["current"] for name, relation in relations.items()},
         "historical_output_files": {name: relation["predecessor"] for name, relation in relations.items()},
         "restored_paths": sorted(relations),
         "additional_excluded_current_only_paths": sorted(value["additional_current_only_files"]),
+        "complete_catalog_sources": catalog["catalog_files"],
+        "complete_previous_source_inventory": catalog["previous_source_inventory"],
         "current_source_unchanged": True, "native_or_rust_execution_qualified": False}
 
 def verify_source_transition_output(root, receipt):
@@ -505,6 +718,15 @@ def verify_source_transition_output(root, receipt):
     for name in value["additional_current_only_files"]:
         reference_require(not (root / name).exists() and not (root / name).is_symlink(),
             "integrated current-only source remains in historical output: " + name)
+    catalog = value["catalog_source"]
+    for name, expected in catalog["catalog_files"].items():
+        if name in catalog["catalog_native_files"]:
+            continue
+        reference_require(pin(capture(name)) == {key: expected[key] for key in ("bytes", "sha256", "git_blob")},
+            "materialized catalog auxiliary source differs: " + name)
+        mode = "100755" if captured[name]["identity"][2] & 0o111 else "100644"
+        reference_require(mode == expected["git_mode"],
+            "materialized catalog auxiliary execution mode differs: " + name)
     _transition_terminal(root, captured, directories)
     for name in value["additional_current_only_files"]:
         reference_require(not (root / name).exists() and not (root / name).is_symlink(),
@@ -533,7 +755,8 @@ def check(source):
     bound={**profile["current_graph_files"],**profile["current_authority_profile_files"],
         **profile["current_workflow_files"]}
     for name,expected in bound.items():
-        raw=transition["predecessors"][name] if name in transition["predecessors"] else read(source,name)
+        raw=(transition["predecessors"][name] if name in transition["predecessors"] else
+             transition["previous_inputs"][name] if name in transition["previous_inputs"] else read(source,name))
         assert pin(raw)==expected,name
     assert len(profile["historical_authority_restore"])==7
     for name,expected in profile["historical_authority_restore"].items():assert profile["restore"][name]==expected
@@ -566,6 +789,11 @@ def selected(source):
     for name in ROOT_FILES:
         path=source/name
         if path.is_file():assert not path.is_symlink();paths[name]=path
+    for name in CATALOG_SELECTED_FILES:
+        path=source/name
+        if path.exists() or path.is_symlink():
+            assert path.resolve(strict=True)==path and not path.is_symlink() and stat.S_ISREG(path.stat().st_mode)
+            paths[name]=path
     return paths
 def verify_materialized(root):
     receipt=json.loads(read(root,"HISTORICAL_PUBLIC_SOURCE.json"))
