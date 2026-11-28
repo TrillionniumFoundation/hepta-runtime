@@ -1,0 +1,543 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 32 or length(s) > 287 or read64(s, 0) != REQUEST:
+        return INVALID
+    operation = read64(s, 8)
+    if operation != 1 and operation != 2 or read64(s, 16) != length(s) - 32 or read64(s, 24) != 0:
+        return INVALID
+    if length(w) < 65536 or length(o) < 4096:
+        return CAPACITY
+    if get(w, 0) == 0:
+        if zeros(w, 0, length(w)) == 0:
+            return INVALID
+        copy_range(w, s, 1024, 0, length(s))
+        put(w, 16, length(s))
+        put(w, 24, operation)
+        put(w, 32, length(o))
+        put(w, 40, length(w))
+        put(w, 224, STATE)
+        if operation == 1:
+            if length(s) != 101 or valid_id(s, 32) == 0 or suffix(s, 96, 5, 1) == 0:
+                fail(w, 4, 0)
+            else:
+                store(w, 1408, 46)
+                copy_range(w, s, 1409, 32, 64)
+                store(w, 1473, 45)
+                copy_range(w, s, 1474, 32, 64)
+                store(w, 1538, 46)
+                store(w, 1539, 116)
+                store(w, 1540, 109)
+                store(w, 1541, 112)
+                put(w, 0, 10)
+        else:
+            copy_range(w, s, 1792, 32, length(s) - 32)
+            put(w, 104, length(s) - 32)
+            put(w, 64, 900)
+            put(w, 0, 100)
+    else:
+        if get(w, 224) != STATE or get(w, 0) == 999 or get(w, 216) != 1:
+            return INVALID
+        if get(w, 16) != length(s) or get(w, 32) != length(o) or get(w, 40) != length(w):
+            return INVALID
+        if equal_inputs(s, w, 1024) == 0 or ack_valid(w) == 0:
+            return INVALID
+        put(w, 216, 0)
+    while True:
+        phase = get(w, 0)
+        result = 4294967295
+        if phase == 10 or phase == 11 or phase == 14:
+            result = step_probe(o, w)
+        if phase == 30 or phase == 31 or phase == 32 or phase == 33:
+            result = step_open_record(o, w)
+        if phase == 40 or phase == 41 or phase == 42 or phase == 43 or phase == 46 or phase == 47:
+            result = step_scan_open(o, w)
+        if phase == 48 or phase == 49 or phase == 51 or phase == 52:
+            result = step_scan_flags(o, w)
+        if phase == 44 or phase == 45 or phase == 50 or phase == 56:
+            result = step_scan_entries(o, w)
+        if phase == 60 or phase == 61 or phase == 62 or phase == 63 or phase == 64 or phase == 65:
+            result = step_read_record(o, w)
+        if phase == 100 or phase == 101 or phase == 102 or phase == 103:
+            result = step_cleanup_open(o, w)
+        if phase == 104 or phase == 105 or phase == 106 or phase == 107:
+            result = step_cleanup_target(o, w)
+        if phase == 108 or phase == 109 or phase == 110 or phase == 111:
+            result = step_cleanup_remove(o, w)
+        if phase == 800 or phase == 900:
+            result = step_terminal(o, w)
+        if result != 0:
+            return result
+        if get(w, 0) == phase and phase != 50:
+            return INVALID
+    return INVALID
+
+def step_probe(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 10:
+        return action(w, 1, 2, 1408, 134, FILEFLAGS, 0, 11)
+    if phase == 11:
+        if error_number == 2:
+            put(w, 0, 30)
+        else:
+            if error_number != 0:
+                fail(w, 23, error_number)
+            else:
+                own(w, 2, 1)
+                return close_to(w, 2, 14)
+    if phase == 14:
+        copy_range(w, w, 1792, 1408, 134)
+        put(w, 104, 134)
+        put(w, 64, 30)
+        put(w, 0, 100)
+    return 0
+
+def step_open_record(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 30:
+        return action(w, 1, 1, 1056, 69, FILEFLAGS, 0, 31)
+    if phase == 31:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            own(w, 1, 1)
+            put(w, 0, 32)
+    if phase == 32:
+        return action(w, 2, 1, 512, 88, 0, 0, 33)
+    if phase == 33:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            put(w, 0, choose(get(w, 536) == 2, 40, 60))
+    return 0
+
+def step_scan_open(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 40:
+        store(w, 2300, 46)
+        return action(w, 1, 4, 2300, 1, DIRFLAGS, 0, 41)
+    if phase == 41:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            own(w, 4, 1)
+            put(w, 0, 42)
+    if phase == 42:
+        return action(w, 7, 5, 0, 0, 4, 0, 43)
+    if phase == 43:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            own(w, 5, 1)
+            put(w, 0, 46)
+    if phase == 46:
+        return action(w, 2, 5, 512, 88, 0, 0, 47)
+    if phase == 47:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            if (get(w, 512) & 61440) != 16384:
+                fail(w, 23, 20)
+            else:
+                put(w, 0, 48)
+    return 0
+
+def step_scan_flags(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 48:
+        return action(w, 9, 5, 0, 0, 0, 0, 49)
+    if phase == 49:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            if (result & 2097152) != 0:
+                fail(w, 23, 9)
+            else:
+                if (result & 3) == 1:
+                    fail(w, 23, 22)
+                else:
+                    put(w, 0, 51)
+    if phase == 51:
+        return action(w, 10, 5, 0, 0, 1, 0, 52)
+    if phase == 52:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            put(w, 0, 44)
+    return 0
+
+def step_scan_entries(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 44:
+        return action(w, 8, 5, 4096, 32768, 0, 0, 45)
+    if phase == 45:
+        if error_number == 2 or error_number == 0 and result == 0:
+            return close_to(w, 5, 56)
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            put(w, 80, result)
+            put(w, 88, 0)
+            put(w, 0, 50)
+    if phase == 50:
+        at = get(w, 88)
+        size = get(w, 80)
+        if at == size:
+            put(w, 0, 44)
+        else:
+            if at > size or size - at < 20:
+                fail(w, 26, 0)
+            else:
+                start = 4096 + at
+                stride = byte(w, start + 16) + byte(w, start + 17) * 256
+                if stride < 20 or stride > size - at:
+                    fail(w, 26, 0)
+                else:
+                    n = 0
+                    while n < stride - 19 and byte(w, start + 19 + n) != 0:
+                        n = n + 1
+                    if n == stride - 19 or n > 255:
+                        fail(w, 26, 0)
+                    else:
+                        put(w, 88, at + stride)
+                        name = start + 19
+                        if utf8(w, name, n) == 0:
+                            fail(w, 25, 0)
+                        else:
+                            if n >= 70 and byte(w, name) == 46 and byte(w, name + 65) == 45 and equal(w, name + 1, 1056, 64) == 1 and suffix(w, name + n - 4, 4, 2) == 1:
+                                copy_range(w, w, 1792, name, n)
+                                put(w, 104, n)
+                                put(w, 64, 50)
+                                put(w, 0, 100)
+    if phase == 56:
+        return close_to(w, 4, 60)
+    return 0
+
+def step_read_record(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 60:
+        return action(w, 2, 1, 512, 88, 0, 0, 61)
+    if phase == 61:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            if valid_metadata(w, 1) == 0:
+                fail(w, 16, 0)
+            else:
+                copy_range(w, w, 640, 512, 88)
+                put(w, 72, 0)
+                put(w, 0, 62)
+    if phase == 62:
+        return action(w, 3, 1, 40000 + get(w, 72), 2049 - get(w, 72), 0, 0, 63)
+    if phase == 63:
+        if error_number == 4:
+            put(w, 0, 62)
+        else:
+            if error_number != 0:
+                fail(w, 23, error_number)
+            else:
+                count = get(w, 72) + result
+                put(w, 72, count)
+                if count > 2048:
+                    fail(w, 3, 0)
+                else:
+                    if result == 0:
+                        put(w, 0, 64)
+                    else:
+                        put(w, 0, 62)
+    if phase == 64:
+        put(w, 44000, RECORD_REQUEST)
+        put(w, 44008, 2)
+        put(w, 44016, get(w, 72))
+        put(w, 44024, 69)
+        copy_range(w, w, 44032, 1056, 69)
+        copy_range(w, w, 44101, 40000, get(w, 72))
+        return action(w, 100, 0, 44000, 101 + get(w, 72), 48000, 4096, 65)
+    if phase == 65:
+        if error_number != 0 or result < 32 or result > 320 or get(w, 48000) != RECORD_RESPONSE:
+            fail(w, 26, 0)
+        else:
+            diagnostic = get(w, 48008)
+            if diagnostic > 4 or diagnostic != 0 and result != 32 or diagnostic == 0 and (result < 128 or get(w, 48056) != result):
+                fail(w, 26, 0)
+            else:
+                if diagnostic != 0:
+                    fail(w, diagnostic, 0)
+                else:
+                    put(w, 192, result)
+                    put(w, 0, 900)
+    return 0
+
+def step_cleanup_open(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 100:
+        n = get(w, 104)
+        if n < 5 or byte(w, 1792) != 46 or suffix(w, 1792 + n - 4, 4, 2) == 0:
+            fail(w, 24, 0)
+        else:
+            if n != 134 or byte(w, 1857) != 45 or valid_id(w, 1793) == 0 or valid_id(w, 1858) == 0:
+                fail(w, 27, 0)
+            else:
+                return action(w, 1, 2, 1792, n, FILEFLAGS, 0, 101)
+    if phase == 101:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            own(w, 2, 1)
+            put(w, 0, 102)
+    if phase == 102:
+        return action(w, 2, 2, 512, 88, 0, 0, 103)
+    if phase == 103:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            if valid_metadata(w, 2) == 0:
+                fail(w, 17, 0)
+            else:
+                if get(w, 536) == 2:
+                    put(w, 168, get(w, 552))
+                    put(w, 176, get(w, 560))
+                    copy_range(w, w, 2048, 1793, 64)
+                    store(w, 2112, 46)
+                    store(w, 2113, 106)
+                    store(w, 2114, 115)
+                    store(w, 2115, 111)
+                    store(w, 2116, 110)
+                    put(w, 0, 104)
+                else:
+                    put(w, 0, 108)
+    return 0
+
+def step_cleanup_target(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 104:
+        return action(w, 1, 3, 2048, 69, FILEFLAGS, 0, 105)
+    if phase == 105:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            own(w, 3, 1)
+            put(w, 0, 106)
+    if phase == 106:
+        return action(w, 2, 3, 512, 88, 0, 0, 107)
+    if phase == 107:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            if get(w, 552) != get(w, 168) or get(w, 560) != get(w, 176):
+                fail(w, 18, 0)
+            else:
+                return close_to(w, 3, 108)
+    return 0
+
+def step_cleanup_remove(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 108:
+        return action(w, 4, 0, 1792, get(w, 104), 0, 0, 109)
+    if phase == 109:
+        if error_number != 0:
+            fail(w, 23, error_number)
+        else:
+            put(w, 0, 110)
+    if phase == 110:
+        return action(w, 5, 0, 0, 0, 0, 0, 111)
+    if phase == 111:
+        if error_number == 4:
+            put(w, 0, 110)
+        else:
+            if error_number != 0:
+                fail(w, 23, error_number)
+            else:
+                return close_to(w, 2, get(w, 64))
+    return 0
+
+def step_terminal(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if phase == 800:
+        own(w, get(w, 208), 0)
+        put(w, 0, get(w, 200))
+    if phase == 900:
+        if get(w, 144) == 1:
+            return close_to(w, 3, 900)
+        if get(w, 136) == 1:
+            return close_to(w, 2, 900)
+        if get(w, 160) == 1:
+            return close_to(w, 5, 900)
+        if get(w, 152) == 1:
+            return close_to(w, 4, 900)
+        if get(w, 128) == 1:
+            return close_to(w, 1, 900)
+        fill_range(o, 0, 192, 0)
+        put(o, 0, RESPONSE)
+        put(o, 8, get(w, 48))
+        put(o, 16, get(w, 56))
+        put(o, 24, get(w, 192))
+        put(o, 32, 192 + get(w, 192))
+        put(o, 40, get(w, 24))
+        if get(w, 48) == 0 and get(w, 24) == 1:
+            copy_range(o, w, 64, 640, 88)
+            copy_range(o, w, 192, 48000, get(w, 192))
+        put(w, 0, 999)
+        return 192 + get(w, 192)
+    return 0
+
+def action(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, capacity:u64, phase:u64) -> u64:
+    sequence = get(w, 8)
+    if sequence == MAXWORD:
+        return INVALID
+    fill_range(w, 256, 96, 0)
+    put(w, 256, ACTION)
+    put(w, 264, sequence + 1)
+    put(w, 272, kind)
+    put(w, 280, slot)
+    put(w, 288, span)
+    put(w, 296, count)
+    put(w, 304, argument)
+    put(w, 312, capacity)
+    copy_range(w, w, 384, 256, 64)
+    put(w, 8, sequence + 1)
+    put(w, 216, 1)
+    put(w, 0, phase)
+    return YIELD
+
+def ack_valid(w:mutbuf) -> u64:
+    if get(w, 256) != ACTION or equal(w, 256, 384, 64) == 0 or get(w, 320) != get(w, 8) or get(w, 344) != 0:
+        return 0
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if error_number > 4095 or error_number != 0 and result != 0:
+        return 0
+    kind = get(w, 272)
+    if kind == 3 or kind == 8:
+        if result > get(w, 296):
+            return 0
+    else:
+        if kind == 100:
+            if result > get(w, 312):
+                return 0
+        else:
+            if kind == 9:
+                if result > 2147483647:
+                    return 0
+            else:
+                if result != 0:
+                    return 0
+    return 1
+
+def close_to(w:mutbuf, slot:u64, phase:u64) -> u64:
+    put(w, 208, slot)
+    put(w, 200, phase)
+    return action(w, 6, slot, 0, 0, 0, 0, 800)
+
+def fail(w:mutbuf, diagnostic:u64, error_number:u64) -> u64:
+    put(w, 48, diagnostic)
+    put(w, 56, error_number)
+    put(w, 192, 0)
+    put(w, 0, 900)
+    return 0
+
+def own(w:mutbuf, slot:u64, value:u64) -> u64:
+    put(w, 128 + (slot - 1) * 8, value)
+    return 0
+
+def zeros(s:readbuf, at:u64, count:u64) -> u64:
+    i = 0
+    while i < count:
+        if byte(s, at + i) != 0:
+            return 0
+        i = i + 1
+    return 1
+
+def equal(s:readbuf, a:u64, b:u64, count:u64) -> u64:
+    i = 0
+    while i < count:
+        if byte(s, a + i) != byte(s, b + i):
+            return 0
+        i = i + 1
+    return 1
+
+def equal_inputs(s:readbuf, w:mutbuf, at:u64) -> u64:
+    i = 0
+    while i < length(s):
+        if byte(s, i) != byte(w, at + i):
+            return 0
+        i = i + 1
+    return 1
+
+def valid_id(s:readbuf, at:u64) -> u64:
+    i = 0
+    while i < 64:
+        c = byte(s, at + i)
+        if (c < 48 or c > 57) and (c < 97 or c > 102):
+            return 0
+        i = i + 1
+    return 1
+
+def suffix(s:readbuf, at:u64, size:u64, kind:u64) -> u64:
+    if kind == 1:
+        return choose(size == 5 and byte(s, at) == 46 and byte(s, at + 1) == 106 and byte(s, at + 2) == 115 and byte(s, at + 3) == 111 and byte(s, at + 4) == 110, 1, 0)
+    return choose(size == 4 and byte(s, at) == 46 and byte(s, at + 1) == 116 and byte(s, at + 2) == 109 and byte(s, at + 3) == 112, 1, 0)
+
+def valid_metadata(w:mutbuf, maximum_links:u64) -> u64:
+    mode = get(w, 512)
+    if (mode & 61440) != 32768 or (mode & 4095) != 384:
+        return 0
+    if get(w, 520) != get(w, 528) or get(w, 536) < 1 or get(w, 536) > maximum_links or get(w, 544) > 2048:
+        return 0
+    return 1
+
+def utf8(s:readbuf, start:u64, count:u64) -> u64:
+    i = 0
+    while i < count:
+        first = byte(s, start + i)
+        if first < 128:
+            i = i + 1
+        else:
+            need = 0
+            low = 128
+            high = 191
+            if first >= 194 and first <= 223:
+                need = 2
+            if first >= 224 and first <= 239:
+                need = 3
+                if first == 224:
+                    low = 160
+                if first == 237:
+                    high = 159
+            if first >= 240 and first <= 244:
+                need = 4
+                if first == 240:
+                    low = 144
+                if first == 244:
+                    high = 143
+            if need == 0 or need > count - i:
+                return 0
+            second = byte(s, start + i + 1)
+            if second < low or second > high:
+                return 0
+            j = 2
+            while j < need:
+                c = byte(s, start + i + j)
+                if c < 128 or c > 191:
+                    return 0
+                j = j + 1
+            i = i + need
+    return 1
