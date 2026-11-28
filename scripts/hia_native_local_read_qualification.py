@@ -7,15 +7,20 @@ The shipped seven-image ELF requires neither Python nor libc.
 """
 from __future__ import annotations
 
+import os
+import sys
+
+# Ignore ambient optimization and import overrides before loading build/test code.
+if __name__ == "__main__" and not sys.flags.isolated:
+    os.execv(sys.executable, [sys.executable, "-I", "-B", os.path.abspath(__file__), *sys.argv[1:]])
+
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
-import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +30,44 @@ MEMBERS = ("local_service", "policy", "binary_codec", "io_policy", "stat_version
            "multi_read_service", "file_info_service")
 SUPPORT = ("hia_native_local_read_qualification.py", "hia_native_composition_build.py",
            "hia_native_build.py", "hia_native_loader.py")
+
+
+EXPECTED_SUITES = {
+    "test_local_service": {
+        "tests_run": 6,
+        "counts": {
+            "domain_errors": 21,
+            "elf_requests": 234,
+            "native_controller_calls": 9,
+            "original_read_comparisons": 118,
+            "protocol_errors": 20
+        }
+    },
+    "test_multi_service": {
+        "tests_run": 5,
+        "counts": {
+            "all_actual_elf_responses": 108,
+            "elf_requests": 101,
+            "expected_domain_refusals": 33,
+            "expected_parameter_refusals": 11,
+            "original_batch_comparisons": 57,
+            "original_budget_boundary_pairs": 4,
+            "original_failure_comparisons": 13
+        }
+    },
+    "test_info_service": {
+        "tests_run": 5,
+        "counts": {
+            "acl_comparisons": 1,
+            "all_actual_elf_responses": 73,
+            "domain_refusals": 12,
+            "info_requests": 64,
+            "original_failure_comparisons": 4,
+            "original_info_comparisons": 39,
+            "parameter_refusals": 13
+        }
+    }
+}
 
 
 def digest(raw: bytes) -> str:
@@ -124,11 +167,34 @@ def check_unchanged(root: Path, identities: dict) -> None:
             raise ValueError(f"source changed during qualification: {name}")
 
 
+def admit_suite(name: str, result: dict, manifest_sha256: str, executable_sha256: str) -> None:
+    expected = EXPECTED_SUITES[name]
+    if result.get("status") != "pass":
+        raise ValueError(f"suite did not pass: {name}")
+    if result.get("manifest_sha256") != manifest_sha256 or result.get("executable_sha256") != executable_sha256:
+        raise ValueError(f"suite used a different manifest or executable: {name}")
+    required = {"tests_run": expected["tests_run"], "skipped": 0, "failures": 0,
+                "errors": 0, "expected_failures": 0, "unexpected_successes": 0,
+                "python_isolated": 1, "python_optimize": 0}
+    for key, value in required.items():
+        if type(result.get(key)) is not int or result[key] != value:
+            raise ValueError(f"suite completeness/isolation mismatch: {name}.{key}")
+    actual = result.get("counts")
+    if (type(actual) is not dict or actual.keys() != expected["counts"].keys() or
+            any(type(actual[key]) is not int or actual[key] != value
+                for key, value in expected["counts"].items())):
+        raise ValueError(f"suite case counts changed: {name}")
+
+
 def qualify(source: Path, hepta: Path, build: Path, report: dict) -> None:
     source = source.resolve(strict=True)
     hepta = hepta.resolve(strict=True)
     build.mkdir(parents=True, exist_ok=True)
     build = build.resolve(strict=True)
+    report["driver_python_isolated"] = sys.flags.isolated
+    report["driver_python_optimize"] = sys.flags.optimize
+    if not sys.flags.isolated or sys.flags.optimize:
+        raise ValueError("qualification driver requires isolated Python with assertions enabled")
     report["current_runtime_commit"] = git(source, "rev-parse", "HEAD").decode().strip()
     report["current_sources"] = freeze(source)
     commit, originals = reference_spec(source)
@@ -152,12 +218,12 @@ def qualify(source: Path, hepta: Path, build: Path, report: dict) -> None:
         result_path = build / f"{name}.result.json"
         # A prior result can never satisfy this invocation.
         result_path.unlink(missing_ok=True)
-        env = {key: value for key, value in os.environ.items() if not key.startswith("HIA_")}
+        env = {key: value for key, value in os.environ.items() if not key.startswith(("HIA_", "PYTHON"))}
         env.update(HIA_RUNTIME_REPO=str(source), HIA_RUNTIME_REFERENCE=str(reference),
                    HIA_HEPTA_DIR=str(hepta), HIA_SERVICE_MANIFEST=str(manifest),
                    HIA_SERVICE_RESULT=str(result_path), HIA_MULTI_SERVICE_RESULT=str(result_path),
                    HIA_INFO_SERVICE_RESULT=str(result_path), HIA_INFO_FIXTURE_ROOT=str(build))
-        command = [sys.executable, str(source / "tests/hia_native" / f"{name}.py")]
+        command = [sys.executable, "-I", "-B", str(source / "tests/hia_native" / f"{name}.py")]
         started = time.monotonic()
         with (build / f"{name}.stdout").open("wb") as out, (
                 build / f"{name}.stderr").open("wb") as err:
@@ -172,10 +238,7 @@ def qualify(source: Path, hepta: Path, build: Path, report: dict) -> None:
         print(json.dumps({"suite": name, "returncode": done.returncode}), flush=True)
         if done.returncode != 0 or row.get("result", {}).get("status") != "pass":
             raise RuntimeError(f"native read qualification failed: {name}; see {build / (name + '.stderr')}")
-        if row["result"]["executable_sha256"] != report["executable_sha256"]:
-            raise ValueError(f"suite used a different executable: {name}")
-        if row["result"]["manifest_sha256"] != report["manifest_sha256"]:
-            raise ValueError(f"suite used a different manifest: {name}")
+        admit_suite(name, row["result"], report["manifest_sha256"], report["executable_sha256"])
     check_unchanged(source, report["current_sources"])
     check_unchanged(reference, report["original_sources"])
     counts = [row["result"]["counts"] for row in report["suites"]]

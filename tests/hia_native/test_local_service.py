@@ -212,5 +212,10 @@ if __name__=='__main__':
  proof={'schema':'hepta.runtime.native-local-service-test.v1','counts':COUNTS,'status':'pass' if result.result.wasSuccessful() else 'fail','original_helper_sha256':ORIGINAL_SHA}
  if hasattr(NativeServiceTests,'metadata'):
   proof.update(manifest_sha256=hashlib.sha256(NativeServiceTests.manifest.read_bytes()).hexdigest(),executable_sha256=NativeServiceTests.metadata['executable_sha256'])
+ proof.update(tests_run=result.result.testsRun, skipped=len(result.result.skipped),
+              failures=len(result.result.failures), errors=len(result.result.errors),
+              expected_failures=len(result.result.expectedFailures),
+              unexpected_successes=len(result.result.unexpectedSuccesses),
+              python_isolated=sys.flags.isolated, python_optimize=sys.flags.optimize)
  if os.environ.get('HIA_SERVICE_RESULT'):Path(os.environ['HIA_SERVICE_RESULT']).write_text(json.dumps(proof,indent=2,sort_keys=True)+'\n')
  print(json.dumps(proof,sort_keys=True));raise SystemExit(0 if result.result.wasSuccessful() else 1)

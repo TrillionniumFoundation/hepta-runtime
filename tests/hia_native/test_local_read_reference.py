@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from hia_native_local_read_qualification import (
-    blob, check_unchanged, digest, materialize_reference,
+    EXPECTED_SUITES, admit_suite, blob, check_unchanged, digest, materialize_reference,
 )
 
 
@@ -84,6 +84,31 @@ class OriginalReferenceTests(unittest.TestCase):
         self.destination.symlink_to(other, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, "symlink"):
             materialize_reference(self.repo, self.destination, self.commit, self.spec)
+
+
+class SuiteCompletenessTests(unittest.TestCase):
+    def result(self):
+        return {"status": "pass", "manifest_sha256": "manifest", "executable_sha256": "elf",
+                "tests_run": 6, "skipped": 0, "failures": 0, "errors": 0,
+                "expected_failures": 0, "unexpected_successes": 0,
+                "python_isolated": 1, "python_optimize": 0,
+                "counts": dict(EXPECTED_SUITES["test_local_service"]["counts"])}
+
+    def test_shortened_or_skipped_success_report_is_refused(self):
+        complete = self.result()
+        admit_suite("test_local_service", complete, "manifest", "elf")
+        for key, value in [("tests_run", 5), ("skipped", 1), ("expected_failures", 1)]:
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "completeness"):
+                admit_suite("test_local_service", dict(complete, **{key: value}), "manifest", "elf")
+        short = self.result()
+        short["counts"]["original_read_comparisons"] -= 1
+        with self.assertRaisesRegex(ValueError, "case counts"):
+            admit_suite("test_local_service", short, "manifest", "elf")
+
+    def test_optimized_or_nonisolated_success_report_is_refused(self):
+        for key, value in [("python_optimize", 1), ("python_isolated", 0)]:
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "isolation"):
+                admit_suite("test_local_service", dict(self.result(), **{key: value}), "manifest", "elf")
 
 
 if __name__ == "__main__":

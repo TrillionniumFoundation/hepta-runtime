@@ -46,3 +46,10 @@ Run the independent reference-isolation regressions with:
 ```sh
 python3 tests/hia_native/test_local_read_reference.py
 ```
+
+The entry point reexecutes with isolated Python (`-I -B`), and the service
+children run with isolation and assertions enabled. Ambient `PYTHON*` import
+and optimization overrides are removed. A pass requires all 16 original tests,
+zero skips/errors/expected failures and the complete original per-suite case
+counts, including all 415 ELF responses and the ACL comparison. Shortened or
+optimized test runs cannot satisfy the qualification report.
