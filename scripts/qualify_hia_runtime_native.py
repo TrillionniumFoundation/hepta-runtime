@@ -478,12 +478,15 @@ MODULES = (
      "standalone": None, "manifest_env": "HIA_MULTI_READ_MANIFEST", "test": "test_multi_read_controller.py"},
     {"key": "file_info_service", "name": "file-info-service", "source": "native/file_info_service.hepta",
      "standalone": None, "manifest_env": "HIA_FILE_INFO_MANIFEST", "test": "test_file_info_controller.py"},
+    {"key": "native_read_bootstrap", "name": "native-read-bootstrap",
+     "source": "native/native_read_bootstrap.hepta", "standalone": None,
+     "manifest_env": "HIA_BOOTSTRAP_MANIFEST", "test": "test_native_read_bootstrap_state.py"},
     {"key": "local_service", "name": "local-service", "source": "native/local_service.hepta",
      "companion_sources": ("native/composition_packer.hepta",), "builder": "composition",
      "manifest_env": "HIA_SERVICE_MANIFEST", "test": "test_local_service.py",
      "additional_tests": ("test_multi_service.py", "test_info_service.py", "test_file_info_io_state.py",
                           "test_file_info_deadline_state.py", "test_file_info_io_faults.py",
-                          "test_file_info_guard.py", "test_native_deadline_probe.py")},
+                          "test_file_info_guard.py", "test_file_info_ready_reap.py", "test_native_deadline_probe.py")},
 )
 PACKERS = {"native/filter_packer.hepta", "native/stdio_packer.hepta"}
 EXTRA_TESTS = ("test_transport.py", "test_native_composition.py", "test_qualification_reporting.py",

@@ -24,7 +24,7 @@ from hia_native_atomic_write_build import (
     require, exact, sha, canonical, read, obj, file_record, native_receipt,
 )
 
-PROFILE = 'b5b3bf8bd8e831284e0767c99a7ae3e8defc64042f53d79d8e786149eccabf2a'
+PROFILE = '15d8ac4c86992fb2cf41fc6e92ace89d4c1a526f3e06e91e9cbd2759dcbbf1c1'
 ORDER = ('batch_write', 'file_lock_service', 'file_lock_key', 'history', 'atomic_write_shared', 'view_cache', 'local_read', 'file_lock_state', 'editable_content', 'batch_plan', 'line_endpoint', 'line_verify', 'batch_apply', 'batch_render')
 KINDS = (*ORDER, 'utf8_new', 'utf8_original', 'packer')
 PREFIX_BYTES, TABLE, ELF_BYTES = 16960, 16832, 2795186

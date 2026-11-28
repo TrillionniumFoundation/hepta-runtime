@@ -63,9 +63,14 @@ The parent computes one absolute `CLOCK_MONOTONIC` deadline. Before every
 interval from that original deadline. The worker signals a private pipe only
 after it has staged the complete result. A closed pipe without a complete
 commit or another worker-internal failure maps to `EIO` (5). A ready worker is
-also sent cancellation and subjected to a nonblocking reap attempt before
-admission; the parent validates
-only its fully staged result, without allowing it to resume outer service code.
+also sent cancellation. Before admitting a successful result, the parent
+retries specific-PID nonblocking reaping until that owned worker is retired.
+Between retries it polls without descriptors for at most one millisecond,
+recomputing the remaining interval from the original absolute deadline every
+time, including after EINTR. A normal successful response therefore cannot
+expose a still-owned worker to the next inspection. The parent validates only
+the fully staged result, without allowing the worker to resume outer service
+code. The final pre-commit deadline check remains in place.
 
 At timeout, the parent sends SIGKILL only to its owned worker, attempts a
 nonblocking reap, discards the shared staging mapping and acknowledges the
@@ -126,12 +131,13 @@ development assembly is authoring input; it is not interpreted or loaded by
 the resulting service. The executable has no dynamic loader, libc dependency
 or Python runtime dependency.
 
-The qualification evidence keeps three distinct categories:
+The qualification evidence keeps distinct categories:
 
 | Test | What it establishes |
 |---|---|
 | `test_file_info_deadline_state.py` | Actual HIA guard transitions with explicitly synthetic guard completions, including failure cleanup and replay refusal. |
 | `test_native_deadline_probe.py` | An actual native worker observed sleeping in empty-pipe `SYS_read`, followed by native timed cancellation and reaping. |
+| `test_file_info_ready_reap.py` | Actual old/new ELF control with four delayed WNOHANG results, bounded one-millisecond polls and EINTR; success requires that the specific worker has been reaped before publishing and the next request matches the original helper. |
 | `test_file_info_guard.py` | The actual seven-image service at its fixed 30-second duration, with a worker read or xattr syscall held by Linux notification; timeout rollback, worker reaping, persistent-root custody and subsequent original-result comparisons. |
 
 Normal `file_info` tests additionally compare exact compact result text against

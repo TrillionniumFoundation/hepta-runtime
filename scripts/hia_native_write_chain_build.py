@@ -24,7 +24,7 @@ from hia_native_atomic_write_build import (
     require, exact, sha, canonical, read, obj, file_record, native_receipt,
 )
 
-PROFILE = '00f2fa2b9d13845f1482b626b80b36d34d8f1f7e0b85307fef18a6383f05bc9f'
+PROFILE = '31f6e17d0859557972140863655820aeed43cae80e2ca9592011791a7c360512'
 ORDER = ('write_chain', 'file_lock_service', 'file_lock_key', 'history',
          'atomic_write_shared', 'view_cache', 'local_read', 'file_lock_state')
 KINDS = (*ORDER, 'packer')

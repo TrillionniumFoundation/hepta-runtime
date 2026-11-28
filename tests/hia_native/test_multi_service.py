@@ -41,7 +41,7 @@ class MultiServiceTests(unittest.TestCase):
   COUNTS['original_batch_comparisons']+=1;return expected
  def failure(self,service,args,text=REDACTED):
   if text==REDACTED:
-   root=service.proc.args[-1]
+   root=str(service.root)
    q={'files':[{'path':path,'root':root} for path in args['paths']],
       'max_file_bytes':16384 if args.get('max_file_bytes') is None else args['max_file_bytes'],
       'max_response_bytes':65536 if args.get('max_response_bytes') is None else args['max_response_bytes']}
