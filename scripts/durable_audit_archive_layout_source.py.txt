@@ -1,0 +1,953 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 32 or read64(s, 0) != REQUEST or read64(s, 8) < 1 or read64(s, 8) > 5 or read64(s, 24) != 0:
+        return INVALID
+    if length(o) < 4480 or length(w) < 1048576:
+        return CAPACITY
+    if get(w, 232) == 0:
+        if zeros(w, 0, length(w)) == 0 or read64(s, 8) != 1:
+            return INVALID
+        put(w, 232, STATE)
+        put(w, 32, length(o))
+        put(w, 40, length(w))
+        fixed_names(w)
+    else:
+        if get(w, 232) != STATE or get(w, 32) != length(o) or get(w, 40) != length(w):
+            return INVALID
+    if get(w, 0) == 0:
+        if get(w, 224) != 0 or get(w, 4152) == MAXWORD or read64(s, 16) != get(w, 4152) + 1:
+            return INVALID
+        if get(w, 4096) == 0 and read64(s, 8) != 1:
+            return INVALID
+        copy_range(w, s, 1536, 0, 32)
+        put(w, 4152, read64(s, 16))
+        put(w, 24, read64(s, 8))
+        put(w, 48, 0)
+        put(w, 56, 0)
+        put(w, 96, 0)
+        put(w, 112, 0)
+        put(w, 120, 0)
+        put(w, 136, 0)
+        if get(w, 4096) == 0:
+            put(w, 0, 10)
+        else:
+            dispatch(w)
+    else:
+        if get(w, 224) != 1 or equal_inputs(s, w, 1536) == 0 or ack_valid(w) == 0:
+            return INVALID
+        put(w, 224, 0)
+    while True:
+        phase = get(w, 0)
+        result = INVALID
+        if phase >= 10 and phase < 20:
+            result = initial(w)
+        if phase >= 100 and phase < 180:
+            result = loading(w)
+        if phase >= 200 and phase < 220:
+            result = initializing(w)
+        if phase >= 300 and phase < 350:
+            result = resuming(w)
+        if phase >= 400 and phase < 430:
+            result = validating(w)
+        if phase >= 450 and phase < 460:
+            result = finishing_intent(w)
+        if phase >= 500 and phase < 570:
+            result = scanning(w)
+        if phase >= 600 and phase < 620:
+            result = exclusive(w)
+        if phase >= 700 and phase < 750:
+            result = directory_checks(w)
+        if phase >= 800 and phase < 830:
+            result = fencing(w)
+        if phase >= 900 and phase < 960:
+            result = terminal(o, w)
+        if result != 0:
+            return result
+        if get(w, 0) == phase:
+            return INVALID
+    return INVALID
+
+def dispatch(w:mutbuf) -> u64:
+    operation = get(w, 24)
+    if operation == 1:
+        put(w, 0, 100)
+    if operation == 2:
+        put(w, 0, 200)
+    if operation == 3:
+        call_fence(w, 0, 900)
+    if operation == 4:
+        if get(w, 4104) == 1:
+            call_validate(w, 1, 900)
+        else:
+            put(w, 0, 900)
+    if operation == 5:
+        put(w, 0, 600)
+    return 0
+
+def initial(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 10:
+        call_private(w, 0, 11, 1)
+    if phase == 11:
+        copy_range(w, w, 4112, 512, 16)
+        call_private(w, 1, 12, 2)
+    if phase == 12:
+        copy_range(w, w, 4128, 512, 16)
+        put(w, 4096, 1)
+        dispatch(w)
+    return 0
+
+def loading(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 100:
+        if get(w, 4104) == 1:
+            put(w, 0, 170)
+        else:
+            return metadata(w, 2, 101)
+    if phase == 101:
+        checked = checked_metadata(w, 2, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            if error == 2 or error == 0 and get(w, 262160) == 2:
+                return metadata(w, 1, 102)
+            return child_bad(w, 20, error)
+        if checked != 2:
+            return INVALID
+        copy_range(w, w, 16384, 262304, 4224)
+        copy_range(w, w, 4208, 262208, 80)
+        if get(w, 16416) != 12 or equal(w, 16424, 4112, 32) == 0 or get(w, 16480) != 256:
+            return bad(w, 23, 0)
+        return action(w, 1, 2, 2048, 19, 0, DIR_FLAGS, 110)
+    if phase == 102:
+        checked = checked_metadata(w, 1, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 21, error)
+        if checked == 1:
+            return action(w, 4, 0, 2048, 19, 512, 88, 103)
+        copy_range(w, w, 8192, 262304, value - 160)
+        call_fence(w, 1, 300)
+    if phase == 103:
+        if error == 2:
+            put(w, 0, 170)
+        else:
+            bad(w, 22, error)
+    if phase == 110:
+        if error != 0:
+            return bad(w, 24, error)
+        put(w, 80, get(w, 80) | 4)
+        call_private(w, 2, 111, 24)
+    if phase == 111:
+        if equal(w, 512, 16464, 16) == 0:
+            return bad(w, 24, 0)
+        put(w, 4176, 0)
+        put(w, 0, 112)
+    if phase == 112:
+        index = get(w, 4176)
+        if index == 256:
+            call_validate(w, 1, 150)
+        else:
+            shard_name(w, index)
+            return action(w, 1, 8 + index, 2304, 2, 2, DIR_FLAGS, 113)
+    if phase == 113:
+        if error != 0:
+            return bad(w, 25, error)
+        put(w, 4144, get(w, 4144) + 1)
+        call_private(w, 8 + get(w, 4176), 114, 25)
+    if phase == 114:
+        index = get(w, 4176)
+        if equal(w, 512, 16512 + index * 16, 16) == 0:
+            return bad(w, 25, 0)
+        put(w, 4176, index + 1)
+        put(w, 0, 112)
+    if phase == 150:
+        call_finish(w, 151)
+    if phase == 151:
+        put(w, 4104, 1)
+        put(w, 0, 170)
+    if phase == 170:
+        if get(w, 24) == 2:
+            put(w, 0, 900)
+        else:
+            if get(w, 4104) == 1:
+                call_fence(w, 0, 900)
+            else:
+                return action(w, 2, 1, 512, 88, 0, 0, 171)
+    if phase == 171:
+        if error != 0:
+            return bad(w, 26, error)
+        if get(w, 560) >= 67108864:
+            put(w, 0, 200)
+        else:
+            call_fence(w, 0, 900)
+    return 0
+
+def initializing(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 200:
+        if get(w, 4104) == 1:
+            call_fence(w, 0, 900)
+        else:
+            return metadata(w, 1, 201)
+    if phase == 201:
+        checked = checked_metadata(w, 1, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 21, error)
+        if checked == 2:
+            copy_range(w, w, 8192, 262304, value - 160)
+            call_fence(w, 1, 300)
+        else:
+            call_fence(w, 0, 202)
+    if phase == 202:
+        fill_range(w, 8192, 4224, 0)
+        put(w, 8192, RECORD_RESPONSE)
+        put(w, 8208, 3)
+        put(w, 8216, 128)
+        put(w, 8224, 12)
+        copy_range(w, w, 8232, 4112, 32)
+        return publication(w, 1, 8192, 203)
+    if phase == 203:
+        checked = checked_publication(w, 1, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 27, error)
+        return checkpoint(w, 1, 0, 204)
+    if phase == 204:
+        call_fence(w, 1, 300)
+    return 0
+
+def resuming(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 300:
+        if get(w, 8224) != 12 or equal(w, 8232, 4112, 32) == 0 or get(w, 8288) > 256 or get(w, 8264) > 1:
+            return bad(w, 30, 0)
+        if get(w, 8264) == 0:
+            if get(w, 8288) != 0:
+                return bad(w, 30, 0)
+            return action(w, 4, 0, 2048, 19, 512, 88, 301)
+        put(w, 0, 304)
+    if phase == 301:
+        if error == 2:
+            return action(w, 16, 0, 2048, 19, 448, 0, 302)
+        if error != 0:
+            return bad(w, 31, error)
+        put(w, 0, 304)
+    if phase == 302:
+        if error != 0:
+            return bad(w, 31, error)
+        return action(w, 11, 0, 0, 0, 0, 0, 303)
+    if phase == 303:
+        if error != 0:
+            return bad(w, 31, error)
+        put(w, 0, 304)
+    if phase == 304:
+        return action(w, 1, 2, 2048, 19, 0, DIR_FLAGS, 305)
+    if phase == 305:
+        if error != 0:
+            return bad(w, 31, error)
+        put(w, 80, get(w, 80) | 4)
+        call_private(w, 2, 306, 31)
+    if phase == 306:
+        copy_range(w, w, 4320, 512, 16)
+        if get(w, 8264) == 1:
+            if equal(w, 512, 8272, 16) == 0:
+                return bad(w, 31, 0)
+            put(w, 0, 310)
+        else:
+            call_scan(w, 2, 0, 307)
+    if phase == 307:
+        return checkpoint(w, 2, 0, 308)
+    if phase == 308:
+        put(w, 8264, 1)
+        copy_range(w, w, 8272, 4320, 16)
+        return publication(w, 2, 8192, 309)
+    if phase == 309:
+        checked = checked_publication(w, 2, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 27, error)
+        return checkpoint(w, 3, 0, 310)
+    if phase == 310:
+        fill_range(w, 32768, 256, 0)
+        call_scan(w, 2, 1, 311)
+    if phase == 311:
+        if all_seen(w, get(w, 8288)) == 0:
+            return bad(w, 36, 0)
+        put(w, 4176, get(w, 8288))
+        put(w, 0, 312)
+    if phase == 312:
+        index = get(w, 4176)
+        if index == 256:
+            put(w, 0, 330)
+        else:
+            shard_name(w, index)
+            if byte(w, 32768 + index) == 0:
+                return action(w, 16, 2, 2304, 2, 448, 0, 313)
+            put(w, 0, 314)
+    if phase == 313:
+        if error != 0:
+            return bad(w, 35, error)
+        put(w, 0, 314)
+    if phase == 314:
+        return action(w, 1, 3, 2304, 2, 2, DIR_FLAGS, 315)
+    if phase == 315:
+        if error != 0:
+            return bad(w, 35, error)
+        put(w, 80, get(w, 80) | 8)
+        call_private(w, 3, 316, 35)
+    if phase == 316:
+        copy_range(w, w, 4336, 512, 16)
+        call_scan(w, 3, 0, 317)
+    if phase == 317:
+        return action(w, 11, 3, 0, 0, 0, 0, 318)
+    if phase == 318:
+        if error != 0:
+            return bad(w, 35, error)
+        return action(w, 11, 2, 0, 0, 0, 0, 319)
+    if phase == 319:
+        if error != 0:
+            return bad(w, 35, error)
+        return checkpoint(w, 4, get(w, 4176), 320)
+    if phase == 320:
+        index = get(w, 4176)
+        if index != get(w, 8288) or index >= 256:
+            return INVALID
+        copy_range(w, w, 8320 + index * 16, 4336, 16)
+        put(w, 8288, index + 1)
+        put(w, 8216, 128 + (index + 1) * 16)
+        return publication(w, 2, 8192, 321)
+    if phase == 321:
+        checked = checked_publication(w, 2, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 27, error)
+        return checkpoint(w, 5, get(w, 4176), 322)
+    if phase == 322:
+        return action(w, 7, 3, 0, 0, 0, 0, 323)
+    if phase == 323:
+        put(w, 80, get(w, 80) & 247)
+        put(w, 4176, get(w, 4176) + 1)
+        put(w, 0, 312)
+    if phase == 330:
+        return action(w, 11, 2, 0, 0, 0, 0, 331)
+    if phase == 331:
+        if error != 0:
+            return bad(w, 35, error)
+        return action(w, 11, 0, 0, 0, 0, 0, 332)
+    if phase == 332:
+        if error != 0:
+            return bad(w, 35, error)
+        call_fence(w, 1, 333)
+    if phase == 333:
+        fill_range(w, 32768, 256, 0)
+        call_scan(w, 2, 2, 334)
+    if phase == 334:
+        if all_seen(w, 256) == 0:
+            return bad(w, 37, 0)
+        copy_range(w, w, 16384, 8192, 4224)
+        put(w, 16400, 2)
+        return publication(w, 3, 16384, 335)
+    if phase == 335:
+        checked = checked_publication(w, 3, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 27, error)
+        return checkpoint(w, 6, 0, 336)
+    if phase == 336:
+        call_finish(w, 337)
+    if phase == 337:
+        return checkpoint(w, 7, 0, 338)
+    if phase == 338:
+        return action(w, 7, 2, 0, 0, 0, 0, 339)
+    if phase == 339:
+        put(w, 80, get(w, 80) & 251)
+        put(w, 0, 100)
+    return 0
+
+def call_validate(w:mutbuf, full:u64, resume:u64) -> u64:
+    put(w, 1216, full)
+    put(w, 1224, resume)
+    put(w, 0, 400)
+    return 0
+
+def validating(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error = get(w, 336)
+    if phase == 400:
+        call_named(w, 0, 2048, 19, 2, 401, 40)
+    if phase == 401:
+        return action(w, 1, 3, 2112, 32, 0, FILE_FLAGS, 402)
+    if phase == 402:
+        if error != 0:
+            return bad(w, 40, error)
+        put(w, 80, get(w, 80) | 8)
+        return action(w, 2, 3, 512, 88, 0, 0, 403)
+    if phase == 403:
+        if error != 0:
+            return bad(w, 40, error)
+        if same_stamp(w, 512, 4208) == 0:
+            return bad(w, 40, 0)
+        return action(w, 7, 3, 0, 0, 0, 0, 404)
+    if phase == 404:
+        put(w, 80, get(w, 80) & 247)
+        if get(w, 1216) == 1:
+            fill_range(w, 32768, 256, 0)
+            call_scan(w, 2, 3, 405)
+        else:
+            put(w, 0, get(w, 1224))
+    if phase == 405:
+        if all_seen(w, 256) == 0:
+            return bad(w, 43, 0)
+        put(w, 0, get(w, 1224))
+    return 0
+
+def call_finish(w:mutbuf, resume:u64) -> u64:
+    put(w, 1240, resume)
+    put(w, 0, 450)
+    return 0
+
+def finishing_intent(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 450:
+        return metadata(w, 1, 451)
+    if phase == 451:
+        checked = checked_metadata(w, 1, value, error)
+        if checked == INVALID:
+            return INVALID
+        if checked == 0:
+            return child_bad(w, 21, error)
+        if checked == 1:
+            put(w, 0, get(w, 1240))
+        else:
+            if value != 4384 or equal(w, 262336, 16416, 72) == 0 or equal(w, 262432, 16512, 4096) == 0:
+                return bad(w, 38, 0)
+            return action(w, 10, 0, 2176, 30, 0, 0, 452)
+    if phase == 452:
+        if error != 0:
+            return bad(w, 38, error)
+        return action(w, 11, 0, 0, 0, 0, 0, 453)
+    if phase == 453:
+        if error != 0:
+            return bad(w, 38, error)
+        put(w, 0, get(w, 1240))
+    return 0
+
+def call_scan(w:mutbuf, parent:u64, mode:u64, resume:u64) -> u64:
+    depth = get(w, 1600)
+    if depth >= 2:
+        return INVALID
+    at = 24576 + depth * 128
+    fill_range(w, at, 128, 0)
+    put(w, at, parent)
+    put(w, at + 8, mode)
+    put(w, at + 16, resume)
+    put(w, 1600, depth + 1)
+    put(w, 0, 500)
+    return 0
+
+def scanning(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    depth = get(w, 1600)
+    if depth == 0 or depth > 2:
+        return INVALID
+    level = depth - 1
+    at = 24576 + level * 128
+    slot = 4 + level * 2
+    buffer = 65536 + level * 32768
+    mode = get(w, at + 8)
+    if phase == 500:
+        return action(w, 1, slot, 2368, 1, get(w, at), DIR_FLAGS, 501)
+    if phase == 501:
+        if error != 0:
+            return bad(w, 44, error)
+        put(w, 80, get(w, 80) | (1 << slot))
+        return action(w, 8, slot + 1, 0, 0, slot, 0, 502)
+    if phase == 502:
+        if error != 0:
+            return bad(w, 44, error)
+        put(w, 80, get(w, 80) | (1 << (slot + 1)))
+        put(w, 0, 503)
+    if phase == 503:
+        return action(w, 9, slot + 1, buffer, 32768, 0, 0, 504)
+    if phase == 504:
+        if error != 0:
+            return bad(w, 44, error)
+        if value == 0:
+            return action(w, 7, slot + 1, 0, 0, 0, 0, 560)
+        put(w, at + 32, value)
+        put(w, at + 40, 0)
+        put(w, 0, 510)
+    if phase == 510:
+        cursor = get(w, at + 40)
+        count = get(w, at + 32)
+        if cursor == count:
+            put(w, 0, 503)
+        else:
+            if cursor > count or count - cursor < 20:
+                return INVALID
+            item = buffer + cursor
+            size = byte(w, item + 16) | (byte(w, item + 17) << 8)
+            if size < 20 or size > count - cursor:
+                return INVALID
+            length_name = 0
+            while length_name < size - 19 and byte(w, item + 19 + length_name) != 0:
+                length_name = length_name + 1
+            if length_name == size - 19:
+                return INVALID
+            put(w, at + 40, cursor + size)
+            if utf8(w, item + 19, length_name) == 0:
+                return bad(w, 45, 0)
+            if length_name == 1 and byte(w, item + 19) == 46 or length_name == 2 and byte(w, item + 19) == 46 and byte(w, item + 20) == 46:
+                put(w, 0, 511)
+            else:
+                if mode == 0:
+                    return bad(w, 32, 0)
+                if length_name != 2:
+                    return bad(w, choose(mode == 3, 41, 33), 0)
+                a = digit(byte(w, item + 19))
+                b = digit(byte(w, item + 20))
+                if a > 15 or b > 15:
+                    return bad(w, choose(mode == 3, 41, 33), 0)
+                index = a * 16 + b
+                if byte(w, 32768 + index) != 0:
+                    return bad(w, choose(mode == 3, 42, choose(mode == 1, 34, 37)), 0)
+                if mode == 1 and index > get(w, 8288):
+                    return bad(w, 34, 0)
+                store(w, 32768 + index, 1)
+                put(w, at + 56, index)
+                shard_name(w, index)
+                if mode == 3:
+                    call_named(w, 2, 2304, 2, 8 + index, 540, 40)
+                else:
+                    return action(w, 1, 3, 2304, 2, 2, DIR_FLAGS, 529)
+    if phase == 511:
+        put(w, 0, 510)
+    if phase == 529:
+        if error != 0:
+            return bad(w, 35, error)
+        put(w, 80, get(w, 80) | 8)
+        call_private(w, 3, 530, 35)
+    if phase == 530:
+        index = get(w, at + 56)
+        if mode == 2 or index < get(w, 8288):
+            if equal(w, 512, 8320 + index * 16, 16) == 0:
+                return bad(w, 35, 0)
+        call_scan(w, 3, 0, 535)
+    if phase == 535:
+        return action(w, 7, 3, 0, 0, 0, 0, 536)
+    if phase == 536:
+        put(w, 80, get(w, 80) & 247)
+        put(w, 0, 510)
+    if phase == 540:
+        return action(w, 2, 8 + get(w, at + 56), 512, 88, 0, 0, 541)
+    if phase == 541:
+        if error != 0:
+            return bad(w, 25, error)
+        if equal(w, 512, 16512 + get(w, at + 56) * 16, 16) == 0:
+            return bad(w, 25, 0)
+        put(w, 0, 510)
+    if phase == 560:
+        put(w, 80, get(w, 80) & (255 ^ (1 << (slot + 1))))
+        return action(w, 7, slot, 0, 0, 0, 0, 561)
+    if phase == 561:
+        put(w, 80, get(w, 80) & (255 ^ (1 << slot)))
+        put(w, 1600, level)
+        put(w, 0, get(w, at + 16))
+    return 0
+
+def exclusive(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error = get(w, 336)
+    if phase == 600:
+        if get(w, 4104) == 1:
+            put(w, 136, 0)
+            put(w, 0, 900)
+        else:
+            return action(w, 4, 0, 2112, 32, 512, 88, 601)
+    if phase == 601:
+        if error == 0:
+            put(w, 136, 1)
+            put(w, 0, 900)
+        else:
+            if error != 2:
+                return bad(w, 46, error)
+            return action(w, 4, 0, 2048, 19, 512, 88, 602)
+    if phase == 602:
+        if error == 0:
+            put(w, 136, 1)
+            put(w, 0, 900)
+        else:
+            if error != 2:
+                return bad(w, 46, error)
+            return action(w, 4, 0, 2176, 30, 512, 88, 603)
+    if phase == 603:
+        if error == 0:
+            put(w, 136, 1)
+            put(w, 0, 900)
+        else:
+            if error != 2:
+                return bad(w, 46, error)
+            return action(w, 2, 1, 512, 88, 0, 0, 604)
+    if phase == 604:
+        if error != 0:
+            return bad(w, 46, error)
+        put(w, 136, choose(get(w, 560) >= 67108864, 1, 0))
+        put(w, 0, 900)
+    return 0
+
+def call_private(w:mutbuf, slot:u64, resume:u64, point:u64) -> u64:
+    put(w, 1024, slot)
+    put(w, 1032, resume)
+    put(w, 1040, point)
+    put(w, 0, 700)
+    return 0
+
+def call_named(w:mutbuf, parent:u64, span:u64, count:u64, held:u64, resume:u64, point:u64) -> u64:
+    put(w, 1080, parent)
+    put(w, 1088, span)
+    put(w, 1096, count)
+    put(w, 1104, held)
+    put(w, 1112, resume)
+    put(w, 1120, point)
+    put(w, 0, 730)
+    return 0
+
+def directory_checks(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 700:
+        return action(w, 2, get(w, 1024), 512, 88, 0, 0, 701)
+    if phase == 701:
+        if error != 0:
+            return bad(w, get(w, 1040), error)
+        if (get(w, 528) & 61440) != 16384:
+            return bad(w, get(w, 1040), 0)
+        return action(w, 3, 0, 0, 0, 0, 0, 702)
+    if phase == 702:
+        if error != 0 or get(w, 536) != value or (get(w, 528) & 4095) != 448:
+            return bad(w, get(w, 1040), error)
+        put(w, 0, get(w, 1032))
+    if phase == 730:
+        return action(w, 4, get(w, 1080), get(w, 1088), get(w, 1096), 512, 88, 731)
+    if phase == 731:
+        if error != 0:
+            return bad(w, get(w, 1120), error)
+        copy_range(w, w, 640, 512, 88)
+        call_private(w, get(w, 1104), 733, get(w, 1120))
+    if phase == 733:
+        if (get(w, 656) & 61440) != 16384:
+            return bad(w, get(w, 1120), 0)
+        return action(w, 3, 0, 0, 0, 0, 0, 734)
+    if phase == 734:
+        if error != 0 or get(w, 664) != value or (get(w, 656) & 4095) != 448 or equal(w, 640, 512, 16) == 0:
+            return bad(w, get(w, 1120), error)
+        put(w, 0, get(w, 1112))
+    return 0
+
+def call_fence(w:mutbuf, legacy_only:u64, resume:u64) -> u64:
+    put(w, 1280, legacy_only)
+    put(w, 1288, resume)
+    put(w, 0, 800)
+    return 0
+
+def fencing(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 800:
+        call_private(w, 0, 801, 10)
+    if phase == 801:
+        if equal(w, 512, 4112, 16) == 0:
+            return bad(w, 10, 0)
+        put(w, 131072, PIN_REQUEST)
+        put(w, 131080, 2)
+        put(w, 131088, 0)
+        put(w, 131096, 0)
+        return action(w, 101, 0, 131072, 32, 262144, 192, 802)
+    if phase == 802:
+        if error != 0:
+            return bad(w, 11, error)
+        if value != 192 or get(w, 262144) != PIN_RESPONSE or get(w, 262176) != 2 or get(w, 262184) != 192 or get(w, 262200) != 0:
+            return INVALID
+        if get(w, 262152) == 1:
+            return child_bad(w, 11, 0)
+        if get(w, 262152) != 0 or get(w, 262160) != 0 or get(w, 262168) != 0 or get(w, 262192) != 1:
+            return INVALID
+        if get(w, 262208) != RECORD_RESPONSE or get(w, 262216) != 0 or get(w, 262224) != 1 or get(w, 262232) != 128 or get(w, 262240) != 0 or zeros(w, 262280, 56) == 0:
+            return INVALID
+        if equal(w, 262248, 4112, 32) == 0:
+            return bad(w, 12, 0)
+        call_named(w, 0, 2240, 19, 1, 803, 13)
+    if phase == 803:
+        if get(w, 1280) == 1:
+            put(w, 0, get(w, 1288))
+        else:
+            if get(w, 4104) == 1:
+                call_validate(w, 0, 804)
+            else:
+                return action(w, 4, 0, 2112, 32, 512, 88, 806)
+    if phase == 804:
+        return action(w, 4, 0, 2176, 30, 512, 88, 805)
+    if phase == 805:
+        if error == 2:
+            put(w, 0, get(w, 1288))
+        else:
+            bad(w, 47, error)
+    if phase == 806:
+        if error != 2:
+            return bad(w, 48, error)
+        return action(w, 4, 0, 2048, 19, 512, 88, 807)
+    if phase == 807:
+        if error != 2:
+            return bad(w, 48, error)
+        return action(w, 4, 0, 2176, 30, 512, 88, 808)
+    if phase == 808:
+        if error != 2:
+            return bad(w, 48, error)
+        put(w, 0, get(w, 1288))
+    return 0
+
+def terminal(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 900:
+        slot = 7
+        while slot >= 3 and (get(w, 80) & (1 << slot)) == 0:
+            slot = slot - 1
+        if slot >= 3:
+            put(w, 144, slot)
+            return action(w, 7, slot, 0, 0, 0, 0, 901)
+        put(w, 1600, 0)
+        if get(w, 4104) == 0 and get(w, 4144) != 0:
+            put(w, 144, 8 + get(w, 4144) - 1)
+            return action(w, 7, get(w, 144), 0, 0, 0, 0, 902)
+        if get(w, 4104) == 0 and (get(w, 80) & 4) != 0:
+            return action(w, 7, 2, 0, 0, 0, 0, 903)
+        put(w, 0, 950)
+    if phase == 901:
+        put(w, 80, get(w, 80) & (255 ^ (1 << get(w, 144))))
+        put(w, 0, 900)
+    if phase == 902:
+        put(w, 4144, get(w, 4144) - 1)
+        put(w, 0, 900)
+    if phase == 903:
+        put(w, 80, get(w, 80) & 251)
+        put(w, 0, 900)
+    if phase == 950:
+        size = choose(get(w, 4104) == 1, 4480, 256)
+        fill_range(o, 0, size, 0)
+        put(o, 0, RESPONSE)
+        put(o, 8, get(w, 48))
+        put(o, 16, get(w, 56))
+        put(o, 24, get(w, 96))
+        put(o, 32, get(w, 24))
+        put(o, 40, size)
+        put(o, 48, get(w, 4104))
+        put(o, 56, get(w, 4152))
+        copy_range(o, w, 64, 4112, 32)
+        put(o, 96, get(w, 112))
+        put(o, 104, get(w, 120))
+        put(o, 112, get(w, 136))
+        if get(w, 4104) == 1:
+            copy_range(o, w, 128, 4208, 80)
+            copy_range(o, w, 256, 16384, 4224)
+        put(w, 0, 0)
+        return size
+    return 0
+
+def metadata(w:mutbuf, operation:u64, resume:u64) -> u64:
+    put(w, 131072, METADATA_REQUEST)
+    put(w, 131080, operation)
+    put(w, 131088, 0)
+    put(w, 131096, 0)
+    return action(w, 100, 0, 131072, 32, 262144, 4384, resume)
+
+def publication(w:mutbuf, operation:u64, record:u64, resume:u64) -> u64:
+    count = get(w, record + 24)
+    if count < 128 or count > 4224 or count != 128 + get(w, record + 96) * 16:
+        return INVALID
+    put(w, 131072, PUBLICATION_REQUEST)
+    put(w, 131080, operation)
+    put(w, 131088, count)
+    put(w, 131096, 0)
+    copy_range(w, w, 131104, record, count)
+    return action(w, 102, 0, 131072, 32 + count, 262144, 128, resume)
+
+def checked_metadata(w:mutbuf, operation:u64, value:u64, error:u64) -> u64:
+    if error != 0:
+        return 0
+    if value < 160 or value > 4384 or get(w, 262144) != METADATA_RESPONSE or get(w, 262176) != operation or get(w, 262184) != value:
+        return INVALID
+    if get(w, 262152) > 1 or get(w, 262160) > 4095 or get(w, 262192) > 1 or get(w, 262200) > 1 or zeros(w, 262288, 16) == 0:
+        return INVALID
+    if get(w, 262152) == 1:
+        if value != 160 or get(w, 262168) < 1 or get(w, 262168) > 30:
+            return INVALID
+        return 0
+    if get(w, 262160) != 0 or get(w, 262168) != 0:
+        return INVALID
+    if get(w, 262192) == 0:
+        if value != 160 or operation != 1:
+            return INVALID
+        return 1
+    if value < 288 or get(w, 262304) != RECORD_RESPONSE or get(w, 262312) != 0 or get(w, 262320) != choose(operation == 1, 3, 2) or get(w, 262328) != value - 160:
+        return INVALID
+    if get(w, 262336) != 12 or get(w, 262376) > 1 or get(w, 262400) > 256 or zeros(w, 262408, 24) == 0:
+        return INVALID
+    if value != 288 + get(w, 262400) * 16:
+        return INVALID
+    if operation == 2 and (get(w, 262376) != 1 or get(w, 262400) != 256):
+        return INVALID
+    if get(w, 262376) == 0 and (get(w, 262384) != 0 or get(w, 262392) != 0 or get(w, 262400) != 0):
+        return INVALID
+    return 2
+
+def checked_publication(w:mutbuf, operation:u64, value:u64, error:u64) -> u64:
+    if error != 0:
+        return 0
+    if value != 128 or get(w, 262144) != PUBLICATION_RESPONSE or get(w, 262176) != operation or get(w, 262184) != 128 or get(w, 262152) > 1 or get(w, 262160) > 4095 or zeros(w, 262240, 32) == 0:
+        return INVALID
+    if get(w, 262152) != 0:
+        return 0
+    return choose(get(w, 262160) == 0 and get(w, 262168) == 0, 1, 0)
+
+def child_bad(w:mutbuf, point:u64, error:u64) -> u64:
+    if error == 0:
+        put(w, 112, get(w, 262152))
+        put(w, 120, get(w, 262168))
+        error = get(w, 262160)
+    return bad(w, point, error)
+
+def checkpoint(w:mutbuf, kind:u64, index:u64, resume:u64) -> u64:
+    return action(w, 21, 0, 0, 0, kind, index, resume)
+
+def same_stamp(w:mutbuf, stat:u64, stamp:u64) -> u64:
+    if get(w, stat) != get(w, stamp) or get(w, stat + 8) != get(w, stamp + 8) or get(w, stat + 48) != get(w, stamp + 16) or get(w, stat + 16) != get(w, stamp + 24) or get(w, stat + 24) != get(w, stamp + 32) or get(w, stat + 40) != get(w, stamp + 40):
+        return 0
+    return equal(w, stat + 56, stamp + 48, 32)
+
+def all_seen(w:mutbuf, count:u64) -> u64:
+    if count > 256:
+        return 0
+    index = 0
+    while index < count:
+        if byte(w, 32768 + index) != 1:
+            return 0
+        index = index + 1
+    return 1
+
+def digit(value:u64) -> u64:
+    if value >= 48 and value <= 57:
+        return value - 48
+    if value >= 97 and value <= 102:
+        return value - 87
+    return 16
+
+def shard_name(w:mutbuf, index:u64) -> u64:
+    high = index >> 4
+    low = index & 15
+    store(w, 2304, choose(high < 10, high + 48, high + 87))
+    store(w, 2305, choose(low < 10, low + 48, low + 87))
+    store(w, 2306, 0)
+    return 0
+
+def bad(w:mutbuf, point:u64, error:u64) -> u64:
+    put(w, 48, 1)
+    put(w, 56, error)
+    put(w, 96, point)
+    put(w, 0, 900)
+    return 0
+
+def action(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, capacity:u64, phase:u64) -> u64:
+    sequence = get(w, 8)
+    if sequence == MAXWORD:
+        return INVALID
+    fill_range(w, 256, 96, 0)
+    put(w, 256, ACTION)
+    put(w, 264, sequence + 1)
+    put(w, 272, kind)
+    put(w, 280, slot)
+    put(w, 288, span)
+    put(w, 296, count)
+    put(w, 304, argument)
+    put(w, 312, capacity)
+    copy_range(w, w, 384, 256, 64)
+    put(w, 8, sequence + 1)
+    put(w, 224, 1)
+    put(w, 0, phase)
+    return YIELD
+
+def ack_valid(w:mutbuf) -> u64:
+    if get(w, 256) != ACTION or equal(w, 256, 384, 64) == 0 or get(w, 320) != get(w, 8) or get(w, 344) != 0 or get(w, 336) > 4095:
+        return 0
+    value = get(w, 328)
+    error = get(w, 336)
+    kind = get(w, 272)
+    if kind == 3:
+        return choose(error == 0 and value <= 4294967295 or error != 0 and value == 0, 1, 0)
+    if kind == 9:
+        return choose(error == 0 and value <= get(w, 296) or error != 0 and value == 0, 1, 0)
+    if kind >= 100 and kind <= 102:
+        return choose(error == 0 and value <= get(w, 312) or error != 0 and value == 0, 1, 0)
+    if kind == 21:
+        return choose(error == 0 and value == 0, 1, 0)
+    return choose(value == 0, 1, 0)
+
+def utf8(w:mutbuf, at:u64, size:u64) -> u64:
+    end = at + size
+    while at < end:
+        ch = byte(w, at)
+        count = 0
+        low = 128
+        high = 191
+        if ch < 128:
+            count = 1
+        else:
+            if ch >= 194 and ch <= 223:
+                count = 2
+            else:
+                if ch >= 224 and ch <= 239:
+                    count = 3
+                    if ch == 224:
+                        low = 160
+                    if ch == 237:
+                        high = 159
+                else:
+                    if ch >= 240 and ch <= 244:
+                        count = 4
+                        if ch == 240:
+                            low = 144
+                        if ch == 244:
+                            high = 143
+        if count == 0 or end - at < count:
+            return 0
+        if count > 1:
+            next = byte(w, at + 1)
+            if next < low or next > high:
+                return 0
+        i = 2
+        while i < count:
+            next = byte(w, at + i)
+            if next < 128 or next > 191:
+                return 0
+            i = i + 1
+        at = at + count
+    return 1
+
