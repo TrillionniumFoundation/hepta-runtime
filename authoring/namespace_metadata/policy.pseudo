@@ -1,0 +1,201 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 176 or length(w) < 512:
+        return RESOURCE
+    phase = get(w, 0)
+    if phase == 0:
+        if length(s) < 96:
+            return INVALID
+        if word(s, 0) != REQUEST:
+            return INVALID
+        cmd = word(s, 8)
+        fd = word(s, 16)
+        size = word(s, 24)
+        if cmd != 1 and cmd != 2:
+            return INVALID
+        if size != length(s) - 96:
+            return INVALID
+        at = 32
+        while at < 96:
+            if word(s, at) != 0:
+                return INVALID
+            at = at + 8
+        if cmd == 1:
+            if size != 0 or fd > 2147483647:
+                return INVALID
+        else:
+            if fd != 0:
+                return INVALID
+            at = 96
+            while at < length(s):
+                if byte(s, at) == 0:
+                    return response(o, w, 2, 0)
+                at = at + 1
+        put(w, 16, cmd)
+        put(w, 24, fd)
+        put(w, 32, size)
+        return pending(o, w, 1, 1, 0, 0)
+    if phase == 99 or length(s) != 288:
+        return INVALID
+    if word(s, 0) != ACK or word(s, 8) != get(w, 8) or word(s, 24) != 0:
+        return INVALID
+    value = word(s, 16)
+    if phase == 1:
+        if value > 2:
+            return INVALID
+        put(w, 40, value)
+        if value == 2:
+            return fallback(o, w)
+        if get(w, 16) == 1:
+            return pending(o, w, 2, 4, get(w, 24), 0)
+        return pending(o, w, 2, 3, 0, get(w, 32))
+    if phase == 2:
+        if value == MAX_U64 - 37:
+            if get(w, 16) == 1:
+                return pending(o, w, 8, 8, get(w, 24), 0)
+            return pending(o, w, 8, 6, 0, get(w, 32))
+        if value == 0:
+            copy_range(w, s, 256, 32, 256)
+            return statx_done(o, w)
+        return statx_failure(value, o, w)
+    if phase == 3:
+        if value > 2:
+            return INVALID
+        if value == 1:
+            return response(o, w, 1, get(w, 48))
+        return pending(o, w, 4, 5, 0, 0)
+    if phase == 4:
+        if value == MAX_U64 - 37:
+            return pending(o, w, 9, 9, 0, 0)
+        return probe_done(value, o, w)
+    if phase == 5:
+        if value != 0:
+            return INVALID
+        put(w, 0, 99)
+        return statx_response(w, o, 256)
+    if phase == 6:
+        if value == 0:
+            fill_range(o, 0, 176, 0)
+            put(o, 0, RESPONSE)
+            put(o, 24, 144)
+            copy_range(o, s, 32, 32, 144)
+            put(w, 0, 99)
+            return 32
+        if value < ERROR_MIN:
+            return INVALID
+        return response(o, w, 1, MAX_U64 - value + 1)
+    if phase == 7:
+        if value != 0:
+            return INVALID
+        if get(w, 56) == 1:
+            return response(o, w, 1, get(w, 48))
+        return fallback(o, w)
+    if phase == 8:
+        if value == 0:
+            statx_from_stat64(s, w, 32)
+            return statx_done(o, w)
+        return statx_failure(value, o, w)
+    if phase == 9:
+        if value == 0:
+            return INVALID
+        return probe_done(value, o, w)
+    return INVALID
+
+def pending(o: mutbuf, w: mutbuf, phase: u64, action: u64, a: u64, b: u64) -> u32:
+    put(w, 0, phase)
+    put(w, 8, action)
+    fill_range(o, 0, 64, 0)
+    put(o, 0, EFFECT)
+    put(o, 8, action)
+    put(o, 16, a)
+    put(o, 24, b)
+    return ACTION
+
+def fallback(o: mutbuf, w: mutbuf) -> u32:
+    if get(w, 16) == 1:
+        return pending(o, w, 6, 7, get(w, 24), 0)
+    return pending(o, w, 6, 6, 0, get(w, 32))
+
+def response(o: mutbuf, w: mutbuf, kind: u64, error: u64) -> u32:
+    fill_range(o, 0, 32, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, kind)
+    put(o, 16, error)
+    put(w, 0, 99)
+    return 32
+
+def make_device(major: u64, minor: u64) -> u64:
+    return ((major & 4095) << 8) | (minor & 255) | ((major & 4294963200) << 32) | ((minor & 4294967040) << 12)
+
+def statx_response(s: readbuf, o: mutbuf, at: u64) -> u32:
+    fill_range(o, 0, 176, 0)
+    put(o, 0, RESPONSE)
+    put(o, 24, 144)
+    pair = word(s, at + 136)
+    put(o, 32, make_device(pair & 4294967295, pair >> 32))
+    put(o, 40, word(s, at + 32))
+    put(o, 48, word(s, at + 16) & 4294967295)
+    mode = word(s, at + 28) & 65535
+    uid = word(s, at + 20) & 4294967295
+    put(o, 56, mode | (uid << 32))
+    put(o, 64, word(s, at + 24) & 4294967295)
+    pair = word(s, at + 128)
+    put(o, 72, make_device(pair & 4294967295, pair >> 32))
+    put(o, 80, word(s, at + 40))
+    put(o, 88, word(s, at + 4) & 4294967295)
+    put(o, 96, word(s, at + 48))
+    put(o, 104, word(s, at + 64))
+    put(o, 112, word(s, at + 72) & 4294967295)
+    put(o, 120, word(s, at + 112))
+    put(o, 128, word(s, at + 120) & 4294967295)
+    put(o, 136, word(s, at + 96))
+    put(o, 144, word(s, at + 104) & 4294967295)
+    return 32
+
+
+def statx_done(o: mutbuf, w: mutbuf) -> u32:
+    if get(w, 40) == 0:
+        return pending(o, w, 5, 2, 1, 0)
+    put(w, 0, 99)
+    return statx_response(w, o, 256)
+
+def statx_failure(value: u64, o: mutbuf, w: mutbuf) -> u32:
+    if value < ERROR_MIN:
+        return INVALID
+    put(w, 48, MAX_U64 - value + 1)
+    return pending(o, w, 3, 1, 0, 0)
+
+def probe_done(value: u64, o: mutbuf, w: mutbuf) -> u32:
+    if value != 0 and value < ERROR_MIN:
+        return INVALID
+    if value == MAX_U64 - 13:
+        put(w, 56, 1)
+        return pending(o, w, 7, 2, 1, 0)
+    put(w, 56, 0)
+    return pending(o, w, 7, 2, 2, 0)
+
+def device_major(device: u64) -> u64:
+    return ((device >> 8) & 4095) | ((device >> 32) & 4294963200)
+
+def device_minor(device: u64) -> u64:
+    return (device & 255) | ((device >> 12) & 4294967040)
+
+def statx_from_stat64(s: readbuf, w: mutbuf, at: u64) -> u32:
+    fill_range(w, 256, 256, 0)
+    put(w, 256, 2047 | ((word(s, at + 56) & 4294967295) << 32))
+    mode_uid = word(s, at + 24)
+    put(w, 272, (word(s, at + 16) & 4294967295) | (mode_uid & 18446744069414584320))
+    put(w, 280, (word(s, at + 32) & 4294967295) | ((mode_uid & 65535) << 32))
+    put(w, 288, word(s, at + 8))
+    put(w, 296, word(s, at + 48))
+    put(w, 304, word(s, at + 64))
+    put(w, 320, word(s, at + 72))
+    put(w, 328, word(s, at + 80) & 4294967295)
+    put(w, 352, word(s, at + 104))
+    put(w, 360, word(s, at + 112) & 4294967295)
+    put(w, 368, word(s, at + 88))
+    put(w, 376, word(s, at + 96) & 4294967295)
+    device = word(s, at + 40)
+    put(w, 384, device_major(device) | (device_minor(device) << 32))
+    device = word(s, at)
+    put(w, 392, device_major(device) | (device_minor(device) << 32))
+    return 0

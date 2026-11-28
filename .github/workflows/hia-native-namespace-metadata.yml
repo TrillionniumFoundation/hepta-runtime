@@ -1,0 +1,71 @@
+name: HIA Native Namespace Metadata
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/**', main]
+    paths:
+      - 'authoring/namespace_metadata/**'
+      - 'native/namespace_metadata*'
+      - 'asm/namespace_metadata.S'
+      - 'scripts/hia_native_namespace_metadata.py'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - '.github/workflows/hia-native-namespace-metadata.yml'
+  pull_request:
+    paths:
+      - 'authoring/namespace_metadata/**'
+      - 'native/namespace_metadata*'
+      - 'asm/namespace_metadata.S'
+      - 'scripts/hia_native_namespace_metadata.py'
+      - 'scripts/hia_native_build.py'
+      - 'scripts/hia_native_loader.py'
+      - '.github/workflows/hia-native-namespace-metadata.yml'
+permissions:
+  contents: read
+jobs:
+  namespace-metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            asm
+            scripts
+            authoring
+            qualification/multi_read_body/v1/codec_reserved_native_build
+      - name: Checkout fixed HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Install original Rust compiler
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+      - name: Build HIA and compare complete actual Rust metadata behavior
+        run: |
+          HIA_METADATA_RUSTC="$(rustup which --toolchain 1.95.0 rustc)"
+          python3 -I -B runtime/authoring/namespace_metadata/run.py \
+            --source "$GITHUB_WORKSPACE/runtime" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --rustc "$HIA_METADATA_RUSTC" \
+            --output "$RUNNER_TEMP/hia-native-namespace-metadata"
+      - name: Retain complete build, original and native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-native-namespace-metadata-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-native-namespace-metadata/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
