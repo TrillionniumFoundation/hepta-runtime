@@ -1,0 +1,115 @@
+name: Ordinary public nine-tool composition from source
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Repository path containing the frozen public-nine source package
+        required: true
+        default: tests/hia_native/public_nine_ci
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  public-nine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      LC_ALL: C.UTF-8
+      NINE_SOURCE: ${{ github.workspace }}/runtime/${{ inputs.source_path }}
+      EIGHT_SOURCE: ${{ github.workspace }}/retained-sdk/tests/hia_native/sdk_target_ci
+    steps:
+      - name: Set runtime paths from the runner environment
+        run: |
+          printf '%s\n' \
+            "NINE_OUTPUT=$RUNNER_TEMP/public-nine-output" \
+            "NINE_ARCHIVE=$RUNNER_TEMP/public-nine-evidence" \
+            >> "$GITHUB_ENV"
+
+      - name: Checkout the exact candidate revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout the immutable repaired SDK source package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/hepta-runtime
+          path: retained-sdk
+          ref: b4054165e9b7be63e9309c8223d04131ec4fe31e
+          sparse-checkout: tests/hia_native/sdk_target_ci
+          persist-credentials: false
+
+      - name: Checkout the exact Hepta compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Verify the complete source package
+        run: |
+          python3 -I -B "$NINE_SOURCE/scripts/run_native_recipe.py" --source "$NINE_SOURCE" --check-only
+          test "$(git -C "$GITHUB_WORKSPACE/retained-sdk" rev-parse HEAD)" = b4054165e9b7be63e9309c8223d04131ec4fe31e
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+
+      - name: Fresh 62 and 79 images, ordinary public loops, and read-only verification
+        run: |
+          python3 -I -B "$NINE_SOURCE/scripts/run_native_recipe.py" \
+            --source "$NINE_SOURCE" --sdk-source "$EIGHT_SOURCE" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --output "$NINE_OUTPUT"
+
+      - name: Require the actual limited public domain
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import json, os
+          root=Path(os.environ['NINE_OUTPUT'])
+          recipe=json.loads((root/'RECIPE.json').read_bytes())
+          result=json.loads((root/'verification.json').read_bytes())
+          assert recipe['status']=='PASS'
+          assert recipe['fresh_62_baseline'] and recipe['fresh_79_candidate']
+          assert result['fresh_member_compiles']==79 and result['checked_reused_members']==0
+          assert result['counts']['actual_public_processes']==4
+          assert result['counts']['response_lines']==90
+          assert result['counts']['public_text_editor_effects_matched']==12
+          assert result['counts']['same_public_session_view_cache_checks']==8
+          assert recipe['outer_subprocess_timeout_seconds'] is None
+          for field in ('existing_binary_inputs','rust_executed','target_original_public_handler_comparison',
+                        'full_sdk_qualified','full_136_route_qualified','full_async_text_editor_qualified',
+                        'scope_wide_qualified','cancellation_fence_timing_qualified',
+                        'production_activated','old_path_removed','fresh_cold_qualified'):
+              assert recipe[field] is False,field
+          assert result['processes_or_native_or_rust_executed'] is False
+          assert result['verification_wrote_files'] is False
+          PY
+
+      - name: Preserve complete successful or failed source and execution artifacts
+        if: always()
+        run: |
+          python3 -I -B "$NINE_SOURCE/scripts/export_native_evidence.py" \
+            --source "$NINE_SOURCE" --build "$NINE_OUTPUT/public-nine" \
+            --loop "$NINE_OUTPUT/public-loop" --recipe-root "$NINE_OUTPUT" \
+            --output "$NINE_ARCHIVE"
+
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-nine-native-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/public-nine-evidence.tar.gz
+            ${{ runner.temp }}/public-nine-evidence.archive.json
+          if-no-files-found: error
+          retention-days: 14
