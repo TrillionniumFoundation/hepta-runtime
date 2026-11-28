@@ -1,0 +1,165 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(o) < 32:
+        return RESOURCE
+    if length(w) < WORK_MIN:
+        return grow(o, 1, WORK_MIN)
+    if get(w, 0) != STATE_MAGIC:
+        fill_range(w, 0, 368, 0)
+        put(w, 0, STATE_MAGIC)
+    phase = get(w, 8)
+    if phase == 0:
+        return start(s, w)
+    if phase == 6:
+        return finish(o, w, 192, get(w, 88))
+    if get(w, 320) != get(w, 16):
+        return INVALID
+    code = get(w, 328)
+    size = get(w, 352)
+    if code >= 4294901760:
+        put(w, 8, 0)
+        return code
+    if phase == 1:
+        return after_message(w, code, size)
+    if phase == 2:
+        return after_request(w, code, size)
+    if phase == 3 or phase == 4:
+        return finish(o, w, code, size)
+    if phase == 5:
+        return after_connection(o, w, code, size)
+    return INVALID
+
+def after_message(w:mutbuf, code:u64, size:u64) -> u32:
+    if size < 256 or size > MESSAGE_CAP or code != size:
+        put(w, 8, 0)
+        return INVALID
+    if get(w, MESSAGE) != MESSAGE_OUTPUT:
+        put(w, 8, 0)
+        return INVALID
+    if size > REQUEST_CAP - 24:
+        return RESOURCE
+    put(w, 48, size)
+    put(w, REQUEST, CONNECTION_INPUT)
+    put(w, REQUEST + 8, 1)
+    put(w, REQUEST + 16, size)
+    copy_within(w, REQUEST + 24, MESSAGE, size)
+    return child(w, 5, 4, REQUEST, size + 24, BRIDGE, BRIDGE_CAP)
+
+def connection_pair(w:mutbuf, base:u64, extent:u64, field:u64) -> bool:
+    at = get(w, base + field)
+    size = get(w, base + field + 8)
+    if at == 0:
+        return size == 0
+    if at < 256 or at > extent:
+        return False
+    return size <= extent - at
+
+def after_connection(o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    if size < 256 or size > BRIDGE_CAP or code != size:
+        return INVALID
+    if get(w, BRIDGE) != CONNECTION_OUTPUT:
+        return INVALID
+    kind = get(w, BRIDGE + 8)
+    closed = get(w, BRIDGE + 16)
+    if kind > 6 or closed > 1 or get(w, BRIDGE + 24) > 1:
+        return INVALID
+    put(w, 64, size)
+    put(w, 72, closed)
+    put(w, 96, kind)
+    put(w, 104, get(w, BRIDGE + 24))
+    put(w, 112, get(w, BRIDGE + 48))
+    variant = get(w, MESSAGE + 16)
+    if kind == 1:
+        if get(w, MESSAGE + 8) == 1 and variant == 2:
+            return initialize_frame(o, w)
+        if get(w, MESSAGE + 8) == 1 and variant == 3:
+            return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+        if connection_pair(w, BRIDGE, size, 64) == False:
+            return INVALID
+        start = get(w, BRIDGE + 64)
+        count = get(w, BRIDGE + 72)
+        if start == 0:
+            return INVALID
+        return direct_frame(o, w, BRIDGE + start, count, closed)
+    if kind == 2:
+        if get(w, MESSAGE + 8) != 1:
+            return INVALID
+        if variant == 14:
+            return child(w, 2, 1, MESSAGE, get(w, 48), REQUEST, REQUEST_CAP)
+        if variant == 1:
+            return empty_result(o, w)
+        return child(w, 4, 3, ORIGINAL, get(w, 24), TEMP, TEMP_CAP)
+    return direct_frame(o, w, 0, 0, closed)
+
+def initialize_frame(o:mutbuf, w:mutbuf) -> u32:
+    extent = get(w, 48)
+    if connection_pair(w, MESSAGE, extent, 80) == False:
+        return INVALID
+    if connection_pair(w, MESSAGE, extent, 128) == False:
+        return INVALID
+    if connection_pair(w, MESSAGE, extent, 144) == False:
+        return INVALID
+    id_at = get(w, MESSAGE + 80)
+    id_size = get(w, MESSAGE + 88)
+    version_at = get(w, MESSAGE + 128)
+    version_size = get(w, MESSAGE + 136)
+    caps_at = get(w, MESSAGE + 144)
+    caps_size = get(w, MESSAGE + 152)
+    if id_at == 0 or id_size == 0 or version_at == 0 or caps_at == 0:
+        return INVALID
+    if id_size > TEMP_CAP - 192:
+        return RESOURCE
+    available = TEMP_CAP - 192 - id_size
+    if caps_size > available:
+        return RESOURCE
+    if version_size > available - caps_size:
+        return RESOURCE
+    fill_range(w, TEMP, 192, 0)
+    put(w, TEMP, PROTOCOL_OUTPUT)
+    put(w, TEMP + 8, 1)
+    put(w, TEMP + 16, 1)
+    put(w, TEMP + 32, get(w, 32))
+    put(w, TEMP + 40, 3)
+    put(w, TEMP + 48, id_size)
+    put(w, TEMP + 56, caps_size)
+    put(w, TEMP + 64, version_size)
+    put(w, TEMP + 120, 192 + id_size)
+    put(w, TEMP + 128, caps_size)
+    put(w, TEMP + 144, INIT_TAG)
+    copy_within(w, TEMP + 192, MESSAGE + id_at, id_size)
+    copy_within(w, TEMP + 192 + id_size, MESSAGE + caps_at, caps_size)
+    copy_within(w, TEMP + 192 + id_size + caps_size, MESSAGE + version_at, version_size)
+    total = 192 + id_size + caps_size + version_size
+    put(w, 88, total)
+    put(w, 8, 6)
+    return finish(o, w, 192, total)
+
+def direct_frame(o:mutbuf, w:mutbuf, start:u64, size:u64, closed:u64) -> u32:
+    if size > TEMP_CAP - 192 or closed > 1:
+        return RESOURCE
+    fill_range(w, TEMP, 192, 0)
+    put(w, TEMP, PROTOCOL_OUTPUT)
+    put(w, TEMP + 16, 6)
+    put(w, TEMP + 32, get(w, 32))
+    put(w, TEMP + 48, size)
+    put(w, TEMP + 72, closed)
+    put(w, TEMP + 144, DIRECT_TAG)
+    if size != 0:
+        copy_within(w, TEMP + 192, start, size)
+    put(w, 88, 192 + size)
+    put(w, 8, 6)
+    return finish(o, w, 192, 192 + size)
+
+def empty_result(o:mutbuf, w:mutbuf) -> u32:
+    if connection_pair(w, MESSAGE, get(w, 48), 80) == False:
+        return INVALID
+    start = get(w, MESSAGE + 80)
+    size = get(w, MESSAGE + 88)
+    if start == 0 or size == 0:
+        return INVALID
+    if size > TEMP_CAP - 224:
+        return RESOURCE
+    at = response_prefix(w, TEMP + 192)
+    copy_within(w, at, MESSAGE + start, size)
+    at = empty_result_suffix(w, at + size)
+    return direct_frame(o, w, TEMP + 192, at - TEMP - 192, 0)
+

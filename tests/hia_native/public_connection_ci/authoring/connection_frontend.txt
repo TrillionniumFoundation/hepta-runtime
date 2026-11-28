@@ -1,0 +1,69 @@
+def after_protocol(s:readbuf, o:mutbuf, w:mutbuf, code:u64, size:u64) -> u32:
+    frame = region(w, 1)
+    if code != 192 or size < 192:
+        return INVALID
+    if get(w, frame) != PROTOCOL_OUTPUT:
+        return INVALID
+    if get(w, frame + 16) != 6:
+        return retained_connection_protocol(s, o, w, code, size)
+    if get(w, frame + 144) != DIRECT_TAG:
+        return INVALID
+    if get(w, frame + 8) != 0 or get(w, frame + 24) != 0:
+        return INVALID
+    if get(w, frame + 32) > 2 or get(w, frame + 40) != 0:
+        return INVALID
+    count = get(w, frame + 48)
+    if count != size - 192:
+        return INVALID
+    if get(w, frame + 56) != 0 or get(w, frame + 64) != 0:
+        return INVALID
+    closed = get(w, frame + 72)
+    if closed > 1:
+        return INVALID
+    at = 80
+    while at < 144:
+        if get(w, frame + at) != 0:
+            return INVALID
+        at = at + 8
+    at = 152
+    while at < 192:
+        if get(w, frame + at) != 0:
+            return INVALID
+        at = at + 8
+    if reserve(w, 7, count) == 0:
+        return pending_grow(o, w)
+    frame = region(w, 1)
+    if count != 0:
+        copy_within(w, region(w, 7), frame + 192, count)
+    put(w, 152, closed)
+    if count == 0:
+        return finish(o, w, 0, 0, 0, 0)
+    return finish(o, w, 3, count, 0, 0)
+
+def prepare_initialize(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    frame = region(w, 2)
+    if get(w, frame + 144) != INIT_TAG:
+        return retained_connection_initialize(s, o, w)
+    if get(w, frame + 16) != 1 or get(w, frame + 40) != 3:
+        return INVALID
+    identifier = get(w, frame + 48)
+    caps = get(w, frame + 56)
+    version = get(w, frame + 64)
+    if identifier == 0 or caps < 2:
+        return INVALID
+    if get(w, frame + 120) != 192 + identifier:
+        return INVALID
+    if get(w, frame + 128) != caps:
+        return INVALID
+    if reserve(w, 0, 32 + version + caps) == 0:
+        return pending_grow(o, w)
+    frame = region(w, 2)
+    target = region(w, 0)
+    put(w, target, ADMISSION_REQUEST)
+    put(w, target + 8, 1)
+    put(w, target + 16, version)
+    put(w, target + 24, caps)
+    copy_within(w, target + 32, frame + 192 + identifier + caps, version)
+    copy_within(w, target + 32 + version, frame + 192 + identifier, caps)
+    return child(w, 1, 32 + version + caps, 2)
+
