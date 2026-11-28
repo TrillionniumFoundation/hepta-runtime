@@ -285,8 +285,10 @@ def verify_metadata_reference_domains(root, metadata):
 # The integrated current source and the retained historical domain have independent
 # fixed identities. Projection is permitted only after the entire current domain
 # has been captured; it is never used as a substitute for a physical input.
-CURRENT_SOURCE_TRANSITION = PREFIX / "CURRENT_SOURCE_TRANSITION.json"
-CURRENT_SOURCE_TRANSITION_PIN = {'bytes': 68066, 'sha256': '7dc0a20b5e8d063f6013b44c6e2ea58203cd024b530e71b30c126dd337a605eb', 'git_blob': 'fc0c64aeaa2c62dbbabde40ce12de7650f5eb8b0'}
+PREVIOUS_SOURCE_TRANSITION = PREFIX / "CURRENT_SOURCE_TRANSITION.json"
+PREVIOUS_SOURCE_TRANSITION_PIN = {'bytes': 68066, 'sha256': '7dc0a20b5e8d063f6013b44c6e2ea58203cd024b530e71b30c126dd337a605eb', 'git_blob': 'fc0c64aeaa2c62dbbabde40ce12de7650f5eb8b0'}
+CURRENT_SOURCE_TRANSITION = PREFIX / "CURRENT_SOURCE_TRANSITION_V2.json"
+CURRENT_SOURCE_TRANSITION_PIN = {'bytes': 3158, 'sha256': '14331c9b93953906df97c770929f1d87760a01db870980aad683e0b29f4acf29', 'git_blob': 'e8e44a9a837e9d75d3b2b3d7f6dca98a6a5032b5'}
 MATERIALIZER_PATH = PREFIX / "materialize.py"
 _LOADED_MATERIALIZER_BYTES = Path(__file__).read_bytes()
 
@@ -352,11 +354,34 @@ def _transition_profile(capture):
     raw = capture(CURRENT_SOURCE_TRANSITION)
     reference_require(pin(raw) == CURRENT_SOURCE_TRANSITION_PIN,
         "fixed integrated source transition authority changed")
-    value = json.loads(raw)
-    reference_require(value["schema"] == "hepta.historical-public58.integrated-source-transition.v1",
+    extension = json.loads(raw)
+    reference_require(extension["schema"] == "hepta.historical-public58.integrated-source-transition.v2",
         "integrated source transition schema changed")
+    reference_require(extension["previous_authority"] == {
+        "path": PREVIOUS_SOURCE_TRANSITION.as_posix(), **PREVIOUS_SOURCE_TRANSITION_PIN},
+        "previous integrated source authority identity changed")
+    previous_raw = capture(PREVIOUS_SOURCE_TRANSITION)
+    reference_require(pin(previous_raw) == PREVIOUS_SOURCE_TRANSITION_PIN,
+        "fixed preceding integrated source authority changed")
+    value = json.loads(previous_raw)
+    reference_require(value["schema"] == "hepta.historical-public58.integrated-source-transition.v1",
+        "preceding integrated source transition schema changed")
     reference_require(capture(MATERIALIZER_PATH) == _LOADED_MATERIALIZER_BYTES,
         "current transition captured materializer differs from the loaded reader")
+    loader = extension["control_loader_transition"]
+    name = "tests/hia_native/test_integrated_source_transition.py"
+    reference_require(loader["path"] == name
+        and loader["predecessor"] == value["current_auxiliary_files"][name],
+        "retained integration control predecessor changed")
+    _transition_inverse(capture(name), loader, name)
+    value["current_auxiliary_files"][name] = loader["current"]
+    added = extension["additional_control_source"]
+    reference_require(added["path"] == "tests/hia_native/test_integrated_registry_transition.py",
+        "registry control source scope changed")
+    value["current_auxiliary_files"][added["path"]] = {
+        key: added[key] for key in ("bytes", "sha256", "git_blob")}
+    value["retained_profiles"][PREVIOUS_SOURCE_TRANSITION.as_posix()] = PREVIOUS_SOURCE_TRANSITION_PIN
+    value["registry_transition"] = extension["registry_transition"]
     for name, identity in value["retained_profiles"].items():
         reference_require(pin(capture(name)) == identity,
             "retained historical authority changed during source transition: " + name)
@@ -400,6 +425,11 @@ def current_source_transition(source):
         reference_require(relation["predecessor"] == expected,
             "integrated source transition changed a retained predecessor: " + name)
         predecessors[name] = _transition_inverse(capture(name), relation, name)
+    registry = value["registry_transition"]
+    reference_require(registry["path"] == "scripts/qualify_hia_runtime_native.py"
+        and registry["source_commit"] == "25cab92378df84e4fa7d7dcf3b97c5bf5b4b85b7",
+        "retained historical registry source identity changed")
+    registry_predecessor = _transition_inverse(capture(registry["path"]), registry, registry["path"])
     native_names = {path.relative_to(source).as_posix()
         for path in (source / "native").rglob("*.hepta")}
     reference_require(native_names == set(value["current_native_files"]) and len(native_names) == 235,
@@ -435,7 +465,7 @@ def current_source_transition(source):
     reference_require(projected == original_native and len(projected) == 195,
         "integrated source transition does not restore the complete original native roster")
     _transition_terminal(source, captured, directories, native_names)
-    return {"profile": value, "predecessors": predecessors, "captured": captured,
+    return {"profile": value, "predecessors": predecessors, "registry_predecessor": registry_predecessor, "captured": captured,
         "directories": directories, "native_names": native_names}
 
 def current_native_inventory_predecessor(source, raw, expected):
@@ -451,11 +481,13 @@ def current_native_inventory_predecessor(source, raw, expected):
     return restored
 
 def _transition_report(value):
-    return {"authority": CURRENT_SOURCE_TRANSITION_PIN, "current_native_source_paths": 235,
-        "historical_native_source_paths": 195,
-        "current_physical_inputs": {name: relation["current"] for name, relation in value["transitions"].items()},
-        "historical_output_files": {name: relation["predecessor"] for name, relation in value["transitions"].items()},
-        "restored_paths": sorted(value["transitions"]),
+    relations = {**value["transitions"], value["registry_transition"]["path"]: value["registry_transition"]}
+    return {"authority": CURRENT_SOURCE_TRANSITION_PIN,
+        "preceding_authority": PREVIOUS_SOURCE_TRANSITION_PIN,
+        "current_native_source_paths": 235, "historical_native_source_paths": 195,
+        "current_physical_inputs": {name: relation["current"] for name, relation in relations.items()},
+        "historical_output_files": {name: relation["predecessor"] for name, relation in relations.items()},
+        "restored_paths": sorted(relations),
         "additional_excluded_current_only_paths": sorted(value["additional_current_only_files"]),
         "current_source_unchanged": True, "native_or_rust_execution_qualified": False}
 
@@ -467,6 +499,9 @@ def verify_source_transition_output(root, receipt):
     for name, relation in value["transitions"].items():
         reference_require(pin(capture(name)) == relation["predecessor"],
             "materialized source transition predecessor differs: " + name)
+    registry = value["registry_transition"]
+    reference_require(pin(capture(registry["path"])) == registry["predecessor"],
+        "materialized historical registry predecessor differs")
     for name in value["additional_current_only_files"]:
         reference_require(not (root / name).exists() and not (root / name).is_symlink(),
             "integrated current-only source remains in historical output: " + name)
@@ -552,7 +587,7 @@ def verify_materialized(root):
     assert receipt["profile_sha256"]==SHA(profile_raw)
     assert receipt["historical_public_images"]==58 and receipt["current_default_images"]==126
     assert receipt["historical_graph_restored_paths"]==sorted(profile["restore"])
-    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(integrated["transitions"]))
+    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(integrated["transitions"])|{integrated["registry_transition"]["path"]})
     assert receipt["excluded_current_only_paths"]==profile["remove_current_public_only"]
     assert {name:pin(path.read_bytes()) for name,path in selected(root).items()}==receipt["files"]
     for name,identity in profile["restore"].items():assert pin(read(root,name))==identity,name
@@ -601,8 +636,11 @@ def main():
         assert pin(read(output,name))==metadata["current_inputs"][name],name
         raw=read(source/METADATA_REFERENCE_SOURCE,name);destination=output/name
         destination.write_bytes(raw);expected[name]=identity
-    for name,raw in transition["predecessors"].items():
-        relation=transition["profile"]["transitions"][name]
+    registry=transition["profile"]["registry_transition"]
+    restored={**transition["predecessors"],registry["path"]:transition["registry_predecessor"]}
+    relations={**transition["profile"]["transitions"],registry["path"]:registry}
+    for name,raw in restored.items():
+        relation=relations[name]
         assert pin(read(output,name))==relation["current"],name
         (output/name).write_bytes(raw);expected[name]=relation["predecessor"]
     for name in transition["profile"]["additional_current_only_files"]:
@@ -624,7 +662,7 @@ def main():
     assert len(members)==1 and len(ast.literal_eval(members[0].value))==58
     receipt=dict(schema="hepta.historical-public58.materialized-source.v3",status="SOURCE_PROFILE_MATERIALIZED",
         input_source=str(source),output_source=str(output),profile_sha256=profile_sha,
-        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(transition["predecessors"])),
+        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])|set(restored)),
         integrated_source_transition=_transition_report(transition["profile"]),
         historical_graph_restored_paths=sorted(profile["restore"]),
         original_reference_restored_paths=sorted(reference["restore"]),

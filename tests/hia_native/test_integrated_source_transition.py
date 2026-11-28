@@ -295,5 +295,14 @@ class IntegratedSourceTransitionTests(unittest.TestCase):
         self.assertEqual(process.stdout, b"")
 
 
+def load_tests(loader, tests, pattern):
+    path = ROOT / "tests/hia_native/test_integrated_registry_transition.py"
+    registry_spec = importlib.util.spec_from_file_location("integrated_registry_controls", path)
+    registry = importlib.util.module_from_spec(registry_spec)
+    registry_spec.loader.exec_module(registry)
+    tests.addTests(loader.loadTestsFromModule(registry))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()

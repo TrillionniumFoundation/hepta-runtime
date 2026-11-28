@@ -1,0 +1,69 @@
+{
+  "additional_control_source": {
+    "bytes": 7778,
+    "git_blob": "f2687a0e0935f7cc6b044fe58420e81c16172268",
+    "path": "tests/hia_native/test_integrated_registry_transition.py",
+    "sha256": "27a68a0ca795d3747f963cf9f9dba145b1201b2492d2b1226f69c112fcca7b52"
+  },
+  "control_loader_transition": {
+    "current": {
+      "bytes": 15329,
+      "git_blob": "50823ded3dba41d29715966981c071d2d153fa83",
+      "sha256": "cdcb1d338de8e7c514f99f7a38d7b36bcd34b1c73e69629dd74fd765121610ea"
+    },
+    "inverse": [
+      {
+        "current": "def load_tests(loader, tests, pattern):\n    path = ROOT / \"tests/hia_native/test_integrated_registry_transition.py\"\n    registry_spec = importlib.util.spec_from_file_location(\"integrated_registry_controls\", path)\n    registry = importlib.util.module_from_spec(registry_spec)\n    registry_spec.loader.exec_module(registry)\n    tests.addTests(loader.loadTestsFromModule(registry))\n    return tests\n\n\n",
+        "end": 15282,
+        "predecessor": "",
+        "start": 14884
+      }
+    ],
+    "path": "tests/hia_native/test_integrated_source_transition.py",
+    "predecessor": {
+      "bytes": 14931,
+      "git_blob": "4157045f5fe4d486b058cb146e2c9272ec5a5a6f",
+      "sha256": "b5c3a409c8e6f57977526445dabf0fe8b926610c7ec4f43a13ad5c5d777184e0"
+    }
+  },
+  "native_or_rust_execution_qualified": false,
+  "original_profiles_changed": false,
+  "preceding_transition_authority_changed": false,
+  "previous_admitted_commit": "c5d23456f8dd84f6f0b3148bc4b8fa069b4d5e84",
+  "previous_authority": {
+    "bytes": 68066,
+    "git_blob": "fc0c64aeaa2c62dbbabde40ce12de7650f5eb8b0",
+    "path": "tests/hia_native/historical_public58/CURRENT_SOURCE_TRANSITION.json",
+    "sha256": "7dc0a20b5e8d063f6013b44c6e2ea58203cd024b530e71b30c126dd337a605eb"
+  },
+  "registry_transition": {
+    "current": {
+      "bytes": 249970,
+      "git_blob": "b1f956eba0c0458aa938c8fd01451ebe67cc1ce7",
+      "sha256": "4e1c58298393c5ac8e4894645ab5228c87a98720ce788871b49834b8a96132bb"
+    },
+    "inverse": [
+      {
+        "current": "    {\"key\": \"native_read_bootstrap\", \"name\": \"native-read-bootstrap\",\n     \"source\": \"native/native_read_bootstrap.hepta\", \"standalone\": None,\n     \"manifest_env\": \"HIA_BOOTSTRAP_MANIFEST\", \"test\": \"test_native_read_bootstrap_state.py\"},\n",
+        "end": 36660,
+        "predecessor": "",
+        "start": 36422
+      },
+      {
+        "current": "                          \"test_file_info_guard.py\", \"test_file_info_ready_reap.py\", \"test_native_deadline_probe.py\")},\n",
+        "end": 37240,
+        "predecessor": "                          \"test_file_info_guard.py\", \"test_native_deadline_probe.py\")},\n",
+        "start": 37120
+      }
+    ],
+    "path": "scripts/qualify_hia_runtime_native.py",
+    "predecessor": {
+      "bytes": 249700,
+      "git_blob": "2325e0042287bba1c5deb0f7fdf283d75d48810e",
+      "sha256": "570afee2ad5515456e43f2590d2f48862ee09accec1b14ff0149c95f02ff8fa6"
+    },
+    "source_commit": "25cab92378df84e4fa7d7dcf3b97c5bf5b4b85b7"
+  },
+  "schema": "hepta.historical-public58.integrated-source-transition.v2",
+  "source_only": true
+}
