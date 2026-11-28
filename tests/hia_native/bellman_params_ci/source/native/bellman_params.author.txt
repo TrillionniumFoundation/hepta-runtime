@@ -1,0 +1,807 @@
+def compile(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 64 or length(s) > 536870912:
+        return 4294967295
+    if read64(s, 0) != INPUT_MAGIC or read64(s, 8) != 1:
+        return 4294967295
+    if read64(s, 16) != length(s) - 64:
+        return 4294967295
+    if read64(s, 24) != 0 or read64(s, 32) != 0 or read64(s, 40) != 0 or read64(s, 48) != 0 or read64(s, 56) != 0:
+        return 4294967295
+    if length(o) < 128:
+        return 4294967294
+    bound = scan(s)
+    if bound == 0:
+        return 4294967293
+    depth = bound >> 32
+    nodes = bound & 4294967295
+    base = 65536 + depth * 40
+    graph = base + nodes * 96
+    if length(w) < graph:
+        return reply(o, 2, 0, graph, 0)
+    fill_range(w, META, 256, 0)
+    put(w, META + 72, base)
+    put(w, META + 80, nodes)
+    put(w, META + 88, depth)
+    put(w, META + 96, graph)
+    fill_range(w, base, nodes * 96, 0)
+    if parse(s, w, 1) == 0:
+        return 4294967293
+    identifier = 1
+    while identifier <= get(w, P):
+        at = node(w, identifier)
+        if get(w, at) == 3:
+            if classify(s, w, get(w, at + 8), get(w, at + 16)) != 0:
+                return 4294967293
+            put(w, at + 80, get(w, 7008))
+            put(w, at + 88, get(w, 7000))
+        identifier = identifier + 1
+    init_fields(w)
+    states = 0
+    root = node(w, 1)
+    if get(w, root) == 5:
+        states = get(w, root + 24)
+    if get(w, root) == 6:
+        states = find_field(s, w, 1, 1)
+    count = 0
+    if states != 0 and get(w, node(w, states)) == 5:
+        count = children(w, states)
+    size = 16
+    if count >= 1 and count <= 4096:
+        size = size + count * 720
+    if length(w) < graph + size:
+        return reply(o, 2, 0, graph + size, 0)
+    put(w, META + 64, count)
+    put(w, META + 104, size)
+    fill_range(w, graph, size, 0)
+    put(w, graph, GRAPH_MAGIC)
+    put(w, graph + 8, count)
+    if typed_params(s, w, 1) == 0:
+        reply(o, 1, 0, 0, 0)
+        copy_workspace(o, w, 40, META, 64)
+        return 128
+    if length(o) < 128 + size:
+        return reply(o, 3, 0, 128 + size, count)
+    reply(o, 0, size, 0, count)
+    copy_workspace(o, w, 128, graph, size)
+    return 128 + size
+
+def reply(o:mutbuf, status:u64, size:u64, required:u64, count:u64) -> u32:
+    fill_range(o, 0, 128, 0)
+    put(o, 0, OUTPUT_MAGIC)
+    put(o, 8, status)
+    put(o, 16, size)
+    put(o, 24, required)
+    put(o, 32, count)
+    return 128
+
+def scan(s:readbuf) -> u64:
+    p = 64
+    count = 0
+    depth = 0
+    maximum = 0
+    while p < length(s):
+        c = byte(s, p)
+        if c == 34:
+            p = p + 1
+            done = 0
+            while p < length(s) and done == 0:
+                c = byte(s, p)
+                p = p + 1
+                if c == 34:
+                    done = 1
+                else:
+                    if c == 92:
+                        p = p + 1
+            if done == 0 or p > length(s):
+                return 0
+            count = count + 1
+        else:
+            if c == 91 or c == 123:
+                depth = depth + 1
+                if depth > maximum:
+                    maximum = depth
+                count = count + 1
+                p = p + 1
+            else:
+                if c == 93 or c == 125:
+                    if depth == 0:
+                        return 0
+                    depth = depth - 1
+                    p = p + 1
+                else:
+                    if c == 45 or digit(c):
+                        p = number_end(s, p)
+                        if p == 0:
+                            return 0
+                        count = count + 1
+                    else:
+                        if c == 116 or c == 110 or c == 102:
+                            p = p + choose(c == 102, 5, 4)
+                            count = count + 1
+                        else:
+                            p = p + 1
+    if depth != 0 or count == 0 or p != length(s):
+        return 0
+    return (maximum << 32) | count
+
+def node(w:mutbuf, identifier:u64) -> u64:
+    return get(w, META + 72) + (identifier - 1) * 96
+
+def key_order(s:readbuf, w:mutbuf, a:u64, ae:u64, b:u64, be:u64) -> u64:
+    a = a + 1
+    b = b + 1
+    while a + 1 < ae and b + 1 < be:
+        a = decoded(s, w, a, ae - 1)
+        av = get(w, P + 72)
+        b = decoded(s, w, b, be - 1)
+        bv = get(w, P + 72)
+        if av < bv:
+            return 1
+        if av > bv:
+            return 0
+    return choose(a + 1 == ae and b + 1 < be, 1, 0)
+
+def text_is(s:readbuf, w:mutbuf, start:u64, end:u64, field:u64) -> u64:
+    offset = get(w, FIELDS + field * 16)
+    size = get(w, FIELDS + field * 16 + 8)
+    start = start + 1
+    i = 0
+    while start + 1 < end and i < size:
+        start = decoded(s, w, start, end - 1)
+        if get(w, P + 72) != byte(w, offset + i):
+            return 0
+        i = i + 1
+    return choose(i == size and start + 1 == end, 1, 0)
+
+def key_is(s:readbuf, w:mutbuf, identifier:u64, field:u64) -> u64:
+    at = node(w, identifier)
+    return text_is(s, w, get(w, at + 56), get(w, at + 64), field)
+
+def find_field(s:readbuf, w:mutbuf, parent:u64, field:u64) -> u64:
+    child = get(w, node(w, parent) + 24)
+    while child != 0:
+        if key_is(s, w, child, field) != 0:
+            return child
+        child = get(w, node(w, child) + 40)
+    return 0
+
+def children(w:mutbuf, parent:u64) -> u64:
+    child = get(w, node(w, parent) + 24)
+    count = 0
+    while child != 0:
+        count = count + 1
+        child = get(w, node(w, child) + 40)
+    return count
+
+def type_error(w:mutbuf, identifier:u64, expected:u64, code:u64) -> u64:
+    at = node(w, identifier)
+    kind = get(w, at)
+    put(w, META, code)
+    put(w, META + 8, kind)
+    put(w, META + 16, expected)
+    if kind == 4:
+        put(w, META + 32, get(w, at + 8))
+        put(w, META + 40, get(w, at + 16))
+    if kind == 3:
+        put(w, META + 48, get(w, at + 80))
+        put(w, META + 56, get(w, at + 88))
+    return 0
+
+def length_error(w:mutbuf, count:u64, expected:u64) -> u64:
+    put(w, META, 3)
+    put(w, META + 16, expected)
+    put(w, META + 24, count)
+    return 0
+
+def missing(w:mutbuf, field:u64) -> u64:
+    put(w, META, 4)
+    put(w, META + 16, field)
+    return 0
+
+def unknown(w:mutbuf, identifier:u64, expected:u64) -> u64:
+    at = node(w, identifier)
+    put(w, META, 5)
+    put(w, META + 16, expected)
+    put(w, META + 32, get(w, at + 56))
+    put(w, META + 40, get(w, at + 64))
+    return 0
+
+def unsigned_float(value:u64, sign:u64) -> u64:
+    if value == 0:
+        return 0
+    exponent = 0
+    copy = value
+    while copy > 1:
+        exponent = exponent + 1
+        copy = copy >> 1
+    mantissa = 0
+    if exponent <= 52:
+        mantissa = value << (52 - exponent)
+    else:
+        shift = exponent - 52
+        mantissa = value >> shift
+        remainder = value & ((1 << shift) - 1)
+        half = 1 << (shift - 1)
+        if remainder > half or (remainder == half and (mantissa & 1) != 0):
+            mantissa = mantissa + 1
+        if mantissa == 9007199254740992:
+            mantissa = mantissa >> 1
+            exponent = exponent + 1
+    return (sign << 63) | ((exponent + 1023) << 52) | (mantissa & 4503599627370495)
+
+def numeric(w:mutbuf, identifier:u64, integer:u64) -> u64:
+    at = node(w, identifier)
+    expected = choose(integer != 0, 9, 7)
+    if get(w, at) != 3:
+        return type_error(w, identifier, expected, 1)
+    tag = get(w, at + 80)
+    bits = get(w, at + 88)
+    if integer != 0:
+        if tag == 5:
+            return type_error(w, identifier, expected, 1)
+        if tag != 3 or bits > 4294967295:
+            return type_error(w, identifier, expected, 2)
+        put(w, META + 112, bits)
+        return 1
+    if tag != 5:
+        if tag == 4:
+            bits = unsigned_float(0 - bits, 1)
+        else:
+            bits = unsigned_float(bits, 0)
+    put(w, META + 112, bits)
+    return 1
+
+def typed_params(s:readbuf, w:mutbuf, identifier:u64) -> u64:
+    at = node(w, identifier)
+    kind = get(w, at)
+    child = get(w, at + 24)
+    if kind == 5:
+        if child == 0:
+            return length_error(w, 0, 12)
+        if typed_states(s, w, child) == 0:
+            return 0
+        if get(w, node(w, child) + 40) != 0:
+            return length_error(w, children(w, identifier), 17)
+        return 1
+    if kind != 6:
+        return type_error(w, identifier, 1, 1)
+    found = 0
+    while child != 0:
+        if key_is(s, w, child, 1) == 0:
+            return unknown(w, child, 1)
+        if typed_states(s, w, child) == 0:
+            return 0
+        found = 1
+        child = get(w, node(w, child) + 40)
+    if found == 0:
+        return missing(w, 1)
+    return 1
+
+def typed_states(s:readbuf, w:mutbuf, identifier:u64) -> u64:
+    at = node(w, identifier)
+    if get(w, at) != 5:
+        return type_error(w, identifier, 2, 1)
+    child = get(w, at + 24)
+    index = 0
+    while child != 0:
+        output = 0
+        count = get(w, META + 64)
+        if count >= 1 and count <= 4096:
+            output = get(w, META + 96) + 16 + index * 720
+        if typed_state(s, w, child, output) == 0:
+            return 0
+        child = get(w, node(w, child) + 40)
+        index = index + 1
+    return 1
+
+def typed_state(s:readbuf, w:mutbuf, identifier:u64, output:u64) -> u64:
+    at = node(w, identifier)
+    kind = get(w, at)
+    child = get(w, at + 24)
+    if kind == 5:
+        if child == 0:
+            return length_error(w, 0, 13)
+        if typed_actions(s, w, child, output) == 0:
+            return 0
+        if get(w, node(w, child) + 40) != 0:
+            return length_error(w, children(w, identifier), 17)
+        return 1
+    if kind != 6:
+        return type_error(w, identifier, 3, 1)
+    found = 0
+    while child != 0:
+        if key_is(s, w, child, 2) == 0:
+            return unknown(w, child, 2)
+        if typed_actions(s, w, child, output) == 0:
+            return 0
+        found = 1
+        child = get(w, node(w, child) + 40)
+    if found == 0:
+        return missing(w, 2)
+    return 1
+
+def typed_actions(s:readbuf, w:mutbuf, identifier:u64, output:u64) -> u64:
+    at = node(w, identifier)
+    if get(w, at) != 5:
+        return type_error(w, identifier, 4, 1)
+    child = get(w, at + 24)
+    index = 0
+    while index < 6:
+        if child == 0:
+            return length_error(w, index, 4)
+        if get(w, node(w, child)) != 0:
+            destination = 0
+            if output != 0:
+                destination = output + index * 120
+            if typed_action(s, w, child, destination) == 0:
+                return 0
+        child = get(w, node(w, child) + 40)
+        index = index + 1
+    if child != 0:
+        return length_error(w, children(w, identifier), 17)
+    return 1
+
+def action_tag(s:readbuf, w:mutbuf, identifier:u64) -> u64:
+    at = node(w, identifier)
+    if get(w, at) != 4:
+        return type_error(w, identifier, 6, 1)
+    begin = get(w, at + 8)
+    end = get(w, at + 16)
+    if text_is(s, w, begin, end, 10) != 0:
+        return 1
+    if text_is(s, w, begin, end, 11) != 0:
+        return 2
+    put(w, META, 6)
+    put(w, META + 32, begin)
+    put(w, META + 40, end)
+    return 0
+
+def typed_action(s:readbuf, w:mutbuf, identifier:u64, output:u64) -> u64:
+    at = node(w, identifier)
+    kind = get(w, at)
+    if kind != 5 and kind != 6:
+        return type_error(w, identifier, 5, 1)
+    child = get(w, at + 24)
+    tag = 0
+    if kind == 5:
+        tag = child
+    else:
+        tag = find_field(s, w, identifier, 3)
+    if tag == 0:
+        return missing(w, 3)
+    variant = action_tag(s, w, tag)
+    if variant == 0:
+        return 0
+    field = choose(variant == 1, 4, 5)
+    if kind == 5:
+        child = get(w, node(w, child) + 40)
+        if child == 0:
+            return length_error(w, 0, choose(variant == 1, 15, 16))
+        if action_value(s, w, child, variant, output) == 0:
+            return 0
+        if get(w, node(w, child) + 40) != 0:
+            return length_error(w, children(w, identifier) - 1, 18)
+        return 1
+    found = 0
+    while child != 0:
+        if child != tag:
+            if key_is(s, w, child, field) == 0:
+                return unknown(w, child, choose(variant == 1, 3, 4))
+            if action_value(s, w, child, variant, output) == 0:
+                return 0
+            found = 1
+        child = get(w, node(w, child) + 40)
+    if found == 0:
+        return missing(w, field)
+    return 1
+
+def action_value(s:readbuf, w:mutbuf, identifier:u64, variant:u64, output:u64) -> u64:
+    if variant == 1:
+        if numeric(w, identifier, 0) == 0:
+            return 0
+        if output != 0:
+            put(w, output, 1)
+            put(w, output + 8, get(w, META + 112))
+        return 1
+    at = node(w, identifier)
+    if get(w, at) != 5:
+        return type_error(w, identifier, 2, 1)
+    child = get(w, at + 24)
+    index = 0
+    while child != 0:
+        destination = 0
+        if output != 0 and index < 3:
+            destination = output + 24 + index * 32
+        if typed_branch(s, w, child, destination) == 0:
+            return 0
+        child = get(w, node(w, child) + 40)
+        index = index + 1
+    if output != 0:
+        put(w, output, 2)
+        put(w, output + 16, index)
+    return 1
+
+def typed_branch(s:readbuf, w:mutbuf, identifier:u64, output:u64) -> u64:
+    at = node(w, identifier)
+    kind = get(w, at)
+    child = get(w, at + 24)
+    if kind == 5:
+        index = 0
+        while index < 4:
+            if child == 0:
+                return length_error(w, index, 14)
+            if numeric(w, child, choose(index == 1, 1, 0)) == 0:
+                return 0
+            if output != 0:
+                put(w, output + index * 8, get(w, META + 112))
+            child = get(w, node(w, child) + 40)
+            index = index + 1
+        if child != 0:
+            return length_error(w, children(w, identifier), 19)
+        return 1
+    if kind != 6:
+        return type_error(w, identifier, 8, 1)
+    seen = 0
+    while child != 0:
+        field = 6
+        while field <= 9 and key_is(s, w, child, field) == 0:
+            field = field + 1
+        if field > 9:
+            return unknown(w, child, 5)
+        if numeric(w, child, choose(field == 7, 1, 0)) == 0:
+            return 0
+        seen = seen | (1 << (field - 6))
+        if output != 0:
+            put(w, output + (field - 6) * 8, get(w, META + 112))
+        child = get(w, node(w, child) + 40)
+    field = 6
+    while field <= 9:
+        if (seen & (1 << (field - 6))) == 0:
+            return missing(w, field)
+        field = field + 1
+    return 1
+
+def read64(s: readbuf, p: u64) -> u64:
+    return byte(s, p) | byte(s, p + 1) << 8 | byte(s, p + 2) << 16 | byte(s, p + 3) << 24 | byte(s, p + 4) << 32 | byte(s, p + 5) << 40 | byte(s, p + 6) << 48 | byte(s, p + 7) << 56
+
+def get(w: mutbuf, p: u64) -> u64:
+    return byte(w, p) | byte(w, p + 1) << 8 | byte(w, p + 2) << 16 | byte(w, p + 3) << 24 | byte(w, p + 4) << 32 | byte(w, p + 5) << 40 | byte(w, p + 6) << 48 | byte(w, p + 7) << 56
+
+def put(w: mutbuf, p: u64, v: u64) -> u64:
+    store(w, p, v)
+    store(w, p + 1, v >> 8)
+    store(w, p + 2, v >> 16)
+    store(w, p + 3, v >> 24)
+    store(w, p + 4, v >> 32)
+    store(w, p + 5, v >> 40)
+    store(w, p + 6, v >> 48)
+    store(w, p + 7, v >> 56)
+    return 0
+
+def fail(w: mutbuf) -> u64:
+    put(w, P + 16, 1)
+    return 0
+
+def space(s: readbuf, p: u64) -> u64:
+    more = 1
+    while p < length(s) and more != 0:
+        c = byte(s, p)
+        if c == 32 or c == 9 or c == 10 or (c == 13):
+            p = p + 1
+        else:
+            more = 0
+    return p
+
+def hex_digit(c: u64) -> u64:
+    if c >= 48 and c <= 57:
+        return c - 48
+    if c >= 65 and c <= 70:
+        return c - 55
+    if c >= 97 and c <= 102:
+        return c - 87
+    return 16
+
+def hex4(s: readbuf, p: u64, end: u64) -> u64:
+    if p + 4 > end:
+        return 65536
+    result = 0
+    i = 0
+    while i < 4:
+        digit = hex_digit(byte(s, p + i))
+        if digit > 15:
+            return 65536
+        result = result << 4 | digit
+        i = i + 1
+    return result
+
+def decoded(s: readbuf, w: mutbuf, p: u64, end: u64) -> u64:
+    if p >= end:
+        return 0
+    c = byte(s, p)
+    if c < 32 or c == 34:
+        return 0
+    if c == 92:
+        if p + 1 >= end:
+            return 0
+        e = byte(s, p + 1)
+        value = 1114112
+        if e == 34 or e == 92 or e == 47:
+            value = e
+        if e == 98:
+            value = 8
+        if e == 102:
+            value = 12
+        if e == 110:
+            value = 10
+        if e == 114:
+            value = 13
+        if e == 116:
+            value = 9
+        if value != 1114112:
+            put(w, P + 72, value)
+            return p + 2
+        if e != 117:
+            return 0
+        value = hex4(s, p + 2, end)
+        if value > 65535 or (value >= 56320 and value <= 57343):
+            return 0
+        q = p + 6
+        if value >= 55296 and value <= 56319:
+            if q + 6 > end:
+                return 0
+            if byte(s, q) != 92 or byte(s, q + 1) != 117:
+                return 0
+            low = hex4(s, q + 2, end)
+            if low < 56320 or low > 57343:
+                return 0
+            value = 65536 + (value - 55296 << 10) + low - 56320
+            q = q + 6
+        put(w, P + 72, value)
+        return q
+    if c < 128:
+        put(w, P + 72, c)
+        return p + 1
+    width = 0
+    value = 0
+    minimum = 0
+    if c >= 194 and c <= 223:
+        width = 2
+        value = c & 31
+        minimum = 128
+    if c >= 224 and c <= 239:
+        width = 3
+        value = c & 15
+        minimum = 2048
+    if c >= 240 and c <= 244:
+        width = 4
+        value = c & 7
+        minimum = 65536
+    if width == 0 or p + width > end:
+        return 0
+    i = 1
+    while i < width:
+        d = byte(s, p + i)
+        if d < 128 or d > 191:
+            return 0
+        value = value << 6 | d & 63
+        i = i + 1
+    if value < minimum or value > 1114111 or (value >= 55296 and value <= 57343):
+        return 0
+    put(w, P + 72, value)
+    return p + width
+
+def string_end(s: readbuf, w: mutbuf, p: u64) -> u64:
+    if p >= length(s) or byte(s, p) != 34:
+        return 0
+    p = p + 1
+    while p < length(s):
+        c = byte(s, p)
+        if c == 34:
+            return p + 1
+        if c >= 32 and c < 128 and (c != 92):
+            p = p + 1
+        else:
+            p = decoded(s, w, p, length(s))
+            if p == 0:
+                return 0
+    return 0
+
+def digit(c: u64) -> bool:
+    return c >= 48 and c <= 57
+
+def number_end(s: readbuf, p: u64) -> u64:
+    end = length(s)
+    if byte(s, p) == 45:
+        p = p + 1
+    if p >= end:
+        return 0
+    c = byte(s, p)
+    if c == 48:
+        p = p + 1
+    else:
+        if c < 49 or c > 57:
+            return 0
+        p = p + 1
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+    if p < end and byte(s, p) == 46:
+        p = p + 1
+        start = p
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+        if p == start:
+            return 0
+    if p < end and (byte(s, p) == 101 or byte(s, p) == 69):
+        p = p + 1
+        if p < end and (byte(s, p) == 43 or byte(s, p) == 45):
+            p = p + 1
+        start = p
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+        if p == start:
+            return 0
+    return p
+
+def append(w: mutbuf, parent: u64, selected: u64) -> u64:
+    base = node(w, parent)
+    last = get(w, base + 32)
+    put(w, node(w, selected) + 40, 0)
+    if last == 0:
+        put(w, base + 24, selected)
+    else:
+        put(w, node(w, last) + 40, selected)
+    put(w, base + 32, selected)
+    return 0
+
+def value(s: readbuf, w: mutbuf, parent: u64) -> u64:
+    p = space(s, get(w, P + 24))
+    if p >= length(s):
+        return fail(w)
+    c = byte(s, p)
+    kind = 7
+    end = 0
+    if c == 34:
+        kind = 4
+        end = string_end(s, w, p)
+    if c == 91 or c == 123:
+        kind = choose(c == 91, 5, 6)
+        end = p + 1
+    if c == 110 and p + 4 <= length(s):
+        if byte(s, p + 1) == 117 and byte(s, p + 2) == 108 and (byte(s, p + 3) == 108):
+            kind = 0
+            end = p + 4
+    if c == 116 and p + 4 <= length(s):
+        if byte(s, p + 1) == 114 and byte(s, p + 2) == 117 and (byte(s, p + 3) == 101):
+            kind = 2
+            end = p + 4
+    if c == 102 and p + 5 <= length(s):
+        if byte(s, p + 1) == 97 and byte(s, p + 2) == 108 and (byte(s, p + 3) == 115) and (byte(s, p + 4) == 101):
+            kind = 1
+            end = p + 5
+    if c == 45 or digit(c):
+        kind = 3
+        end = number_end(s, p)
+    if kind == 7 or end == 0:
+        return fail(w)
+    identifier = get(w, P + 0) + 1
+    if identifier > get(w, META + 80):
+        return fail(w)
+    put(w, P + 0, identifier)
+    if get(w, P + 8) != 0:
+        base = node(w, identifier)
+        put(w, base, kind)
+        put(w, base + 8, p)
+        put(w, base + 16, end)
+        put(w, base + 48, parent)
+        put(w, base + 56, get(w, P + 48))
+        put(w, base + 64, get(w, P + 56))
+        put(w, base + 72, get(w, P + 64))
+        if parent != 0:
+            if get(w, node(w, parent)) == 6:
+                last = get(w, node(w, parent) + 32)
+                if last != 0:
+                    if key_order(s, w, get(w, node(w, last) + 56), get(w, node(w, last) + 64), get(w, P + 48), get(w, P + 56)) == 0:
+                        return fail(w)
+            append(w, parent, identifier)
+    put(w, P + 24, end)
+    if kind >= 5:
+        depth = get(w, P + 40)
+        if depth >= get(w, META + 88):
+            return fail(w)
+        frame = 65536 + depth * 40
+        put(w, frame, identifier)
+        put(w, frame + 8, kind)
+        put(w, frame + 16, 0)
+        put(w, P + 40, depth + 1)
+    return identifier
+
+def close_container(w: mutbuf, frame: u64, p: u64) -> u64:
+    if get(w, P + 8) != 0:
+        put(w, node(w, get(w, frame)) + 16, p + 1)
+    put(w, P + 24, p + 1)
+    put(w, P + 40, get(w, P + 40) - 1)
+    return 0
+
+def parse(s: readbuf, w: mutbuf, store_nodes: u64) -> u64:
+    fill_range(w, P, 80, 0)
+    put(w, P + 8, store_nodes)
+    put(w, P + 24, 64)
+    if value(s, w, 0) == 0:
+        return 0
+    while get(w, P + 40) != 0:
+        frame = 65536 + (get(w, P + 40) - 1) * 40
+        kind = get(w, frame + 8)
+        state = get(w, frame + 16)
+        p = space(s, get(w, P + 24))
+        if p >= length(s):
+            return fail(w)
+        c = byte(s, p)
+        terminal = choose(kind == 5, 93, 125)
+        if c == terminal and state != 2:
+            close_container(w, frame, p)
+        elif state == 1:
+            if c != 44:
+                return fail(w)
+            put(w, frame + 16, 2)
+            put(w, P + 24, p + 1)
+        else:
+            kp = 0
+            ke = 0
+            kh = 0
+            if kind == 6:
+                kp = p
+                ke = string_end(s, w, p)
+                if ke == 0:
+                    return fail(w)
+                p = space(s, ke)
+                if p >= length(s) or byte(s, p) != 58:
+                    return fail(w)
+                p = p + 1
+            put(w, P + 48, kp)
+            put(w, P + 56, ke)
+            put(w, P + 64, kh)
+            put(w, P + 24, p)
+            put(w, frame + 16, 1)
+            if value(s, w, get(w, frame)) == 0:
+                return 0
+    if space(s, get(w, P + 24)) != length(s):
+        return fail(w)
+    return 1
+
+def init_fields(w:mutbuf) -> u64:
+    put(w, FIELDS + 16, 33792)
+    put(w, FIELDS + 24, 6)
+    put(w, 33792, 126879581434995)
+    put(w, FIELDS + 32, 33800)
+    put(w, FIELDS + 40, 7)
+    put(w, 33800, 32491047111385953)
+    put(w, FIELDS + 48, 33808)
+    put(w, FIELDS + 56, 4)
+    put(w, 33808, 1684957547)
+    put(w, FIELDS + 64, 33816)
+    put(w, FIELDS + 72, 5)
+    put(w, 33816, 435761734006)
+    put(w, FIELDS + 80, 33824)
+    put(w, FIELDS + 88, 8)
+    put(w, 33824, 8315167063272419938)
+    put(w, FIELDS + 96, 33832)
+    put(w, FIELDS + 104, 11)
+    put(w, 33832, 7811883199053656688)
+    put(w, 33840, 7959657)
+    put(w, FIELDS + 112, 33848)
+    put(w, FIELDS + 120, 9)
+    put(w, 33848, 8030889439828079987)
+    put(w, 33856, 114)
+    put(w, FIELDS + 128, 33864)
+    put(w, FIELDS + 136, 6)
+    put(w, 33864, 110442424264050)
+    put(w, FIELDS + 144, 33872)
+    put(w, FIELDS + 152, 3)
+    put(w, 33872, 6645094)
+    put(w, FIELDS + 160, 33880)
+    put(w, FIELDS + 168, 8)
+    put(w, 33880, 7809644627923985780)
+    put(w, FIELDS + 176, 33888)
+    put(w, FIELDS + 184, 8)
+    put(w, 33888, 7310870969309884259)
+    return 0

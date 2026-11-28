@@ -1,0 +1,697 @@
+def compile(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 64 or length(s) > 8388608:
+        return 4294967295
+    if read64(s, 0) != MAGIC_REQUEST:
+        return 4294967295
+    mode = read64(s, 8)
+    flags = read64(s, 16)
+    modern = read64(s, 24)
+    if mode < 1 or mode > 3 or modern > 1 or flags > 15:
+        return 4294967295
+    if flags != 0 and (flags & 1) == 0:
+        return 4294967295
+    if mode != 1 and (flags != 0 or modern != 0):
+        return 4294967295
+    if read64(s, 32) != length(s) - 64:
+        return 4294967295
+    if read64(s, 40) != 0 or read64(s, 48) != 0 or read64(s, 56) != 0:
+        return 4294967295
+    if length(o) < 64:
+        return 4294967294
+    if length(w) < 16384:
+        return reply(o, 2, 16384, 0, flags, modern)
+    if parse(s, w, 0) == 0:
+        return reply(o, 1, 0, 0, flags, modern)
+    nodes = get(w, 0)
+    need = 16384 + nodes * 96
+    if length(w) < need:
+        return reply(o, 2, need, 0, flags, modern)
+    fill_range(w, 16384, nodes * 96, 0)
+    if parse(s, w, 1) == 0:
+        return reply(o, 1, 0, 0, flags, modern)
+    init_literals(w)
+    count = 1
+    if mode == 1:
+        init_names(w)
+        count = catalog(s, w, flags)
+        if get(w, 16) != 0:
+            return reply(o, 1, 0, 0, flags, modern)
+    else:
+        if get(w, node(1)) != 6:
+            return reply(o, 1, 0, 0, flags, modern)
+        if mode == 2:
+            put(w, node(1) + 80, 2)
+    if mode != 3:
+        transform(s, w)
+    extent = emit_all(s, o, w, mode, modern, 0)
+    if extent > length(o):
+        return reply(o, 3, extent, 0, flags, modern)
+    reply(o, 0, extent - 64, count, flags, modern)
+    return emit_all(s, o, w, mode, modern, 1)
+
+def read64(s: readbuf, p: u64) -> u64:
+    return byte(s, p) | (byte(s, p + 1) << 8) | (byte(s, p + 2) << 16) | (byte(s, p + 3) << 24) | (byte(s, p + 4) << 32) | (byte(s, p + 5) << 40) | (byte(s, p + 6) << 48) | (byte(s, p + 7) << 56)
+
+def get(w: mutbuf, p: u64) -> u64:
+    return byte(w, p) | (byte(w, p + 1) << 8) | (byte(w, p + 2) << 16) | (byte(w, p + 3) << 24) | (byte(w, p + 4) << 32) | (byte(w, p + 5) << 40) | (byte(w, p + 6) << 48) | (byte(w, p + 7) << 56)
+
+def put(w: mutbuf, p: u64, v: u64) -> u64:
+    store(w, p, v)
+    store(w, p + 1, v >> 8)
+    store(w, p + 2, v >> 16)
+    store(w, p + 3, v >> 24)
+    store(w, p + 4, v >> 32)
+    store(w, p + 5, v >> 40)
+    store(w, p + 6, v >> 48)
+    store(w, p + 7, v >> 56)
+    return 0
+
+def reply(o: mutbuf, status: u64, size: u64, count: u64, flags: u64, modern: u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, MAGIC_REPLY)
+    put(o, 8, status)
+    if status == 0:
+        put(o, 16, 64)
+    put(o, 24, size)
+    put(o, 32, count)
+    put(o, 40, flags)
+    put(o, 48, modern)
+    return 64
+
+def node(identifier: u64) -> u64:
+    return 16384 + (identifier - 1) * 96
+
+def fail(w: mutbuf) -> u64:
+    put(w, 16, 1)
+    return 0
+
+def space(s: readbuf, p: u64) -> u64:
+    more = 1
+    while p < length(s) and more != 0:
+        c = byte(s, p)
+        if c == 32 or c == 9 or c == 10 or c == 13:
+            p = p + 1
+        else:
+            more = 0
+    return p
+
+def hex_digit(c: u64) -> u64:
+    if c >= 48 and c <= 57:
+        return c - 48
+    if c >= 65 and c <= 70:
+        return c - 55
+    if c >= 97 and c <= 102:
+        return c - 87
+    return 16
+
+def hex4(s: readbuf, p: u64, end: u64) -> u64:
+    if p + 4 > end:
+        return 65536
+    result = 0
+    i = 0
+    while i < 4:
+        digit = hex_digit(byte(s, p + i))
+        if digit > 15:
+            return 65536
+        result = (result << 4) | digit
+        i = i + 1
+    return result
+
+def decoded(s: readbuf, w: mutbuf, p: u64, end: u64) -> u64:
+    if p >= end:
+        return 0
+    c = byte(s, p)
+    if c < 32 or c == 34:
+        return 0
+    if c == 92:
+        if p + 1 >= end:
+            return 0
+        e = byte(s, p + 1)
+        value = 1114112
+        if e == 34 or e == 92 or e == 47:
+            value = e
+        if e == 98:
+            value = 8
+        if e == 102:
+            value = 12
+        if e == 110:
+            value = 10
+        if e == 114:
+            value = 13
+        if e == 116:
+            value = 9
+        if value != 1114112:
+            put(w, 72, value)
+            return p + 2
+        if e != 117:
+            return 0
+        value = hex4(s, p + 2, end)
+        if value > 65535 or (value >= 56320 and value <= 57343):
+            return 0
+        q = p + 6
+        if value >= 55296 and value <= 56319:
+            if q + 6 > end:
+                return 0
+            if byte(s, q) != 92 or byte(s, q + 1) != 117:
+                return 0
+            low = hex4(s, q + 2, end)
+            if low < 56320 or low > 57343:
+                return 0
+            value = 65536 + ((value - 55296) << 10) + low - 56320
+            q = q + 6
+        put(w, 72, value)
+        return q
+    if c < 128:
+        put(w, 72, c)
+        return p + 1
+    width = 0
+    value = 0
+    minimum = 0
+    if c >= 194 and c <= 223:
+        width = 2
+        value = c & 31
+        minimum = 128
+    if c >= 224 and c <= 239:
+        width = 3
+        value = c & 15
+        minimum = 2048
+    if c >= 240 and c <= 244:
+        width = 4
+        value = c & 7
+        minimum = 65536
+    if width == 0 or p + width > end:
+        return 0
+    i = 1
+    while i < width:
+        d = byte(s, p + i)
+        if d < 128 or d > 191:
+            return 0
+        value = (value << 6) | (d & 63)
+        i = i + 1
+    if value < minimum or value > 1114111 or (value >= 55296 and value <= 57343):
+        return 0
+    put(w, 72, value)
+    return p + width
+
+def string_end(s: readbuf, w: mutbuf, p: u64) -> u64:
+    if p >= length(s) or byte(s, p) != 34:
+        return 0
+    p = p + 1
+    while p < length(s):
+        c = byte(s, p)
+        if c == 34:
+            return p + 1
+        if c >= 32 and c < 128 and c != 92:
+            p = p + 1
+        else:
+            p = decoded(s, w, p, length(s))
+            if p == 0:
+                return 0
+    return 0
+
+def key_hash(s: readbuf, w: mutbuf, p: u64, end: u64) -> u64:
+    value = 14695981039346656037
+    p = p + 1
+    while p + 1 < end:
+        p = decoded(s, w, p, end - 1)
+        value = (value ^ get(w, 72)) * 1099511628211
+    return value
+
+def key_equal(s: readbuf, w: mutbuf, a: u64, ae: u64, b: u64, be: u64) -> u64:
+    a = a + 1
+    b = b + 1
+    while a + 1 < ae and b + 1 < be:
+        a = decoded(s, w, a, ae - 1)
+        av = get(w, 72)
+        b = decoded(s, w, b, be - 1)
+        if av != get(w, 72):
+            return 0
+    if a + 1 == ae and b + 1 == be:
+        return 1
+    return 0
+
+def digit(c: u64) -> bool:
+    return c >= 48 and c <= 57
+
+def number_end(s: readbuf, p: u64) -> u64:
+    end = length(s)
+    if byte(s, p) == 45:
+        p = p + 1
+    if p >= end:
+        return 0
+    c = byte(s, p)
+    if c == 48:
+        p = p + 1
+    else:
+        if c < 49 or c > 57:
+            return 0
+        p = p + 1
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+    if p < end and byte(s, p) == 46:
+        p = p + 1
+        start = p
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+        if p == start:
+            return 0
+    if p < end and (byte(s, p) == 101 or byte(s, p) == 69):
+        p = p + 1
+        if p < end and (byte(s, p) == 43 or byte(s, p) == 45):
+            p = p + 1
+        start = p
+        while p < end and digit(byte(s, p)):
+            p = p + 1
+        if p == start:
+            return 0
+    return p
+
+def unlink(w: mutbuf, parent: u64, selected: u64) -> u64:
+    base = node(parent)
+    child = get(w, base + 24)
+    previous = 0
+    while child != 0:
+        following = get(w, node(child) + 40)
+        if child == selected:
+            if previous == 0:
+                put(w, base + 24, following)
+            else:
+                put(w, node(previous) + 40, following)
+            if get(w, base + 32) == child:
+                put(w, base + 32, previous)
+            put(w, node(child) + 40, 0)
+            return 1
+        previous = child
+        child = following
+    return 0
+
+def append(w: mutbuf, parent: u64, selected: u64) -> u64:
+    base = node(parent)
+    last = get(w, base + 32)
+    put(w, node(selected) + 40, 0)
+    if last == 0:
+        put(w, base + 24, selected)
+    else:
+        put(w, node(last) + 40, selected)
+    put(w, base + 32, selected)
+    return 0
+
+def find_key(s: readbuf, w: mutbuf, parent: u64, kp: u64, ke: u64, hash: u64) -> u64:
+    child = get(w, node(parent) + 24)
+    while child != 0:
+        base = node(child)
+        if get(w, base + 72) == hash:
+            if key_equal(s, w, get(w, base + 56), get(w, base + 64), kp, ke) != 0:
+                return child
+        child = get(w, base + 40)
+    return 0
+
+def value(s: readbuf, w: mutbuf, parent: u64) -> u64:
+    p = space(s, get(w, 24))
+    if p >= length(s):
+        return fail(w)
+    c = byte(s, p)
+    kind = 7
+    end = 0
+    if c == 34:
+        kind = 4
+        end = string_end(s, w, p)
+    if c == 91 or c == 123:
+        kind = choose(c == 91, 5, 6)
+        end = p + 1
+    if c == 110 and p + 4 <= length(s):
+        if byte(s, p + 1) == 117 and byte(s, p + 2) == 108 and byte(s, p + 3) == 108:
+            kind = 0
+            end = p + 4
+    if c == 116 and p + 4 <= length(s):
+        if byte(s, p + 1) == 114 and byte(s, p + 2) == 117 and byte(s, p + 3) == 101:
+            kind = 2
+            end = p + 4
+    if c == 102 and p + 5 <= length(s):
+        if byte(s, p + 1) == 97 and byte(s, p + 2) == 108 and byte(s, p + 3) == 115 and byte(s, p + 4) == 101:
+            kind = 1
+            end = p + 5
+    if c == 45 or digit(c):
+        kind = 3
+        end = number_end(s, p)
+    if kind == 7 or end == 0:
+        return fail(w)
+    identifier = get(w, 0) + 1
+    put(w, 0, identifier)
+    if get(w, 8) != 0:
+        base = node(identifier)
+        put(w, base, kind)
+        put(w, base + 8, p)
+        put(w, base + 16, end)
+        put(w, base + 48, parent)
+        put(w, base + 56, get(w, 48))
+        put(w, base + 64, get(w, 56))
+        put(w, base + 72, get(w, 64))
+        if parent != 0:
+            if get(w, node(parent)) == 6:
+                old = find_key(s, w, parent, get(w, 48), get(w, 56), get(w, 64))
+                if old != 0:
+                    unlink(w, parent, old)
+            append(w, parent, identifier)
+    put(w, 24, end)
+    if kind >= 5:
+        depth = get(w, 40)
+        if depth >= 128:
+            return fail(w)
+        frame = 1024 + depth * 40
+        put(w, frame, identifier)
+        put(w, frame + 8, kind)
+        put(w, frame + 16, 0)
+        put(w, 40, depth + 1)
+    return identifier
+
+def close_container(w: mutbuf, frame: u64, p: u64) -> u64:
+    if get(w, 8) != 0:
+        put(w, node(get(w, frame)) + 16, p + 1)
+    put(w, 24, p + 1)
+    put(w, 40, get(w, 40) - 1)
+    return 0
+
+def parse(s: readbuf, w: mutbuf, store_nodes: u64) -> u64:
+    fill_range(w, 0, 7168, 0)
+    put(w, 8, store_nodes)
+    put(w, 24, 64)
+    if value(s, w, 0) == 0:
+        return 0
+    while get(w, 40) != 0:
+        frame = 1024 + (get(w, 40) - 1) * 40
+        kind = get(w, frame + 8)
+        state = get(w, frame + 16)
+        p = space(s, get(w, 24))
+        if p >= length(s):
+            return fail(w)
+        c = byte(s, p)
+        terminal = choose(kind == 5, 93, 125)
+        if c == terminal and state != 2:
+            close_container(w, frame, p)
+        else:
+            if state == 1:
+                if c != 44:
+                    return fail(w)
+                put(w, frame + 16, 2)
+                put(w, 24, p + 1)
+            else:
+                kp = 0
+                ke = 0
+                kh = 0
+                if kind == 6:
+                    kp = p
+                    ke = string_end(s, w, p)
+                    if ke == 0:
+                        return fail(w)
+                    kh = key_hash(s, w, kp, ke)
+                    p = space(s, ke)
+                    if p >= length(s) or byte(s, p) != 58:
+                        return fail(w)
+                    p = p + 1
+                put(w, 48, kp)
+                put(w, 56, ke)
+                put(w, 64, kh)
+                put(w, 24, p)
+                put(w, frame + 16, 1)
+                if value(s, w, get(w, frame)) == 0:
+                    return 0
+    if space(s, get(w, 24)) != length(s):
+        return fail(w)
+    return 1
+
+def table_equal(s: readbuf, w: mutbuf, p: u64, end: u64, table: u64, size: u64) -> u64:
+    p = p + 1
+    i = 0
+    while p + 1 < end and i < size:
+        p = decoded(s, w, p, end - 1)
+        if get(w, 72) != byte(w, table + i):
+            return 0
+        i = i + 1
+    if i == size and p + 1 == end:
+        return 1
+    return 0
+
+def key_is(s: readbuf, w: mutbuf, identifier: u64, field: u64) -> u64:
+    base = node(identifier)
+    offset = get(w, 6400 + field * 16)
+    size = get(w, 6408 + field * 16)
+    return table_equal(s, w, get(w, base + 56), get(w, base + 64), offset, size)
+
+def find_field(s: readbuf, w: mutbuf, parent: u64, field: u64) -> u64:
+    child = get(w, node(parent) + 24)
+    while child != 0:
+        if key_is(s, w, child, field) != 0:
+            return child
+        child = get(w, node(child) + 40)
+    return 0
+
+def is_null_string(s: readbuf, w: mutbuf, identifier: u64) -> u64:
+    base = node(identifier)
+    if get(w, base) != 4:
+        return 0
+    return table_equal(s, w, get(w, base + 8), get(w, base + 16), NULL_TEXT, 4)
+
+def copy_value(w: mutbuf, target: u64, source: u64) -> u64:
+    to = node(target)
+    origin = node(source)
+    put(w, to, get(w, origin))
+    put(w, to + 8, get(w, origin + 8))
+    put(w, to + 16, get(w, origin + 16))
+    put(w, to + 24, get(w, origin + 24))
+    put(w, to + 32, get(w, origin + 32))
+    return 0
+
+def strip_type(s: readbuf, w: mutbuf, object: u64) -> u64:
+    value = find_field(s, w, object, 0)
+    if value == 0:
+        return 0
+    if get(w, node(value)) != 5:
+        return 0
+    child = get(w, node(value) + 24)
+    while child != 0:
+        following = get(w, node(child) + 40)
+        if is_null_string(s, w, child) != 0:
+            unlink(w, value, child)
+        child = following
+    child = get(w, node(value) + 24)
+    if child != 0 and get(w, node(child) + 40) == 0:
+        copy_value(w, value, child)
+    return 0
+
+def strip_union(s: readbuf, w: mutbuf, object: u64, field: u64) -> u64:
+    value = find_field(s, w, object, field)
+    if value == 0:
+        return 0
+    if get(w, node(value)) != 5:
+        return 0
+    child = get(w, node(value) + 24)
+    while child != 0:
+        following = get(w, node(child) + 40)
+        if get(w, node(child)) == 6:
+            type = find_field(s, w, child, 0)
+            if type != 0 and is_null_string(s, w, type) != 0:
+                unlink(w, value, child)
+        child = following
+    child = get(w, node(value) + 24)
+    if child != 0 and get(w, node(child) + 40) == 0:
+        if get(w, node(child)) == 6:
+            unlink(w, object, value)
+            property = get(w, node(child) + 24)
+            while property != 0:
+                base = node(property)
+                following = get(w, base + 40)
+                existing = find_key(s, w, object, get(w, base + 56), get(w, base + 64), get(w, base + 72))
+                if existing == 0:
+                    append(w, object, property)
+                property = following
+    return 0
+
+def mark_children(w: mutbuf, identifier: u64, flag: u64, object_only: u64) -> u64:
+    child = get(w, node(identifier) + 24)
+    while child != 0:
+        if object_only == 0 or get(w, node(child)) == 6:
+            put(w, node(child) + 80, get(w, node(child) + 80) | flag)
+        child = get(w, node(child) + 40)
+    return 0
+
+def noise(s: readbuf, w: mutbuf, object: u64) -> u64:
+    child = get(w, node(object) + 24)
+    while child != 0:
+        base = node(child)
+        following = get(w, base + 40)
+        remove = key_is(s, w, child, 3) | key_is(s, w, child, 4)
+        if get(w, base) == 0 and key_is(s, w, child, 5) != 0:
+            remove = 1
+        if remove != 0:
+            unlink(w, object, child)
+        else:
+            kind = get(w, base)
+            if kind == 6:
+                if key_is(s, w, child, 6) != 0 or key_is(s, w, child, 7) != 0:
+                    mark_children(w, child, 4, 1)
+                else:
+                    put(w, base + 80, get(w, base + 80) | 4)
+            if kind == 5:
+                mark_children(w, child, 4, 1)
+        child = following
+    return 0
+
+def transform(s: readbuf, w: mutbuf) -> u64:
+    i = 1
+    total = get(w, 0)
+    while i <= total:
+        base = node(i)
+        if (get(w, base + 80) & 3) != 0 and get(w, base) >= 5:
+            mark_children(w, i, 1, 0)
+        i = i + 1
+    i = total
+    while i != 0:
+        base = node(i)
+        if (get(w, base + 80) & 1) != 0 and get(w, base) == 6:
+            strip_type(s, w, i)
+            strip_union(s, w, i, 1)
+            strip_union(s, w, i, 2)
+        i = i - 1
+    i = 1
+    while i <= total:
+        base = node(i)
+        put(w, base + 80, choose((get(w, base + 80) & 2) != 0, 4, 0))
+        i = i + 1
+    i = 1
+    while i <= total:
+        base = node(i)
+        if (get(w, base + 80) & 4) != 0 and get(w, base) == 6:
+            noise(s, w, i)
+        i = i + 1
+    return 0
+
+def visible(classification: u64, flags: u64) -> u64:
+    if (classification & 2) != 0 and (flags & 2) == 0:
+        return 0
+    if (classification & 16) != 0 and (flags & 4) == 0:
+        return 0
+    if (classification & 4) != 0 and (flags & 8) == 0:
+        return 0
+    if (flags & 1) != 0:
+        if (classification & 32) != 0:
+            return 0
+    else:
+        if (classification & 1) != 0:
+            return 0
+    return 1
+
+def catalog(s: readbuf, w: mutbuf, flags: u64) -> u64:
+    if get(w, node(1)) != 5:
+        return fail(w)
+    tool = get(w, node(1) + 24)
+    ordinal = 0
+    table = 8192
+    count = 0
+    while tool != 0:
+        if ordinal >= 136 or get(w, node(tool)) != 6:
+            return fail(w)
+        following = get(w, node(tool) + 40)
+        name = find_field(s, w, tool, 8)
+        schema = find_field(s, w, tool, 9)
+        if name == 0 or schema == 0:
+            return fail(w)
+        if get(w, node(name)) != 4 or get(w, node(schema)) != 6:
+            return fail(w)
+        size = byte(w, table)
+        classification = byte(w, table + 1)
+        if table_equal(s, w, get(w, node(name) + 8), get(w, node(name) + 16), table + 2, size) == 0:
+            return fail(w)
+        table = table + size + 2
+        ordinal = ordinal + 1
+        if visible(classification, flags) == 0:
+            unlink(w, 1, tool)
+        else:
+            count = count + 1
+            if (classification & 10) == 0:
+                put(w, node(schema) + 80, 2)
+        tool = following
+    if ordinal != 136:
+        return fail(w)
+    return count
+
+def emit_byte(o: mutbuf, w: mutbuf, value: u64) -> u64:
+    p = get(w, 80)
+    if get(w, 88) != 0:
+        store(o, p, value)
+    put(w, 80, p + 1)
+    return 0
+
+def emit_raw(s: readbuf, o: mutbuf, w: mutbuf, p: u64, size: u64) -> u64:
+    cursor = get(w, 80)
+    if get(w, 88) != 0:
+        copy_span(o, s, cursor, p, size)
+    put(w, 80, cursor + size)
+    return 0
+
+def emit_literal(o: mutbuf, w: mutbuf, p: u64, size: u64) -> u64:
+    cursor = get(w, 80)
+    if get(w, 88) != 0:
+        copy_workspace(o, w, cursor, p, size)
+    put(w, 80, cursor + size)
+    return 0
+
+def emit_key(s: readbuf, o: mutbuf, w: mutbuf, identifier: u64) -> u64:
+    base = node(identifier)
+    p = get(w, base + 56)
+    emit_raw(s, o, w, p, get(w, base + 64) - p)
+    emit_byte(o, w, 58)
+    return 0
+
+def serialize(s: readbuf, o: mutbuf, w: mutbuf, root: u64) -> u64:
+    current = root
+    depth = 0
+    while current != 0 or depth != 0:
+        if current != 0:
+            base = node(current)
+            kind = get(w, base)
+            if kind < 5:
+                p = get(w, base + 8)
+                emit_raw(s, o, w, p, get(w, base + 16) - p)
+                current = 0
+            else:
+                emit_byte(o, w, choose(kind == 5, 91, 123))
+                child = get(w, base + 24)
+                if child == 0:
+                    emit_byte(o, w, choose(kind == 5, 93, 125))
+                    current = 0
+                else:
+                    frame = 1024 + depth * 24
+                    put(w, frame, kind)
+                    put(w, frame + 8, get(w, node(child) + 40))
+                    depth = depth + 1
+                    if kind == 6:
+                        emit_key(s, o, w, child)
+                    current = child
+        else:
+            frame = 1024 + (depth - 1) * 24
+            kind = get(w, frame)
+            child = get(w, frame + 8)
+            if child == 0:
+                emit_byte(o, w, choose(kind == 5, 93, 125))
+                depth = depth - 1
+            else:
+                emit_byte(o, w, 44)
+                put(w, frame + 8, get(w, node(child) + 40))
+                if kind == 6:
+                    emit_key(s, o, w, child)
+                current = child
+    return 0
+
+def emit_all(s: readbuf, o: mutbuf, w: mutbuf, mode: u64, modern: u64, writing: u64) -> u64:
+    put(w, 80, 64)
+    put(w, 88, writing)
+    if mode == 1:
+        emit_literal(o, w, PREFIX_OFFSET, PREFIX_BYTES)
+    serialize(s, o, w, 1)
+    if mode == 1:
+        if modern == 0:
+            emit_byte(o, w, 125)
+        else:
+            emit_literal(o, w, SUFFIX_OFFSET, SUFFIX_BYTES)
+    return get(w, 80)

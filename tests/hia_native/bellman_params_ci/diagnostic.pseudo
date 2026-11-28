@@ -1,0 +1,267 @@
+def compile(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 192 or length(s) > 536870912:
+        return 4294967295
+    if read64(s, 0) != PARAMS_MAGIC or read64(s, 8) != 1:
+        return 4294967295
+    if read64(s, 16) != 0 or read64(s, 24) != 0 or read64(s, 32) != 0:
+        return 4294967295
+    if read64(s, 104) != 0 or read64(s, 112) != 0 or read64(s, 120) != 0:
+        return 4294967295
+    if read64(s, 128) != INPUT_MAGIC or read64(s, 136) != 1 or read64(s, 144) != length(s) - 192:
+        return 4294967295
+    if read64(s, 152) != 0 or read64(s, 160) != 0 or read64(s, 168) != 0 or read64(s, 176) != 0 or read64(s, 184) != 0:
+        return 4294967295
+    if valid_descriptor(s) == 0:
+        return 4294967295
+    if length(o) < 64:
+        return 4294967294
+    if length(w) < 65536:
+        return reply(o, 2, 0, 65536)
+    put(w, 8192, 0)
+    put(w, 8200, 0)
+    init_literals(w)
+    if read64(s, 40) <= 2 and read64(s, 48) == 4:
+        unicode_table(w)
+    if render(s, w) == 0:
+        return 4294967293
+    size = get(w, 8192)
+    if length(w) < 65536 + size:
+        return reply(o, 2, 0, 65536 + size)
+    if length(o) < 64 + size:
+        return reply(o, 3, 0, 64 + size)
+    reply(o, 0, size, 0)
+    copy_workspace(o, w, 64, 65536, size)
+    return 64 + size
+
+def valid_descriptor(s:readbuf) -> u64:
+    code = read64(s, 40)
+    kind = read64(s, 48)
+    expected = read64(s, 56)
+    count = read64(s, 64)
+    start = read64(s, 72)
+    end = read64(s, 80)
+    tag = read64(s, 88)
+    bits = read64(s, 96)
+    if code < 1 or code > 6:
+        return 0
+    string = 0
+    if code <= 2:
+        if kind > 6 or expected < 1 or expected > 11 or count != 0:
+            return 0
+        if code == 2 and (kind != 3 or expected != 9):
+            return 0
+        if kind == 3:
+            if tag < 3 or tag > 5:
+                return 0
+            if tag == 4 and (bits >> 63) == 0:
+                return 0
+            if tag == 5 and ((bits >> 52) & 2047) == 2047:
+                return 0
+            if code == 2 and (tag == 5 or (tag == 3 and bits <= 4294967295)):
+                return 0
+        else:
+            if tag != 0 or bits != 0:
+                return 0
+        string = choose(kind == 4, 1, 0)
+    else:
+        if kind != 0 or tag != 0 or bits != 0:
+            return 0
+        if code != 3 and count != 0:
+            return 0
+        if code == 3:
+            if expected != 4 and (expected < 12 or expected > 19):
+                return 0
+        if code == 4 and (expected < 1 or expected > 9):
+            return 0
+        if code == 5:
+            if expected < 1 or expected > 5:
+                return 0
+            string = 1
+        if code == 6:
+            if expected != 0:
+                return 0
+            string = 1
+    if string != 0:
+        if start < 64 or start >= end or end > length(s) - 128 or end - start < 2:
+            return 0
+        if byte(s, 128 + start) != 34 or byte(s, 127 + end) != 34:
+            return 0
+    else:
+        if start != 0 or end != 0:
+            return 0
+    return 1
+
+def reply(o:mutbuf, status:u64, size:u64, required:u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, OUTPUT_MAGIC)
+    put(o, 8, status)
+    put(o, 16, size)
+    put(o, 24, required)
+    return 64
+
+def emit(w:mutbuf, value:u64) -> u64:
+    offset = get(w, 8192)
+    if 65536 + offset < length(w):
+        store(w, 65536 + offset, value)
+    put(w, 8192, offset + 1)
+    return 0
+
+def emit_text(w:mutbuf, identifier:u64) -> u64:
+    at = get(w, 32768 + identifier * 16)
+    size = get(w, 32776 + identifier * 16)
+    index = 0
+    while index < size:
+        emit(w, byte(w, at + index))
+        index = index + 1
+    return 0
+
+def emit_integer(w:mutbuf, value:u64) -> u64:
+    digits = 1
+    power = 10
+    while digits < 20 and value >= power:
+        digits = digits + 1
+        if digits < 20:
+            power = power * 10
+    remaining = digits
+    power = 1
+    while remaining > 1:
+        power = power * 10
+        remaining = remaining - 1
+    while digits > 0:
+        digit = 0
+        while value >= power:
+            value = value - power
+            digit = digit + 1
+        emit(w, 48 + digit)
+        digits = digits - 1
+        power = 1
+        remaining = digits
+        while remaining > 1:
+            power = power * 10
+            remaining = remaining - 1
+    return 0
+
+def emit_number(s:readbuf, w:mutbuf) -> u64:
+    bits = read64(s, 96)
+    tag = read64(s, 88)
+    if tag == 5:
+        emit_text(w, 10)
+        size = format_bits(w, bits)
+        if size == 0 or size > 32:
+            return 0
+        index = 0
+        while index < size:
+            emit(w, byte(w, 6144 + index))
+            index = index + 1
+    else:
+        emit_text(w, 9)
+        if tag == 4:
+            emit(w, 45)
+            bits = 0 - bits
+        emit_integer(w, bits)
+    emit(w, 96)
+    return 1
+
+def emit_utf8(w:mutbuf, value:u64) -> u64:
+    if value < 128:
+        emit(w, value)
+        return 0
+    if value < 2048:
+        emit(w, 192 | (value >> 6))
+        emit(w, 128 | (value & 63))
+        return 0
+    if value < 65536:
+        emit(w, 224 | (value >> 12))
+        emit(w, 128 | ((value >> 6) & 63))
+        emit(w, 128 | (value & 63))
+        return 0
+    emit(w, 240 | (value >> 18))
+    emit(w, 128 | ((value >> 12) & 63))
+    emit(w, 128 | ((value >> 6) & 63))
+    emit(w, 128 | (value & 63))
+    return 0
+
+def emit_debug(w:mutbuf, value:u64) -> u64:
+    if needs_escape(w, value) == False:
+        return emit_utf8(w, value)
+    emit(w, 92)
+    short = short_escape(value)
+    if short != 0:
+        emit(w, short)
+        return 0
+    emit(w, 117)
+    emit(w, 123)
+    shifts = 0
+    copy = value
+    while copy >= 16:
+        shifts = shifts + 4
+        copy = copy >> 4
+    emit(w, hex_digit((value >> shifts) & 15))
+    while shifts > 0:
+        shifts = shifts - 4
+        emit(w, hex_digit((value >> shifts) & 15))
+    emit(w, 125)
+    return 0
+
+def emit_string(s:readbuf, w:mutbuf, debug:u64) -> u64:
+    p = 129 + read64(s, 72)
+    end = 127 + read64(s, 80)
+    if debug != 0:
+        emit(w, 34)
+    while p < end:
+        p = decoded(s, w, p, end)
+        if p == 0:
+            return 0
+        cp = get(w, 16456)
+        if debug != 0:
+            emit_debug(w, cp)
+        else:
+            emit_utf8(w, cp)
+    if debug != 0:
+        emit(w, 34)
+    return 1
+
+def render(s:readbuf, w:mutbuf) -> u64:
+    code = read64(s, 40)
+    expected = read64(s, 56)
+    emit_text(w, code)
+    if code <= 2:
+        kind = read64(s, 48)
+        if kind == 0:
+            emit_text(w, 11)
+        if kind == 1:
+            emit_text(w, 12)
+        if kind == 2:
+            emit_text(w, 13)
+        if kind == 3:
+            if emit_number(s, w) == 0:
+                return 0
+        if kind == 4:
+            emit_text(w, 14)
+            if emit_string(s, w, 1) == 0:
+                return 0
+        if kind == 5:
+            emit_text(w, 15)
+        if kind == 6:
+            emit_text(w, 16)
+        emit_text(w, 7)
+        emit_text(w, 100 + expected)
+        return 1
+    if code == 3:
+        emit_integer(w, read64(s, 64))
+        emit_text(w, 7)
+        emit_text(w, 100 + expected)
+        return 1
+    if code == 4:
+        emit_text(w, 200 + expected)
+        emit(w, 96)
+        return 1
+    if emit_string(s, w, 0) == 0:
+        return 0
+    emit(w, 96)
+    emit_text(w, 7)
+    if code == 5:
+        emit_text(w, 300 + expected)
+    else:
+        emit_text(w, 306)
+    return 1
