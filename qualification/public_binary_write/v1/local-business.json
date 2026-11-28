@@ -1,0 +1,210 @@
+{
+  "actual_default_entrypoint": true,
+  "actual_network_ssh": false,
+  "actual_ssh_invocations": 17,
+  "audit_events": 15,
+  "cases": [
+    {
+      "name": "configured-catalog",
+      "passed": true,
+      "tools": 113
+    },
+    {
+      "bytes": 0,
+      "name": "create-empty",
+      "passed": true,
+      "version": "65040:178748:0:1795872367646243936:1795872367653812684"
+    },
+    {
+      "bytes": 768,
+      "name": "create-all-byte-values",
+      "passed": true,
+      "version": "65040:178751:768:1795872367961895770:1795872367963051810"
+    },
+    {
+      "bytes": 10,
+      "name": "replace-current-version-and-metadata",
+      "passed": true,
+      "version": "65040:178753:10:1795872368249426394:1795872368251866361"
+    },
+    {
+      "bytes": 1048576,
+      "name": "create-one-MiB",
+      "passed": true,
+      "version": "65040:178755:1048576:1795872370042218653:1795872370046218611"
+    },
+    {
+      "bytes": 13,
+      "name": "unicode-quoted-path",
+      "passed": true,
+      "version": "65040:178758:13:1795872370859809053:1795872370861054946"
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nValueError: destination version changed; no publication performed",
+      "name": "stale-version",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nValueError: destination version changed; no publication performed",
+      "name": "create-only-collision",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nError: Leading padding not allowed",
+      "name": "base64-leading-padding",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nError: Excess padding not allowed",
+      "name": "base64-excess-padding",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nError: Excess data after padding",
+      "name": "base64-after-padding",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nError: Only base64 data is allowed",
+      "name": "base64-invalid-alphabet",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nFileNotFoundError: [Errno 2] No such file or directory: 'missing'",
+      "name": "missing-parent",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nValueError: open: embedded null character in path",
+      "name": "embedded-NUL",
+      "passed": true
+    },
+    {
+      "error": "remote helper on local-native failed with 1\nstdout:\n\nstderr:\nValueError: atomic replacement would split hard links; original remains unchanged",
+      "name": "hardlink-replacement",
+      "passed": true
+    },
+    {
+      "name": "missing-version",
+      "passed": true,
+      "response": {
+        "error": {
+          "code": -32602,
+          "message": "failed to deserialize parameters: missing field `expected_version`"
+        },
+        "id": 25,
+        "jsonrpc": "2.0"
+      }
+    },
+    {
+      "name": "wrong-type",
+      "passed": true,
+      "response": {
+        "error": {
+          "code": -32602,
+          "message": "failed to deserialize parameters: invalid type: integer `17`, expected a string"
+        },
+        "id": 26,
+        "jsonrpc": "2.0"
+      }
+    },
+    {
+      "name": "unknown-field",
+      "passed": true,
+      "response": {
+        "error": {
+          "code": -32602,
+          "message": "failed to deserialize parameters: unknown field `extra`, expected one of `host`, `path`, `data_base64`, `expected_version`"
+        },
+        "id": 27,
+        "jsonrpc": "2.0"
+      }
+    },
+    {
+      "error": "binary payload exceeds 1 MiB decoded bound",
+      "name": "encoded-bound",
+      "passed": true
+    },
+    {
+      "error": "native binary tools require an operator host",
+      "name": "isolated-mode",
+      "passed": true
+    },
+    {
+      "error": "path `/workspace/scratch/63dc82d6d364/runtime-evidence/public-write-business-local-v4/outside.bin` is outside configured write roots on host `writer`",
+      "name": "outside-write-root",
+      "passed": true
+    },
+    {
+      "error": "audit sink must not be hard-linked: /workspace/scratch/63dc82d6d364/runtime-evidence/public-write-business-local-v4/state/audit/events.jsonl",
+      "name": "audit-failure-blocks-SSH",
+      "passed": true
+    },
+    {
+      "bytes": 9,
+      "name": "audit-recovery",
+      "passed": true,
+      "version": "65040:178784:9:1795872374549673599:1795872374550906406"
+    },
+    {
+      "name": "retained-file_info",
+      "passed": true
+    },
+    {
+      "name": "retained-binary_read",
+      "passed": true
+    },
+    {
+      "name": "normal-EOF-and-joins",
+      "passed": true,
+      "returncode": 0
+    }
+  ],
+  "cases_count": 26,
+  "control_sources": {
+    "lifecycle.py": {
+      "bytes": 14219,
+      "sha256": "6d1633c153d1f15d2f254a4bd5e5a37b6d17999d5e14d6b25f7c799ff9756347"
+    },
+    "run.py": {
+      "bytes": 19800,
+      "sha256": "4c1fac3769dada26b7f01c80f21fd6e1a03b96c4ae4af9728254330b91d75a7c"
+    }
+  },
+  "elapsed_seconds": 9.463114569998652,
+  "elf": {
+    "bytes": 36986880,
+    "sha256": "773c5a8101e17ae576000260bc8687ef33f242d6bf6b9e34709c431be9b4e3ff"
+  },
+  "full_network_route_qualified": false,
+  "manifest": {
+    "bytes": 1372581,
+    "sha256": "945a07aaf4f2283ac214f2967d2221328d88544e7f6eac48fb6e800daee728c7"
+  },
+  "old_path_removed": false,
+  "original_full_runtime_rerun": false,
+  "original_sources": {
+    "binary_file.py": {
+      "bytes": 12196,
+      "sha256": "c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12"
+    },
+    "file_metadata.py": {
+      "bytes": 6481,
+      "sha256": "24b9df89816536db16dd35a74d6460b1a215981a00798393a00853da6077f5d3"
+    },
+    "inode_patch.py": {
+      "bytes": 10189,
+      "sha256": "c005aacc833ece08a862f74430d7d97cf93f2d7b413bcaa955f663f20d4f4e46"
+    }
+  },
+  "public_route_qualified": false,
+  "schema": "hepta.runtime.public-binary-write.business.v1",
+  "source_binding": "2e02569c77e019ae707719680e3d17dd05955fa3a2e2e25024bcb26b955a11ae",
+  "ssh_argument_file": {
+    "bytes": 10827,
+    "sha256": "e190b7092c8cd3e1b00c79fc2331788c5927ed639f7d7fbab32bb53ccb566601"
+  },
+  "status": "PASS",
+  "transport": "local-command",
+  "whole_runtime_replaced": false
+}

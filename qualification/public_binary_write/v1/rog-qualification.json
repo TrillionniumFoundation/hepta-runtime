@@ -1,0 +1,68 @@
+{
+  "schema": "hepta.runtime.public175.rog-qualification.v1",
+  "status": "PASS",
+  "input_archive_sha256": "9d5cb4c1eb1590176d49c20148ad42502313b9768a416251c4013474ecce38c5",
+  "elf_sha256": "773c5a8101e17ae576000260bc8687ef33f242d6bf6b9e34709c431be9b4e3ff",
+  "source_binding_sha256": "2e02569c77e019ae707719680e3d17dd05955fa3a2e2e25024bcb26b955a11ae",
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "boot": "4477367b-056e-4199-8615-ee84a00d0786",
+  "phases": [
+    {
+      "label": "business",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/source/tests/hia_native/public_binary_write/run.py",
+        "--manifest",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/manifest.json",
+        "--elf",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/runtime-mcp.elf",
+        "--source",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/source",
+        "--output",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/business-v1",
+        "--transport",
+        "loopback",
+        "--reference-python",
+        "/usr/bin/python3"
+      ],
+      "status": "PASS",
+      "returncode": 0,
+      "seconds": 9.7484508670168,
+      "cases": 26
+    },
+    {
+      "label": "lifecycle",
+      "command": [
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/source/tests/hia_native/public_binary_write/lifecycle.py",
+        "--manifest",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/manifest.json",
+        "--elf",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/runtime-mcp.elf",
+        "--source",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/source",
+        "--output",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/lifecycle-v1",
+        "--transport",
+        "loopback",
+        "--business-evidence",
+        "/home/qian-qi/hia-runtime-public175-63dc-v1/business-v1"
+      ],
+      "status": "PASS",
+      "returncode": 0,
+      "seconds": 36.998156515997835,
+      "cases": 3
+    }
+  ],
+  "whole_runtime_replaced": false,
+  "old_path_removed": false,
+  "elapsed_seconds": 46.759612141002435,
+  "business_cases": 26,
+  "lifecycle_cases": 3,
+  "actual_network_ssh": true,
+  "public_binary_write_route_qualified": true
+}
