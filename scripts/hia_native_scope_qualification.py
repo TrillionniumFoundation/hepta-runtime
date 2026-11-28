@@ -51,18 +51,18 @@ SPECS = (
     ("operation-scope", "native/operation_scope.hepta", 1, 166, 8 << 20, 2 << 20, 3 << 20),
     ("scope-entropy-fixture", "tests/hia_native/scope_entropy_fixture.hepta", 0, 0, 48, 128, 128),
 )
-PACKER_SOURCE_SHA256 = "4367179d1c4776853d5c9542db6582b24be2c59c76ac8d1c347d6373cb297d5a"
-PACKER_PREFIX_SHA256 = "db41d6cf9664e59dcd216e2d0c7df398fc945c8df0a7e73b6137c97dfbf73273"
+PACKER_SOURCE_SHA256 = "60c081c08f4f1be4a2585f49ce3f6dffa1a50707df9e0b8383a0396b61589f63"
+PACKER_PREFIX_SHA256 = "b176ed119e3df573a47a05f546d1316bc66dcbcd41295833eebe932f2b19760a"
 
 
 def embedded_images(executable: bytes, profile: list[dict], images: list[bytes]) -> dict:
     """Bind the complete frozen adapter, pointed-to table and every image byte.
 
-    The source-owned 4367179d packer has an 8,752-byte fixed ELF/adapter prefix.
+    The source-owned 60c081c0 packer has an 8,912-byte fixed ELF/adapter prefix.
     Only its two total-size words vary with this profile; its RIP-relative
     metadata displacement, all adapter code and alignment bytes are fixed.
     """
-    metadata_at, pointer_at, work_start = 8752, 228, 16859136
+    metadata_at, pointer_at, work_start = 8912, 228, 16859136
     if len(executable) < metadata_at + 64 + len(profile) * 128 or len(images) != len(profile):
         raise ValueError("scope embedded native table is incomplete")
     prefix = bytearray(executable[:metadata_at])

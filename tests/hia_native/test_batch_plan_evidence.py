@@ -84,7 +84,7 @@ def main(args):
         changed('consistently_rehashed_compile_receipt',[receipt,built],receipt_mutation)
         cloned_composition=build/bundle['composition']['manifest'];elf=cloned_composition.parent/'native-local-read.elf'
         elf.chmod(0o600)  # Mutate only the private test copy; the built ELF stays sealed.
-        for name,offset in [('adapter_code',180),('metadata_pointer',228),('metadata_reserved',8752+16),('table_permission',8752+64+48),('table_source_digest',8752+64+64),('embedded_image',8752+64+4*128)]:
+        for name,offset in [('adapter_code',180),('metadata_pointer',228),('metadata_reserved',8912+16),('table_permission',8912+64+48),('table_source_digest',8912+64+64),('embedded_image',8912+64+4*128)]:
             def mutate(offset=offset):
                 raw=bytearray(read(elf));raw[offset]^=1;elf.write_bytes(raw)
                 alter_json(cloned_composition,lambda v:(v.__setitem__('executable_sha256',sha(raw)),v['inspection'].__setitem__('sha256',sha(raw))))

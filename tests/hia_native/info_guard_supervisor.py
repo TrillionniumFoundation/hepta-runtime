@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import select
 import socket
+import struct
 import sys
 import time
 
@@ -37,7 +38,8 @@ def main():
     parser.add_argument('--held-state', required=True, type=Path)
     parser.add_argument('--fixture', required=True, type=Path)
     parser.add_argument('--mode', required=True, choices=('read', 'flistxattr', 'map_failure',
-                        'pipe_failure', 'fork_failure', 'clock_failure', 'pdeath_failure', 'closed_stderr'))
+                        'pipe_failure', 'fork_failure', 'clock_failure', 'pdeath_failure', 'closed_stderr',
+                        'ready_reap', 'ready_reap_eintr'))
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
@@ -57,7 +59,10 @@ def main():
             if libc.prctl(38, 1, 0, 0, 0):
                 raise OSError(ctypes.get_errno(), 'PR_SET_NO_NEW_PRIVS')
             instructions = [Filter(0x20, 0, 0, 0)]
-            for number in (0, 3, 5, 9, 57, 157, 196, 228, 257, 293):
+            numbers = (0, 3, 5, 9, 57, 157, 196, 228, 257, 293)
+            if args.mode.startswith('ready_reap'):
+                numbers += (61, 271)
+            for number in numbers:
                 instructions.extend([Filter(0x15, 0, 1, number), Filter(0x06, 0, 0, 0x7fc00000)])
             instructions.append(Filter(0x06, 0, 0, 0x7fff0000))
             filters = (Filter * len(instructions))(*instructions)
@@ -92,6 +97,8 @@ def main():
     held_once = False
     fault_injected = False
     wait_status = None
+    ready_waits, ready_polls = 0, 0
+    ready_worker = None
     try:
         while True:
             if pending is not None:
@@ -120,6 +127,43 @@ def main():
                 nr = note.data.nr
                 owner = int(note.pid)
                 descriptor = int(note.data.args[0])
+                if args.mode.startswith('ready_reap') and owner == pid and nr == 61:
+                    if descriptor <= 0 or int(note.data.args[2]) != 1:
+                        raise RuntimeError('native guard attempted a broad or blocking wait')
+                    if ready_worker is None:
+                        identity = process_identity(descriptor)
+                        if identity is None:
+                            raise RuntimeError('ready worker vanished before retained wait')
+                        ready_worker = descriptor
+                        args.held_state.write_text(json.dumps({
+                            'service': pid, 'mode': args.mode, 'worker': descriptor,
+                            'worker_start_ticks': identity['start_ticks'],
+                            'kind': 'controlled WNOHANG zero before real owned-PID wait',
+                        }, sort_keys=True) + '\n')
+                    if descriptor == ready_worker:
+                        ready_waits += 1
+                        if ready_waits <= 4:
+                            # Exercise a legal not-yet-reaped result. The real
+                            # child remains owned and no file/MCP result is supplied.
+                            answer.val, answer.error, answer.flags = 0, 0, 0
+                        events.append({'event': 'ready_owned_wait', 'worker': descriptor,
+                                       'ordinal': ready_waits, 'options': int(note.data.args[2]),
+                                       'controlled_zero': ready_waits <= 4})
+                if (args.mode.startswith('ready_reap') and owner == pid and nr == 271
+                        and ready_waits and int(note.data.args[1]) == 0):
+                    if int(note.data.args[0]) != 0:
+                        raise RuntimeError('ready-reap poll unexpectedly owns descriptors')
+                    with open(f'/proc/{pid}/mem', 'rb', buffering=0) as memory:
+                        raw = os.pread(memory.fileno(), 16, int(note.data.args[2]))
+                    seconds, nanos = struct.unpack('<2Q', raw)
+                    if seconds != 0 or not 0 < nanos <= 1000000:
+                        raise RuntimeError('ready-reap poll exceeded its one-millisecond quantum')
+                    ready_polls += 1
+                    interrupted = args.mode == 'ready_reap_eintr' and ready_polls == 1
+                    if interrupted:
+                        answer.val, answer.error, answer.flags = 0, -errno.EINTR, 0
+                    events.append({'event': 'ready_bounded_poll', 'seconds': seconds,
+                                   'nanoseconds': nanos, 'injected_eintr': interrupted})
                 selected_fault = (
                     (args.mode == 'map_failure' and nr == 9 and owner == pid
                      and note.data.args[1] == 8523776 and note.data.args[3] == 0x21)
@@ -192,7 +236,8 @@ def main():
                 pass
             _, wait_status = os.waitpid(pid, 0)
         args.log.write_text(json.dumps({'events': events, 'held_once': held_once, 'fault_injected': fault_injected,
-                                       'service_exit': os.waitstatus_to_exitcode(wait_status)},
+                                       'service_exit': os.waitstatus_to_exitcode(wait_status),
+                                       'ready_owned_waits': ready_waits, 'ready_bounded_polls': ready_polls},
                                       sort_keys=True) + '\n')
     raise SystemExit(os.waitstatus_to_exitcode(wait_status))
 

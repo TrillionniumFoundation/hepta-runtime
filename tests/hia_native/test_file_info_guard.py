@@ -293,7 +293,13 @@ if __name__ == '__main__':
     if not result.wasSuccessful():
         raise SystemExit(1)
     assert {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in SOURCE_PATHS.items()} == SOURCE_SHA
-    proof = {'schema': 'hepta.runtime.native-info-guard-test.v1', 'status': 'pass', 'counts': COUNTS,
+    proof = {'schema': 'hepta.runtime.native-info-guard-test.v1', 'status': 'pass',
+             'tests_run': result.testsRun, 'skipped': len(result.skipped),
+             "errors": len(result.errors), "failures": len(result.failures),
+             "expected_failures": len(result.expectedFailures),
+             "unexpected_successes": len(result.unexpectedSuccesses),
+             "python_isolated": sys.flags.isolated, "python_optimize": sys.flags.optimize,
+             'counts': COUNTS,
              'actual_elf_responses': shared.COUNTS['elf_requests'], 'timings': TIMINGS,
              'executable_sha256': FileInfoGuardTests.metadata['executable_sha256'],
              'manifest_sha256': hashlib.sha256(FileInfoGuardTests.manifest.read_bytes()).hexdigest(),

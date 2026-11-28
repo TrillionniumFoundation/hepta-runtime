@@ -36,13 +36,14 @@ OS effect, with scope 6 as its immediate caller. Requests cannot select a
 device, raw descriptor, arbitrary image, destination or extra authority bit.
 
 Admitted flags are exactly `{0, 1, 3, 4}`. Existing flag-3 file IO stays in its
-separately pinned owner and slot; the complete worker and 30-second guard are
-unchanged. Future authority profiles require separate fixed tables and actual
+separately pinned owner and slot. Successful file-info handoff now retires its
+specific owned worker within the original absolute 30-second deadline; timeout
+cleanup and entropy ownership are unchanged. Future authority profiles require separate fixed tables and actual
 new executable evidence.
 
-Metadata starts at offset 8,752; its RIP-relative displacement is at offset
+Metadata starts at offset 8,912; its RIP-relative displacement is at offset
 228. The prefix SHA-256, normalizing only the two ELF segment size words, is
-`db41d6cf9664e59dcd216e2d0c7df398fc945c8df0a7e73b6137c97dfbf73273`.
+`b176ed119e3df573a47a05f546d1316bc66dcbcd41295833eebe932f2b19760a`.
 Qualification checks that prefix, pointer, every descriptor, actual image,
 source digest, alignment padding and private workspace placement.
 
@@ -158,8 +159,11 @@ The seed-profile repair was replayed against the exact failed-run native ELF
 and Rust 1.95 binary in GitHub Actions run `43613933669`. All native and original
 cases passed under the unchanged 180-second suite limit. Independent ai395
 replays passed the complete native domain and both Rust 1.95 and freshly built
-Rust 1.99.1 originals. Native HIA sources, all eight images, the packer and ELF
-are unchanged. This component repair is not an aggregate runtime qualification.
+Rust 1.99.1 originals. For that seed-profile repair, native HIA sources, all eight images, the packer
+and ELF were unchanged. The subsequent ready-worker repair is separately bound
+by `composition_ready_reap.json`; it changes the shared adapter prefix and
+metadata placement while retaining all eight scope image bytes. Neither
+component repair is an aggregate runtime qualification.
 
 Initial local cleanup `EPERM`, early classifier failures, the first test
 sentinel mismatch and an archival-path failure remain separately retained.

@@ -18,7 +18,7 @@ from hia_native_view_cache_qualification import _compiled
 FOLDER = 'history-rust-oracle'
 CORPUS_FILES = ('native-corpus.json', 'input.bin.gz', 'native-output.bin.gz', 'rows.jsonl.gz')
 IMPORTS = {'f2': 'f8', 'f14': 'f9', 'f15': 'f10', 'f16': 'f11'}
-PACKER = '4367179d1c4776853d5c9542db6582b24be2c59c76ac8d1c347d6373cb297d5a'
+PACKER = '60c081c08f4f1be4a2585f49ce3f6dffa1a50707df9e0b8383a0396b61589f63'
 TRANSPORT = '30779bf4c9315135a8a7ce6df86d4a1f84bffbe7cacfbf083c1980512851e54a'
 
 

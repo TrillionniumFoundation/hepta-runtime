@@ -163,7 +163,7 @@ class EvidenceTests(unittest.TestCase):
                     fixture = json.loads(path.read_bytes())
                     elf = path.parent / fixture['executable']
                     raw = bytearray(elf.read_bytes())
-                    raw[300 if change == 'elf-prefix' else 8752 + 64 + 48] ^= 1
+                    raw[300 if change == 'elf-prefix' else 8912 + 64 + 48] ^= 1
                     replace(elf, raw)
                     fixture['executable_sha256'] = sha(raw)
                     fixture['inspection']['sha256'] = sha(raw)

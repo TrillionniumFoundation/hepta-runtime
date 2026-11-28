@@ -17,6 +17,7 @@ def req(method,params=None,identity=1):
 def init(identity=1):return req('initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'native-test','version':'1'}},identity)
 class Session:
  def __init__(self,executable,root):
+  self.root=Path(root)
   self.proc=subprocess.Popen([str(executable),'--local-read-profile',str(root)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={'PATH':''});self.buffer=b''
  def send(self,raw,fragmented=False):
   raw+=b'\n';step=3 if fragmented else len(raw)
