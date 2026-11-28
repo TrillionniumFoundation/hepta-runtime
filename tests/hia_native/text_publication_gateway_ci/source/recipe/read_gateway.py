@@ -67,10 +67,13 @@ def normalized_output(raw,row,after,content):
 def read(capture):
     capture=Path(capture)
     require((capture/"DOMAIN.json").read_bytes()==canonical(declaration()),"full input domain changed")
+    retired=decode((capture/"RETIRED_FIXTURE.json").read_bytes())
+    fixture_root=Path(retired["root"])
+    require(fixture_root.is_absolute() and fixture_root.name=="fixtures-root","retained fixture identity")
     declared=[decode(line) for line in (capture/"cases.jsonl").read_bytes().splitlines()]
     meta=decode((capture/"CAPTURE.json").read_bytes())
     require(meta["status"]=="COMPLETE_GATEWAY_CAPTURE_ONLY","capture did not complete")
-    require(declared==rows(meta["profile"],capture/"fixtures-root"),"input-only sequence differs")
+    require(declared==rows(meta["profile"],fixture_root),"input-only sequence differs")
     helpers=prepare(Path(__file__).resolve().parents[1]/"retained/text75_qualify.py")
     fs=retained_filesystem()
     all_rows={};readers={}
@@ -81,7 +84,19 @@ def read(capture):
             and process["expected_success"] is True and process["elapsed_seconds"]<180
             and process["timeout_seconds"]==180 and process["exchange_limit_seconds"]==60,"full process gate differs")
         require(process["stdin"]==pin(lane/"stdin") and process["stdout_gzip"]==pin(lane/"stdout.gz")
-            and process["stderr"]==pin(lane/"stderr") and (lane/"stderr").read_bytes()==b"","complete process streams differ")
+            and process["stderr"]==pin(lane/"stderr"),"complete process streams differ")
+        require(process["cwd"]==str(fixture_root),"actual process fixture root differs")
+        diagnostic=(lane/"stderr").read_bytes()
+        if role=="original":
+            require(diagnostic==b"","original stderr differs")
+        else:
+            # Frozen private fixture sets engine+80=stderr+1. Production leaves it zero.
+            # Each unchanged runtime_grow_trace writes exactly 224 bytes.
+            require(len(diagnostic)>0 and len(diagnostic)%224==0,"complete native private trace length")
+            for at in range(0,len(diagnostic),224):
+                frame=diagnostic[at:at+224]
+                require(frame[:8]==b"HRGTR002" and U(frame,8)>0 and U(frame,16)<68 and U(frame,24) in (1,2,3,4),
+                    "private graph diagnostic frame changed")
         with gzip.open(lane/"stdout.gz","rb") as stream:stdout=stream.read()
         require(process["full_stdout"]==dict(bytes=len(stdout),sha256=sha(stdout)),"full uncompressed process stdout differs")
         records=[decode(line) for line in (lane/"records.jsonl").read_bytes().splitlines()]
@@ -94,7 +109,7 @@ def read(capture):
         for index,(row,record) in enumerate(zip(declared,records)):
             require(record["index"]==index and record["input"]==row and 0<=record["elapsed_ns"]<60_000_000_000,
                 "ordered full case differs")
-            require(record["fixture"]==str(capture/"fixtures-root"/row["fixture"]),"fixture path changed")
+            require(record["fixture"]==str(fixture_root/row["fixture"]),"fixture path changed")
             inputs.append(buffers.get(record["request"]));responses.append(buffers.get(record["response"]))
             if role=="original":require(inputs[-1]==canonical(row),"actual original input differs")
         require((lane/"stdin").read_bytes()==b"".join(inputs) and stdout==b"".join(responses),"complete pipe coverage differs")
@@ -142,7 +157,7 @@ def read(capture):
         require(history==observations.history(bytes.fromhex(expected["history_snapshot_hex"])),("complete history",row["id"]))
         compared+=len(state)+len(actual)+len(wanted)
     retired=decode((capture/"RETIRED_FIXTURE.json").read_bytes())
-    require(retired["root"]==str(capture/"fixtures-root") and retired["captured_before_retirement"] is True
+    require(retired["root"]==str(fixture_root) and retired["captured_before_retirement"] is True
         and retired["case_buffers_preserved"] is True and not (capture/"fixtures-root").exists(),
         "owned fixture retirement provenance differs")
     retained=Reader(capture/"retired-fixture-buffers")
