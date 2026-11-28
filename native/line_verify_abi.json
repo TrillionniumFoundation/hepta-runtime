@@ -1,0 +1,39 @@
+{
+  "schema": "hepta.runtime.line-verify-abi.v1",
+  "target": "linux-x86_64-lp64",
+  "entry": "f0(readbuf,mutbuf,mutbuf)->u32",
+  "buffers": ["input", "output", "workspace"],
+  "integer_byte_order": "little-endian",
+  "input_limit_bytes": 8388608,
+  "minimum_workspace_bytes": 192,
+  "input": {
+    "header_bytes": 64,
+    "magic_ascii": "HLINE001",
+    "fields": ["magic:8bytes", "operation:u64", "number_bits:u64", "total:u64", "expected_hash_bytes:u64", "payload_bytes:u64", "reserved_zero:u64", "reserved_zero:u64"],
+    "operations": {
+      "1": "verify_line_id: number_bits is the full unsigned LP64 line number; total is the number of explicit UTF-8 line slices",
+      "2": "resolve_line_index: number_bits is the two-complement i64 index; total is the full unsigned LP64 total_lines",
+      "3": "resolve_line_index_clamped: same signed index and full total domain"
+    },
+    "verification_payload": "The exact UTF-8 expected hash, then total line records. Each record is canonical unsigned LEB128 byte length followed by that many UTF-8 content bytes. Zero-length records are one byte. Embedded LF, CR and NUL remain content; the ABI does not normalize or split strings.",
+    "index_payload": "Empty; expected_hash_bytes and payload_bytes must both be zero.",
+    "line_encoding": "Canonical ULEB128 rejects redundant zero groups, unterminated encodings, overflow beyond u64, truncation and trailing bytes. It represents the complete original five-MiB file with five million empty lines inside the standard eight-MiB input profile."
+  },
+  "output": {
+    "header_bytes": 40,
+    "magic_ascii": "HLINER01",
+    "fields": ["magic:8bytes", "status:u64", "resolved_line:u64", "was_clamped:u64", "error_bytes:u64"],
+    "status": {
+      "0": "Original Result::Ok; resolved line and optional view clamp flag, with no error payload",
+      "1": "Original Result::Err; resolved_line and was_clamped are zero, followed by the complete original UTF-8 error"
+    },
+    "diagnostics": "Includes exact quoting/newlines, current target ID, up to two context lines on each side, the three nearest matching hashes in stable original line order for equal distances, and the original retry/ranged-view suggestion. No cause for a moved hash is inferred."
+  },
+  "return": {
+    "0xffffffff": "Malformed input ABI, invalid UTF-8, unsupported operation or input outside the declared profile; output unchanged",
+    "0xfffffffe": "Workspace shorter than 192 bytes or complete result exceeds output capacity; output unchanged. Workspace capacity is checked before packet admission.",
+    "other": "Complete initialized output byte count"
+  },
+  "ownership": "HIA owns packet validation, exact content hashing through five source-identical imported helpers, unsigned distance ranking, exact diagnostics, signed/unsigned boundary behavior and output sizing. The caller supplies typed line slices and performs no line-ID verification or error formatting.",
+  "scope": "Internal verify_line_id and strict/clamped line-index owners only. No JSON Value parsing, file IO, locks, edits, history, production handler replacement or whole-runtime closure."
+}

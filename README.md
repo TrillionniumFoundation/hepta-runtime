@@ -22,6 +22,85 @@ See [repository layout and language boundaries](docs/REPOSITORY_LAYOUT.md) and
 pre-cleanup tree remains in Git, with per-file source commit, path, blob and mode
 records for every retired file.
 
+## Integration qualification boundary
+
+The source union retains the qualified 124-component behavior profile below.
+The imported successor also contains two binary-owner components in its
+126-component builder; their complete public route is still explicitly
+unregistered. Merging these sources does not extend the older qualification
+or activate production. The existing controller and every remaining original
+handler stay available until their matching HIA route and recovery gates pass.
+
+## HIA native implementation
+
+The [HIA native profile](native/README.md) provides executable `.hepta` owners
+and Linux ELF transport packers. The resulting program runs without Python,
+Rust, libc, or a dynamic loader. A pinned Hepta compiler and explicit Python
+build and evidence readers produce and verify the executable.
+
+The default native builder assembles **124 HIA components**: 116 directly linked
+owners and an eight-component shared worker capability in 117 physical containers.
+The graph routes thirteen target handlers: `host_list`, `effective_config`,
+`execution_shadow_admit`, `view`, `workdir`, `directory_create`, `file_move`,
+`directory_move`, `text_editor`, `batch_edit`, `weight_bellman_plan`,
+`extract_lines` and `text_file_write`. The configured catalog advertises eleven
+tools, or eight when runtime configuration is absent; Batch and Bellman have
+actual routes but remain outside that advertised set. Component counts are
+not tool counts.
+
+TextEditor retains shared Local Create/Replace/Delete/Undo owners. The Local
+extract and text-file publisher call chains use the actual configuration,
+SessionOwner, path-policy, Scope, cache, history and lock owners. Current SDK
+connection, metadata admission, get_info, typed text construction, transport
+and shutdown stay in the graph. Protocol peer information is not an identity
+credential.
+
+The bounded publisher lifecycle qualification includes 22 public SDK scenarios
+and eight direct handler-future scenarios on the real two-session pump and
+shared process pool. SDK notification cancellation can leave the handler
+running through its blocking body and post-await Forget. Direct future Drop
+instead follows the original Scope-cancel path and skips that post-await
+Forget. EOF drains both session pumps and closes the shared runtime once.
+These results establish the declared Local domain, not full SDK concurrency
+or Remote execution.
+
+Build and launch the actual default entry with an explicit verified bootstrap:
+
+```sh
+python3 -I -B scripts/hia_native_runtime_mcp_build.py   --hepta /absolute/path/to/pinned/Hepta   --bootstrap /absolute/path/to/verified/bootstrap   --output /absolute/path/to/new-public-build
+/absolute/path/to/new-public-build/build/public-task-batch-extract/runtime-mcp.elf
+```
+
+CI omits `--bootstrap` and freshly compiles all 124 components. The
+[current public qualification](native/runtime_mcp_current_qualification.md)
+binds all 536 source files and the actual default command. The complete new
+publisher regression compares 686 current-native cases with immutable actual
+current-Rust captures, including whole wire, file contents, session/cache,
+history and locks. All 24 native processes keep their original 180-second
+limit, with 60 seconds per exchange. Independent uploaded readers recheck
+the complete captures without executing either implementation.
+
+The dedicated [historical 58-image source profile](tests/hia_native/historical_public58/README.md)
+restores its exact 120 historical files and excludes current-only sources.
+The prior 91-, 102- and 111-component qualifications retain their original
+source identities. The old nine-role 111 result is retained evidence for that
+graph; it is not relabeled as a 124-component result. The current default
+workflow checks the exact candidate or PR head against the qualified
+536-source closure, builds that default entry, and requires the resulting
+ELF to equal the application-qualified current binary.
+
+The production target has 136 registered tool handlers. The current graph
+routes thirteen, leaving **123 unrouted target handlers**. The existing
+production runtime continues to own the remaining filesystem, process,
+host, SSH, HTTP, document, REA and model-worker behavior.
+[The source coverage inventory](native/migration.json) and
+[exact target snapshot](native/migration_target.json) retain these gaps.
+Full SDK, full asynchronous runtime, full handler replacement, production
+activation and removal of the old runtime remain unqualified.
+
+The retained component registry and its eleven native partitions and eight
+original comparison partitions remain separately qualified. Their counts
+and passing results do not imply coverage of the current public graph.
 
 ## Concurrent execution
 

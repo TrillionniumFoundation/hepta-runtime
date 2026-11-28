@@ -1,0 +1,31 @@
+def tool_kind(w: mutbuf, at: u64, size: u64) -> u64:
+    if size == 15:
+        if get(w, at) == PUBLICATION_WORD:
+            if byte(w, at + 8) == 101 and byte(w, at + 9) == 95 and byte(w, at + 10) == 119 and byte(w, at + 11) == 114 and byte(w, at + 12) == 105 and byte(w, at + 13) == 116 and byte(w, at + 14) == 101:
+                return PUBLICATION_KIND
+    return retained_publication_tool_kind(w, at, size)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf, phase: u64) -> u32:
+    if phase == 6 and get(w, 112) == PUBLICATION_KIND:
+        put(w, 8, 106)
+        if reserve(w, 1, 192) == 0:
+            return pending_grow(o, w)
+        return prepare_publication(s, o, w)
+    if phase == 4:
+        operation = get(w, 120)
+        if operation == 7 or operation == 8:
+            if get(w, 144) != 0:
+                return INVALID
+            put(w, 8, 104)
+            if reserve(w, 0, 40) == 0:
+                return pending_grow(o, w)
+            if reserve(w, 1, 32) == 0:
+                return pending_grow(o, w)
+            at = region(w, 0)
+            put(w, at, CATALOG_QUERY)
+            put(w, at + 8, 7)
+            put(w, at + 16, get(w, 128))
+            put(w, at + 24, operation - 7)
+            put(w, at + 32, 11)
+            return child(w, 2, 40, 4)
+    return retained_publication_prepare(s, o, w, phase)

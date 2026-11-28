@@ -1,0 +1,27 @@
+{
+  "schema": "hepta.runtime.publication-resume.generation-control.v1",
+  "prior_source": "86ec07470f777fdf33930f41b1925297a93d8569",
+  "finding": "saved PA_TAG was not explicitly compared with the currently admitted caller66 generation before actual worker poll/drop",
+  "before": {
+    "bytes": 10865,
+    "sha256": "28266855978bd07f44b21a69905b80bc4dd1827fbd638f42710f5f4a14744c7e",
+    "git_blob": "41d99ea7ae948462b7d400f433e13fb40cde0ca0"
+  },
+  "after": {
+    "bytes": 10931,
+    "sha256": "0760f8c99945ca0d06cc131889305881eee12f7e4885bfae2ecf34b82ba1eea0",
+    "git_blob": "362c7383a8c271f18c850b780d386a587ecdba54"
+  },
+  "source_change": {
+    "before": "    cmp [r12+PA_POOL],rax\n    jne rpa_invalid\n    cmp qword ptr [r12+PA_STAGE],1",
+    "after": "    cmp [r12+PA_POOL],rax\n    jne rpa_invalid\n    mov rax,[r13+24]\n    cmp [r12+PA_TAG],rax\n    jne rpa_invalid\n    cmp qword ptr [r12+PA_STAGE],1"
+  },
+  "required_actual_control": {
+    "start": "real pending public CALL 18->64->66->67",
+    "mutation": "test-owned current caller generation/workspace sequence/action sequence/continuation sequence all advanced together; retained PA_TAG and actual worker job unchanged",
+    "expected_admission": "raw INVALID before worker poll/drop, full pending contexts and buffers unchanged",
+    "restore": "restore exact current-call fields; then original real pending completion"
+  },
+  "actual_control_executed": false,
+  "public_async_qualified": false
+}

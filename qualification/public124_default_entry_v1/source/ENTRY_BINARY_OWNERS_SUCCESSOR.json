@@ -1,0 +1,71 @@
+{
+  "after_entry": {
+    "bytes": 12279,
+    "sha256": "cdb74f54c53bf256b3a4682c0fcecac575866e6a560727b172db5c1d886e769e"
+  },
+  "all_old124_capture_results_unchanged": true,
+  "all_original536_source_rows_unchanged": true,
+  "before_entry": {
+    "bytes": 10594,
+    "sha256": "22c9a7660c8088941323f73ad3d7ae3fb61511cf8451fe7b58cec3e70aa4d97f"
+  },
+  "exact_replacements": [
+    [
+      "import binary_root_successor\n",
+      "import binary_root_successor\nimport binary_owners_successor\n"
+    ],
+    [
+      "    binary_root_successor.verify_recipe(HERE)",
+      "    binary_owners_successor.verify_recipe(HERE)"
+    ],
+    [
+      "    successor=binary_root_successor.profile(root)",
+      "    successor=binary_owners_successor.profile(root)"
+    ],
+    [
+      "    raw=(root/\"scripts/hia_native_runtime_mcp_build.py\").read_text()",
+      "    raw=successor[\"originals\"].get(\"scripts/hia_native_runtime_mcp_build.py\",\n        (root/\"scripts/hia_native_runtime_mcp_build.py\").read_bytes()).decode()"
+    ],
+    [
+      "pin(root/\"scripts/hia_native_runtime_mcp_build.py\")=={k:proof[\"new\"][k] for k in (\"bytes\",\"sha256\")}",
+      "dict(bytes=len(raw.encode()),sha256=hashlib.sha256(raw.encode()).hexdigest())=={k:proof[\"new\"][k] for k in (\"bytes\",\"sha256\")}"
+    ],
+    [
+      "    return result\ndef prepare(source,capture):",
+      "    if successor[\"owners_active\"]:\n        result.update(source_files=544,hia_sources_changed=3,binary_owners_integrated=True,\n            public_binary_write_registered=False,additional_sources=[binary_root_successor.COMPOSITION,*successor[\"additional_sources\"]])\n    return result\ndef prepare(source,capture):"
+    ],
+    [
+      "    expected_public=binary_root_successor.PUBLIC if checked.get(\"binary_root_operation9\") else PUBLIC",
+      "    owners=checked.get(\"binary_owners_integrated\",False)\n    direct,physical,total,slots=(118,119,126,71) if owners else (116,117,124,69)\n    expected_public=binary_owners_successor.PUBLIC if owners else binary_root_successor.PUBLIC if checked.get(\"binary_root_operation9\") else PUBLIC"
+    ],
+    [
+      "build[\"physical_images\"]==117 and build[\"runtime_hia_images\"]==124\n        and build[\"direct_hia_members\"]==116 and build[\"packed_hia_members\"]==8 and build[\"fresh_member_compiles\"]==116",
+      "build[\"physical_images\"]==physical and build[\"runtime_hia_images\"]==total\n        and build[\"direct_hia_members\"]==direct and build[\"packed_hia_members\"]==8 and build[\"fresh_member_compiles\"]==direct"
+    ],
+    [
+      "model[\"physical_images\"]==117 and model[\"runtime_hia_images\"]==124\n        and len(model[\"members\"])==116 and len({r[\"name\"] for r in model[\"members\"]})==116",
+      "model[\"physical_images\"]==physical and model[\"runtime_hia_images\"]==total\n        and len(model[\"members\"])==direct and len({r[\"name\"] for r in model[\"members\"]})==direct"
+    ],
+    [
+      "model[\"extra_table\"][59:]==[\"extract_gateway\",\"extract_params\",\"extract_call\",\"extract_adapter\",None,",
+      "len(model[\"extra_table\"])==slots and model[\"extra_table\"][69:]==([\"binary_write_params\",\"binary_call_plan\"] if owners else [])\n        and model[\"extra_table\"][59:69]==[\"extract_gateway\",\"extract_params\",\"extract_call\",\"extract_adapter\",None,"
+    ],
+    [
+      "    for member in model[\"members\"]:",
+      "    if owners:\n        require(build[\"binary_write_params_slot\"]==69 and build[\"binary_call_plan_slot\"]==70\n            and build[\"public_binary_write_registered\"] is False\n            and model[\"binary_write_params_slot\"]==69 and model[\"binary_call_plan_slot\"]==70\n            and model[\"private_slots\"]==71 and model[\"private_work_high\"]==12736 and model[\"private_output_high\"]==12744\n            and model[\"public_binary_write_registered\"] is False\n            and model[\"binary_write_effects_qualified\"] is False and model[\"binary_write_audit_qualified\"] is False\n            and model[\"binary_write_lifecycle_qualified\"] is False,\"new exact layout and unclosed effect scope\")\n    for member in model[\"members\"]:"
+    ],
+    [
+      "direct_fresh=116,packed_fresh=8,physical_images=117,descriptors=69,",
+      "direct_fresh=direct,packed_fresh=8,physical_images=physical,descriptors=slots,"
+    ],
+    [
+      "    return result\ndef main():",
+      "    if owners:\n        result.update(status=\"ACTUAL_DEFAULT126_ENTRY_COMPLETE_READ_PASS\",binary_root_product_binary_identical=False,\n            binary_owners_product_binary_identical=True,public_binary_write_registered=False)\n    return result\ndef main():"
+    ]
+  ],
+  "fresh_direct_members": 118,
+  "fresh_packed_members": 8,
+  "original_budgets_unchanged": true,
+  "reused_members": 0,
+  "schema": "hepta.runtime.default126.binary-owners-reader-successor.v1"
+}

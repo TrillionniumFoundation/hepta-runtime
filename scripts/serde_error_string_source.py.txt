@@ -1,0 +1,174 @@
+def string(w:mutbuf, mode:u64) -> u64:
+    bad = False
+    pput(w, 104, 0)
+    pput(w, 112, 1)
+    if mode == 2:
+        pput(w, 88, pget(w, 80))
+        pput(w, 96, 0)
+    running = True
+    while running:
+        start = pget(w, 0)
+        at = start
+        end = pget(w, 16)
+        scanning = True
+        while scanning and at < end:
+            ch = byte(w, at)
+            if ch < 32 or ch == 34 or ch == 92:
+                scanning = False
+            else:
+                at = at + 1
+        pput(w, 0, at)
+        if at != start:
+            if bad == False and utf8(w, start, at - start) == 0:
+                bad = True
+            if mode == 1:
+                key_raw(w, start, at - start)
+            if mode == 2:
+                allocated = pget(w, 80)
+                if at - start > length(w) - allocated:
+                    return CAPACITY
+                copy_range(w, w, allocated, start, at - start)
+                pput(w, 80, allocated + at - start)
+        ch = next_byte(w)
+        if ch == 256:
+            return fail(w, 3, pget(w, 0), 0)
+        if ch == 34:
+            if bad:
+                return fail(w, 14, pget(w, 0), 0)
+            if mode == 2:
+                pput(w, 96, pget(w, 80) - pget(w, 88))
+            return 0
+        if ch != 92:
+            return fail(w, 15, pget(w, 0), 0)
+        scalar = escape(w)
+        if pget(w, 48) != 0:
+            return 0
+        if mode == 1:
+            key_scalar(w, scalar)
+        if mode == 2:
+            if capture_scalar(w, scalar) == CAPACITY:
+                return CAPACITY
+    return 0
+
+def key_raw(w:mutbuf, begin:u64, count:u64) -> u64:
+    at = pget(w, 104)
+    match = pget(w, 112)
+    index = 0
+    while match == 1 and index < count:
+        if at + index >= 30 or byte(w, begin + index) != token_byte(at + index):
+            match = 0
+        index = index + 1
+    pput(w, 104, at + count)
+    pput(w, 112, match)
+    return 0
+
+def key_scalar(w:mutbuf, scalar:u64) -> u64:
+    at = pget(w, 104)
+    if at >= 30 or scalar != token_byte(at):
+        pput(w, 112, 0)
+    pput(w, 104, at + 1)
+    return 0
+
+def escape(w:mutbuf) -> u64:
+    ch = next_byte(w)
+    if ch == 256:
+        fail(w, 3, pget(w, 0), 0)
+        return 0
+    if ch == 34 or ch == 92 or ch == 47:
+        return ch
+    if ch == 98:
+        return 8
+    if ch == 102:
+        return 12
+    if ch == 110:
+        return 10
+    if ch == 114:
+        return 13
+    if ch == 116:
+        return 9
+    if ch != 117:
+        fail(w, 11, pget(w, 0), 0)
+        return 0
+    first = hex4(w)
+    if pget(w, 48) != 0:
+        return 0
+    if first >= 56320 and first <= 57343:
+        fail(w, 19, pget(w, 0), 0)
+        return 0
+    if first < 55296 or first > 56319:
+        return first
+    ch = next_byte(w)
+    if ch == 256:
+        fail(w, 3, pget(w, 0), 0)
+        return 0
+    if ch != 92:
+        fail(w, 22, pget(w, 0), 0)
+        return 0
+    ch = next_byte(w)
+    if ch == 256:
+        fail(w, 3, pget(w, 0), 0)
+        return 0
+    if ch != 117:
+        fail(w, 22, pget(w, 0), 0)
+        return 0
+    second = hex4(w)
+    if pget(w, 48) != 0:
+        return 0
+    if second < 56320 or second > 57343:
+        fail(w, 19, pget(w, 0), 0)
+        return 0
+    return 65536 + ((first - 55296) << 10) + second - 56320
+
+def hex4(w:mutbuf) -> u64:
+    at = pget(w, 0)
+    end = pget(w, 16)
+    if end - at < 4:
+        pput(w, 0, end)
+        fail(w, 3, end, 0)
+        return 0
+    pput(w, 0, at + 4)
+    count = 0
+    value = 0
+    while count < 4:
+        ch = byte(w, at + count)
+        digit = 16
+        if ch >= 48 and ch <= 57:
+            digit = ch - 48
+        if ch >= 65 and ch <= 70:
+            digit = ch - 55
+        if ch >= 97 and ch <= 102:
+            digit = ch - 87
+        if digit == 16:
+            fail(w, 11, pget(w, 0), 0)
+            return 0
+        value = value * 16 + digit
+        count = count + 1
+    return value
+
+def capture_scalar(w:mutbuf, scalar:u64) -> u64:
+    at = pget(w, 80)
+    n = 1
+    if scalar >= 128:
+        n = 2
+    if scalar >= 2048:
+        n = 3
+    if scalar >= 65536:
+        n = 4
+    if n > length(w) - at:
+        return CAPACITY
+    if n == 1:
+        store(w, at, scalar)
+    else:
+        if n == 2:
+            store(w, at, 192 | (scalar >> 6))
+        else:
+            if n == 3:
+                store(w, at, 224 | (scalar >> 12))
+                store(w, at + 1, 128 | ((scalar >> 6) & 63))
+            else:
+                store(w, at, 240 | (scalar >> 18))
+                store(w, at + 1, 128 | ((scalar >> 12) & 63))
+                store(w, at + 2, 128 | ((scalar >> 6) & 63))
+        store(w, at + n - 1, 128 | (scalar & 63))
+    pput(w, 80, at + n)
+    return 0

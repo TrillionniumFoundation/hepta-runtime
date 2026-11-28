@@ -1,0 +1,494 @@
+{
+  "actual_reference_process": {
+    "exit_code": 0,
+    "host": "ai395",
+    "job_id": "1a1d9efbbe0-392-146c",
+    "output_complete": true,
+    "output_durable": true,
+    "state": "succeeded",
+    "timed_out": false
+  },
+  "base_runtime_commit": "9d37ed907de85887c3e7ece94a78e6a31f348ac0",
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0",
+  "complete_concurrent_scope_parity": false,
+  "composition_manifest_sha256": "850558ff412ab4e3f83d965b4e0af0ebd661b4235050bd732e93b944214e7fc6",
+  "composition_source_sha256": "a711cf40ddcc555422356639e9871708b6033b1610ea91815c61890a831bfcba",
+  "corpus": {
+    "cases": 16944,
+    "file": "scope_cases.jsonl.gz",
+    "gzip_sha256": "c3d46fd1547394c62a7a5dacc1f25106b4b53afac4f1dc7af8d25859da67cff5",
+    "metadata_sha256": "c6876cac53a2ff36fdeeae8a3ac603c71eb3f89a2c8adf5ba5e2ed904f999fc1",
+    "native_output_sha256": "6ffb0f8a65797307edea097fd5479e7635351dc5a5f98bd6b0d5773bd9984cde",
+    "raw_bytes": 48268172,
+    "raw_sha256": "eb707ea2b886d4bd75474ecc5d909fcbd009d6ef544097969059a35d2c88e715"
+  },
+  "executable_sha256": "4712c9b19079aeab438bec5895a1121de61cea193e68bcbb0203071b26e1706b",
+  "historical_failed_replay": {
+    "actual_process": {
+      "at_unix_ms": 1794657206298,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": false,
+      "exit_code": 1,
+      "job_id": "1a1d9e7ba4d-392-144a",
+      "launch_nonce": "4c5ea7e58212b4e0e871756e551154ce",
+      "log_bytes": {
+        "stderr": {
+          "seen": 244,
+          "stored": 244
+        },
+        "stdout": {
+          "seen": 1347,
+          "stored": 1347
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "failed",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    },
+    "original_report": {
+      "corpus_raw_sha256": "62fe7c4127503580f553b32293e5a8d05dfe32dea0bd6fb3d6be6552f644a14b",
+      "exit_code": 101,
+      "expected_cases": 16992,
+      "oracle_result": null,
+      "source_sha256": {
+        "native-corpus-final.json": "e46e12fc00b55494f724afd5ce6c0cf97fbe0fe2feebd5cc7af6a782dbc72b9f",
+        "oracle_operation_scope.rs": "8cc43dc0f42b18e77fa06390f566a61837acfb83c3dcc1ef506c65b7585bc19f",
+        "scope_cases.final.jsonl.xz": "5d62fbba7ec5422609ea7ced11ceee0a34ff87edb6527ceea39c3d099ba61d63",
+        "scope_oracle/Cargo.lock": "ec018357b46a809307e5cf94e34fa1e666ac8f23bdf12a9129ff20d2befa35a9",
+        "scope_oracle/Cargo.toml": "e34e71bc0b2c1efb788b8c5f7697a6e1963d096111873a0d587ea1436a99fc9f",
+        "scope_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+        "scope_oracle/original_access.rs": "bcaea357155571b76664bccb8448817a7af242a2df8b39e5e16b3908f47bac11",
+        "src/mcp/runtime/operation_crypto.rs": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+        "target/release/hia-operation-scope-reference": "cde9eec6c1c6f40fbaa0aa191854cb4210845c083af8da3f5cf6e3f6856b5fac"
+      },
+      "sources_unchanged": true,
+      "status": "FAIL",
+      "stderr_sha256": "48b50f7c8b5fca8c1bc5b38a3ed751066a17b00accd1414c1bd2307c7741da10",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "timed_out": false,
+      "wall_seconds": 0.04124668403528631
+    },
+    "original_stderr": "\nthread 'main' (104638) panicked at ../oracle_operation_scope.rs:152:9:\nassertion `left == right` failed: entropy count at row 16438\n  left: Some(2)\n right: Some(0)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+    "reason": "The first exporter omitted injected post-reservation calls but retained a later release row with their entropy state; corrected by selecting entire fault sessions before execution. HIA source and Rust original remained unchanged.",
+    "retained_receipt_sha256": "7f25c8fb3eb97e48e23399dbfc9da5ca1b0977b67e3124c10001fcda81ae57b4"
+  },
+  "image_sha256": "5b42ded0a8148025c2db87ef0ec900dd519d245819a05d5fc7e8661aec29c996",
+  "integration_qualification": "A separate fresh source-bound aggregate gate and required locked Cargo replay remain necessary after integration. This observation covers the isolated component and actual original Rust owner.",
+  "native_control_evidence": {
+    "capacity_controls": {
+      "file": "scope_capacity_controls.jsonl.gz",
+      "gzip_bytes": 521,
+      "gzip_sha256": "f59bb81c440928a466adb2ab448bbe76f3e2e1c80723ae7361d6252a545f9b7c",
+      "native_rows": 3,
+      "raw_bytes": 3019,
+      "raw_sha256": "4ba8dac7d0a4afb80ef44a4346e9077b138b10615f264b4e6e16dd40334a1b03"
+    },
+    "excluded_sessions": [
+      {
+        "first_native_ordinal": 16390,
+        "injected_rows": 1,
+        "last_native_ordinal": 16391,
+        "native_rows": 2,
+        "reason": "phase 1: replace the child result length",
+        "session": 4
+      },
+      {
+        "first_native_ordinal": 16392,
+        "injected_rows": 1,
+        "last_native_ordinal": 16393,
+        "native_rows": 2,
+        "reason": "phase 2: replace the child result length",
+        "session": 5
+      },
+      {
+        "first_native_ordinal": 16394,
+        "injected_rows": 1,
+        "last_native_ordinal": 16395,
+        "native_rows": 2,
+        "reason": "phase 3: replace the child result length",
+        "session": 6
+      },
+      {
+        "first_native_ordinal": 16396,
+        "injected_rows": 1,
+        "last_native_ordinal": 16398,
+        "native_rows": 3,
+        "reason": "phase 4: replace the child result length",
+        "session": 7
+      },
+      {
+        "first_native_ordinal": 16399,
+        "injected_rows": 1,
+        "last_native_ordinal": 16401,
+        "native_rows": 3,
+        "reason": "phase 5: replace the child result length",
+        "session": 8
+      },
+      {
+        "first_native_ordinal": 16402,
+        "injected_rows": 1,
+        "last_native_ordinal": 16404,
+        "native_rows": 3,
+        "reason": "phase 6: replace the child result length",
+        "session": 9
+      },
+      {
+        "first_native_ordinal": 16405,
+        "injected_rows": 1,
+        "last_native_ordinal": 16407,
+        "native_rows": 3,
+        "reason": "phase 7: replace the child result length",
+        "session": 10
+      },
+      {
+        "first_native_ordinal": 16408,
+        "injected_rows": 1,
+        "last_native_ordinal": 16410,
+        "native_rows": 3,
+        "reason": "phase 8: replace the child result length",
+        "session": 11
+      },
+      {
+        "first_native_ordinal": 16411,
+        "injected_rows": 1,
+        "last_native_ordinal": 16413,
+        "native_rows": 3,
+        "reason": "phase 9: replace the child result length",
+        "session": 12
+      },
+      {
+        "first_native_ordinal": 16414,
+        "injected_rows": 1,
+        "last_native_ordinal": 16416,
+        "native_rows": 3,
+        "reason": "phase 10: replace the child result length",
+        "session": 13
+      },
+      {
+        "first_native_ordinal": 16417,
+        "injected_rows": 1,
+        "last_native_ordinal": 16419,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 0",
+        "session": 14
+      },
+      {
+        "first_native_ordinal": 16420,
+        "injected_rows": 1,
+        "last_native_ordinal": 16422,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 8",
+        "session": 15
+      },
+      {
+        "first_native_ordinal": 16423,
+        "injected_rows": 1,
+        "last_native_ordinal": 16425,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 16",
+        "session": 16
+      },
+      {
+        "first_native_ordinal": 16426,
+        "injected_rows": 1,
+        "last_native_ordinal": 16428,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 24",
+        "session": 17
+      },
+      {
+        "first_native_ordinal": 16429,
+        "injected_rows": 1,
+        "last_native_ordinal": 16431,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 32",
+        "session": 18
+      },
+      {
+        "first_native_ordinal": 16432,
+        "injected_rows": 1,
+        "last_native_ordinal": 16434,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 40",
+        "session": 19
+      },
+      {
+        "first_native_ordinal": 16435,
+        "injected_rows": 1,
+        "last_native_ordinal": 16437,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 48",
+        "session": 20
+      },
+      {
+        "first_native_ordinal": 16438,
+        "injected_rows": 1,
+        "last_native_ordinal": 16440,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 56",
+        "session": 21
+      },
+      {
+        "first_native_ordinal": 16441,
+        "injected_rows": 1,
+        "last_native_ordinal": 16443,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 64",
+        "session": 22
+      },
+      {
+        "first_native_ordinal": 16444,
+        "injected_rows": 1,
+        "last_native_ordinal": 16446,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 72",
+        "session": 23
+      },
+      {
+        "first_native_ordinal": 16447,
+        "injected_rows": 1,
+        "last_native_ordinal": 16449,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 88",
+        "session": 24
+      },
+      {
+        "first_native_ordinal": 16450,
+        "injected_rows": 1,
+        "last_native_ordinal": 16452,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 96",
+        "session": 25
+      },
+      {
+        "first_native_ordinal": 16453,
+        "injected_rows": 1,
+        "last_native_ordinal": 16455,
+        "native_rows": 3,
+        "reason": "phase 4: corrupt call-footer word at byte 104",
+        "session": 26
+      },
+      {
+        "first_native_ordinal": 16456,
+        "injected_rows": 1,
+        "last_native_ordinal": 16458,
+        "native_rows": 3,
+        "reason": "phase 4: child result has nonzero bits above u32",
+        "session": 27
+      },
+      {
+        "first_native_ordinal": 16460,
+        "injected_rows": 1,
+        "last_native_ordinal": 16464,
+        "native_rows": 5,
+        "reason": "phase 8: replace record seal completion after nonce reservation",
+        "session": 29
+      }
+    ],
+    "fault_histories": {
+      "file": "scope_fault_sessions.jsonl.gz",
+      "gzip_bytes": 2145,
+      "gzip_sha256": "d5d6e27b97f5ebcec678d70ede5b54c8123e48c69aa602590351ba9bb776e4d9",
+      "native_rows": 74,
+      "raw_bytes": 45349,
+      "raw_sha256": "4092c61778bc20ed542a2a107749df07d5d621fe2e8e0cbef849f256f38ae776"
+    },
+    "selection_policy": "entire session selected when a named child-result fault is installed, before observing the result",
+    "total_direct_native_rows": 17021
+  },
+  "native_observation": {
+    "exit_code": 0,
+    "manifest_sha256": "850558ff412ab4e3f83d965b4e0af0ebd661b4235050bd732e93b944214e7fc6",
+    "native_scope_counts": {
+      "actual_elf_fatal_contract_controls": 1,
+      "actual_elf_processes": 4,
+      "actual_elf_requests": 27,
+      "actual_elf_responses": 26,
+      "authentication_reference_refusals": 16,
+      "binding_reference_cases": 36,
+      "capacity_refusals": 3,
+      "child_contract_refusals": 24,
+      "direct_requests_5": 16384,
+      "direct_requests_6": 588,
+      "direct_requests_7": 49,
+      "direct_sessions": 49,
+      "duplicate_nonce_reference_cases": 3,
+      "entropy_failure_reference_cases": 1,
+      "exact_capacity_successes": 104,
+      "fault_session_prefix_rows_excluded": 47,
+      "fault_sessions_excluded_from_rust": 25,
+      "invalid_binding_input_reference_cases": 36,
+      "invalid_token_reference_cases": 166,
+      "malformed_frame_refusals": 109,
+      "native_entries_1": 683,
+      "native_entries_2": 215,
+      "native_entries_3": 230,
+      "native_entries_4": 127,
+      "native_entries_5": 16510,
+      "native_entries_6": 1099,
+      "native_entries_7": 147,
+      "nonce_budget_reference_refusals": 1,
+      "nonce_budget_setup_reservations": 16384,
+      "open_reference_cases": 55,
+      "post_reservation_refusal_controls": 2,
+      "preflight_reference_refusals": 4,
+      "seal_reference_cases": 57,
+      "stdio_failure_reference_cases": 4,
+      "stdio_success_reference_cases": 4,
+      "verified_constructor_reference_cases": 6
+    },
+    "source_sha256": {
+      "native/operation_scope.hepta": "10a46116ef61f2026f561d2199021c187bfbdf666bab86d04735341f522637a0",
+      "native/operation_scope_abi.md": "c09e570d72b0e33997fe88660f03969fb1b71618548adfa7ec3c2427980aa0f8",
+      "native/operation_scope_composition.json": "a711cf40ddcc555422356639e9871708b6033b1610ea91815c61890a831bfcba",
+      "scripts/hia_native_scope_build.py": "ceb53b830eafed930fee9db4c513132969bc46626ede9aa0b3a27a599b637c69",
+      "tests/hia_native/oracle_operation_scope.rs": "8cc43dc0f42b18e77fa06390f566a61837acfb83c3dcc1ef506c65b7585bc19f",
+      "tests/hia_native/scope_entropy_fixture.hepta": "cf33465aa3e26fde3e7c28d092f566000d2e0e01eb824cfbc4bf8f9325b23675",
+      "tests/hia_native/scope_hex_transport.hepta": "b4a6aab4cb9657db2c3cd3879ab2492565d636c6cbfeb345e4d81ad7a6713eb5",
+      "tests/hia_native/scope_oracle/Cargo.lock": "ec018357b46a809307e5cf94e34fa1e666ac8f23bdf12a9129ff20d2befa35a9",
+      "tests/hia_native/scope_oracle/Cargo.toml": "e34e71bc0b2c1efb788b8c5f7697a6e1963d096111873a0d587ea1436a99fc9f",
+      "tests/hia_native/scope_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+      "tests/hia_native/scope_oracle/original_access.rs": "bcaea357155571b76664bccb8448817a7af242a2df8b39e5e16b3908f47bac11",
+      "tests/hia_native/test_operation_scope.py": "840b798dcdb10cbf0b3020ffadbde123e494bb4d2a381ea645d3feba87200fa7"
+    },
+    "sources_unchanged": true,
+    "status": "PASS",
+    "stderr_sha256": "4dfbc4b99063f1f1c6f1a8492aa78fd475a7bfe56a3cca249a7a01bdfd8c4441",
+    "stderr_tail": "ds_u128_and_authentication (__main__.ScopeTests.test_record_boundaries_kinds_u128_and_authentication) ... ok\ntest_seal_open_and_exact_order (__main__.ScopeTests.test_seal_open_and_exact_order) ... ok\ntest_shared_nonce_rejection_and_distinct_namespaces (__main__.ScopeTests.test_shared_nonce_rejection_and_distinct_namespaces) ... ok\ntest_stdio_four_fills_failure_cleanup_and_retry (__main__.ScopeTests.test_stdio_four_fills_failure_cleanup_and_retry) ... ok\ntest_token_admission_and_binding_limits (__main__.ScopeTests.test_token_admission_and_binding_limits) ... ok\ntest_token_keys_bindings_and_shared_serial_lifetime (__main__.ScopeTests.test_token_keys_bindings_and_shared_serial_lifetime) ... ok\n\n----------------------------------------------------------------------\nRan 12 tests in 19.565s\n\nOK\n",
+    "stdout_sha256": "d8d860137815f56523a17d2d812e207b93594c088a438213dfefaac46cc5dce2",
+    "test_groups": 12,
+    "timed_out": false,
+    "wall_seconds": 19.758483829005854
+  },
+  "original_compilation": {
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "elapsed_seconds": 4.978424052009359,
+    "executable_sha256": "cde9eec6c1c6f40fbaa0aa191854cb4210845c083af8da3f5cf6e3f6856b5fac",
+    "exit_code": 0,
+    "original_sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+    "source_sha256": {
+      "oracle_operation_scope.rs": "8cc43dc0f42b18e77fa06390f566a61837acfb83c3dcc1ef506c65b7585bc19f",
+      "scope_oracle/Cargo.lock": "ec018357b46a809307e5cf94e34fa1e666ac8f23bdf12a9129ff20d2befa35a9",
+      "scope_oracle/Cargo.toml": "e34e71bc0b2c1efb788b8c5f7697a6e1963d096111873a0d587ea1436a99fc9f",
+      "scope_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+      "scope_oracle/original_access.rs": "bcaea357155571b76664bccb8448817a7af242a2df8b39e5e16b3908f47bac11"
+    },
+    "status": "PASS",
+    "stderr_sha256": "519f49197b33e75c694886023c111dae7397598d5f3b86f9325b7270d33b8b1a",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "original_runtime_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+  "original_rust_observation": {
+    "corpus_raw_sha256": "eb707ea2b886d4bd75474ecc5d909fcbd009d6ef544097969059a35d2c88e715",
+    "excluded_native_controls": {
+      "capacity_rows": 3,
+      "fault_rows": 74,
+      "fault_sessions": 25,
+      "passed_to_original_oracle": false
+    },
+    "exit_code": 0,
+    "expected_cases": 16944,
+    "oracle_result": {
+      "adapter_only_rows": 137,
+      "fixture_control_rows": 24,
+      "native_cases_added_by_replay": 0,
+      "original_binding_constructors": 16384,
+      "original_clones": 4,
+      "original_domain_rows": 16807,
+      "original_entropy_fixture_fills": 92,
+      "original_entropy_fixture_requested_bytes": 1704,
+      "original_idempotency_bindings": 23,
+      "original_last_releases": 18,
+      "original_nonce_setup_reservations": 16384,
+      "original_opens": 73,
+      "original_owner_calls": 33191,
+      "original_policy_bindings": 24,
+      "original_releases": 22,
+      "original_request_bindings": 25,
+      "original_seals": 64,
+      "original_stdio_constructors": 9,
+      "original_verified_constructors": 179,
+      "output_sha256": "6ffb0f8a65797307edea097fd5479e7635351dc5a5f98bd6b0d5773bd9984cde",
+      "refusal_cases": 344,
+      "rust_oracle_cases": 16944,
+      "sessions": 24,
+      "status": "PASS"
+    },
+    "schema": "hepta.runtime.operation-scope-original-reference-observation.v1",
+    "source_sha256": {
+      "ledger-native-corpus.json": "c6876cac53a2ff36fdeeae8a3ac603c71eb3f89a2c8adf5ba5e2ed904f999fc1",
+      "ledger-scope_capacity_controls.jsonl.gz": "f59bb81c440928a466adb2ab448bbe76f3e2e1c80723ae7361d6252a545f9b7c",
+      "ledger-scope_fault_sessions.jsonl.gz": "d5d6e27b97f5ebcec678d70ede5b54c8123e48c69aa602590351ba9bb776e4d9",
+      "oracle_operation_scope.rs": "8cc43dc0f42b18e77fa06390f566a61837acfb83c3dcc1ef506c65b7585bc19f",
+      "scope_cases.complete.jsonl": "eb707ea2b886d4bd75474ecc5d909fcbd009d6ef544097969059a35d2c88e715",
+      "scope_oracle/Cargo.lock": "ec018357b46a809307e5cf94e34fa1e666ac8f23bdf12a9129ff20d2befa35a9",
+      "scope_oracle/Cargo.toml": "e34e71bc0b2c1efb788b8c5f7697a6e1963d096111873a0d587ea1436a99fc9f",
+      "scope_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+      "scope_oracle/original_access.rs": "bcaea357155571b76664bccb8448817a7af242a2df8b39e5e16b3908f47bac11",
+      "src/mcp/runtime/operation_crypto.rs": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+      "target/release/hia-operation-scope-reference": "cde9eec6c1c6f40fbaa0aa191854cb4210845c083af8da3f5cf6e3f6856b5fac"
+    },
+    "sources_unchanged": true,
+    "status": "PASS",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "54bbfb4e6163dac649a6054e81575e8561e0f0862eddc66cbfcebfe042b3a756",
+    "timed_out": false,
+    "wall_seconds": 0.24533578706905246
+  },
+  "original_source": "src/mcp/runtime/operation_crypto.rs",
+  "original_source_blob": "0c07318a6d85efb920069ce4f190c4f2ed56e84f",
+  "original_source_sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+  "production_handler_coverage_changed": false,
+  "real_os_entropy_connected": false,
+  "reference_domain_accounting": {
+    "actual_elf_deliberate_fatal_exits": 1,
+    "actual_elf_processes": 4,
+    "actual_elf_requests": 27,
+    "actual_elf_responses": 26,
+    "adapter_only_replay_rows": 137,
+    "direct_native_rows": 17021,
+    "excluded_native_capacity_rows": 3,
+    "excluded_native_fault_history_rows": 74,
+    "excluded_native_fault_sessions": 25,
+    "fixture_control_rows_within_adapter_domain": 24,
+    "native_requests_added_by_rust_replay": 0,
+    "original_nonce_preparation_owner_calls": 32768,
+    "original_nonce_preparation_rows": 16384,
+    "original_replay_rows": 16944,
+    "original_scope_owner_calls": 423,
+    "original_scope_rows": 423
+  },
+  "retained_observations": {
+    "native-observation.json": "4cfb3fa8180650071958fcf24cadb316be29a26960e215b3df2bb1781b880f15",
+    "native.stderr": "4dfbc4b99063f1f1c6f1a8492aa78fd475a7bfe56a3cca249a7a01bdfd8c4441",
+    "native.stdout": "d8d860137815f56523a17d2d812e207b93594c088a438213dfefaac46cc5dce2",
+    "original-process-receipts.json": "2382043dfcb268460983e8d23ecc5e160148df6ba933f939e60a03262a1b5f4f",
+    "original-replay-observation.json": "3028ea156397cd0702ed935843c79777b54686b4874fc05229597c117b0aa5bb",
+    "original-replay.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "original-replay.stdout": "54bbfb4e6163dac649a6054e81575e8561e0f0862eddc66cbfcebfe042b3a756"
+  },
+  "schema": "hepta.runtime.operation-scope-original-comparison.v1",
+  "scope": "Private serial scope creation, binding, seal/open ordering, shared reference lifetime and key/nonce destruction. Trusted deterministic entropy fixture; concurrent shared capabilities and OS entropy wiring remain separate.",
+  "serial_private_scope_lifetime_qualified": true,
+  "source_sha256": "10a46116ef61f2026f561d2199021c187bfbdf666bab86d04735341f522637a0",
+  "status": "PASS",
+  "whole_runtime_replaced": false,
+  "workspace_proof": "All scope temporary bytes after each terminal request are zero. Successful final release clears the scope private region and nonce child; KDF2048, AEAD512 and record private prefix are also inspected. Fatal completion clears scope keys and retires the bundle. Caller inputs, machine registers/stack and concurrent capability safety are outside these checks."
+}

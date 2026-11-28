@@ -1,0 +1,90 @@
+name: Current124 ordinary publisher complete domain
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication124-ordinary-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime source paths
+        run: |
+          printf '%s\n' "PO_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication124_ordinary_ci" "PO_CAPTURE=$RUNNER_TEMP/ordinary124-source-capture" "PO_EXPORT=$RUNNER_TEMP/ordinary124-source-export" "PO_DRIVER=$RUNNER_TEMP/ordinary124-source-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication124_ordinary_ci
+      - name: Verify every source and exact original capture reader inverses
+        run: |
+          mkdir "$PO_CAPTURE"
+          python3 -I -S -B "$PO_SOURCE/recipe/check_current.py" > "$PO_DRIVER.stdout" 2> "$PO_DRIVER.stderr"
+          cp "$PO_DRIVER.stdout" "$PO_CAPTURE/SOURCE_CHECK.json"
+          cat "$PO_DRIVER.stdout"
+      - name: Preserve source result and any failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PO_SOURCE/recipe/archive.py" pack --source "$PO_SOURCE" --capture "$PO_CAPTURE" --output "$PO_EXPORT" --driver-prefix "$PO_DRIVER"
+          cat "$PO_DRIVER.stderr"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ordinary124-source-${{ github.sha }}
+          path: ${{ env.PO_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  native:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [carrier_absent, carrier_body, carrier_capabilities, carrier_catalog, carrier_configured, carrier_denied, carrier_fence_required, carrier_typed, stdio_absent, stdio_configured, stdio_denied, stdio_fence_required]
+    steps:
+      - name: Set exact independent capture paths
+        run: |
+          printf '%s\n' "PO_SOURCE=$GITHUB_WORKSPACE/candidate/tests/hia_native/publication124_ordinary_ci" "PO_BUILD=$GITHUB_WORKSPACE/build-recipe/tests/hia_native/publication_duplex_build_v3" "PO_PUBLIC=$GITHUB_WORKSPACE/public-reader/tests/hia_native/publication_duplex_complete_read_v2" "PO_CAPTURE=$RUNNER_TEMP/ordinary124-current-capture" "PO_STAGE=$RUNNER_TEMP/ordinary124-complete-dependencies" "PO_EXPORT=$RUNNER_TEMP/ordinary124-current-export" "PO_DRIVER=$RUNNER_TEMP/ordinary124-current-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication124_ordinary_ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: build-recipe
+          ref: f4a348f6661aec513ac63e1807ff697e81704b3e
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_build_v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: public-reader
+          ref: 61066b30cb274d56b48e7dd24b33fa1aaede0c60
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/publication_duplex_complete_read_v2
+      - name: Whole actual graph admission and two current native protocol lanes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$PO_SOURCE/recipe/run_current.py" --output "$PO_CAPTURE" --stage "$PO_STAGE" --build-recipe "$PO_BUILD" --public-reader "$PO_PUBLIC" --group "${{ matrix.group }}" > "$PO_DRIVER.stdout" 2> "$PO_DRIVER.stderr"
+          cat "$PO_DRIVER.stdout"
+      - name: Preserve every completed or failed capture and unchanged original role
+        if: always()
+        run: |
+          python3 -I -S -B "$PO_SOURCE/recipe/archive.py" pack --source "$PO_SOURCE" --capture "$PO_CAPTURE" --output "$PO_EXPORT" --driver-prefix "$PO_DRIVER"
+          cat "$PO_DRIVER.stderr"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ordinary124-${{ matrix.group }}-${{ github.sha }}
+          path: ${{ env.PO_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

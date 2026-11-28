@@ -1,0 +1,79 @@
+{
+  ".github/workflows/hia-runtime-native.yml": {
+    "after": {
+      "bytes": 32951,
+      "git_blob": "ee67a8c64d1f2c6d510977554b267399d0c1e9b9",
+      "sha256": "7d7e971f58c1d2b7295cc6901dbebccf6a87556de6b72fe9bb20c20c2f598d83"
+    },
+    "before": {
+      "bytes": 32706,
+      "git_blob": "224cc35e3f669cc0fabf63269c562c426173b2b7",
+      "sha256": "8969de2b2b702751fa844e12b344aa9aa092e6ca81537326a7b85d3cb5e609c7"
+    },
+    "exact_inverse": true
+  },
+  ".github/workflows/hia-runtime-original-shard.yml": {
+    "after": {
+      "bytes": 5255,
+      "git_blob": "5b84e5df1d6caae2f3bb4d183f3afec9b0e533a3",
+      "sha256": "750f054cf52309e521c01b7852e5338933bb3724cb065cfab714d5026dec5926"
+    },
+    "before": {
+      "bytes": 5221,
+      "git_blob": "050e27b7a7eacea6906668abc2d5ac399c2f7edd",
+      "sha256": "a2de1c23edda6444056005cb8d203a07959d76fa663c5a217dccedfd3112844f"
+    },
+    "exact_inverse": true
+  },
+  "tests/hia_native/historical_public58/PROFILE.json": {
+    "after": {
+      "bytes": 185820,
+      "git_blob": "457f409158827899df0a10dbabe638c2d5cdb9ef",
+      "sha256": "37554113b92faca455a8d453d9845bb2286a331d0328f089aa3370a82524626f"
+    },
+    "before": {
+      "bytes": 185820,
+      "git_blob": "0e5f8936244fa143cfd022700f3af4e9cd14547f",
+      "sha256": "ff83069b0f419ad7d0b11efec90a0ba73a532b104cf6485b7b1512e80c615d8e"
+    },
+    "exact_inverse": true
+  },
+  "tests/hia_native/test_native_pipeline.py": {
+    "added_methods": [
+      "test_workflow_failed_only_and_full_retries_preserve_distinct_producer_batches",
+      "test_workflow_failure_diagnostics_keep_each_actual_execution_attempt",
+      "test_workflow_recomputed_consumer_attempts_are_rejected"
+    ],
+    "addition": {
+      "bytes": 8224,
+      "git_blob": "9c6f793392bd6a99d764de9b9efdac6cbd8a134c",
+      "sha256": "c5058bfffae99cf33d29cf2643080f44d24937423cf4fee3980698b555abffc6"
+    },
+    "after": {
+      "bytes": 101555,
+      "git_blob": "8a6e99f425dfec1c9e2f0e8e2947862349b327b8",
+      "sha256": "2bdbfbba3c789b5cdbba367e2044dce91f69c340a355263fddd2487f2614c5a8"
+    },
+    "before": {
+      "bytes": 93310,
+      "git_blob": "c1bf47ae105328f76e33ad38533caf6a35865f27",
+      "sha256": "874486b176a4a9d5bde84ef4980e7f9e2d3604397182f8e58b882ec08573c1fa"
+    },
+    "exact_inverse": true,
+    "original_methods": 55,
+    "replacements": [
+      [
+        "--invocation \"${{ github.run_id }}-${{ github.run_attempt }}\"",
+        "--invocation \"${{ needs.prepare.outputs.invocation }}\""
+      ],
+      [
+        "name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}",
+        "name: hia-native-build-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}"
+      ],
+      [
+        "name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-${{ matrix.group }}",
+        "name: hia-native-shard-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}-${{ matrix.group }}"
+      ]
+    ]
+  }
+}

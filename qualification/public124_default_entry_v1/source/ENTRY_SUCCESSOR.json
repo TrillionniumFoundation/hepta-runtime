@@ -1,0 +1,53 @@
+{
+  "after_entry_sha256": "22c9a7660c8088941323f73ad3d7ae3fb61511cf8451fe7b58cec3e70aa4d97f",
+  "all_fresh_compile_and_process_requirements_unchanged": true,
+  "before_entry_sha256": "995a5f566934b87a2955dc84785a7b27a3c0f996cf93a36e44f08e776adc0918",
+  "budgets_unchanged": true,
+  "exact_replacements": [
+    [
+      "import readonly\n",
+      "import readonly\nimport binary_root_successor\n"
+    ],
+    [
+      "def inputs():\n",
+      "def inputs():\n    binary_root_successor.verify_recipe(HERE)\n"
+    ],
+    [
+      "    rows,proof=inputs()\n",
+      "    rows,proof=inputs()\n    successor=binary_root_successor.profile(root)\n"
+    ],
+    [
+      "        raw=path.read_bytes()\n",
+      "        raw=successor[\"originals\"].get(str(name),path.read_bytes())\n"
+    ],
+    [
+      "    binding=(root/\"native/runtime_mcp_sources.json\").read_text()\n",
+      "    binding=successor[\"originals\"].get(\"native/runtime_mcp_sources.json\",\n        (root/\"native/runtime_mcp_sources.json\").read_bytes()).decode()\n"
+    ],
+    [
+      "    return dict(source_files=536,source_binding=pin(root/\"native/runtime_mcp_sources.json\"),hia_sources_changed=0,\n        runtime_boundary_changed=False,exact_inverse=True)\n",
+      "    result=dict(source_files=536,source_binding=pin(root/\"native/runtime_mcp_sources.json\"),hia_sources_changed=0,\n        runtime_boundary_changed=False,exact_inverse=True)\n    if successor[\"active\"]:\n        result.update(source_files=537,hia_sources_changed=1,runtime_boundary_changed=True,\n            binary_root_operation9=True,additional_sources=[binary_root_successor.COMPOSITION])\n    return result\n"
+    ],
+    [
+      "    require(check_source(target)==checked,\"complete copied source\")\n",
+      "    for name in checked.get(\"additional_sources\",[]):\n        src=source/name;dst=target/name;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst)\n    require(check_source(target)==checked,\"complete copied source\")\n"
+    ],
+    [
+      "    checked=check_source(source)\n    require(decode((capture/\"SOURCE.json\").read_bytes())==checked,\"recorded preparation\")\n",
+      "    checked=check_source(source)\n    expected_public=binary_root_successor.PUBLIC if checked.get(\"binary_root_operation9\") else PUBLIC\n    require(decode((capture/\"SOURCE.json\").read_bytes())==checked,\"recorded preparation\")\n"
+    ],
+    [
+      "    require(binary==manifest.parent/model[\"elf\"] and pin(binary)==PUBLIC\n        and model[\"elf_sha256\"]==PUBLIC[\"sha256\"] and model[\"elf_bytes\"]==PUBLIC[\"bytes\"]\n        and build[\"elf_sha256\"]==PUBLIC[\"sha256\"] and build[\"elf_bytes\"]==PUBLIC[\"bytes\"],",
+      "    require(binary==manifest.parent/model[\"elf\"] and pin(binary)==expected_public\n        and model[\"elf_sha256\"]==expected_public[\"sha256\"] and model[\"elf_bytes\"]==expected_public[\"bytes\"]\n        and build[\"elf_sha256\"]==expected_public[\"sha256\"] and build[\"elf_bytes\"]==expected_public[\"bytes\"],"
+    ],
+    [
+      "    return dict(status=\"ACTUAL_DEFAULT124_ENTRY_COMPLETE_READ_PASS\",source=checked,public_binary=PUBLIC,\n        direct_fresh=116,packed_fresh=8,physical_images=117,descriptors=69,retained124_public_binary_identical=True,ordinary686_on124_pending=True,\n        hia_executed=False,rust_executed=False,full_async=False,full_sdk=False,production_installed=False)\n",
+      "    result=dict(status=\"ACTUAL_DEFAULT124_ENTRY_COMPLETE_READ_PASS\",source=checked,public_binary=expected_public,\n        direct_fresh=116,packed_fresh=8,physical_images=117,descriptors=69,retained124_public_binary_identical=True,ordinary686_on124_pending=True,\n        hia_executed=False,rust_executed=False,full_async=False,full_sdk=False,production_installed=False)\n    if checked.get(\"binary_root_operation9\"):\n        result.update(retained124_public_binary_identical=False,binary_root_product_binary_identical=True)\n    return result\n"
+    ]
+  ],
+  "old_capture_results_unchanged": true,
+  "schema": "hepta.runtime.default124.binary-root-reader-successor.v1",
+  "scope": "Exact current op9 source inverse; preserve complete prior 124-source reader and qualification requirements.",
+  "workflow_gates_unchanged": true,
+  "workflow_manifest_pin_occurrences_updated": 2
+}

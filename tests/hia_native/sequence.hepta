@@ -1,0 +1,14 @@
+hia-asm.v1 hepta.hia.program.v8 runtime_transport_sequence
+fn f0(source:readbuf,output:mutbuf,workspace:mutbuf) -> (u32) effects(read,write,trap) entry(entry)
+block entry(source:readbuf,output:mutbuf,workspace:mutbuf)
+  zero:usize = const() {"value":0}
+  one:u8 = const() {"value":1}
+  offset:u8 = const() {"value":48}
+  old:u8 = buffer.load(workspace,zero)
+  next:u8 = int.add.wrap(old,one)
+  encoded:u8 = int.add.wrap(next,offset)
+  _ = buffer.store(workspace,zero,next)
+  _ = buffer.store(output,zero,encoded)
+  result:u32 = const() {"value":1}
+  ret(result)
+end
