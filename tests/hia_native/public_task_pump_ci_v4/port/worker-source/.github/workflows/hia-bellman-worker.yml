@@ -1,0 +1,46 @@
+name: HIA Bellman worker original writer trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-bellman-worker-qualification-6780-20261116
+
+permissions:
+  contents: read
+
+jobs:
+  writer_trace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: '1.95.0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the exact original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Capture actual original writer calls
+        run: |
+          umask 077
+          python -I -S -B tests/hia_native/blocking_worker_ci/capture_writer_trace.py \
+            --source-root "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/bellman-writer-trace"
+      - name: Preserve the exact success or failure
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/bellman-writer-trace" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-writer-trace.tar.gz" bellman-writer-trace
+            sha256sum "$RUNNER_TEMP/bellman-writer-trace.tar.gz" > "$RUNNER_TEMP/bellman-writer-trace.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-writer-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bellman-writer-trace.tar.gz
+            ${{ runner.temp }}/bellman-writer-trace.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error
