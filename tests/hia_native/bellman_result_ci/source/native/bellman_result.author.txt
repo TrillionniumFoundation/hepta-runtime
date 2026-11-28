@@ -1,0 +1,1096 @@
+
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 64:
+        return 4294967295
+    if get(s, 0) != 3544422320666591816 or get(s, 8) != 1:
+        return 4294967295
+    if get(s, 40) != 0 or get(s, 48) != 0 or get(s, 56) != 0:
+        return 4294967295
+    core = get(s, 16)
+    commitment = get(s, 24)
+    if core < 200 or core > 295040 or commitment < 128 or commitment > 8388736:
+        return 4294967295
+    if length(s) != 64 + core + commitment:
+        return 4294967295
+    if finite(get(s, 32)) == 0 or (get(s, 32) >> 63) != 0:
+        return 4294967295
+    if valid_core(s, core) == 0 or valid_commitment(s, 64 + core, commitment) == 0:
+        return 4294967295
+    if length(o) < 64:
+        return 4294967294
+    count = get(s, 72)
+    capacity = 20480 + count * 256
+    if length(w) < capacity:
+        return header(o, 2, 0, capacity)
+    put(w, 12288, 0)
+    put(w, 12296, 0)
+    render(s, w, 64 + core)
+    if w_get(w, 12296) != 0:
+        return 4294967292
+    size = w_get(w, 12288)
+    if length(o) < 64 + size:
+        return header(o, 3, 0, 64 + size)
+    header(o, 0, size, 0)
+    index = 0
+    while index < size:
+        store(o, 64 + index, byte(w, 16384 + index))
+        index = index + 1
+    return 64 + size
+
+def valid_core(s:readbuf, extent:u64) -> u64:
+    if get(s, 64) != 3552861063634569544:
+        return 0
+    count = get(s, 72)
+    if count == 0 or count > 4096 or extent != 128 + count * 72:
+        return 0
+    legal = get(s, 80)
+    continuing = get(s, 88)
+    branches = get(s, 96)
+    if legal < count or legal > count * 6 or continuing > count * 2:
+        return 0
+    if branches > 24576 or branches > continuing * 3 or get(s, 104) > branches:
+        return 0
+    if get(s, 120) != count * 256 + legal * 64 + branches * 128:
+        return 0
+    if get(s, 128) > get(s, 136) or get(s, 136) > count or get(s, 144) > 1:
+        return 0
+    if get(s, 144) == 0 and get(s, 152) != 0:
+        return 0
+    if finite(get(s, 112)) == 0 or finite(get(s, 152)) == 0 or finite(get(s, 160)) == 0:
+        return 0
+    if get(s, 168) != 0 or get(s, 176) != 0 or get(s, 184) != 0:
+        return 0
+    index = 0
+    actions = 0
+    while index < count:
+        at = 192 + index * 72
+        mask = get(s, at)
+        selected = get(s, at + 8)
+        if mask == 0 or mask > 63 or selected > 5:
+            return 0
+        if ((mask >> selected) & 1) == 0:
+            return 0
+        if finite(get(s, at + 16)) == 0 or get(s, at + 16) != get(s, at + 24 + selected * 8):
+            return 0
+        action = 0
+        while action < 6:
+            bits = get(s, at + 24 + action * 8)
+            if ((mask >> action) & 1) != 0:
+                if finite(bits) == 0:
+                    return 0
+                actions = actions + 1
+            else:
+                if bits != 0:
+                    return 0
+            action = action + 1
+        index = index + 1
+    if actions != legal:
+        return 0
+    return 1
+
+def valid_commitment(s:readbuf, at:u64, extent:u64) -> u64:
+    if get(s, at) != 6000292600568037960:
+        return 0
+    size = get(s, at + 8)
+    if size > 8388608 or extent != 128 + size:
+        return 0
+    if get(s, at + 112) != 0 or get(s, at + 120) != 0:
+        return 0
+    return 1
+
+def header(o:mutbuf, status:u64, size:u64, capacity:u64) -> u64:
+    put(o, 0, 3544424519689847368)
+    put(o, 8, status)
+    put(o, 16, size)
+    put(o, 24, capacity)
+    put(o, 32, 0)
+    put(o, 40, 0)
+    put(o, 48, 0)
+    put(o, 56, 0)
+    return 64
+
+def finite(bits:u64) -> u64:
+    if ((bits >> 52) & 2047) == 2047:
+        return 0
+    return 1
+
+def render_states(s:readbuf, w:mutbuf) -> u64:
+    text_array_open(w)
+    count = get(s, 72)
+    index = 0
+    while index < count:
+        if index != 0:
+            text_comma(w)
+        at = 192 + index * 72
+        mask = get(s, at)
+        text_state_open(w)
+        emit_integer(w, get(s, at + 8))
+        text_q_open(w)
+        action = 0
+        while action < 6:
+            if action != 0:
+                text_comma(w)
+            if ((mask >> action) & 1) != 0:
+                emit_float(w, get(s, at + 24 + action * 8))
+            else:
+                text_null(w)
+            action = action + 1
+        text_value(w)
+        emit_float(w, get(s, at + 16))
+        text_object_close(w)
+        index = index + 1
+    return text_array_close(w)
+
+def reserve(w:mutbuf, size:u64) -> u64:
+    if w_get(w, 12296) != 0:
+        return 0
+    cursor = w_get(w, 12288)
+    if size > 1052672 or cursor > 1052672 - size:
+        put(w, 12296, 1)
+        return 0
+    if length(w) < 16384 + cursor + size:
+        put(w, 12296, 1)
+        return 0
+    put(w, 12288, cursor + size)
+    return 16384 + cursor
+
+def emit_float(w:mutbuf, bits:u64) -> u64:
+    size = format_bits(w, bits)
+    if size == 0 or size > 32:
+        put(w, 12296, 1)
+        return 0
+    at = reserve(w, size)
+    if at == 0:
+        return 0
+    index = 0
+    while index < size:
+        store(w, at + index, byte(w, 6144 + index))
+        index = index + 1
+    return 0
+
+def emit_integer(w:mutbuf, value:u64) -> u64:
+    count = 0
+    while value != 0 or count == 0:
+        quotient = (value * 3435973837) >> 35
+        store(w, 10000 + count, 48 + value - quotient * 10)
+        value = quotient
+        count = count + 1
+    at = reserve(w, count)
+    if at == 0:
+        return 0
+    index = 0
+    while index < count:
+        store(w, at + index, byte(w, 10000 + count - 1 - index))
+        index = index + 1
+    return 0
+
+def emit_digest(s:readbuf, w:mutbuf, begin:u64) -> u64:
+    at = reserve(w, 64)
+    if at == 0:
+        return 0
+    index = 0
+    while index < 32:
+        value = byte(s, begin + index)
+        store(w, at + index * 2, hex_digit(value >> 4))
+        store(w, at + index * 2 + 1, hex_digit(value & 15))
+        index = index + 1
+    return 0
+
+def hex_digit(value:u64) -> u64:
+    if value < 10:
+        return 48 + value
+    return 87 + value
+
+def get(s:readbuf, at:u64) -> u64:
+    index = 0
+    value = 0
+    while index < 8:
+        value = value | (byte(s, at + index) << (index * 8))
+        index = index + 1
+    return value
+
+def w_get(w:mutbuf, at:u64) -> u64:
+    index = 0
+    value = 0
+    while index < 8:
+        value = value | (byte(w, at + index) << (index * 8))
+        index = index + 1
+    return value
+
+def put(w:mutbuf, at:u64, value:u64) -> u64:
+    index = 0
+    while index < 8:
+        store(w, at + index, value >> (index * 8))
+        index = index + 1
+    return 0
+
+def render(s:readbuf, w:mutbuf, commitment:u64) -> u64:
+    text_key_action_names(w)
+    text_static_action_names(w)
+    text_key_branch_count(w)
+    emit_integer(w, get(s, 96))
+    text_key_canonical_request_byte_budget(w)
+    text_static_canonical_request_byte_budget(w)
+    text_key_checkpoint_verified(w)
+    text_static_checkpoint_verified(w)
+    text_key_continuing_action_count(w)
+    emit_integer(w, get(s, 88))
+    text_key_environment_law_verified(w)
+    text_static_environment_law_verified(w)
+    text_key_exact_tie_state_count(w)
+    emit_integer(w, get(s, 128))
+    text_key_gradient_steps(w)
+    text_static_gradient_steps(w)
+    text_key_implementation_source_sha256(w)
+    text_quote(w)
+    emit_digest(s, w, commitment + 48)
+    text_quote(w)
+    text_key_independent_holdout_verified(w)
+    text_static_independent_holdout_verified(w)
+    text_key_legal_action_count(w)
+    emit_integer(w, get(s, 80))
+    text_key_maximum_probability_sum_error_f64(w)
+    emit_float(w, get(s, 112))
+    text_key_maximum_self_consistency_residual_f64(w)
+    emit_float(w, get(s, 160))
+    text_key_method(w)
+    text_static_method(w)
+    text_key_minimum_relative_action_gap_f64(w)
+    if get(s, 144) == 0:
+        text_null(w)
+    else:
+        emit_float(w, get(s, 152))
+    text_key_native_operation_wall_seconds(w)
+    emit_float(w, get(s, 32))
+    text_key_near_tie_relative_threshold(w)
+    emit_float(w, 4431990193862339089)
+    text_key_near_tie_state_count(w)
+    emit_integer(w, get(s, 136))
+    text_key_operation_budget_units(w)
+    text_static_operation_budget_units(w)
+    text_key_operation_charged_units(w)
+    emit_integer(w, get(s, 120))
+    text_key_plan_id(w)
+    text_plan_prefix(w)
+    emit_digest(s, w, commitment + 80)
+    text_quote(w)
+    text_key_probability_sum_tolerance(w)
+    emit_float(w, 4427486594234968593)
+    text_key_production_eligible(w)
+    text_static_production_eligible(w)
+    text_key_real_arithmetic_optimality_certified(w)
+    text_static_real_arithmetic_optimality_certified(w)
+    text_key_recurrence(w)
+    text_static_recurrence(w)
+    text_key_request_bytes(w)
+    emit_integer(w, get(s, commitment + 8))
+    text_key_request_commitment_encoding(w)
+    text_static_request_commitment_encoding(w)
+    text_key_request_sha256(w)
+    text_quote(w)
+    emit_digest(s, w, commitment + 16)
+    text_quote(w)
+    text_key_schema(w)
+    text_static_schema(w)
+    text_key_scope(w)
+    text_static_scope(w)
+    text_key_self_consistency_is_numerical_error_bound(w)
+    text_static_self_consistency_is_numerical_error_bound(w)
+    text_key_semantics_version(w)
+    text_static_semantics_version(w)
+    text_key_state_count(w)
+    emit_integer(w, get(s, 72))
+    text_key_states(w)
+    render_states(s, w)
+    text_key_training_targets_used(w)
+    text_static_training_targets_used(w)
+    text_key_zero_probability_branch_count(w)
+    emit_integer(w, get(s, 104))
+    return text_object_close(w)
+
+def text_array_open(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 91)
+    return 0
+
+def text_array_close(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 93)
+    return 0
+
+def text_object_close(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 125)
+    return 0
+
+def text_comma(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 44)
+    return 0
+
+def text_null(w:mutbuf) -> u64:
+    at = reserve(w, 4)
+    if at == 0:
+        return 0
+    store(w, at + 0, 110)
+    store(w, at + 1, 117)
+    store(w, at + 2, 108)
+    store(w, at + 3, 108)
+    return 0
+
+def text_quote(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 34)
+    return 0
+
+def text_state_open(w:mutbuf) -> u64:
+    at = reserve(w, 10)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7957695015191388795)
+    store(w, at + 8, 34)
+    store(w, at + 9, 58)
+    return 0
+
+def text_q_open(w:mutbuf) -> u64:
+    at = reserve(w, 6)
+    if at == 0:
+        return 0
+    store(w, at + 0, 44)
+    store(w, at + 1, 34)
+    store(w, at + 2, 113)
+    store(w, at + 3, 34)
+    store(w, at + 4, 58)
+    store(w, at + 5, 91)
+    return 0
+
+def text_value(w:mutbuf) -> u64:
+    at = reserve(w, 10)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7310868735955446877)
+    store(w, at + 8, 34)
+    store(w, at + 9, 58)
+    return 0
+
+def text_plan_prefix(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 34)
+    store(w, at + 1, 119)
+    store(w, at + 2, 98)
+    store(w, at + 3, 49)
+    store(w, at + 4, 95)
+    return 0
+
+def text_key_action_names(w:mutbuf) -> u64:
+    at = reserve(w, 16)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7957695015191388795)
+    put(w, at + 8, 4189037482871975519)
+    return 0
+
+def text_static_action_names(w:mutbuf) -> u64:
+    at = reserve(w, 53)
+    if at == 0:
+        return 0
+    put(w, at + 0, 3180192588524364379)
+    put(w, at + 8, 2462380841666434850)
+    put(w, at + 16, 5918341386003891538)
+    put(w, at + 24, 2462380833076498501)
+    put(w, at + 32, 3485597310413591891)
+    put(w, at + 40, 5281950872209861666)
+    store(w, at + 48, 84)
+    store(w, at + 49, 95)
+    store(w, at + 50, 49)
+    store(w, at + 51, 34)
+    store(w, at + 52, 93)
+    return 0
+
+def text_key_branch_count(w:mutbuf) -> u64:
+    at = reserve(w, 16)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7521977167448777260)
+    put(w, at + 8, 4189038621173441375)
+    return 0
+
+def text_key_canonical_request_byte_budget(w:mutbuf) -> u64:
+    at = reserve(w, 33)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7597132141291577900)
+    put(w, at + 8, 8462656716707488099)
+    put(w, at + 16, 7310601558544380773)
+    put(w, at + 24, 2482720789329437279)
+    store(w, at + 32, 58)
+    return 0
+
+def text_static_canonical_request_byte_budget(w:mutbuf) -> u64:
+    at = reserve(w, 7)
+    if at == 0:
+        return 0
+    store(w, at + 0, 56)
+    store(w, at + 1, 51)
+    store(w, at + 2, 56)
+    store(w, at + 3, 56)
+    store(w, at + 4, 54)
+    store(w, at + 5, 48)
+    store(w, at + 6, 56)
+    return 0
+
+def text_key_checkpoint_verified(w:mutbuf) -> u64:
+    at = reserve(w, 23)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8100677641950143020)
+    put(w, at + 8, 8243124845318924655)
+    store(w, at + 16, 105)
+    store(w, at + 17, 102)
+    store(w, at + 18, 105)
+    store(w, at + 19, 101)
+    store(w, at + 20, 100)
+    store(w, at + 21, 34)
+    store(w, at + 22, 58)
+    return 0
+
+def text_static_checkpoint_verified(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_continuing_action_count(w:mutbuf) -> u64:
+    at = reserve(w, 27)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7956018234390684204)
+    put(w, at + 8, 8386653993479072117)
+    put(w, at + 16, 7959390389040738153)
+    store(w, at + 24, 116)
+    store(w, at + 25, 34)
+    store(w, at + 26, 58)
+    return 0
+
+def text_key_environment_law_verified(w:mutbuf) -> u64:
+    at = reserve(w, 28)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8030597042934194732)
+    put(w, at + 8, 7020090872836746606)
+    put(w, at + 16, 7594873761656364919)
+    store(w, at + 24, 101)
+    store(w, at + 25, 100)
+    store(w, at + 26, 34)
+    store(w, at + 27, 58)
+    return 0
+
+def text_static_environment_law_verified(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_exact_tie_state_count(w:mutbuf) -> u64:
+    at = reserve(w, 25)
+    if at == 0:
+        return 0
+    put(w, at + 0, 6878231801184461356)
+    put(w, at + 8, 8386112020011116916)
+    put(w, at + 16, 2482730745246998373)
+    store(w, at + 24, 58)
+    return 0
+
+def text_key_gradient_steps(w:mutbuf) -> u64:
+    at = reserve(w, 18)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7307482240079307308)
+    put(w, at + 8, 8318260062579553390)
+    store(w, at + 16, 34)
+    store(w, at + 17, 58)
+    return 0
+
+def text_static_gradient_steps(w:mutbuf) -> u64:
+    at = reserve(w, 1)
+    if at == 0:
+        return 0
+    store(w, at + 0, 48)
+    return 0
+
+def text_key_implementation_source_sha256(w:mutbuf) -> u64:
+    at = reserve(w, 32)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7882825952909664812)
+    put(w, at + 8, 7957695015159098981)
+    put(w, at + 16, 6874009749498590047)
+    put(w, at + 24, 4188970205514393715)
+    return 0
+
+def text_key_independent_holdout_verified(w:mutbuf) -> u64:
+    at = reserve(w, 32)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7309453677245833772)
+    put(w, at + 8, 8027771289460892782)
+    put(w, at + 16, 7311135998873658476)
+    put(w, at + 24, 4189020990130776434)
+    return 0
+
+def text_static_independent_holdout_verified(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_legal_action_count(w:mutbuf) -> u64:
+    at = reserve(w, 22)
+    if at == 0:
+        return 0
+    put(w, at + 0, 6875977827799015980)
+    put(w, at + 8, 7160563357332038497)
+    store(w, at + 16, 111)
+    store(w, at + 17, 117)
+    store(w, at + 18, 110)
+    store(w, at + 19, 116)
+    store(w, at + 20, 34)
+    store(w, at + 21, 58)
+    return 0
+
+def text_key_maximum_probability_sum_error_f64(w:mutbuf) -> u64:
+    at = reserve(w, 37)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8461535240650564140)
+    put(w, at + 8, 7089055519258730349)
+    put(w, at + 16, 8463213100008041577)
+    put(w, at + 24, 6877682118284369773)
+    store(w, at + 32, 102)
+    store(w, at + 33, 54)
+    store(w, at + 34, 52)
+    store(w, at + 35, 34)
+    store(w, at + 36, 58)
+    return 0
+
+def text_key_maximum_self_consistency_residual_f64(w:mutbuf) -> u64:
+    at = reserve(w, 41)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8461535240650564140)
+    put(w, at + 8, 7160554548286938989)
+    put(w, at + 16, 7954892355859082863)
+    put(w, at + 24, 7235441155895163235)
+    put(w, at + 32, 2464654709394006389)
+    store(w, at + 40, 58)
+    return 0
+
+def text_key_method(w:mutbuf) -> u64:
+    at = reserve(w, 10)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7237117975334822444)
+    store(w, at + 8, 34)
+    store(w, at + 9, 58)
+    return 0
+
+def text_static_method(w:mutbuf) -> u64:
+    at = reserve(w, 44)
+    if at == 0:
+        return 0
+    put(w, at + 0, 6874028402423719458)
+    put(w, at + 8, 7306090318169334116)
+    put(w, at + 16, 7020682341121287538)
+    put(w, at + 24, 7453301735283714413)
+    put(w, at + 32, 6874584755290857842)
+    store(w, at + 40, 102)
+    store(w, at + 41, 54)
+    store(w, at + 42, 52)
+    store(w, at + 43, 34)
+    return 0
+
+def text_key_minimum_relative_action_gap_f64(w:mutbuf) -> u64:
+    at = reserve(w, 35)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8461535197835108908)
+    put(w, at + 8, 7598805589467225965)
+    put(w, at + 16, 8028075780948845942)
+    put(w, at + 24, 3919925461947735918)
+    store(w, at + 32, 52)
+    store(w, at + 33, 34)
+    store(w, at + 34, 58)
+    return 0
+
+def text_key_native_operation_wall_seconds(w:mutbuf) -> u64:
+    at = reserve(w, 33)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7311146993654309420)
+    put(w, at + 8, 7598805615236902751)
+    put(w, at + 16, 6875989896958275183)
+    put(w, at + 24, 2482438245089240435)
+    store(w, at + 32, 58)
+    return 0
+
+def text_key_near_tie_relative_threshold(w:mutbuf) -> u64:
+    at = reserve(w, 31)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8385546793826263596)
+    put(w, at + 8, 8386103164106925417)
+    put(w, at + 16, 7310019994201716329)
+    store(w, at + 24, 115)
+    store(w, at + 25, 104)
+    store(w, at + 26, 111)
+    store(w, at + 27, 108)
+    store(w, at + 28, 100)
+    store(w, at + 29, 34)
+    store(w, at + 30, 58)
+    return 0
+
+def text_key_near_tie_state_count(w:mutbuf) -> u64:
+    at = reserve(w, 24)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8385546793826263596)
+    put(w, at + 8, 7310575247908889961)
+    put(w, at + 16, 4189038621173441375)
+    return 0
+
+def text_key_operation_budget_units(w:mutbuf) -> u64:
+    at = reserve(w, 26)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8386109761144169004)
+    put(w, at + 8, 7450208748945960809)
+    put(w, at + 16, 8319390334796657765)
+    store(w, at + 24, 34)
+    store(w, at + 25, 58)
+    return 0
+
+def text_static_operation_budget_units(w:mutbuf) -> u64:
+    at = reserve(w, 7)
+    if at == 0:
+        return 0
+    store(w, at + 0, 56)
+    store(w, at + 1, 48)
+    store(w, at + 2, 48)
+    store(w, at + 3, 48)
+    store(w, at + 4, 48)
+    store(w, at + 5, 48)
+    store(w, at + 6, 48)
+    return 0
+
+def text_key_operation_charged_units(w:mutbuf) -> u64:
+    at = reserve(w, 27)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8386109761144169004)
+    put(w, at + 8, 8241983569076842345)
+    put(w, at + 16, 8388357231344903527)
+    store(w, at + 24, 115)
+    store(w, at + 25, 34)
+    store(w, at + 26, 58)
+    return 0
+
+def text_key_plan_id(w:mutbuf) -> u64:
+    at = reserve(w, 11)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7592908861480116780)
+    store(w, at + 8, 100)
+    store(w, at + 9, 34)
+    store(w, at + 10, 58)
+    return 0
+
+def text_key_probability_sum_tolerance(w:mutbuf) -> u64:
+    at = reserve(w, 29)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7089055519258714668)
+    put(w, at + 8, 8463213100008041577)
+    put(w, at + 16, 7021786285424795501)
+    store(w, at + 24, 110)
+    store(w, at + 25, 99)
+    store(w, at + 26, 101)
+    store(w, at + 27, 34)
+    store(w, at + 28, 58)
+    return 0
+
+def text_key_production_eligible(w:mutbuf) -> u64:
+    at = reserve(w, 23)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7166744811854111276)
+    put(w, at + 8, 7596558132016277876)
+    store(w, at + 16, 103)
+    store(w, at + 17, 105)
+    store(w, at + 18, 98)
+    store(w, at + 19, 108)
+    store(w, at + 20, 101)
+    store(w, at + 21, 34)
+    store(w, at + 22, 58)
+    return 0
+
+def text_static_production_eligible(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_real_arithmetic_optimality_certified(w:mutbuf) -> u64:
+    at = reserve(w, 40)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7016445910036128300)
+    put(w, at + 8, 7598809991859169650)
+    put(w, at + 16, 7020383342963941219)
+    put(w, at + 24, 8243103954682276204)
+    put(w, at + 32, 4189020990130776436)
+    return 0
+
+def text_static_real_arithmetic_optimality_certified(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_recurrence(w:mutbuf) -> u64:
+    at = reserve(w, 14)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8246782937432990252)
+    store(w, at + 8, 101)
+    store(w, at + 9, 110)
+    store(w, at + 10, 99)
+    store(w, at + 11, 101)
+    store(w, at + 12, 34)
+    store(w, at + 13, 58)
+    return 0
+
+def text_static_recurrence(w:mutbuf) -> u64:
+    at = reserve(w, 137)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8102104866965317922)
+    put(w, at + 8, 7021782660286867820)
+    put(w, at + 16, 7306090317112435566)
+    put(w, at + 24, 7809651250875611762)
+    put(w, at + 32, 7093013764034603808)
+    put(w, at + 40, 2340029477534917217)
+    put(w, at + 48, 7811889803735605290)
+    put(w, at + 56, 2334401090213535588)
+    put(w, at + 64, 7237954716568789035)
+    put(w, at + 72, 2982901817503719465)
+    put(w, at + 80, 8079580268622127163)
+    put(w, at + 88, 7596562542728736626)
+    put(w, at + 96, 7596291779702647156)
+    put(w, at + 104, 7594793261066449008)
+    put(w, at + 112, 7018690059355583346)
+    put(w, at + 120, 8386662871394885740)
+    put(w, at + 128, 7887330622167936288)
+    store(w, at + 136, 34)
+    return 0
+
+def text_key_request_bytes(w:mutbuf) -> u64:
+    at = reserve(w, 17)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8315181416903221804)
+    put(w, at + 8, 2482439370538377076)
+    store(w, at + 16, 58)
+    return 0
+
+def text_key_request_commitment_encoding(w:mutbuf) -> u64:
+    at = reserve(w, 31)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8315181416903221804)
+    put(w, at + 8, 8388356097741905780)
+    put(w, at + 16, 7164775517842728301)
+    store(w, at + 24, 111)
+    store(w, at + 25, 100)
+    store(w, at + 26, 105)
+    store(w, at + 27, 110)
+    store(w, at + 28, 103)
+    store(w, at + 29, 34)
+    store(w, at + 30, 58)
+    return 0
+
+def text_static_request_commitment_encoding(w:mutbuf) -> u64:
+    at = reserve(w, 62)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7142819395851088930)
+    put(w, at + 8, 7809632533312663137)
+    put(w, at + 16, 7664956572898259744)
+    put(w, at + 24, 8390045715529625459)
+    put(w, at + 32, 5715993855365575200)
+    put(w, at + 40, 8247252291104681294)
+    put(w, at + 48, 2338619929465679457)
+    store(w, at + 56, 98)
+    store(w, at + 57, 121)
+    store(w, at + 58, 116)
+    store(w, at + 59, 101)
+    store(w, at + 60, 115)
+    store(w, at + 61, 34)
+    return 0
+
+def text_key_request_sha256(w:mutbuf) -> u64:
+    at = reserve(w, 18)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8315181416903221804)
+    put(w, at + 8, 3906083645759381364)
+    store(w, at + 16, 34)
+    store(w, at + 17, 58)
+    return 0
+
+def text_key_schema(w:mutbuf) -> u64:
+    at = reserve(w, 10)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7020378893159965228)
+    store(w, at + 8, 34)
+    store(w, at + 9, 58)
+    return 0
+
+def text_static_schema(w:mutbuf) -> u64:
+    at = reserve(w, 30)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8587908692171909154)
+    put(w, at + 8, 7305452623051057509)
+    put(w, at + 16, 7813795305592024172)
+    store(w, at + 24, 97)
+    store(w, at + 25, 110)
+    store(w, at + 26, 46)
+    store(w, at + 27, 118)
+    store(w, at + 28, 49)
+    store(w, at + 29, 34)
+    return 0
+
+def text_key_scope(w:mutbuf) -> u64:
+    at = reserve(w, 9)
+    if at == 0:
+        return 0
+    put(w, at + 0, 2478510793649496620)
+    store(w, at + 8, 58)
+    return 0
+
+def text_static_scope(w:mutbuf) -> u64:
+    at = reserve(w, 178)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7234298802019983906)
+    put(w, at + 8, 7956011637086646304)
+    put(w, at + 16, 8367813887758639207)
+    put(w, at + 24, 7308335460846167400)
+    put(w, at + 32, 8241987967223344498)
+    put(w, at + 40, 8388357179918279781)
+    put(w, at + 48, 7935407720650514533)
+    put(w, at + 56, 6998705337232924783)
+    put(w, at + 64, 7142757883378492259)
+    put(w, at + 72, 7956012745355388264)
+    put(w, at + 80, 7598805624095055988)
+    put(w, at + 88, 7165905831562341999)
+    put(w, at + 96, 7954874719498692981)
+    put(w, at + 104, 7598805550878845300)
+    put(w, at + 112, 7526769937255001711)
+    put(w, at + 120, 7598805550879764069)
+    put(w, at + 128, 8247252441945370223)
+    put(w, at + 136, 7881702290525021557)
+    put(w, at + 144, 2338053340534104937)
+    put(w, at + 152, 7290605916551147109)
+    put(w, at + 160, 7163369272278803566)
+    put(w, at + 168, 7593469619725755233)
+    store(w, at + 176, 109)
+    store(w, at + 177, 34)
+    return 0
+
+def text_key_self_consistency_is_numerical_error_bound(w:mutbuf) -> u64:
+    at = reserve(w, 45)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7160554548286923308)
+    put(w, at + 8, 7954892355859082863)
+    put(w, at + 16, 8461805699169483107)
+    put(w, at + 24, 6875977810686666093)
+    put(w, at + 32, 8026082431028327013)
+    store(w, at + 40, 117)
+    store(w, at + 41, 110)
+    store(w, at + 42, 100)
+    store(w, at + 43, 34)
+    store(w, at + 44, 58)
+    return 0
+
+def text_static_self_consistency_is_numerical_error_bound(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_semantics_version(w:mutbuf) -> u64:
+    at = reserve(w, 21)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8389750278319186476)
+    put(w, at + 8, 8318823020788671337)
+    store(w, at + 16, 105)
+    store(w, at + 17, 111)
+    store(w, at + 18, 110)
+    store(w, at + 19, 34)
+    store(w, at + 20, 58)
+    return 0
+
+def text_static_semantics_version(w:mutbuf) -> u64:
+    at = reserve(w, 27)
+    if at == 0:
+        return 0
+    put(w, at + 0, 6874028402423719458)
+    put(w, at + 8, 7306090318169334116)
+    put(w, at + 16, 6860167945707087218)
+    store(w, at + 24, 118)
+    store(w, at + 25, 49)
+    store(w, at + 26, 34)
+    return 0
+
+def text_key_state_count(w:mutbuf) -> u64:
+    at = reserve(w, 15)
+    if at == 0:
+        return 0
+    put(w, at + 0, 6874028368165282348)
+    store(w, at + 8, 99)
+    store(w, at + 9, 111)
+    store(w, at + 10, 117)
+    store(w, at + 11, 110)
+    store(w, at + 12, 116)
+    store(w, at + 13, 34)
+    store(w, at + 14, 58)
+    return 0
+
+def text_key_states(w:mutbuf) -> u64:
+    at = reserve(w, 10)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8315180248923841068)
+    store(w, at + 8, 34)
+    store(w, at + 9, 58)
+    return 0
+
+def text_key_training_targets_used(w:mutbuf) -> u64:
+    at = reserve(w, 25)
+    if at == 0:
+        return 0
+    put(w, at + 0, 7597125488673563180)
+    put(w, at + 8, 7306934683321722734)
+    put(w, at + 16, 2478217241525449588)
+    store(w, at + 24, 58)
+    return 0
+
+def text_static_training_targets_used(w:mutbuf) -> u64:
+    at = reserve(w, 5)
+    if at == 0:
+        return 0
+    store(w, at + 0, 102)
+    store(w, at + 1, 97)
+    store(w, at + 2, 108)
+    store(w, at + 3, 115)
+    store(w, at + 4, 101)
+    return 0
+
+def text_key_zero_probability_branch_count(w:mutbuf) -> u64:
+    at = reserve(w, 33)
+    if at == 0:
+        return 0
+    put(w, at + 0, 8097313192154898988)
+    put(w, at + 8, 7596562542728736626)
+    put(w, at + 16, 7164771201097628020)
+    put(w, at + 24, 2482730745246998376)
+    store(w, at + 32, 58)
+    return 0
+
+def format_f7(p0:mutbuf, p1:u64, p2:u64, p3:u64) -> u64:
+    return 0
+
+def format_f8(p0:mutbuf, p1:u64) -> u64:
+    return 0
+
+def format_f9(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f10(p0:mutbuf, p1:u64) -> u64:
+    return 0
+
+def format_f11(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f12(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f13(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f14(p0:mutbuf, p1:u64) -> u64:
+    return 0
+
+def format_f15(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_bits(p0:mutbuf, p1:u64) -> u64:
+    return 0
+
+def format_f17(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f18(p0:mutbuf, p1:u64) -> u64:
+    return 0
+
+def format_f19(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0
+
+def format_f20(p0:mutbuf, p1:u64, p2:u64) -> u64:
+    return 0

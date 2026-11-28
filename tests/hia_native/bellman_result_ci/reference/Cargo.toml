@@ -1,0 +1,22 @@
+[package]
+name = "hia-bellman-result-reference"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "hia-bellman-result-reference"
+path = "oracle.rs"
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+
+[profile.release]
+lto = true              # Enable Link Time Optimization
+codegen-units = 1       # Reduce parallel code generation units for better optimization
+panic = "abort"         # Abort on panic for smaller binary size
+strip = true            # Strip symbols from binary
+opt-level = 3           # Prioritize runtime throughput and bounded cold-validation latency
+overflow-checks = false # Disable overflow checks in release mode
+

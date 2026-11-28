@@ -1,0 +1,59 @@
+name: HIA complete Bellman result serialization
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - hia-bellman-result-qualification-6780-v1-20261116
+
+permissions:
+  contents: read
+
+jobs:
+  result:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+      RUSTUP_TOOLCHAIN: '1.95.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: pinned-Hepta
+          persist-credentials: false
+      - name: Install fixed original toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Fresh HIA children and complete unchanged original serializer
+        run: |
+          umask 077
+          python -I -S -B tests/hia_native/bellman_result_ci/qualify.py \
+            --phase all --hepta "$GITHUB_WORKSPACE/pinned-Hepta" \
+            --output "$RUNNER_TEMP/bellman-result-evidence"
+      - name: Independent complete read-only admission
+        run: |
+          python -I -S -B tests/hia_native/bellman_result_ci/readonly.py \
+            --output "$RUNNER_TEMP/bellman-result-evidence" \
+            > "$RUNNER_TEMP/bellman-result-reader.json"
+          cp "$RUNNER_TEMP/bellman-result-reader.json" "$RUNNER_TEMP/bellman-result-evidence/read-only.json"
+      - name: Preserve all complete and failed observations
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/bellman-result-evidence" ]; then
+            tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/bellman-result-evidence.tar.gz" bellman-result-evidence
+            sha256sum "$RUNNER_TEMP/bellman-result-evidence.tar.gz" > "$RUNNER_TEMP/bellman-result-evidence.tar.gz.sha256"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bellman-result-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/bellman-result-evidence.tar.gz
+            ${{ runner.temp }}/bellman-result-evidence.tar.gz.sha256
+          compression-level: 0
+          if-no-files-found: error
