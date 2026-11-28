@@ -1,0 +1,399 @@
+{
+  "relation_scope": "original pure policy functions and declared pre-effect prefixes; no claim of full original job handler execution",
+  "relations": [
+    {
+      "adapted": "#[derive(Debug, Clone, Deserialize, Serialize)]\npub struct HostConfig {\n\t/// Complete administrator-bound native job bundle; absence retains legacy configuration identity.\n\t#[serde(default, skip_serializing_if = \"Option::is_none\")]\n\tpub native_jobs: Option<NativeJobEntries>,\n\t/// Optional administrator-pinned CRIU executable. Disabled when absent.\n\t#[serde(default)]\n\tpub checkpoint_binary: Option<String>,\n\t/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.\n\t#[serde(default)]\n\tpub checkpoint_binary_sha256: Option<String>,\n\t#[serde(default)]\n\tpub execution_mode: ExecutionMode,\n\t/// OpenSSH config alias or user@host target. Never supplied by a tool call.\n\tpub ssh_target: String,\n\t#[serde(default)]\n\tpub platform: Platform,\n\t/// Absolute per-host directory holding durable job state and logs.\n\tpub remote_state_dir: String,\n\t#[serde(default)]\n\tpub allow_execute: bool,\n\t#[serde(default)]\n\tpub allow_pty: bool,\n\t#[serde(default)]\n\tpub allow_write: bool,\n\t/// Allow AF_INET/AF_INET6 from durable jobs. Default false creates a fail-closed\n\t/// private network namespace restricted to AF_UNIX.\n\t#[serde(default)]\n\tpub allow_job_network: bool,\n\t/// Allow a detached supervisor when user-systemd cannot create the unit.\n\t/// Keep false on production Linux hosts; macOS requires true in v0.1.\n\t#[serde(default)]\n\tpub allow_detached_fallback: bool,\n\t/// Optional absolute cwd allowlist. Empty means any cwd reachable by the SSH identity.\n\t#[serde(default)]\n\tpub allowed_cwd_prefixes: Vec<String>,\n\t/// Absolute remote read roots for inherited SFTP tools. Empty denies reads.\n\t#[serde(default)]\n\tpub allowed_read_path_prefixes: Vec<String>,\n\t/// Absolute remote write roots. Empty denies writes even when allow_write is true.\n\t#[serde(default)]\n\tpub allowed_write_path_prefixes: Vec<String>,\n\t#[serde(default)]\n\tpub protected_path_prefixes: Vec<String>,\n\t#[serde(default)]\n\tpub protected_argument_substrings: Vec<String>,\n\t#[serde(default)]\n\tpub denied_executables: Vec<String>,\n\t#[serde(default)]\n\tpub allowed_dangerous_executables: Vec<String>,\n\t#[serde(default)]\n\tpub privileged_actions: BTreeMap<String, PrivilegedAction>,\n}",
+      "original": "#[derive(Debug, Clone, Deserialize, Serialize)]\npub struct HostConfig {\n\t/// Complete administrator-bound native job bundle; absence retains legacy configuration identity.\n\t#[serde(default, skip_serializing_if = \"Option::is_none\")]\n\tpub native_jobs: Option<NativeJobEntries>,\n\t/// Optional administrator-pinned CRIU executable. Disabled when absent.\n\t#[serde(default)]\n\tpub checkpoint_binary: Option<String>,\n\t/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.\n\t#[serde(default)]\n\tpub checkpoint_binary_sha256: Option<String>,\n\t#[serde(default)]\n\tpub execution_mode: ExecutionMode,\n\t/// OpenSSH config alias or user@host target. Never supplied by a tool call.\n\tpub ssh_target: String,\n\t#[serde(default)]\n\tpub platform: Platform,\n\t/// Absolute per-host directory holding durable job state and logs.\n\tpub remote_state_dir: String,\n\t#[serde(default)]\n\tpub allow_execute: bool,\n\t#[serde(default)]\n\tpub allow_pty: bool,\n\t#[serde(default)]\n\tpub allow_write: bool,\n\t/// Allow AF_INET/AF_INET6 from durable jobs. Default false creates a fail-closed\n\t/// private network namespace restricted to AF_UNIX.\n\t#[serde(default)]\n\tpub allow_job_network: bool,\n\t/// Allow a detached supervisor when user-systemd cannot create the unit.\n\t/// Keep false on production Linux hosts; macOS requires true in v0.1.\n\t#[serde(default)]\n\tpub allow_detached_fallback: bool,\n\t/// Optional absolute cwd allowlist. Empty means any cwd reachable by the SSH identity.\n\t#[serde(default)]\n\tpub allowed_cwd_prefixes: Vec<String>,\n\t/// Absolute remote read roots for inherited SFTP tools. Empty denies reads.\n\t#[serde(default)]\n\tpub allowed_read_path_prefixes: Vec<String>,\n\t/// Absolute remote write roots. Empty denies writes even when allow_write is true.\n\t#[serde(default)]\n\tpub allowed_write_path_prefixes: Vec<String>,\n\t#[serde(default)]\n\tpub protected_path_prefixes: Vec<String>,\n\t#[serde(default)]\n\tpub protected_argument_substrings: Vec<String>,\n\t#[serde(default)]\n\tpub denied_executables: Vec<String>,\n\t#[serde(default)]\n\tpub allowed_dangerous_executables: Vec<String>,\n\t#[serde(default)]\n\tpub privileged_actions: BTreeMap<String, PrivilegedAction>,\n}",
+      "original_pin": {
+        "bytes": 2156,
+        "sha256": "3084aadb7f5615cf7800b8e8d3de338af5000cc5a8985aeec9d7246944d8ce0e"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 3274
+    },
+    {
+      "adapted": "#[derive(Debug, Clone, Deserialize, Serialize)]\n#[serde(deny_unknown_fields)]\npub struct NativeJobEntries {\n\tpub entry: NativeJobPin,\n\tpub submit: NativeJobPin,\n\tpub observation: NativeJobPin,\n\tpub cancel: NativeJobPin,\n\tpub launcher: NativeJobPin,\n}",
+      "original": "#[derive(Debug, Clone, Deserialize, Serialize)]\n#[serde(deny_unknown_fields)]\npub struct NativeJobEntries {\n\tpub entry: NativeJobPin,\n\tpub submit: NativeJobPin,\n\tpub observation: NativeJobPin,\n\tpub cancel: NativeJobPin,\n\tpub launcher: NativeJobPin,\n}",
+      "original_pin": {
+        "bytes": 250,
+        "sha256": "b2c0505cf7cee98a41ac00fc92583b04aa862c70bb001aedef9eb6e26a8a23dd"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 1992
+    },
+    {
+      "adapted": "#[derive(Debug, Clone, Deserialize, Serialize)]\n#[serde(deny_unknown_fields)]\npub struct NativeJobPin {\n\tpub executable: String,\n\tpub sha256: String,\n}",
+      "original": "#[derive(Debug, Clone, Deserialize, Serialize)]\n#[serde(deny_unknown_fields)]\npub struct NativeJobPin {\n\tpub executable: String,\n\tpub sha256: String,\n}",
+      "original_pin": {
+        "bytes": 151,
+        "sha256": "38e1e82bbb52b398f0fb8641e85b1387bf16e765a1b72b8b71b1b0d1b7499cbd"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 1685
+    },
+    {
+      "adapted": "#[derive(Debug, Clone, Deserialize, Serialize)]\npub struct PrivilegedAction {\n\tpub executable: String,\n\t#[serde(default)]\n\tpub fixed_args: Vec<String>,\n\t#[serde(default)]\n\tpub allow_extra_args: bool,\n\t/// One full-match regex per accepted extra argument. Empty means none.\n\t#[serde(default)]\n\tpub extra_arg_patterns: Vec<String>,\n\t#[serde(default = \"default_action_timeout\")]\n\tpub timeout_seconds: u64,\n}",
+      "original": "#[derive(Debug, Clone, Deserialize, Serialize)]\npub struct PrivilegedAction {\n\tpub executable: String,\n\t#[serde(default)]\n\tpub fixed_args: Vec<String>,\n\t#[serde(default)]\n\tpub allow_extra_args: bool,\n\t/// One full-match regex per accepted extra argument. Empty means none.\n\t#[serde(default)]\n\tpub extra_arg_patterns: Vec<String>,\n\t#[serde(default = \"default_action_timeout\")]\n\tpub timeout_seconds: u64,\n}",
+      "original_pin": {
+        "bytes": 404,
+        "sha256": "5a4857d25a4b70e75acac5f742fcfdf78c128540fe9ba8591935416fb9f81758"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 1149
+    },
+    {
+      "adapted": "#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]\n#[serde(rename_all = \"snake_case\")]\npub enum ExecutionMode {\n\t#[default]\n\tIsolated,\n\t/// Full authority of the configured SSH login, including its existing sudo rights.\n\tOperator,\n}",
+      "original": "#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]\n#[serde(rename_all = \"snake_case\")]\npub enum ExecutionMode {\n\t#[default]\n\tIsolated,\n\t/// Full authority of the configured SSH login, including its existing sudo rights.\n\tOperator,\n}",
+      "original_pin": {
+        "bytes": 259,
+        "sha256": "9a2eeade86d8f2a4db99a211ec226362f2af0434dabb5368a5b5dcb8bab0312a"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 888
+    },
+    {
+      "adapted": "#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]\n#[serde(rename_all = \"snake_case\")]\npub enum Platform {\n\t#[default]\n\tLinux,\n\tMacos,\n}",
+      "original": "#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]\n#[serde(rename_all = \"snake_case\")]\npub enum Platform {\n\t#[default]\n\tLinux,\n\tMacos,\n}",
+      "original_pin": {
+        "bytes": 163,
+        "sha256": "ad75302de09bc7fef298d3267eb570f4e85edffb7c2a2d87491593f563c7ff73"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 643
+    },
+    {
+      "adapted": "fn default_action_timeout() -> u64 {\n\t30\n}",
+      "original": "fn default_action_timeout() -> u64 {\n\t30\n}",
+      "original_pin": {
+        "bytes": 42,
+        "sha256": "8855fd33a34c545f42d3e84fcdf1882a578f3fb500091ed2c7410b912d68ef1a"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 1555
+    },
+    {
+      "adapted": "fn executable_basename(executable: &str) -> &str {\n\texecutable.rsplit('/').next().unwrap_or(executable)\n}",
+      "original": "fn executable_basename(executable: &str) -> &str {\n\texecutable.rsplit('/').next().unwrap_or(executable)\n}",
+      "original_pin": {
+        "bytes": 105,
+        "sha256": "1513af06ed6d5631a6f8a4d0f25313a0276dad8db0189fd852ec33cfbf73c961"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 19893
+    },
+    {
+      "adapted": "fn protected_value(host: &HostConfig, value: &str) -> Option<String> {\n\thost.protected_path_prefixes\n\t\t.iter()\n\t\t.chain(host.protected_argument_substrings.iter())\n\t\t.find(|prefix| !prefix.is_empty() && value.contains(prefix.as_str()))\n\t\t.cloned()\n}",
+      "original": "fn protected_value(host: &HostConfig, value: &str) -> Option<String> {\n\thost.protected_path_prefixes\n\t\t.iter()\n\t\t.chain(host.protected_argument_substrings.iter())\n\t\t.find(|prefix| !prefix.is_empty() && value.contains(prefix.as_str()))\n\t\t.cloned()\n}",
+      "original_pin": {
+        "bytes": 248,
+        "sha256": "8a3bc3ddc2a13dff8df9bd798520a075459c10056f85ca46e56306c2ceeed0be"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 20000
+    },
+    {
+      "adapted": "fn validate_execution(\n\thost_name: &str,\n\thost: &HostConfig,\n\texecutable: &str,\n\targs: &[String],\n\tcwd: Option<&str>,\n\tpty: bool,\n) -> Result<()> {\n\tif pty && !host.allow_pty {\n\t\tbail!(\"PTY execution is disabled for host `{host_name}`\");\n\t}\n\tif !pty && !host.allow_execute {\n\t\tbail!(\"process execution is disabled for host `{host_name}`\");\n\t}\n\tif executable.trim().is_empty() || executable.contains('\\0') {\n\t\tbail!(\"executable must be a non-empty absolute path\");\n\t}\n\tlet executable_path = Path::new(executable);\n\tif !executable_path.is_absolute()\n\t\t|| executable_path\n\t\t\t.components()\n\t\t\t.any(|part| matches!(part, Component::ParentDir))\n\t{\n\t\tbail!(\"executable `{executable}` must be an absolute path without parent traversal\");\n\t}\n\tif let Some(prefix) = protected_value(host, executable) {\n\t\tbail!(\"executable intersects protected value `{prefix}` on host `{host_name}`\");\n\t}\n\tlet base = executable_basename(executable);\n\tlet explicitly_denied = host\n\t\t.denied_executables\n\t\t.iter()\n\t\t.any(|x| x == base || x == executable);\n\tlet dangerous = DEFAULT_DANGEROUS.contains(&base);\n\tlet explicitly_allowed = host\n\t\t.allowed_dangerous_executables\n\t\t.iter()\n\t\t.any(|x| x == base || x == executable);\n\tif explicitly_denied\n\t\t|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)\n\t{\n\t\tbail!(\n\t\t\t\"executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured\"\n\t\t);\n\t}\n\tif cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {\n\t\tbail!(\"cwd is required when execution roots are configured for host `{host_name}`\");\n\t}\n\tif let Some(cwd) = cwd {\n\t\tif cwd.contains('\\0')\n\t\t\t|| !Path::new(cwd).is_absolute()\n\t\t\t|| Path::new(cwd)\n\t\t\t\t.components()\n\t\t\t\t.any(|c| matches!(c, Component::ParentDir))\n\t\t{\n\t\t\tbail!(\"cwd must be an absolute path\");\n\t\t}\n\t\tif !host.allowed_cwd_prefixes.is_empty()\n\t\t\t&& !host.allowed_cwd_prefixes.iter().any(|prefix| {\n\t\t\t\tcwd == prefix || cwd.starts_with(&format!(\"{}/\", prefix.trim_end_matches('/')))\n\t\t\t}) {\n\t\t\tbail!(\"cwd `{cwd}` is outside configured execution roots on host `{host_name}`\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, cwd) {\n\t\t\tbail!(\"cwd intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tfor arg in args {\n\t\tif arg.contains('\\0') {\n\t\t\tbail!(\"arguments may not contain NUL bytes\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, arg) {\n\t\t\tbail!(\"argument intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tOk(())\n}",
+      "original": "fn validate_execution(\n\thost_name: &str,\n\thost: &HostConfig,\n\texecutable: &str,\n\targs: &[String],\n\tcwd: Option<&str>,\n\tpty: bool,\n) -> Result<()> {\n\tif pty && !host.allow_pty {\n\t\tbail!(\"PTY execution is disabled for host `{host_name}`\");\n\t}\n\tif !pty && !host.allow_execute {\n\t\tbail!(\"process execution is disabled for host `{host_name}`\");\n\t}\n\tif executable.trim().is_empty() || executable.contains('\\0') {\n\t\tbail!(\"executable must be a non-empty absolute path\");\n\t}\n\tlet executable_path = Path::new(executable);\n\tif !executable_path.is_absolute()\n\t\t|| executable_path\n\t\t\t.components()\n\t\t\t.any(|part| matches!(part, Component::ParentDir))\n\t{\n\t\tbail!(\"executable `{executable}` must be an absolute path without parent traversal\");\n\t}\n\tif let Some(prefix) = protected_value(host, executable) {\n\t\tbail!(\"executable intersects protected value `{prefix}` on host `{host_name}`\");\n\t}\n\tlet base = executable_basename(executable);\n\tlet explicitly_denied = host\n\t\t.denied_executables\n\t\t.iter()\n\t\t.any(|x| x == base || x == executable);\n\tlet dangerous = DEFAULT_DANGEROUS.contains(&base);\n\tlet explicitly_allowed = host\n\t\t.allowed_dangerous_executables\n\t\t.iter()\n\t\t.any(|x| x == base || x == executable);\n\tif explicitly_denied\n\t\t|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)\n\t{\n\t\tbail!(\n\t\t\t\"executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured\"\n\t\t);\n\t}\n\tif cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {\n\t\tbail!(\"cwd is required when execution roots are configured for host `{host_name}`\");\n\t}\n\tif let Some(cwd) = cwd {\n\t\tif cwd.contains('\\0')\n\t\t\t|| !Path::new(cwd).is_absolute()\n\t\t\t|| Path::new(cwd)\n\t\t\t\t.components()\n\t\t\t\t.any(|c| matches!(c, Component::ParentDir))\n\t\t{\n\t\t\tbail!(\"cwd must be an absolute path\");\n\t\t}\n\t\tif !host.allowed_cwd_prefixes.is_empty()\n\t\t\t&& !host.allowed_cwd_prefixes.iter().any(|prefix| {\n\t\t\t\tcwd == prefix || cwd.starts_with(&format!(\"{}/\", prefix.trim_end_matches('/')))\n\t\t\t}) {\n\t\t\tbail!(\"cwd `{cwd}` is outside configured execution roots on host `{host_name}`\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, cwd) {\n\t\t\tbail!(\"cwd intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tfor arg in args {\n\t\tif arg.contains('\\0') {\n\t\t\tbail!(\"arguments may not contain NUL bytes\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, arg) {\n\t\t\tbail!(\"argument intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tOk(())\n}",
+      "original_pin": {
+        "bytes": 2470,
+        "sha256": "b3213885abc4574a8f322de1b4eb2a426caf430d79dec9f7a92ab1962ed16adc"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 21686
+    },
+    {
+      "adapted": "const DEFAULT_DANGEROUS: &[&str] = &[\n\t\"sudo\",\n\t\"su\",\n\t\"doas\",\n\t\"sh\",\n\t\"bash\",\n\t\"dash\",\n\t\"zsh\",\n\t\"fish\",\n\t\"ksh\",\n\t\"ssh\",\n\t\"scp\",\n\t\"sftp\",\n\t\"nohup\",\n\t\"setsid\",\n\t\"tmux\",\n\t\"screen\",\n\t\"systemd-run\",\n\t\"crontab\",\n\t\"at\",\n\t\"nsenter\",\n\t\"unshare\",\n\t\"kill\",\n\t\"pkill\",\n\t\"killall\",\n\t\"systemctl\",\n\t\"service\",\n\t\"loginctl\",\n\t\"reboot\",\n\t\"shutdown\",\n\t\"poweroff\",\n\t\"halt\",\n\t\"init\",\n\t\"mount\",\n\t\"umount\",\n\t\"modprobe\",\n\t\"insmod\",\n\t\"rmmod\",\n\t\"apt\",\n\t\"apt-get\",\n\t\"dpkg\",\n\t\"rpm\",\n\t\"dnf\",\n\t\"yum\",\n\t\"snap\",\n\t\"docker\",\n\t\"podman\",\n\t\"virsh\",\n\t\"nft\",\n\t\"iptables\",\n\t\"ip6tables\",\n];",
+      "original": "const DEFAULT_DANGEROUS: &[&str] = &[\n\t\"sudo\",\n\t\"su\",\n\t\"doas\",\n\t\"sh\",\n\t\"bash\",\n\t\"dash\",\n\t\"zsh\",\n\t\"fish\",\n\t\"ksh\",\n\t\"ssh\",\n\t\"scp\",\n\t\"sftp\",\n\t\"nohup\",\n\t\"setsid\",\n\t\"tmux\",\n\t\"screen\",\n\t\"systemd-run\",\n\t\"crontab\",\n\t\"at\",\n\t\"nsenter\",\n\t\"unshare\",\n\t\"kill\",\n\t\"pkill\",\n\t\"killall\",\n\t\"systemctl\",\n\t\"service\",\n\t\"loginctl\",\n\t\"reboot\",\n\t\"shutdown\",\n\t\"poweroff\",\n\t\"halt\",\n\t\"init\",\n\t\"mount\",\n\t\"umount\",\n\t\"modprobe\",\n\t\"insmod\",\n\t\"rmmod\",\n\t\"apt\",\n\t\"apt-get\",\n\t\"dpkg\",\n\t\"rpm\",\n\t\"dnf\",\n\t\"yum\",\n\t\"snap\",\n\t\"docker\",\n\t\"podman\",\n\t\"virsh\",\n\t\"nft\",\n\t\"iptables\",\n\t\"ip6tables\",\n];",
+      "original_pin": {
+        "bytes": 549,
+        "sha256": "390b6a14fcbd4551b5c6c29c4028424462a455e083045ce316688ae1acc175d1"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 19342
+    },
+    {
+      "adapted": "const DANGEROUS_ENV: &[&str] = &[\n\t\"LD_PRELOAD\",\n\t\"LD_LIBRARY_PATH\",\n\t\"DYLD_INSERT_LIBRARIES\",\n\t\"DYLD_LIBRARY_PATH\",\n\t\"PYTHONPATH\",\n\t\"PYTHONHOME\",\n\t\"NODE_OPTIONS\",\n\t\"BASH_ENV\",\n\t\"ENV\",\n\t\"PERL5OPT\",\n\t\"RUBYOPT\",\n\t\"GIT_SSH\",\n\t\"GIT_SSH_COMMAND\",\n\t\"SSH_ASKPASS\",\n\t\"SUDO_ASKPASS\",\n];",
+      "original": "const DANGEROUS_ENV: &[&str] = &[\n\t\"LD_PRELOAD\",\n\t\"LD_LIBRARY_PATH\",\n\t\"DYLD_INSERT_LIBRARIES\",\n\t\"DYLD_LIBRARY_PATH\",\n\t\"PYTHONPATH\",\n\t\"PYTHONHOME\",\n\t\"NODE_OPTIONS\",\n\t\"BASH_ENV\",\n\t\"ENV\",\n\t\"PERL5OPT\",\n\t\"RUBYOPT\",\n\t\"GIT_SSH\",\n\t\"GIT_SSH_COMMAND\",\n\t\"SSH_ASKPASS\",\n\t\"SUDO_ASKPASS\",\n];",
+      "original_pin": {
+        "bytes": 277,
+        "sha256": "c5fd2c025d271012d0f33319b3735bf7472ccfb7778773060212165748d4f1de"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [],
+      "start_byte": 20250
+    },
+    {
+      "adapted": "pub fn check_environment(host_name: &str, host: &HostConfig, env: &BTreeMap<String, String>) -> Result<()> {\n\tfor (key, value) in env {\n\t\tif value.contains('\\0') {\n\t\t\tbail!(\"environment values may not contain NUL bytes\");\n\t\t}\n\t\tif host.execution_mode == ExecutionMode::Isolated && DANGEROUS_ENV.contains(&key.as_str()) {\n\t\t\tbail!(\"environment variable `{key}` is denied on host `{host_name}`\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, value) {\n\t\t\tbail!(\"environment value intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tOk(())\n}",
+      "adapted_pin": {
+        "bytes": 561,
+        "sha256": "56da3ac0a4aa719151ab49f38cebf5b6e15c4f852eef6560d79102edb4f1fab0"
+      },
+      "original": "pub fn check_environment(host_name: &str, env: &BTreeMap<String, String>) -> Result<()> {\n\tlet host = runtime_config()?.host(host_name)?;\n\tfor (key, value) in env {\n\t\tif value.contains('\\0') {\n\t\t\tbail!(\"environment values may not contain NUL bytes\");\n\t\t}\n\t\tif host.execution_mode == ExecutionMode::Isolated && DANGEROUS_ENV.contains(&key.as_str()) {\n\t\t\tbail!(\"environment variable `{key}` is denied on host `{host_name}`\");\n\t\t}\n\t\tif let Some(prefix) = protected_value(host, value) {\n\t\t\tbail!(\"environment value intersects protected value `{prefix}` on host `{host_name}`\");\n\t\t}\n\t}\n\tOk(())\n}",
+      "original_pin": {
+        "bytes": 590,
+        "sha256": "e4e7b4a0bad4d7fca63488234d1d330855dedcf1c59c0fdad13c6010e12ad0c9"
+      },
+      "source": "src/mcp/runtime/config.rs",
+      "source_pin": {
+        "bytes": 29323,
+        "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+      },
+      "splices": [
+        {
+          "new": "host_name: &str, host: &HostConfig, env:",
+          "old": "host_name: &str, env:"
+        },
+        {
+          "new": "",
+          "old": "\tlet host = runtime_config()?.host(host_name)?;\n"
+        }
+      ],
+      "start_byte": 20529
+    },
+    {
+      "adapted": "fn validate_start(params: &ProcessStartParams, host: &HostConfig) -> Result<()> {\n\tmatch params.idempotency_key.as_deref() {\n\t\tSome(key) if !key.trim().is_empty() && key.len() <= 256 => {}\n\t\t_ => bail!(\"idempotency_key is mandatory and must contain 1..256 nonblank bytes\"),\n\t}\n\tvalidate_execution(\n\t\t&params.host,\n\t\thost,\n\t\t&params.executable,\n\t\t&params.args,\n\t\tparams.cwd.as_deref(),\n\t\tfalse,\n\t)?;\n\tcheck_environment(&params.host, host, &params.env)?;\n\tif params.args.len() > 256 {\n\t\tbail!(\"at most 256 arguments are allowed\");\n\t}\n\tif params.env.len() > 128 {\n\t\tbail!(\"at most 128 environment variables are allowed\");\n\t}\n\tfor key in params.env.keys() {\n\t\tlet valid = !key.is_empty()\n\t\t\t&& !key.as_bytes()[0].is_ascii_digit()\n\t\t\t&& key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');\n\t\tif !valid {\n\t\t\tbail!(\"invalid environment variable name `{key}`\");\n\t\t}\n\t}\n\tif params\n\t\t.stdin\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.len() > MAX_STDIN_BYTES)\n\t{\n\t\tbail!(\"stdin exceeds the 1 MiB limit\");\n\t}\n\tif params\n\t\t.timeout_seconds\n\t\t.is_some_and(|value| value == 0 || value > 604_800)\n\t{\n\t\tbail!(\"timeout_seconds must be between 1 and 604800\");\n\t}\n\tif params.nice.is_some_and(|value| value > 19) {\n\t\tbail!(\"nice must be between 0 and 19\");\n\t}\n\tif params\n\t\t.cpu_quota_percent\n\t\t.is_some_and(|value| value == 0 || value > 1000)\n\t{\n\t\tbail!(\"cpu_quota_percent must be between 1 and 1000\");\n\t}\n\tif params\n\t\t.memory_max_bytes\n\t\t.is_some_and(|value| value < 16 * 1024 * 1024)\n\t{\n\t\tbail!(\"memory_max_bytes must be at least 16 MiB\");\n\t}\n\tif params\n\t\t.idempotency_key\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.is_empty() || value.len() > 256)\n\t{\n\t\tbail!(\"idempotency_key must contain 1..256 bytes\");\n\t}\n\tOk(())\n}",
+      "adapted_pin": {
+        "bytes": 1703,
+        "sha256": "02b7ca076fd33a18f9c612e26be2532e6d8ae91c4ee3b2a6164e3db1acc29781"
+      },
+      "original": "fn validate_start(params: &ProcessStartParams) -> Result<()> {\n\tmatch params.idempotency_key.as_deref() {\n\t\tSome(key) if !key.trim().is_empty() && key.len() <= 256 => {}\n\t\t_ => bail!(\"idempotency_key is mandatory and must contain 1..256 nonblank bytes\"),\n\t}\n\tcheck_execution(\n\t\t&params.host,\n\t\t&params.executable,\n\t\t&params.args,\n\t\tparams.cwd.as_deref(),\n\t\tfalse,\n\t)?;\n\tcheck_environment(&params.host, &params.env)?;\n\tif params.args.len() > 256 {\n\t\tbail!(\"at most 256 arguments are allowed\");\n\t}\n\tif params.env.len() > 128 {\n\t\tbail!(\"at most 128 environment variables are allowed\");\n\t}\n\tfor key in params.env.keys() {\n\t\tlet valid = !key.is_empty()\n\t\t\t&& !key.as_bytes()[0].is_ascii_digit()\n\t\t\t&& key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');\n\t\tif !valid {\n\t\t\tbail!(\"invalid environment variable name `{key}`\");\n\t\t}\n\t}\n\tif params\n\t\t.stdin\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.len() > MAX_STDIN_BYTES)\n\t{\n\t\tbail!(\"stdin exceeds the 1 MiB limit\");\n\t}\n\tif params\n\t\t.timeout_seconds\n\t\t.is_some_and(|value| value == 0 || value > 604_800)\n\t{\n\t\tbail!(\"timeout_seconds must be between 1 and 604800\");\n\t}\n\tif params.nice.is_some_and(|value| value > 19) {\n\t\tbail!(\"nice must be between 0 and 19\");\n\t}\n\tif params\n\t\t.cpu_quota_percent\n\t\t.is_some_and(|value| value == 0 || value > 1000)\n\t{\n\t\tbail!(\"cpu_quota_percent must be between 1 and 1000\");\n\t}\n\tif params\n\t\t.memory_max_bytes\n\t\t.is_some_and(|value| value < 16 * 1024 * 1024)\n\t{\n\t\tbail!(\"memory_max_bytes must be at least 16 MiB\");\n\t}\n\tif params\n\t\t.idempotency_key\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.is_empty() || value.len() > 256)\n\t{\n\t\tbail!(\"idempotency_key must contain 1..256 bytes\");\n\t}\n\tOk(())\n}",
+      "original_pin": {
+        "bytes": 1667,
+        "sha256": "747c0fa4cf6b0dc56c4b0de2f38267c3874eeebf56709bef5b19aa7d3c5a02b8"
+      },
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [
+        {
+          "new": "params: &ProcessStartParams, host: &HostConfig)",
+          "old": "params: &ProcessStartParams)"
+        },
+        {
+          "new": "validate_execution(\n\t\t&params.host,\n\t\thost,",
+          "old": "check_execution(\n\t\t&params.host,"
+        },
+        {
+          "new": "check_environment(&params.host, host, &params.env)?;",
+          "old": "check_environment(&params.host, &params.env)?;"
+        }
+      ],
+      "start_byte": 201141
+    },
+    {
+      "adapted": "fn validate_new_host_resource_limits(\n\tplatform: Platform,\n\tparams: &ProcessStartParams,\n) -> Result<()> {\n\tif platform == Platform::Macos\n\t\t&& (params.cpu_quota_percent.is_some() || params.memory_max_bytes.is_some())\n\t{\n\t\tbail!(\n\t\t\t\"macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted\"\n\t\t);\n\t}\n\tOk(())\n}",
+      "original": "fn validate_new_host_resource_limits(\n\tplatform: Platform,\n\tparams: &ProcessStartParams,\n) -> Result<()> {\n\tif platform == Platform::Macos\n\t\t&& (params.cpu_quota_percent.is_some() || params.memory_max_bytes.is_some())\n\t{\n\t\tbail!(\n\t\t\t\"macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted\"\n\t\t);\n\t}\n\tOk(())\n}",
+      "original_pin": {
+        "bytes": 393,
+        "sha256": "5c2568a3ad099d2441c4912ab8d5efa320018a538530c9edf0d7e6541f6375b6"
+      },
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [],
+      "start_byte": 236977
+    },
+    {
+      "adapted": "fn key_only(params: &ProcessStartParams) -> Result<()> {\n\tmatch params.idempotency_key.as_deref() {\n\t\tSome(key) if !key.trim().is_empty() && key.len() <= 256 => {}\n\t\t_ => bail!(\"idempotency_key is mandatory and must contain 1..256 nonblank bytes\"),\n\t}\n\tOk(())\n}",
+      "original": "fn validate_start(params: &ProcessStartParams) -> Result<()> {\n\tmatch params.idempotency_key.as_deref() {\n\t\tSome(key) if !key.trim().is_empty() && key.len() <= 256 => {}\n\t\t_ => bail!(\"idempotency_key is mandatory and must contain 1..256 nonblank bytes\"),\n\t}\n\tcheck_execution(\n\t\t&params.host,\n\t\t&params.executable,\n\t\t&params.args,\n\t\tparams.cwd.as_deref(),\n\t\tfalse,\n\t)?;\n\tcheck_environment(&params.host, &params.env)?;\n\tif params.args.len() > 256 {\n\t\tbail!(\"at most 256 arguments are allowed\");\n\t}\n\tif params.env.len() > 128 {\n\t\tbail!(\"at most 128 environment variables are allowed\");\n\t}\n\tfor key in params.env.keys() {\n\t\tlet valid = !key.is_empty()\n\t\t\t&& !key.as_bytes()[0].is_ascii_digit()\n\t\t\t&& key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');\n\t\tif !valid {\n\t\t\tbail!(\"invalid environment variable name `{key}`\");\n\t\t}\n\t}\n\tif params\n\t\t.stdin\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.len() > MAX_STDIN_BYTES)\n\t{\n\t\tbail!(\"stdin exceeds the 1 MiB limit\");\n\t}\n\tif params\n\t\t.timeout_seconds\n\t\t.is_some_and(|value| value == 0 || value > 604_800)\n\t{\n\t\tbail!(\"timeout_seconds must be between 1 and 604800\");\n\t}\n\tif params.nice.is_some_and(|value| value > 19) {\n\t\tbail!(\"nice must be between 0 and 19\");\n\t}\n\tif params\n\t\t.cpu_quota_percent\n\t\t.is_some_and(|value| value == 0 || value > 1000)\n\t{\n\t\tbail!(\"cpu_quota_percent must be between 1 and 1000\");\n\t}\n\tif params\n\t\t.memory_max_bytes\n\t\t.is_some_and(|value| value < 16 * 1024 * 1024)\n\t{\n\t\tbail!(\"memory_max_bytes must be at least 16 MiB\");\n\t}\n\tif params\n\t\t.idempotency_key\n\t\t.as_ref()\n\t\t.is_some_and(|value| value.is_empty() || value.len() > 256)\n\t{\n\t\tbail!(\"idempotency_key must contain 1..256 bytes\");\n\t}\n\tOk(())\n}",
+      "relation": "exact first match block of validate_start; test-owned function name and Ok return",
+      "source": "src/mcp/runtime/jobs.rs"
+    },
+    {
+      "adapted": "fn operator_host<'a>(name: &str, host: &'a HostConfig) -> Result<&'a HostConfig> {\n\tif host.execution_mode != ExecutionMode::Operator {\n\t\tbail!(\n\t\t\t\"host `{name}` is isolated; operator authority must be configured by its administrator\"\n\t\t);\n\t}\n\tOk(host)\n}",
+      "adapted_pin": {
+        "bytes": 255,
+        "sha256": "fb34613012fdeb71ebfbf8087c3256b2860d6b561a2b6a7d27e35c3582b373b2"
+      },
+      "original": "fn operator_host(name: &str) -> Result<&'static HostConfig> {\n\tlet host = runtime_config()?.host(name)?;\n\tif host.execution_mode != ExecutionMode::Operator {\n\t\tbail!(\n\t\t\t\"host `{name}` is isolated; operator authority must be configured by its administrator\"\n\t\t);\n\t}\n\tOk(host)\n}",
+      "original_pin": {
+        "bytes": 277,
+        "sha256": "389e5f064ae2b21d8d011604c74e9e8f72d95416d9d8953c62c705463cf44f19"
+      },
+      "source": "src/mcp/runtime/operator.rs",
+      "source_pin": {
+        "bytes": 11409,
+        "sha256": "36583618c7b1974b18309825498da698b32bd296310e307c51441b06c2860737"
+      },
+      "splices": [
+        {
+          "new": "fn operator_host<'a>(name: &str, host: &'a HostConfig) -> Result<&'a HostConfig>",
+          "old": "fn operator_host(name: &str) -> Result<&'static HostConfig>"
+        },
+        {
+          "new": "",
+          "old": "\tlet host = runtime_config()?.host(name)?;\n"
+        }
+      ],
+      "start_byte": 580
+    },
+    {
+      "adapted": "fn shell_start_prefix(params: ShellStartParams, host: &HostConfig) -> Result<()> {\n\toperator_host(&params.host, host)?;\n\tif params.command.len() > 65536 || params.command.contains('\\0') {\n\t\tbail!(\"shell source must not contain NUL and is limited to 64 KiB\");\n\t}\n\tOk(())\n}",
+      "original": "pub async fn shell_start(params: ShellStartParams) -> Result<String> {\n\toperator_host(&params.host)?;\n\tif params.command.len() > 65536 || params.command.contains('\\0') {\n\t\tbail!(\"shell source must not contain NUL and is limited to 64 KiB\");\n\t}\n\tstart_job(ProcessStartParams {\n\t\thost: params.host,\n\t\texecutable: params.shell.unwrap_or_else(|| \"/bin/sh\".into()),\n\t\targs: vec![\"-c\".into(), params.command],\n\t\tcwd: params.cwd,\n\t\tenv: params.env,\n\t\tstdin: None,\n\t\ttimeout_seconds: params.timeout_seconds,\n\t\tidempotency_key: params.idempotency_key,\n\t\tnice: None,\n\t\tcpu_quota_percent: None,\n\t\tmemory_max_bytes: None,\n\t})\n\t.await\n}",
+      "original_pin": {
+        "bytes": 623,
+        "sha256": "5bbba6ea30a56f86a9451387ecc09e797add1300d404263f8b67087e9655bb71"
+      },
+      "relation": "exact pre-start_job original prefix, explicit captured-host injection, no effect called",
+      "source": "src/mcp/runtime/operator.rs",
+      "source_pin": {
+        "bytes": 11409,
+        "sha256": "36583618c7b1974b18309825498da698b32bd296310e307c51441b06c2860737"
+      },
+      "splices": [],
+      "start_byte": 1417
+    },
+    {
+      "adapted": "fn page_prefix(params: &ProcessListPageParams) -> Result<usize> {\n\tlet limit = params.limit.unwrap_or(128) as usize;\n\tif !(1..=128).contains(&limit)\n\t\t|| params\n\t\t\t.cursor\n\t\t\t.as_ref()\n\t\t\t.is_some_and(|cursor| cursor.len() > 256)\n\t{\n\t\tbail!(\"invalid durable job inventory page\");\n\t}\n\tOk(limit)\n}",
+      "original": "fn page_job_rows(\n\trows: &[Value],\n\tparams: &ProcessListPageParams,\n\tnamespace: &str,\n) -> Result<String> {\n\tlet limit = params.limit.unwrap_or(128) as usize;\n\tif !(1..=128).contains(&limit)\n\t\t|| params\n\t\t\t.cursor\n\t\t\t.as_ref()\n\t\t\t.is_some_and(|cursor| cursor.len() > 256)\n\t{\n\t\tbail!(\"invalid durable job inventory page\");\n\t}\n\tlet fingerprint = inventory_snapshot_digest(rows, params.host.as_deref(), namespace)?;\n\tlet start = match params.cursor.as_deref() {\n\t\tNone => 0,\n\t\tSome(cursor) => {\n\t\t\tlet (digest, id) = cursor\n\t\t\t\t.split_once(':')\n\t\t\t\t.ok_or_else(|| anyhow::anyhow!(\"invalid inventory cursor\"))?;\n\t\t\tif digest != fingerprint {\n\t\t\t\tbail!(\"durable job inventory changed; restart from the first page\");\n\t\t\t}\n\t\t\trows.iter()\n\t\t\t\t.position(|row| row[\"id\"].as_str() == Some(id))\n\t\t\t\t.ok_or_else(|| anyhow::anyhow!(\"inventory cursor unavailable\"))?\n\t\t\t\t+ 1\n\t\t}\n\t};\n\tlet mut end = (start + limit).min(rows.len());\n\tloop {\n\t\tlet more = end < rows.len();\n\t\tlet next = if more {\n\t\t\tSome(format!(\n\t\t\t\t\"{}:{}\",\n\t\t\t\tfingerprint,\n\t\t\t\trows[end - 1][\"id\"].as_str().unwrap_or_default()\n\t\t\t))\n\t\t} else {\n\t\t\tNone\n\t\t};\n\t\tlet value = json!({\"jobs\":&rows[start..end],\"total\":rows.len(),\"next_cursor\":next,\n\t\t\t\"has_more\":more,\"inventory_complete\":!more,\"snapshot_sha256\":fingerprint,\n\t\t\t\"status_authoritative\":false,\"snapshot_semantics\":\"registry_metadata_at_observation\"});\n\t\tlet text = serde_json::to_string(&value)?;\n\t\tlet wire = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(\n\t\t\ttext.clone(),\n\t\t)]);\n\t\tif serde_json::to_vec(&wire)?.len() <= 64 * 1024 {\n\t\t\treturn Ok(text);\n\t\t}\n\t\tif end <= start + 1 {\n\t\t\tbail!(\"one durable job identity exceeds the inventory page budget\");\n\t\t}\n\t\tend -= 1;\n\t}\n}",
+      "original_pin": {
+        "bytes": 1711,
+        "sha256": "1f6dec2fb4ada8afa78cb0355db066a4c7216df2230ee4e0732546076da5e2df"
+      },
+      "relation": "exact limit/cursor admission prefix of original page_job_rows, no inventory mutation",
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [],
+      "start_byte": 255670
+    },
+    {
+      "adapted": "pub async fn read_job(params: ProcessReadParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\tlet record = check_ref(&reference)?;\n\tlet host = runtime_config()?.host(&record.host)?;\n\tif host.native_jobs.is_some() && record.system_jobctl {\n\t\tbail!(\"native-only job profile does not admit legacy system jobctl reads; no fallback\");\n\t}\n\tlet request = json!({\n\t\t\"job_id\": record.id,\n\t\t\"job_dir\": record.remote_job_dir,\n\t\t\"request_digest\": record.request_digest,\n\t\t\"unit\": record.unit,\n\t\t\"stdout_offset\": params.stdout_offset.unwrap_or(0),\n\t\t\"stderr_offset\": params.stderr_offset.unwrap_or(0),\n\t\t\"limit\": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),\n\t});\n\tlet output: Value = if super::ssh::observation_pool_requested() {\n\t\tuse super::ssh::{run_job_observation, JobObservation};\n\t\tlet observation = if record.system_jobctl {\n\t\t\tJobObservation::SystemRead {\n\t\t\t\tjob_id: &record.id,\n\t\t\t\tstdout_offset: params.stdout_offset.unwrap_or(0),\n\t\t\t\tstderr_offset: params.stderr_offset.unwrap_or(0),\n\t\t\t\tlimit: params.limit.unwrap_or(16384),\n\t\t\t}\n\t\t} else {\n\t\t\tJobObservation::PythonRead {\n\t\t\t\tjob_id: &record.id,\n\t\t\t\tjob_dir: &record.remote_job_dir,\n\t\t\t\tunit: &record.unit,\n\t\t\t\trequest_digest: record\n\t\t\t\t\t.request_digest\n\t\t\t\t\t.as_deref()\n\t\t\t\t\t.context(\"legacy job has no full observation binding\")?,\n\t\t\t\tstdout_offset: params.stdout_offset.unwrap_or(0),\n\t\t\t\tstderr_offset: params.stderr_offset.unwrap_or(0),\n\t\t\t\tlimit: params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),\n\t\t\t}\n\t\t};\n\t\trun_job_observation(&record.host, observation).await?\n\t} else if record.system_jobctl {\n\t\trun_jobctl(host, &json!({\"op\":\"read\",\"job_id\":record.id,\n            \"stdout_offset\":params.stdout_offset.unwrap_or(0),\"stderr_offset\":params.stderr_offset.unwrap_or(0),\"limit\":params.limit.unwrap_or(16384)})).await?\n\t} else if host.native_jobs.is_some() {\n\t\tsuper::ssh::run_native_job_json(\n\t\t\thost,\n\t\t\tsuper::native_jobs::NativeJobOperation::Read(&request),\n\t\t\tDuration::from_secs(15),\n\t\t)\n\t\t.await?\n\t} else {\n\t\trun_python_json(\n\t\t\thost,\n\t\t\t&bound_remote_code(READ_CODE)?,\n\t\t\t&request,\n\t\t\tDuration::from_secs(15),\n\t\t)\n\t\t.await?\n\t};\n\tlet completion = observation_completion_audit(\n\t\t\"process_read\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"observation\",\"ok\": true}),\n\t)\n\t.await;\n\tOk(serde_json::to_string_pretty(\n\t\t&retain_observation_after_audit(output, completion, &record.host, &record.id),\n\t)?)\n}",
+      "original": "pub async fn read_job(params: ProcessReadParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\tlet record = check_ref(&reference)?;\n\tlet host = runtime_config()?.host(&record.host)?;\n\tif host.native_jobs.is_some() && record.system_jobctl {\n\t\tbail!(\"native-only job profile does not admit legacy system jobctl reads; no fallback\");\n\t}\n\tlet request = json!({\n\t\t\"job_id\": record.id,\n\t\t\"job_dir\": record.remote_job_dir,\n\t\t\"request_digest\": record.request_digest,\n\t\t\"unit\": record.unit,\n\t\t\"stdout_offset\": params.stdout_offset.unwrap_or(0),\n\t\t\"stderr_offset\": params.stderr_offset.unwrap_or(0),\n\t\t\"limit\": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),\n\t});\n\tlet output: Value = if super::ssh::observation_pool_requested() {\n\t\tuse super::ssh::{run_job_observation, JobObservation};\n\t\tlet observation = if record.system_jobctl {\n\t\t\tJobObservation::SystemRead {\n\t\t\t\tjob_id: &record.id,\n\t\t\t\tstdout_offset: params.stdout_offset.unwrap_or(0),\n\t\t\t\tstderr_offset: params.stderr_offset.unwrap_or(0),\n\t\t\t\tlimit: params.limit.unwrap_or(16384),\n\t\t\t}\n\t\t} else {\n\t\t\tJobObservation::PythonRead {\n\t\t\t\tjob_id: &record.id,\n\t\t\t\tjob_dir: &record.remote_job_dir,\n\t\t\t\tunit: &record.unit,\n\t\t\t\trequest_digest: record\n\t\t\t\t\t.request_digest\n\t\t\t\t\t.as_deref()\n\t\t\t\t\t.context(\"legacy job has no full observation binding\")?,\n\t\t\t\tstdout_offset: params.stdout_offset.unwrap_or(0),\n\t\t\t\tstderr_offset: params.stderr_offset.unwrap_or(0),\n\t\t\t\tlimit: params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),\n\t\t\t}\n\t\t};\n\t\trun_job_observation(&record.host, observation).await?\n\t} else if record.system_jobctl {\n\t\trun_jobctl(host, &json!({\"op\":\"read\",\"job_id\":record.id,\n            \"stdout_offset\":params.stdout_offset.unwrap_or(0),\"stderr_offset\":params.stderr_offset.unwrap_or(0),\"limit\":params.limit.unwrap_or(16384)})).await?\n\t} else if host.native_jobs.is_some() {\n\t\tsuper::ssh::run_native_job_json(\n\t\t\thost,\n\t\t\tsuper::native_jobs::NativeJobOperation::Read(&request),\n\t\t\tDuration::from_secs(15),\n\t\t)\n\t\t.await?\n\t} else {\n\t\trun_python_json(\n\t\t\thost,\n\t\t\t&bound_remote_code(READ_CODE)?,\n\t\t\t&request,\n\t\t\tDuration::from_secs(15),\n\t\t)\n\t\t.await?\n\t};\n\tlet completion = observation_completion_audit(\n\t\t\"process_read\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"observation\",\"ok\": true}),\n\t)\n\t.await;\n\tOk(serde_json::to_string_pretty(\n\t\t&retain_observation_after_audit(output, completion, &record.host, &record.id),\n\t)?)\n}",
+      "original_pin": {
+        "bytes": 2465,
+        "sha256": "0359a72abd34954635420424580449bf1943368cbc605a8ab640a18fde65af33"
+      },
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [],
+      "start_byte": 245947
+    },
+    {
+      "adapted": "pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\tlet record = check_ref(&reference)?;\n\tlet wait = params.timeout_seconds.unwrap_or(10).min(30);\n\tlet status = status_observation(&record, wait).await?;\n\tlet completion = observation_completion_audit(\n\t\t\"process_wait\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"observation\",\"ok\":true}),\n\t)\n\t.await;\n\tOk(serde_json::to_string_pretty(\n\t\t&retain_observation_after_audit(status, completion, &record.host, &record.id),\n\t)?)\n}",
+      "original": "pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\tlet record = check_ref(&reference)?;\n\tlet wait = params.timeout_seconds.unwrap_or(10).min(30);\n\tlet status = status_observation(&record, wait).await?;\n\tlet completion = observation_completion_audit(\n\t\t\"process_wait\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"observation\",\"ok\":true}),\n\t)\n\t.await;\n\tOk(serde_json::to_string_pretty(\n\t\t&retain_observation_after_audit(status, completion, &record.host, &record.id),\n\t)?)\n}",
+      "original_pin": {
+        "bytes": 601,
+        "sha256": "ff227fe34e2d62fa381bb4754257a827f875f511f92c6837a993d9a20786412c"
+      },
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [],
+      "start_byte": 245344
+    },
+    {
+      "adapted": "pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\t// Cancellation continues an existing identity even when new effects are\n\t// fenced off. Carry that verified binding, without acquiring a new owner.\n\tlet record = Arc::new(check_ref(&reference)?);\n\tlet host = runtime_config()?.host(&record.host)?;\n\tif host.native_jobs.is_some() && record.system_jobctl {\n\t\tbail!(\n\t\t\t\"native-only job profile does not admit legacy system jobctl cancellation; no fallback\"\n\t\t);\n\t}\n\tlet request = json!({\n\t\t\"job_id\": record.id,\n\t\t\"job_dir\": record.remote_job_dir,\n\t\t\"request_digest\": record.request_digest,\n\t\t\"unit\": record.unit,\n\t\t\"grace_seconds\": params.grace_seconds.unwrap_or(10).min(30),\n\t});\n\t#[cfg(target_os = \"linux\")]\n\tlet mut request = request;\n\t#[cfg(target_os = \"linux\")]\n\tif !record.system_jobctl && host.platform == Platform::Linux {\n\t\tif let Some((artifacts, protocol)) =\n\t\t\tcrate::mcp::hia_controller_release::terminal_publication_artifacts()\n\t\t{\n\t\t\tif protocol >= 10 {\n\t\t\t\trequest[\"hia_cancel_authority\"] = artifacts[\"encoder\"].clone();\n\t\t\t}\n\t\t\tif protocol >= 12 {\n\t\t\t\trequest[\"hia_cancel_writer\"] = artifacts[\"writer\"].clone();\n\t\t\t}\n\t\t}\n\t}\n\tlet intent = prepare_audit(\n\t\t\"process_cancel_intent\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"intent\",\"remote_operation_submitted\":false}),\n\t)\n\t.map_err(|_| operation_intent_unavailable())?;\n\tlet record = run_cancel_intent(intent, record, append_audit).await?;\n\tlet remote = if record.system_jobctl {\n\t\trun_jobctl(host, &json!({\"op\":\"cancel\",\"job_id\":record.id})).await\n\t} else if host.native_jobs.is_some() {\n\t\tsuper::ssh::run_native_job_json(\n\t\t\thost,\n\t\t\tsuper::native_jobs::NativeJobOperation::Cancel(&request),\n\t\t\tDuration::from_secs(45),\n\t\t)\n\t\t.await\n\t} else {\n\t\trun_python_json(\n\t\t\thost,\n\t\t\t&bound_remote_code(CANCEL_CODE)?,\n\t\t\t&request,\n\t\t\tDuration::from_secs(45),\n\t\t)\n\t\t.await\n\t};\n\tlet output = retain_cancel_outcome(&params.job_id, remote);\n\tlet completion = prepare_audit(\n\t\t\"process_cancel\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"result\",\"outcome_unknown\":output[\"outcome\"]==\"unknown\"}),\n\t);\n\tlet output = complete_cancel_audit(output, completion, record, append_audit).await;\n\tOk(serde_json::to_string_pretty(&output)?)\n}",
+      "original": "pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {\n\tlet reference = ProcessRefParams {\n\t\thost: params.host.clone(),\n\t\tjob_id: params.job_id.clone(),\n\t};\n\t// Cancellation continues an existing identity even when new effects are\n\t// fenced off. Carry that verified binding, without acquiring a new owner.\n\tlet record = Arc::new(check_ref(&reference)?);\n\tlet host = runtime_config()?.host(&record.host)?;\n\tif host.native_jobs.is_some() && record.system_jobctl {\n\t\tbail!(\n\t\t\t\"native-only job profile does not admit legacy system jobctl cancellation; no fallback\"\n\t\t);\n\t}\n\tlet request = json!({\n\t\t\"job_id\": record.id,\n\t\t\"job_dir\": record.remote_job_dir,\n\t\t\"request_digest\": record.request_digest,\n\t\t\"unit\": record.unit,\n\t\t\"grace_seconds\": params.grace_seconds.unwrap_or(10).min(30),\n\t});\n\t#[cfg(target_os = \"linux\")]\n\tlet mut request = request;\n\t#[cfg(target_os = \"linux\")]\n\tif !record.system_jobctl && host.platform == Platform::Linux {\n\t\tif let Some((artifacts, protocol)) =\n\t\t\tcrate::mcp::hia_controller_release::terminal_publication_artifacts()\n\t\t{\n\t\t\tif protocol >= 10 {\n\t\t\t\trequest[\"hia_cancel_authority\"] = artifacts[\"encoder\"].clone();\n\t\t\t}\n\t\t\tif protocol >= 12 {\n\t\t\t\trequest[\"hia_cancel_writer\"] = artifacts[\"writer\"].clone();\n\t\t\t}\n\t\t}\n\t}\n\tlet intent = prepare_audit(\n\t\t\"process_cancel_intent\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"intent\",\"remote_operation_submitted\":false}),\n\t)\n\t.map_err(|_| operation_intent_unavailable())?;\n\tlet record = run_cancel_intent(intent, record, append_audit).await?;\n\tlet remote = if record.system_jobctl {\n\t\trun_jobctl(host, &json!({\"op\":\"cancel\",\"job_id\":record.id})).await\n\t} else if host.native_jobs.is_some() {\n\t\tsuper::ssh::run_native_job_json(\n\t\t\thost,\n\t\t\tsuper::native_jobs::NativeJobOperation::Cancel(&request),\n\t\t\tDuration::from_secs(45),\n\t\t)\n\t\t.await\n\t} else {\n\t\trun_python_json(\n\t\t\thost,\n\t\t\t&bound_remote_code(CANCEL_CODE)?,\n\t\t\t&request,\n\t\t\tDuration::from_secs(45),\n\t\t)\n\t\t.await\n\t};\n\tlet output = retain_cancel_outcome(&params.job_id, remote);\n\tlet completion = prepare_audit(\n\t\t\"process_cancel\",\n\t\t&params.host,\n\t\t&params.job_id,\n\t\t&json!({\"phase\":\"result\",\"outcome_unknown\":output[\"outcome\"]==\"unknown\"}),\n\t);\n\tlet output = complete_cancel_audit(output, completion, record, append_audit).await;\n\tOk(serde_json::to_string_pretty(&output)?)\n}",
+      "original_pin": {
+        "bytes": 2328,
+        "sha256": "0f60ce411805d77615876da320738e63f6b688be1a15bc2fbe99179b9d30b79c"
+      },
+      "source": "src/mcp/runtime/jobs.rs",
+      "source_pin": {
+        "bytes": 262505,
+        "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+      },
+      "splices": [],
+      "start_byte": 249030
+    },
+    {
+      "adaptation": "same trim predicate/error; independent observer calls it command instead of cmd",
+      "current": "bail!(\"Command parameter cannot be empty\")",
+      "original": "\t\t\tif cmd.trim().is_empty() {\n\t\t\t\tbail!(\"Command parameter cannot be empty\");\n\t\t\t}",
+      "previous_observer_error_corrected": "bail!(\"Command must not be empty\")",
+      "source": "src/mcp/fs/shell.rs",
+      "source_sha256": "9a8a1d3a5f93807fadbf16fe67126bd531ec4e03acef381ceed3e31d88673d2d"
+    }
+  ],
+  "schema": "hia.process-original-policy-observer.v1",
+  "source_head": "abc9ecb95ee9538518ec3f36c47b881974107021",
+  "sources": {
+    "src/mcp/fs/shell.rs": {
+      "bytes": 30386,
+      "sha256": "9a8a1d3a5f93807fadbf16fe67126bd531ec4e03acef381ceed3e31d88673d2d"
+    },
+    "src/mcp/runtime/config.rs": {
+      "bytes": 29323,
+      "sha256": "e4129a31dd5312be4d97ac9f68508f760bdb5a9e77c769fe65cd807f1ab73502"
+    },
+    "src/mcp/runtime/jobs.rs": {
+      "bytes": 262505,
+      "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+    },
+    "src/mcp/runtime/operator.rs": {
+      "bytes": 11409,
+      "sha256": "36583618c7b1974b18309825498da698b32bd296310e307c51441b06c2860737"
+    }
+  }
+}

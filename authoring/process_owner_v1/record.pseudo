@@ -1,0 +1,160 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(o)<32:
+        return CAPACITY
+    if length(s)<40:
+        return INVALID
+    if read(s,0)!=REQUEST or read(s,16)!=111 or read(s,24)!=0:
+        return INVALID
+    mode=read(s,8)
+    size=read(s,32)
+    if (mode!=1 and mode!=2 and mode!=3) or size>4194304 or size!=length(s)-40:
+        return INVALID
+    return retained_entry(s,o,w)
+
+def schema_init(w:mutbuf) -> u64:
+    retained_schema_init(w)
+    record_schema(w)
+    return 0
+
+def type_map(kind:u64) -> u64:
+    if kind==111:
+        return 9024
+    return retained_type_map(kind)
+
+def initialize(w:mutbuf,node:u64,kind:u64) -> u64:
+    result=retained_initialize(w,node,kind)
+    if result!=0 or kind!=111:
+        return result
+    at=allocate(w,8)
+    if at==0:
+        return CAPACITY
+    put(w,32768+at,LAUNCHED)
+    member=node_get(w,node+16)+15*64
+    node_put(w,member,1)
+    node_put(w,member+32,at)
+    node_put(w,member+40,8)
+    return 0
+
+def value(s:readbuf,w:mutbuf,at:u64,kind:u64,node:u64) -> u64:
+    if kind!=8:
+        return retained_value(s,w,at,kind,node)
+    end=number_span(s,at)
+    if end>=INVALID_EDGE or end<=at:
+        return INVALID
+    hi=0
+    lo=0
+    i=at
+    while i<end:
+        b=byte(s,i)
+        if b<48 or b>57:
+            return INVALID
+        digit=b-48
+        if hi>1844674407370955161:
+            return INVALID
+        if hi==1844674407370955161:
+            if lo>11068046444225730969:
+                return INVALID
+            if lo==11068046444225730969 and digit>5:
+                return INVALID
+        a=(lo&4294967295)*10+digit
+        b=(lo>>32)*10+(a>>32)
+        lo=(b<<32)|(a&4294967295)
+        hi=hi*10+(b>>32)
+        i=i+1
+    size=end-at
+    target=allocate(w,size)
+    if target==0:
+        return CAPACITY
+    copy_range(w,s,32768+target,at,size)
+    node_put(w,node,8)
+    node_put(w,node+16,hi)
+    node_put(w,node+24,lo)
+    node_put(w,node+32,target)
+    node_put(w,node+40,size)
+    return end
+
+def scalar(w:mutbuf,o:mutbuf,node:u64) -> u64:
+    if node_get(w,node)!=8:
+        return retained_scalar(w,o,node)
+    at=node_get(w,node+32)
+    size=node_get(w,node+40)
+    i=0
+    while i<size:
+        emit_byte(w,o,byte(w,32768+at+i))
+        i=i+1
+    return 0
+
+def output_finish(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if read(s,8)!=3:
+        put(w,224,0)
+        return retained_output_finish(s,o,w)
+    put(w,224,1)
+    put(w,112,0)
+    node=get(w,40)
+    size=emit_document(w,o,node)
+    if size>=INVALID_EDGE:
+        return size
+    if size>4194304:
+        return INVALID
+    if size>length(o):
+        put(w,176,size)
+        put(w,184,2)
+        return CAPACITY
+    put(w,112,1)
+    result=emit_document(w,o,node)
+    put(w,192,0)
+    return result
+
+def emit_document(w:mutbuf,o:mutbuf,node:u64) -> u64:
+    put(w,232,0)
+    put(w,240,0)
+    put(w,248,0)
+    return retained_emit_document(w,o,node)
+
+def indent(w:mutbuf,o:mutbuf,depth:u64) -> u64:
+    raw_emit(w,o,10)
+    i=0
+    while i<depth*2:
+        raw_emit(w,o,32)
+        i=i+1
+    return 0
+
+def emit_byte(w:mutbuf,o:mutbuf,b:u64) -> u64:
+    if get(w,224)==0:
+        return raw_emit(w,o,b)
+    state=get(w,240)
+    if (state&1)!=0:
+        if (state&2)!=0:
+            put(w,240,1)
+        elif b==92:
+            put(w,240,3)
+        elif b==34:
+            put(w,240,0)
+        return raw_emit(w,o,b)
+    depth=get(w,232)
+    pending=get(w,248)
+    if pending!=0:
+        put(w,248,0)
+        if (pending==91 and b==93) or (pending==123 and b==125):
+            put(w,232,depth-1)
+            return raw_emit(w,o,b)
+        indent(w,o,depth)
+    if b==34:
+        put(w,240,1)
+        return raw_emit(w,o,b)
+    if b==123 or b==91:
+        raw_emit(w,o,b)
+        put(w,232,depth+1)
+        put(w,248,b)
+        return 0
+    if b==125 or b==93:
+        put(w,232,depth-1)
+        indent(w,o,depth-1)
+        return raw_emit(w,o,b)
+    if b==44:
+        raw_emit(w,o,b)
+        return indent(w,o,depth)
+    if b==58:
+        raw_emit(w,o,b)
+        return raw_emit(w,o,32)
+    return raw_emit(w,o,b)

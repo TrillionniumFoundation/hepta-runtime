@@ -1,0 +1,625 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 688 or load(s, 0) != REQUEST or load(s, 40) != 0:
+        return INVALID
+    phase = load(s, 8)
+    kind = load(s, 16)
+    typed_size = load(s, 24)
+    host_size = load(s, 32)
+    if phase > 6 or kind < 1 or kind > 9 or typed_size < 640 or typed_size > length(s) - 48:
+        return INVALID
+    if host_size != length(s) - 48 - typed_size:
+        return INVALID
+    if length(o) < 80:
+        return CAPACITY
+    if length(s) > MAXIMUM - 131072:
+        return INVALID
+    if length(w) < length(s) + 131072:
+        return header(o, phase, kind, 2, length(s) + 131072, 0)
+    fill_range(w, 0, 16384, 0)
+    put(w, 1024, phase)
+    put(w, 1032, kind)
+    put(w, 1040, typed_size)
+    if checked_typed(s, w, kind, typed_size) == False:
+        return INVALID
+    requires_host = phase == 1 or phase == 2 or phase == 3
+    if requires_host:
+        if checked_host(s, w, 48 + typed_size, host_size) == False:
+            return INVALID
+    else:
+        if host_size != 0:
+            return INVALID
+    result = dispatch(s, w, phase, kind)
+    if result == MAXIMUM:
+        return INVALID
+    if result != 0:
+        return render_error(s, o, w)
+    header(o, phase, kind, 0, 0, 0)
+    put(o, 48, get(w, 1200))
+    put(o, 56, get(w, 1208))
+    put(o, 64, get(w, 1216))
+    return 80
+
+def dispatch(s: readbuf, w: mutbuf, phase: u64, kind: u64) -> u64:
+    if phase == 0:
+        if kind != 3:
+            return MAXIMUM
+        return key_admission(s, w)
+    if phase == 1:
+        if kind != 3:
+            return MAXIMUM
+        if key_admission(s, w) != 0:
+            return 1
+        if execution(s, w) != 0:
+            return 1
+        if environment(s, w) != 0:
+            return 1
+        return start_bounds(s, w)
+    if phase == 2:
+        if kind != 3:
+            return MAXIMUM
+        if get(w, 1072) == 1 and (present(w, 10) or present(w, 11)):
+            return failure(w, 18, 0, 0, 0, 0, 0, 0)
+        return 0
+    if phase == 3:
+        if kind != 2:
+            return MAXIMUM
+        if get(w, 1080) != 1:
+            return failure(w, 19, 0, field(w, 1), field_size(w, 1), 0, 0, 0)
+        if field_size(w, 18) > 65536 or has_zero(s, field(w, 18), field_size(w, 18)):
+            return failure(w, 20, 0, 0, 0, 0, 0, 0)
+        return 0
+    if phase == 4:
+        if kind == 5:
+            limit = 65536
+            if present(w, 15):
+                limit = field_value(w, 15)
+            if limit > 16384:
+                limit = 16384
+            put(w, 1200, limit)
+            put(w, 1208, field_value(w, 13))
+            put(w, 1216, field_value(w, 14))
+            return 0
+        if kind == 6 or kind == 7:
+            index = choose(kind == 6, 7, 16)
+            value = 10
+            if present(w, index):
+                value = field_value(w, index)
+            if value > 30:
+                value = 30
+            put(w, 1200, value)
+            return 0
+        return MAXIMUM
+    if phase == 5:
+        if kind != 9:
+            return MAXIMUM
+        value = 128
+        if present(w, 15):
+            value = field_value(w, 15)
+        if value < 1 or value > 128 or field_size(w, 17) > 256:
+            return failure(w, 21, 0, 0, 0, 0, 0, 0)
+        put(w, 1200, value)
+        return 0
+    if kind != 1:
+        return MAXIMUM
+    if blank(s, field(w, 18), field_size(w, 18)):
+        return failure(w, 22, 0, 0, 0, 0, 0, 0)
+    return 0
+
+def checked_typed(s: readbuf, w: mutbuf, kind: u64, size: u64) -> bool:
+    base = 48
+    if load(s, base) != TYPED or load(s, base + 8) != 0 or load(s, base + 16) != kind:
+        return False
+    mask = load(s, base + 24)
+    if (mask >> 20) != 0 or (mask & 1) != 0 or load(s, base + 32) != size - 640:
+        return False
+    if load(s, base + 40) != 0 or load(s, base + 48) != 0 or load(s, base + 56) != 0:
+        return False
+    i = 520
+    while i < 640:
+        if load(s, base + i) != 0:
+            return False
+        i = i + 8
+    put(w, 1048, mask)
+    at = base + 640
+    index = 1
+    while index <= 19:
+        typ = field_type(kind, index)
+        slot = base + 64 + (index - 1) * 24
+        actual = load(s, slot)
+        size = load(s, slot + 8)
+        value = load(s, slot + 16)
+        has = (mask & (1 << index)) != 0
+        if typ == 0 or (has == False and typ != 6 and typ != 7):
+            if actual != 0 or size != 0 or value != 0 or has:
+                return False
+            if typ == 1:
+                return False
+        else:
+            if actual != typ or size > base + get(w, 1040) - at:
+                return False
+            if typ <= 2:
+                if value != 0 or utf8(s, at, size) == False:
+                    return False
+            else:
+                if typ <= 5:
+                    if size != 0 or (typ == 4 and value > 255) or (typ == 5 and value > 65535):
+                        return False
+                else:
+                    count = checked_compound(s, w, typ, at, size)
+                    if count == MAXIMUM or count != value:
+                        return False
+                    if has == False and (size != 2 or count != 0):
+                        return False
+        put(w, FIELDS + index * 32, at)
+        put(w, FIELDS + index * 32 + 8, size)
+        put(w, FIELDS + index * 32 + 16, value)
+        at = at + size
+        index = index + 1
+    return at == base + get(w, 1040)
+
+def checked_compound(s: readbuf, w: mutbuf, typ: u64, at: u64, size: u64) -> u64:
+    if size < 2 or byte(s, at) != choose(typ == 6, 91, 123) or byte(s, at + size - 1) != choose(typ == 6, 93, 125):
+        return MAXIMUM
+    end = at + size - 1
+    at = at + 1
+    count = 0
+    while at < end:
+        if typ == 7:
+            if byte(s, at) != 34:
+                return MAXIMUM
+            at = string_info(s, w, at)
+            if at == MAXIMUM or at >= end or byte(s, at) != 58:
+                return MAXIMUM
+            at = at + 1
+        if byte(s, at) != 34:
+            return MAXIMUM
+        at = string_info(s, w, at)
+        if at == MAXIMUM or at > end:
+            return MAXIMUM
+        count = count + 1
+        if at < end:
+            if byte(s, at) != 44:
+                return MAXIMUM
+            at = at + 1
+            if at == end:
+                return MAXIMUM
+    return count
+
+def checked_host(s: readbuf, w: mutbuf, at: u64, size: u64) -> bool:
+    if size < 128 or load(s, at) != HOST or load(s, at + 8) != 1 or load(s, at + 16) != 1:
+        return False
+    if load(s, at + 48) > 1 or load(s, at + 56) > 1 or load(s, at + 64) > 31:
+        return False
+    put(w, 1072, load(s, at + 48))
+    put(w, 1080, load(s, at + 56))
+    put(w, 1088, load(s, at + 64))
+    end = at + size
+    cursor = at + 128
+    index = 0
+    while index < 3:
+        length = load(s, at + 24 + index * 8)
+        if length > end - cursor or utf8(s, cursor, length) == False:
+            return False
+        if index == 0:
+            if length != field_size(w, 1) or equal(s, cursor, field(w, 1), length) == False:
+                return False
+        put(w, 2048 + index * 16, cursor)
+        put(w, 2056 + index * 16, length)
+        cursor = cursor + length
+        index = index + 1
+    index = 0
+    while index < 7:
+        count = load(s, at + 72 + index * 8)
+        if count > (end - cursor) // 8:
+            return False
+        put(w, LISTS + index * 16, cursor)
+        put(w, LISTS + index * 16 + 8, count)
+        i = 0
+        while i < count:
+            if end - cursor < 8:
+                return False
+            length = load(s, cursor)
+            cursor = cursor + 8
+            if length > end - cursor or utf8(s, cursor, length) == False:
+                return False
+            cursor = cursor + length
+            i = i + 1
+        index = index + 1
+    return cursor == end
+
+def key_admission(s: readbuf, w: mutbuf) -> u64:
+    size = field_size(w, 8)
+    if present(w, 8) == False or size > 256 or blank(s, field(w, 8), size):
+        return failure(w, 1, 0, 0, 0, 0, 0, 0)
+    return 0
+
+def execution(s: readbuf, w: mutbuf) -> u64:
+    host = field(w, 1)
+    host_size = field_size(w, 1)
+    if (get(w, 1088) & 1) == 0:
+        return failure(w, 2, 0, host, host_size, 0, 0, 0)
+    exe = field(w, 2)
+    exe_size = field_size(w, 2)
+    if blank(s, exe, exe_size) or has_zero(s, exe, exe_size):
+        return failure(w, 3, 0, 0, 0, 0, 0, 0)
+    if absolute(s, exe, exe_size) == False:
+        return failure(w, 4, 0, exe, exe_size, 0, 0, 0)
+    prefix = protected(s, w, 0, exe, exe_size)
+    if prefix != 0:
+        return failure(w, 5, 0, prefix + 8, load(s, prefix), 0, host, host_size)
+    base = exe
+    i = 0
+    while i < exe_size:
+        if byte(s, exe + i) == 47:
+            base = exe + i + 1
+        i = i + 1
+    base_size = exe + exe_size - base
+    denied = list_equal(s, w, 5, exe, exe_size) or list_equal(s, w, 5, base, base_size)
+    allowed = list_equal(s, w, 6, exe, exe_size) or list_equal(s, w, 6, base, base_size)
+    dangerous = listed(s, base, base_size, 1000, DANGEROUS_COUNT)
+    if denied or (get(w, 1080) == 0 and dangerous and allowed == False):
+        return failure(w, 6, 0, base, base_size, 0, host, host_size)
+    roots = get(w, LISTS + 8)
+    if present(w, 4) == False and roots != 0:
+        return failure(w, 7, 0, host, host_size, 0, 0, 0)
+    if present(w, 4):
+        cwd = field(w, 4)
+        size = field_size(w, 4)
+        if has_zero(s, cwd, size) or absolute(s, cwd, size) == False:
+            return failure(w, 8, 0, 0, 0, 0, 0, 0)
+        if roots != 0 and cwd_allowed(s, w, cwd, size) == False:
+            return failure(w, 9, 0, cwd, size, 0, host, host_size)
+        prefix = protected(s, w, 0, cwd, size)
+        if prefix != 0:
+            return failure(w, 10, 0, prefix + 8, load(s, prefix), 0, host, host_size)
+    at = field(w, 3) + 1
+    end = field(w, 3) + field_size(w, 3) - 1
+    while at < end:
+        next = string_info(s, w, at)
+        size = decode(s, w, at, SCRATCH)
+        if vzero(s, w, 1, SCRATCH, size):
+            return failure(w, 11, 0, 0, 0, 0, 0, 0)
+        prefix = protected(s, w, 1, SCRATCH, size)
+        if prefix != 0:
+            return failure(w, 12, 0, prefix + 8, load(s, prefix), 0, host, host_size)
+        at = next + 1
+    return 0
+
+def environment(s: readbuf, w: mutbuf) -> u64:
+    at = field(w, 5) + 1
+    end = field(w, 5) + field_size(w, 5) - 1
+    while at < end:
+        next = string_info(s, w, at)
+        key_size = decode(s, w, at, SCRATCH)
+        value_start = next + 1
+        next = string_info(s, w, value_start)
+        value_size = decode(s, w, value_start, SCRATCH + key_size)
+        if vzero(s, w, 1, SCRATCH + key_size, value_size):
+            return failure(w, 13, 0, 0, 0, 0, 0, 0)
+        if get(w, 1080) == 0 and listed(w, SCRATCH, key_size, 2000, ENV_COUNT):
+            return failure(w, 14, 1, SCRATCH, key_size, 0, field(w, 1), field_size(w, 1))
+        prefix = protected(s, w, 1, SCRATCH + key_size, value_size)
+        if prefix != 0:
+            return failure(w, 15, 0, prefix + 8, load(s, prefix), 0, field(w, 1), field_size(w, 1))
+        at = next + 1
+    return 0
+
+def start_bounds(s: readbuf, w: mutbuf) -> u64:
+    if field_value(w, 3) > 256:
+        return failure(w, 23, 0, 0, 0, 0, 0, 0)
+    if field_value(w, 5) > 128:
+        return failure(w, 24, 0, 0, 0, 0, 0, 0)
+    at = field(w, 5) + 1
+    end = field(w, 5) + field_size(w, 5) - 1
+    while at < end:
+        next = string_info(s, w, at)
+        key_size = decode(s, w, at, SCRATCH)
+        if environment_name(w, SCRATCH, key_size) == False:
+            return failure(w, 25, 1, SCRATCH, key_size, 0, 0, 0)
+        next = string_info(s, w, next + 1)
+        at = next + 1
+    if present(w, 6) and field_size(w, 6) > 1048576:
+        return failure(w, 26, 0, 0, 0, 0, 0, 0)
+    value = field_value(w, 7)
+    if present(w, 7) and (value == 0 or value > 604800):
+        return failure(w, 27, 0, 0, 0, 0, 0, 0)
+    if present(w, 9) and field_value(w, 9) > 19:
+        return failure(w, 28, 0, 0, 0, 0, 0, 0)
+    value = field_value(w, 10)
+    if present(w, 10) and (value == 0 or value > 1000):
+        return failure(w, 29, 0, 0, 0, 0, 0, 0)
+    if present(w, 11) and field_value(w, 11) < 16777216:
+        return failure(w, 30, 0, 0, 0, 0, 0, 0)
+    if present(w, 8) and (field_size(w, 8) == 0 or field_size(w, 8) > 256):
+        return failure(w, 31, 0, 0, 0, 0, 0, 0)
+    return 0
+
+def environment_name(s: readbuf, at: u64, size: u64) -> bool:
+    if size == 0 or (byte(s, at) >= 48 and byte(s, at) <= 57):
+        return False
+    i = 0
+    while i < size:
+        b = byte(s, at + i)
+        if (b < 48 or b > 57) and (b < 65 or b > 90) and (b < 97 or b > 122) and b != 95:
+            return False
+        i = i + 1
+    return True
+
+def absolute(s: readbuf, at: u64, size: u64) -> bool:
+    if size == 0 or byte(s, at) != 47:
+        return False
+    i = 0
+    start = 0
+    while i <= size:
+        if i == size or byte(s, at + i) == 47:
+            if i - start == 2 and byte(s, at + start) == 46 and byte(s, at + start + 1) == 46:
+                return False
+            start = i + 1
+        i = i + 1
+    return True
+
+def cwd_allowed(s: readbuf, w: mutbuf, at: u64, size: u64) -> bool:
+    cursor = get(w, LISTS)
+    count = get(w, LISTS + 8)
+    index = 0
+    while index < count:
+        n = load(s, cursor)
+        prefix = cursor + 8
+        if n == size and equal(s, at, prefix, n):
+            return True
+        trim = n
+        while trim != 0 and byte(s, prefix + trim - 1) == 47:
+            trim = trim - 1
+        if size > trim and byte(s, at + trim) == 47 and equal(s, at, prefix, trim):
+            return True
+        cursor = prefix + n
+        index = index + 1
+    return False
+
+def list_equal(s: readbuf, w: mutbuf, which: u64, at: u64, size: u64) -> bool:
+    cursor = get(w, LISTS + which * 16)
+    count = get(w, LISTS + which * 16 + 8)
+    index = 0
+    while index < count:
+        n = load(s, cursor)
+        if n == size and equal(s, at, cursor + 8, n):
+            return True
+        cursor = cursor + 8 + n
+        index = index + 1
+    return False
+
+def protected(s: readbuf, w: mutbuf, domain: u64, at: u64, size: u64) -> u64:
+    which = 3
+    while which <= 4:
+        cursor = get(w, LISTS + which * 16)
+        count = get(w, LISTS + which * 16 + 8)
+        index = 0
+        while index < count:
+            n = load(s, cursor)
+            if n != 0 and n <= size:
+                i = 0
+                while i <= size - n:
+                    j = 0
+                    same = True
+                    while j < n:
+                        if vbyte(s, w, domain, at + i + j) != byte(s, cursor + 8 + j):
+                            same = False
+                        j = j + 1
+                    if same:
+                        return cursor
+                    i = i + 1
+            cursor = cursor + 8 + n
+            index = index + 1
+        which = which + 1
+    return 0
+
+def listed(s: readbuf, at: u64, size: u64, base: u64, count: u64) -> bool:
+    index = 0
+    while index < count:
+        layout = literal_layout(base + index)
+        n = layout & 65535
+        if n == size:
+            same = True
+            j = 0
+            while j < size:
+                b = (data_word((layout >> 16) + j // 8) >> ((j % 8) * 8)) & 255
+                if byte(s, at + j) != b:
+                    same = False
+                j = j + 1
+            if same:
+                return True
+        index = index + 1
+    return False
+
+def decode(s: readbuf, w: mutbuf, at: u64, out: u64) -> u64:
+    at = at + 1
+    count = 0
+    while at < length(s):
+        value = unit(s, w, at)
+        at = get(w, 0)
+        if value == 1114112:
+            return count
+        if value <= 127:
+            fill_range(w, out + count, 1, value)
+            count = count + 1
+        else:
+            if value <= 2047:
+                fill_range(w, out + count, 1, 192 | (value >> 6))
+                fill_range(w, out + count + 1, 1, 128 | (value & 63))
+                count = count + 2
+            else:
+                if value <= 65535:
+                    fill_range(w, out + count, 1, 224 | (value >> 12))
+                    fill_range(w, out + count + 1, 1, 128 | ((value >> 6) & 63))
+                    fill_range(w, out + count + 2, 1, 128 | (value & 63))
+                    count = count + 3
+                else:
+                    fill_range(w, out + count, 1, 240 | (value >> 18))
+                    fill_range(w, out + count + 1, 1, 128 | ((value >> 12) & 63))
+                    fill_range(w, out + count + 2, 1, 128 | ((value >> 6) & 63))
+                    fill_range(w, out + count + 3, 1, 128 | (value & 63))
+                    count = count + 4
+    return MAXIMUM
+
+def utf8(s: readbuf, at: u64, size: u64) -> bool:
+    end = at + size
+    while at < end:
+        b = byte(s, at)
+        if b <= 127:
+            at = at + 1
+        else:
+            count = 0
+            value = 0
+            minimum = 0
+            if b >= 194 and b <= 223:
+                count = 1
+                value = b & 31
+                minimum = 128
+            if b >= 224 and b <= 239:
+                count = 2
+                value = b & 15
+                minimum = 2048
+            if b >= 240 and b <= 244:
+                count = 3
+                value = b & 7
+                minimum = 65536
+            if count == 0 or count >= end - at:
+                return False
+            at = at + 1
+            i = 0
+            while i < count:
+                b = byte(s, at)
+                if b < 128 or b > 191:
+                    return False
+                value = (value << 6) | (b & 63)
+                at = at + 1
+                i = i + 1
+            if value < minimum or value > 1114111 or (value >= 55296 and value <= 57343):
+                return False
+    return True
+
+def blank(s: readbuf, at: u64, size: u64) -> bool:
+    end = at + size
+    while at < end:
+        b = byte(s, at)
+        if b == 32 or (b >= 9 and b <= 13):
+            at = at + 1
+        else:
+            count = 0
+            if end - at >= 2 and b == 194:
+                if byte(s, at + 1) == 133 or byte(s, at + 1) == 160:
+                    count = 2
+            if end - at >= 3:
+                b1 = byte(s, at + 1)
+                b2 = byte(s, at + 2)
+                if b == 225 and b1 == 154 and b2 == 128:
+                    count = 3
+                if b == 226 and b1 == 128 and ((b2 >= 128 and b2 <= 138) or b2 == 168 or b2 == 169 or b2 == 175):
+                    count = 3
+                if b == 226 and b1 == 129 and b2 == 159:
+                    count = 3
+                if b == 227 and b1 == 128 and b2 == 128:
+                    count = 3
+            if count == 0:
+                return False
+            at = at + count
+    return True
+
+def has_zero(s: readbuf, at: u64, size: u64) -> bool:
+    i = 0
+    while i < size:
+        if byte(s, at + i) == 0:
+            return True
+        i = i + 1
+    return False
+
+def vzero(s: readbuf, w: mutbuf, domain: u64, at: u64, size: u64) -> bool:
+    i = 0
+    while i < size:
+        if vbyte(s, w, domain, at + i) == 0:
+            return True
+        i = i + 1
+    return False
+
+def vbyte(s: readbuf, w: mutbuf, domain: u64, at: u64) -> u64:
+    if domain == 0:
+        return byte(s, at)
+    return byte(w, at)
+
+def equal(s: readbuf, a: u64, b: u64, size: u64) -> bool:
+    i = 0
+    while i < size:
+        if byte(s, a + i) != byte(s, b + i):
+            return False
+        i = i + 1
+    return True
+
+def field(w: mutbuf, index: u64) -> u64:
+    return get(w, FIELDS + index * 32)
+
+def field_size(w: mutbuf, index: u64) -> u64:
+    return get(w, FIELDS + index * 32 + 8)
+
+def field_value(w: mutbuf, index: u64) -> u64:
+    return get(w, FIELDS + index * 32 + 16)
+
+def present(w: mutbuf, index: u64) -> bool:
+    return (get(w, 1048) & (1 << index)) != 0
+
+def failure(w: mutbuf, code: u64, domain_a: u64, a: u64, an: u64, domain_b: u64, b: u64, bn: u64) -> u64:
+    put(w, 1104, code)
+    put(w, 1112, domain_a)
+    put(w, 1120, a)
+    put(w, 1128, an)
+    put(w, 1136, domain_b)
+    put(w, 1144, b)
+    put(w, 1152, bn)
+    return 1
+
+def render_error(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    code = get(w, 1104)
+    n0 = literal_layout(code * 3) & 65535
+    n1 = literal_layout(code * 3 + 1) & 65535
+    n2 = literal_layout(code * 3 + 2) & 65535
+    an = get(w, 1128)
+    bn = get(w, 1152)
+    size = n0 + n1 + n2 + an + bn
+    if size > length(o) - 80:
+        return header(o, get(w, 1024), get(w, 1032), 3, size + 80, 0)
+    header(o, get(w, 1024), get(w, 1032), 1, 0, size)
+    at = 80
+    write_literal(o, at, code * 3)
+    at = at + n0
+    i = 0
+    while i < an:
+        fill_range(o, at + i, 1, vbyte(s, w, get(w, 1112), get(w, 1120) + i))
+        i = i + 1
+    at = at + an
+    write_literal(o, at, code * 3 + 1)
+    at = at + n1
+    i = 0
+    while i < bn:
+        fill_range(o, at + i, 1, vbyte(s, w, get(w, 1136), get(w, 1144) + i))
+        i = i + 1
+    write_literal(o, at + bn, code * 3 + 2)
+    return 80
+
+def write_literal(o: mutbuf, at: u64, code: u64) -> u64:
+    layout = literal_layout(code)
+    size = layout & 65535
+    index = 0
+    while index < size:
+        word = data_word((layout >> 16) + index // 8)
+        fill_range(o, at + index, 1, (word >> ((index % 8) * 8)) & 255)
+        index = index + 1
+    return 0
+
+def header(o: mutbuf, phase: u64, kind: u64, status: u64, needed: u64, size: u64) -> u32:
+    fill_range(o, 0, 80, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, phase)
+    put(o, 24, kind)
+    put(o, 32, size)
+    put(o, 40, needed)
+    return 80

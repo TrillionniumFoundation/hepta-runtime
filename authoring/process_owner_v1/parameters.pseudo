@@ -1,0 +1,247 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 26 or load(s, 0) != REQUEST or load(s, 8) != length(s) - 24:
+        return INVALID
+    kind = load(s, 16)
+    if kind < 1 or kind > 9 or byte(s, 24) != 123 or byte(s, length(s) - 1) != 125:
+        return INVALID
+    if length(o) < HEADER:
+        return CAPACITY
+    if length(s) > MAXIMUM - 65536:
+        return header(o, kind, 4, MAXIMUM, 0)
+    needed = length(s)
+    if needed < 1024:
+        needed = 1024
+    needed = needed + 65536
+    if length(w) < needed:
+        return header(o, kind, 2, needed, 0)
+    fill_range(w, 0, 1024, 0)
+    fill_range(w, META, 768, 0)
+    if skip_value(s, w, 24) != length(s):
+        return INVALID
+    put(w, 816, kind)
+    status = project(s, w, kind)
+    if status == MAXIMUM:
+        return INVALID
+    if status != 0:
+        unicode_table(w)
+        put(w, 48, 0)
+        put(w, 112, 0)
+        put(w, 120, 0)
+        error(s, w, o, status)
+        size = get(w, 120)
+        if get(w, 48) != 0 or size > MAXIMUM - HEADER:
+            return header(o, kind, 4, MAXIMUM, 0)
+        if size + HEADER > length(o):
+            return header(o, kind, 3, size + HEADER, 0)
+        header(o, kind, 1, 0, size)
+        put(w, 112, 1)
+        put(w, 120, HEADER)
+        error(s, w, o, status)
+        return HEADER
+    return success(s, w, o, kind)
+
+def project(s: readbuf, w: mutbuf, kind: u64) -> u64:
+    at = 25
+    present = 0
+    while at < length(s) - 1:
+        if byte(s, at) != 34:
+            return MAXIMUM
+        key = at
+        end = string_info(s, w, at)
+        if end == MAXIMUM or end >= length(s) or byte(s, end) != 58:
+            return MAXIMUM
+        field = field_key(s, key, end)
+        typ = field_type(kind, field)
+        if typ == 0 and kind != 1:
+            put(w, 88, key)
+            return 200
+        start = end + 1
+        end = skip_value(s, w, start)
+        if end == MAXIMUM or end >= length(s):
+            return MAXIMUM
+        if typ != 0:
+            bit = 1 << field
+            if (present & bit) != 0:
+                return MAXIMUM
+            present = present | bit
+            result = typed_field(s, w, field, typ, start, end)
+            if result != 0:
+                return result
+        if byte(s, end) == 125:
+            if end != length(s) - 1:
+                return MAXIMUM
+            at = end
+        else:
+            if byte(s, end) != 44:
+                return MAXIMUM
+            at = end + 1
+            if at >= length(s) - 1:
+                return MAXIMUM
+    if at != length(s) - 1:
+        return MAXIMUM
+    return required(kind, present)
+
+def typed_field(s: readbuf, w: mutbuf, field: u64, typ: u64, start: u64, end: u64) -> u64:
+    first = byte(s, start)
+    if typ >= 2 and typ <= 5 and first == 110:
+        return 0
+    put(w, 88, start)
+    if typ == 1 or typ == 2:
+        put(w, 96, 5)
+        if first != 34:
+            if get(w, 816) == 1:
+                return 211
+            return 10
+        if string_info(s, w, start) != end:
+            return MAXIMUM
+        put(w, META + field * 32, start)
+        put(w, META + field * 32 + 8, get(w, 16))
+    if typ >= 3 and typ <= 5:
+        expected = 17
+        if typ == 4:
+            expected = 18
+        if typ == 5:
+            expected = 19
+        put(w, 96, expected)
+        if (first < 48 or first > 57) and first != 45:
+            return 10
+        if integer(s, w, start, end) == 0:
+            return 10
+        if get(w, 16) != 0:
+            return 11
+        value = get(w, 8)
+        if typ == 4 and value > 255:
+            return 11
+        if typ == 5 and value > 65535:
+            return 11
+        put(w, META + field * 32 + 16, value)
+    if typ == 6 or typ == 7:
+        result = compound(s, w, typ, start, end)
+        if result != 0:
+            return result
+        put(w, META + field * 32, start)
+        put(w, META + field * 32 + 8, end - start)
+        put(w, META + field * 32 + 16, get(w, 824))
+    put(w, 808, get(w, 808) | (1 << field))
+    return 0
+
+def compound(s: readbuf, w: mutbuf, typ: u64, start: u64, end: u64) -> u64:
+    opening = 91
+    closing = 93
+    expected = 20
+    if typ == 7:
+        opening = 123
+        closing = 125
+        expected = 21
+    put(w, 96, expected)
+    if byte(s, start) != opening:
+        return 10
+    if byte(s, end - 1) != closing:
+        return MAXIMUM
+    at = start + 1
+    count = 0
+    while at < end - 1:
+        if typ == 7:
+            if byte(s, at) != 34:
+                return MAXIMUM
+            key_end = string_info(s, w, at)
+            if key_end == MAXIMUM or key_end >= end or byte(s, key_end) != 58:
+                return MAXIMUM
+            at = key_end + 1
+        put(w, 88, at)
+        put(w, 96, 5)
+        if byte(s, at) != 34:
+            return 10
+        item_end = string_info(s, w, at)
+        if item_end == MAXIMUM or item_end >= end:
+            return MAXIMUM
+        count = count + 1
+        at = item_end
+        if byte(s, at) == closing:
+            if at != end - 1:
+                return MAXIMUM
+        else:
+            if byte(s, at) != 44:
+                return MAXIMUM
+            at = at + 1
+            if at >= end - 1:
+                return MAXIMUM
+    if at != end - 1:
+        return MAXIMUM
+    put(w, 824, count)
+    return 0
+
+def error(s: readbuf, w: mutbuf, o: mutbuf, code: u64) -> u64:
+    if code >= 100 and code < 124:
+        return literal(w, o, code)
+    if code == 210 or code == 211:
+        return literal(w, o, code)
+    if code == 200:
+        literal(w, o, 14)
+        at = get(w, 88) + 1
+        while at < length(s):
+            value = unit(s, w, at)
+            at = get(w, 0)
+            if value == 1114112:
+                return literal(w, o, 300 + get(w, 816))
+            raw_scalar(w, o, value)
+        return 0
+    if code == 10 or code == 11:
+        literal(w, o, choose(code == 10, 3, 16))
+        unexpected(s, w, o, get(w, 88))
+        literal(w, o, 4)
+        literal(w, o, get(w, 96))
+        return 0
+    return 0
+
+def success(s: readbuf, w: mutbuf, o: mutbuf, kind: u64) -> u32:
+    total = HEADER
+    field = 1
+    while field <= 19:
+        size = get(w, META + field * 32 + 8)
+        typ = field_type(kind, field)
+        if (typ == 6 or typ == 7) and get(w, META + field * 32) == 0:
+            size = 2
+        if size > MAXIMUM - total:
+            return header(o, kind, 4, MAXIMUM, 0)
+        total = total + size
+        field = field + 1
+    if total > length(o):
+        return header(o, kind, 3, total, 0)
+    header(o, kind, 0, 0, 0)
+    put(o, 24, get(w, 808))
+    put(o, 32, total - HEADER)
+    at = HEADER
+    field = 1
+    while field <= 19:
+        start = get(w, META + field * 32)
+        size = get(w, META + field * 32 + 8)
+        value = get(w, META + field * 32 + 16)
+        typ = field_type(kind, field)
+        slot = 64 + (field - 1) * 24
+        if (get(w, 808) & (1 << field)) != 0 or typ == 6 or typ == 7:
+            put(o, slot, typ)
+            if typ == 6 or typ == 7:
+                if start == 0:
+                    size = 2
+                    fill_range(o, at, 1, choose(typ == 6, 91, 123))
+                    fill_range(o, at + 1, 1, choose(typ == 6, 93, 125))
+                else:
+                    copy_range(o, s, at, start, size)
+            else:
+                if start != 0:
+                    copy_string(s, w, o, start, at)
+            put(o, slot + 8, size)
+            put(o, slot + 16, value)
+        at = at + size
+        field = field + 1
+    return HEADER
+
+def header(o: mutbuf, kind: u64, status: u64, needed: u64, error_size: u64) -> u32:
+    fill_range(o, 0, HEADER, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, kind)
+    put(o, 40, error_size)
+    put(o, 48, needed)
+    return HEADER

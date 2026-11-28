@@ -1,0 +1,251 @@
+{
+  "schema": "hepta.runtime.process-params.schemas.v1",
+  "target_commit": "abc9ecb95ee9538518ec3f36c47b881974107021",
+  "types": [
+    {
+      "id": 1,
+      "name": "shell",
+      "type": "ShellCommandMap",
+      "fields": [
+        [
+          "command",
+          18,
+          "string"
+        ]
+      ],
+      "unknown_fields": "ignore",
+      "parameter_prefix": false
+    },
+    {
+      "id": 2,
+      "name": "shell_start",
+      "type": "ShellStartParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "command",
+          18,
+          "string"
+        ],
+        [
+          "shell",
+          19,
+          "option_string"
+        ],
+        [
+          "cwd",
+          4,
+          "option_string"
+        ],
+        [
+          "env",
+          5,
+          "string_map"
+        ],
+        [
+          "timeout_seconds",
+          7,
+          "option_u64"
+        ],
+        [
+          "idempotency_key",
+          8,
+          "option_string"
+        ]
+      ]
+    },
+    {
+      "id": 3,
+      "name": "process_start",
+      "type": "ProcessStartParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "executable",
+          2,
+          "string"
+        ],
+        [
+          "args",
+          3,
+          "string_vec"
+        ],
+        [
+          "cwd",
+          4,
+          "option_string"
+        ],
+        [
+          "env",
+          5,
+          "string_map"
+        ],
+        [
+          "stdin",
+          6,
+          "option_string"
+        ],
+        [
+          "timeout_seconds",
+          7,
+          "option_u64"
+        ],
+        [
+          "idempotency_key",
+          8,
+          "option_string"
+        ],
+        [
+          "nice",
+          9,
+          "option_u8"
+        ],
+        [
+          "cpu_quota_percent",
+          10,
+          "option_u16"
+        ],
+        [
+          "memory_max_bytes",
+          11,
+          "option_u64"
+        ]
+      ]
+    },
+    {
+      "id": 4,
+      "name": "process_status",
+      "type": "ProcessRefParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "job_id",
+          12,
+          "string"
+        ]
+      ]
+    },
+    {
+      "id": 5,
+      "name": "process_read",
+      "type": "ProcessReadParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "job_id",
+          12,
+          "string"
+        ],
+        [
+          "stdout_offset",
+          13,
+          "option_u64"
+        ],
+        [
+          "stderr_offset",
+          14,
+          "option_u64"
+        ],
+        [
+          "limit",
+          15,
+          "option_u64"
+        ]
+      ]
+    },
+    {
+      "id": 6,
+      "name": "process_wait",
+      "type": "ProcessWaitParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "job_id",
+          12,
+          "string"
+        ],
+        [
+          "timeout_seconds",
+          7,
+          "option_u64"
+        ]
+      ]
+    },
+    {
+      "id": 7,
+      "name": "process_cancel",
+      "type": "ProcessCancelParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "string"
+        ],
+        [
+          "job_id",
+          12,
+          "string"
+        ],
+        [
+          "grace_seconds",
+          16,
+          "option_u64"
+        ]
+      ]
+    },
+    {
+      "id": 8,
+      "name": "process_list",
+      "type": "ProcessListParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "option_string"
+        ]
+      ]
+    },
+    {
+      "id": 9,
+      "name": "process_list_page",
+      "type": "ProcessListPageParams",
+      "fields": [
+        [
+          "host",
+          1,
+          "option_string"
+        ],
+        [
+          "cursor",
+          17,
+          "option_string"
+        ],
+        [
+          "limit",
+          15,
+          "option_u16"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "blocks": [
+    "#[derive(Serialize)]\nstruct RequestBinding<'a> {\n\targs: &'a [String],\n\tcpu_quota_percent: Option<u16>,\n\tcwd: Option<&'a str>,\n\tenv: &'a BTreeMap<String, String>,\n\texecutable: &'a str,\n\thost: &'a str,\n\tmemory_max_bytes: Option<u64>,\n\tnice: Option<u8>,\n\tstdin: Option<&'a str>,\n\ttimeout_seconds: Option<u64>,\n}\nfn request_binding(params: &ProcessStartParams) -> RequestBinding<'_> {\n\tRequestBinding {\n\t\targs: &params.args,\n\t\tcpu_quota_percent: params.cpu_quota_percent,\n\t\tcwd: params.cwd.as_deref(),\n\t\tenv: &params.env,\n\t\texecutable: &params.executable,\n\t\thost: &params.host,\n\t\tmemory_max_bytes: params.memory_max_bytes,\n\t\tnice: params.nice,\n\t\tstdin: params.stdin.as_deref(),\n\t\ttimeout_seconds: params.timeout_seconds,\n\t}\n}\nstruct RequestHashWriter(Sha256);\nimpl Write for RequestHashWriter {\n\tfn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {\n\t\tself.0.update(bytes);\n\t\tOk(bytes.len())\n\t}\n\tfn flush(&mut self) -> std::io::Result<()> {\n\t\tOk(())\n\t}\n}\npub(crate) fn request_digest(params: &ProcessStartParams) -> Result<String> {\n\tlet mut writer = RequestHashWriter(Sha256::new());\n\tserde_json::to_writer(&mut writer, &request_binding(params))?;\n\tlet digest = writer.0.finalize();\n\tlet mut hex = String::with_capacity(64);\n\tconst HEX: &[u8; 16] = b\"0123456789abcdef\";\n\tfor byte in digest {\n\t\thex.push(HEX[(byte >> 4) as usize] as char);\n\t\thex.push(HEX[(byte & 15) as usize] as char);\n\t}\n\tOk(hex)\n}\n",
+    "fn fingerprint(digest: &str) -> u64 {\n\tdigest\n\t\t.get(..16)\n\t\t.and_then(|prefix| u64::from_str_radix(prefix, 16).ok())\n\t\t.unwrap_or(0)\n}"
+  ],
+  "exact_identity_blocks_pin": {
+    "bytes": 1542,
+    "sha256": "0d3391296858062ea3583cc32cbd58201ff3fa8691343c074349dac7d8f5b839"
+  },
+  "params_original": {
+    "bytes": 3540,
+    "sha256": "0245809850d8e8bdc3718cb699cbe3fe6707f6ebb31be2402ba12b8426537b04"
+  },
+  "source": "src/mcp/runtime/jobs.rs",
+  "source_pin": {
+    "bytes": 262505,
+    "sha256": "9641fea246692b7c535816630f40df78c2f240d9093226b02ff5a12b25d57220"
+  }
+}
