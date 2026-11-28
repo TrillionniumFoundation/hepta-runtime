@@ -1,0 +1,74 @@
+name: Qualify actual borrowed-file metadata capture summary and preserve
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-metadata-actual-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      METADATA_SOURCE: ${{ github.workspace }}/qualification/file_metadata/v1/source
+      METADATA_MANIFEST: 66d11aacd3e47ef6dd151e9525606e03398dc8e0c409881653e2859c368d5816
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_metadata/v1/source
+          persist-credentials: false
+      - name: Bind all source and the complete fixed input domain before application calls
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/domain_author_driver.py" --output "$RUNNER_TEMP/metadata-complete-source" --manifest "$METADATA_MANIFEST"
+      - name: Retain source-only gate
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-complete-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-complete-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  actual-metadata:
+    needs: frozen-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [capture-a, capture-b, preserve-a, preserve-b, preserve-c, preserve-d, capture-race, preserve-race-a, preserve-race-b, large-a, large-b, large-c, large-d, summary-a, summary-b, observer-off]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      METADATA_SOURCE: ${{ github.workspace }}/qualification/file_metadata/v1/source
+      METADATA_MANIFEST: 66d11aacd3e47ef6dd151e9525606e03398dc8e0c409881653e2859c368d5816
+      METADATA_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete trusted upstream build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_metadata/v1/source
+          persist-credentials: false
+      - name: Capture actual original and HIA once then perform complete guarded reads and controls
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/gate.py" qualify --work "$RUNNER_TEMP/metadata-actual" --group "$METADATA_GROUP" --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Archive every actual application byte and complete source and controls
+        if: always()
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/gate.py" export --work "$RUNNER_TEMP/metadata-actual" --group "$METADATA_GROUP" --output "$RUNNER_TEMP/metadata-actual-export" --source-manifest-sha256 "$METADATA_MANIFEST"
+      - name: Upload complete original and native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-actual-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-actual-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

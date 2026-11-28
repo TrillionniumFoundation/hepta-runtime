@@ -1,0 +1,34 @@
+name: Check frozen metadata inputs and evidence carrier source
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-metadata-domain-source-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      METADATA_SOURCE: ${{ github.workspace }}/qualification/file_metadata/v1/domain_source
+      METADATA_MANIFEST: 5da89ffce8f5a321c7f3fc6110d1df8e7fd24466a3fc7fe28f94792589b8d942
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_metadata/v1/domain_source
+          persist-credentials: false
+      - name: Check only source definitions and declared input serialization
+        run: |
+          python3 -I -S -B "$METADATA_SOURCE/scripts/domain_author_driver.py" --output "$RUNNER_TEMP/metadata-domain-source" --manifest "$METADATA_MANIFEST"
+      - name: Retain complete source-only process and input inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: metadata-domain-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/metadata-domain-source
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

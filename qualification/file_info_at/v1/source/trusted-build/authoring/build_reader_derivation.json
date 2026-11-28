@@ -1,0 +1,123 @@
+{
+  "schema": "hepta.runtime.file-info-at.build-reader-derivation.v1",
+  "baseline_commit": "1f9b1538d7e513494f7b7a55a249938dbceab66e",
+  "build_exact_replacements": [
+    {
+      "before": "MEMBERS=((\"body\",\"native/file_metadata.hepta\"),\n    (\"codec\",\"native/binary_codec.hepta\"),\n    (\"linker\",\"compiler/elf_static_linker.hepta\"),(\"packer\",\"native/runtime_mcp_image_packer.hepta\"))\nPATCHES=(\"file_metadata_body_call_displacement\",\"file_metadata_codec_call_displacement\")",
+      "after": "IMAGES=(\"body\",\"fingerprint\",\"metadata\",\"codec\",\"stat\",\"error\")\nMEMBERS=((\"body\",\"native/file_info_at.hepta\"),\n    (\"fingerprint\",\"native/binary_read_body.hepta\"),\n    (\"metadata\",\"native/file_metadata.hepta\"),\n    (\"codec\",\"native/binary_codec.hepta\"),\n    (\"stat\",\"native/stat_version.hepta\"),\n    (\"error\",\"native/structured_error.hepta\"),\n    (\"linker\",\"compiler/elf_static_linker.hepta\"),(\"packer\",\"native/runtime_mcp_image_packer.hepta\"))\nPATCHES=((\"file_info_at_body_call_displacement\",0),(\"file_info_at_stat_call_displacement\",4),\n    (\"binary_read_body_body_call_displacement\",1),(\"binary_read_body_codec_call_displacement\",3),\n    (\"binary_read_body_stat_call_displacement\",4),(\"file_metadata_body_call_displacement\",2),\n    (\"file_metadata_codec_call_displacement\",3),(\"file_info_at_error_call_displacement\",5))\nASM=(\"asm/file_info_at_callable.S\",\"asm/binary_read_body_callable.S\",\n    \"asm/file_metadata_callable.S\",\"asm/process_orphans.S\",\"asm/file_info_at_fixture.S\")"
+    },
+    {
+      "before": "    original=owned(source,\"asm/file_metadata_callable.S\").read_text()+\"\\n\"+owned(source,\"asm/file_metadata_fixture.S\").read_text()",
+      "after": "    original=\"\\n\".join(owned(source,name).read_text() for name in ASM)"
+    },
+    {
+      "before": "source/\"authoring/author_file_metadata.py\"",
+      "after": "source/\"authoring/author_file_info_at.py\""
+    },
+    {
+      "before": "for name in(\"file_metadata.hepta\",\"file_metadata_composition.json\",\"file_metadata.pseudo\")",
+      "after": "for name in(\"file_info_at.hepta\",\"file_info_at_composition.json\",\"file_info_at.pseudo\")"
+    },
+    {
+      "before": "            \"frozen source author output differs\")",
+      "after": "            \"frozen source author output differs\")\n    require((output/\"authored/target_info_branch.py\").read_bytes()==owned(source,\"native/target_info_branch.txt\").read_bytes(),\"exact original info branch differs\")"
+    },
+    {
+      "before": "\"file-metadata-callable-\"+name",
+      "after": "\"file-info-at-callable-\"+name"
+    },
+    {
+      "before": "    require(members[\"body\"][\"source\"][\"sha256\"]==\"aca656e4c5dfa69cb4269e6b586802f9088aff4d5d1141c7e35b6d097311acf0\"\n        and members[\"codec\"][\"image\"][\"sha256\"]==\"469f2b555224499b2d9d3c95cc3d772f65fcbe6705fb79804f31fa7c473debe2\",\n        \"frozen metadata source or qualified codec image changed\")",
+      "after": "    expected_sources=decode(owned(source,\"NATIVE_PROVENANCE.json\").read_bytes())[\"hia_sources\"]\n    require({name:members[name][\"source\"][\"sha256\"] for name in IMAGES}==expected_sources,\n        \"frozen info or qualified dependency source changed\")\n    require(members[\"codec\"][\"image\"][\"sha256\"]==\"469f2b555224499b2d9d3c95cc3d772f65fcbe6705fb79804f31fa7c473debe2\"\n        and members[\"error\"][\"image\"][\"sha256\"]==\"4b8adfcf9c7713088c2f5feecdb54a9d82afd5620ef3087661d78fab2c05da2c\",\n        \"qualified codec or dual-structure formatter image changed\")"
+    },
+    {
+      "before": "for name in (\"body\",\"codec\")",
+      "after": "for name in IMAGES"
+    },
+    {
+      "before": "patches=[(2,256+symbols[name],index) for index,name in enumerate(PATCHES)]",
+      "after": "patches=[(2,256+symbols[name],index) for name,index in PATCHES]"
+    },
+    {
+      "before": "elf=output/\"file-metadata-callable.elf\"",
+      "after": "elf=output/\"file-info-at-callable.elf\""
+    },
+    {
+      "before": "status=\"FRESH_FIXED_FILE_METADATA_CALLABLE_BUILD_PASS\"",
+      "after": "status=\"FRESH_FIXED_FILE_INFO_AT_CALLABLE_BUILD_PASS\""
+    },
+    {
+      "before": "actual_hia_compiles=4,runtime_images=2",
+      "after": "actual_hia_compiles=8,runtime_images=6"
+    },
+    {
+      "before": "image_order=[\"body\",\"codec\"],exports={k:v for k,v in symbols.items() if k.startswith(\"file_metadata_\")}",
+      "after": "image_order=list(IMAGES),exports={k:v for k,v in symbols.items() if k.startswith((\"file_info_at_\",\"binary_read_body_\",\"file_metadata_\",\"hia_process_orphans_\"))}"
+    }
+  ],
+  "reader_exact_replacements": [
+    {
+      "before": "from build_callable import MEMBERS,PATCHES,flattened,object_layout",
+      "after": "from build_callable import MEMBERS,PATCHES,IMAGES,flattened,object_layout"
+    },
+    {
+      "before": "\"FRESH_FIXED_FILE_METADATA_CALLABLE_BUILD_PASS\"",
+      "after": "\"FRESH_FIXED_FILE_INFO_AT_CALLABLE_BUILD_PASS\""
+    },
+    {
+      "before": "bundle[\"actual_hia_compiles\"]==4 and bundle[\"runtime_images\"]==2",
+      "after": "bundle[\"actual_hia_compiles\"]==8 and bundle[\"runtime_images\"]==6"
+    },
+    {
+      "before": "\"fixed four-owner set differs\"",
+      "after": "\"fixed eight-owner set differs\""
+    },
+    {
+      "before": "for name in(\"file_metadata.hepta\",\"file_metadata_composition.json\",\"file_metadata.pseudo\")",
+      "after": "for name in(\"file_info_at.hepta\",\"file_info_at_composition.json\",\"file_info_at.pseudo\")"
+    },
+    {
+      "before": "            \"source author did not reproduce frozen native source\")",
+      "after": "            \"source author did not reproduce frozen native source\")\n    require(owned(root,\"authored/target_info_branch.py\").read_bytes()==owned(source,\"native/target_info_branch.txt\").read_bytes(),\"complete original info branch differs\")"
+    },
+    {
+      "before": "ordered=[images[name] for name in (\"body\",\"codec\")]",
+      "after": "ordered=[images[name] for name in IMAGES]"
+    },
+    {
+      "before": "patches=[(2,256+symbols[name],i) for i,name in enumerate(PATCHES)]",
+      "after": "patches=[(2,256+symbols[name],i) for name,i in PATCHES]"
+    },
+    {
+      "before": "frame=b\"HIAIMG02\"+struct.pack(\"<4Q\",len(prefix),2,2,0)+prefix",
+      "after": "frame=b\"HIAIMG02\"+struct.pack(\"<4Q\",len(prefix),len(IMAGES),len(PATCHES),0)+prefix"
+    },
+    {
+      "before": "and bundle[\"image_order\"]==[\"body\",\"codec\"]",
+      "after": "and bundle[\"image_order\"]==list(IMAGES)"
+    },
+    {
+      "before": "and bundle[\"exports\"]=={k:v for k,v in symbols.items() if k.startswith(\"file_metadata_\")}",
+      "after": "and bundle[\"exports\"]=={k:v for k,v in symbols.items() if k.startswith((\"file_info_at_\",\"binary_read_body_\",\"file_metadata_\",\"hia_process_orphans_\"))}"
+    },
+    {
+      "before": "elf=owned(root,\"file-metadata-callable.elf\")",
+      "after": "elf=owned(root,\"file-info-at-callable.elf\")"
+    },
+    {
+      "before": "\"FRESH_FILE_METADATA_CALLABLE_BUILD_READBACK_PASS\"",
+      "after": "\"FRESH_FILE_INFO_AT_CALLABLE_BUILD_READBACK_PASS\""
+    },
+    {
+      "before": "fresh_hia_compiles=4,runtime_images=2",
+      "after": "fresh_hia_compiles=8,runtime_images=6"
+    }
+  ],
+  "unchanged_budgets": {
+    "exchange": 60,
+    "process": 180,
+    "compile": 900,
+    "job_minutes": 15
+  },
+  "native_semantics_executed": false
+}

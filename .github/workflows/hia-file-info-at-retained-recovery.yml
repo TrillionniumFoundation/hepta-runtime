@@ -1,0 +1,74 @@
+name: Recover complete original file_info evidence without application replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-file-info-at-retained-recovery-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  frozen-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      INFO_SOURCE: ${{ github.workspace }}/qualification/file_info_at/v1/recovery
+      INFO_MANIFEST: 74ab881e790de75927a989319a42c75ec96b8b2af6b528395cd6c35f505eeb68
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v1/recovery
+          persist-credentials: false
+      - name: Bind exact reader correction and all original captures before pure recovery
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/domain_author_driver.py" --output "$RUNNER_TEMP/info-recovery-source" --manifest "$INFO_MANIFEST"
+      - name: Retain source-only gate
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-recovery-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-recovery-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  recover-complete:
+    needs: frozen-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [ordinary-a, content-boundaries, ordinary-b, attribute-boundaries, refusals-a, refusals-b, hash-race-a, hash-race-b, reopen-race, metadata-gap, metadata-race, large-a, large-b, descriptor, orphan-a, orphan-b, observer-off-a, observer-off-b]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      INFO_SOURCE: ${{ github.workspace }}/qualification/file_info_at/v1/recovery
+      INFO_MANIFEST: 74ab881e790de75927a989319a42c75ec96b8b2af6b528395cd6c35f505eeb68
+      INFO_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact source and complete trusted upstream build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/file_info_at/v1/recovery
+          persist-credentials: false
+      - name: Read original complete archives and recover full comparison plus controls
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/recovery_driver.py" recover --work "$RUNNER_TEMP/info-retained-recovery" --group "$INFO_GROUP" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Archive all original evidence and new pure readers and controls
+        if: always()
+        run: |
+          python3 -I -S -B "$INFO_SOURCE/scripts/recovery_driver.py" export --work "$RUNNER_TEMP/info-retained-recovery" --group "$INFO_GROUP" --output "$RUNNER_TEMP/info-retained-recovery-export" --source-manifest-sha256 "$INFO_MANIFEST"
+      - name: Upload complete original archives and pure recovery proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: info-retained-recovery-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/info-retained-recovery-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
