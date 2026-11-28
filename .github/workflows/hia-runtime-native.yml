@@ -278,6 +278,9 @@ jobs:
           EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
 
+      - name: Verify complete lossless evidence transport controls
+        run: python3 -I -B runtime/tests/hia_native/test_evidence_transport.py
+
       - name: Verify source coverage and evidence snapshot controls
         run: |
           python3 -I -B "$HIA_QUALIFICATION_SOURCE"/tests/hia_native/test_migration_target.py
@@ -414,6 +417,7 @@ jobs:
     outputs:
       invocation: ${{ needs.prepare.outputs.invocation }}
       native_sha256: ${{ steps.original_inputs.outputs.native_sha256 }}
+      native_archive_sha256: ${{ steps.transport.outputs.sha256 }}
     steps:
       - name: Install filesystem syscall trace observer
         run: |
@@ -494,25 +498,37 @@ jobs:
             --invocation "${{ needs.prepare.outputs.invocation }}" \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Pack every admitted evidence member without repeated transport bytes
+        id: transport
+        run: |
+          python3 -I -B runtime/scripts/hia_native_evidence_transport.py pack \
+            --source "$RUNNER_TEMP/hia-runtime-native" \
+            --output "$RUNNER_TEMP/hia-native-transport" \
+            --runtime-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --invocation "${{ needs.prepare.outputs.invocation }}" \
+            --native-sha256 "${{ steps.original_inputs.outputs.native_sha256 }}" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Retain admitted complete native evidence
-        if: success()
+        if: ${{ always() && steps.transport.outcome != 'skipped' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.prepare.outputs.invocation }}
-          path: ${{ runner.temp }}/hia-runtime-native/
+          path: ${{ runner.temp }}/hia-native-transport/
+          compression-level: 0
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
       - name: Capture native collection failure diagnostics
-        if: ${{ always() && steps.original_inputs.outcome != 'success' }}
+        if: ${{ always() && (steps.original_inputs.outcome != 'success' || steps.transport.outcome != 'success') }}
         run: |
           python3 -I -B "$HIA_QUALIFICATION_SOURCE"/scripts/hia_native_failure_evidence.py \
             --source "$RUNNER_TEMP/hia-runtime-native" \
             --output "$RUNNER_TEMP/hia-native-diagnostics"
 
       - name: Retain native collection failure diagnostics
-        if: ${{ always() && steps.original_inputs.outcome != 'success' }}
+        if: ${{ always() && (steps.original_inputs.outcome != 'success' || steps.transport.outcome != 'success') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: hia-native-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}-native-collect
@@ -530,6 +546,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_state:
     name: Complete original state recipes
@@ -540,6 +557,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_services:
     name: Complete original services recipes
@@ -550,6 +568,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_json:
     name: Complete original json recipes
@@ -560,6 +579,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_config:
     name: Complete original config recipes
@@ -570,6 +590,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_system:
     name: Complete original system recipes
@@ -580,6 +601,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_batch:
     name: Complete original batch recipes
@@ -590,6 +612,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   original_storage:
     name: Complete original storage recipes
@@ -600,6 +623,7 @@ jobs:
       runtime-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       invocation: ${{ needs.native_collect.outputs.invocation }}
       native-sha256: ${{ needs.native_collect.outputs.native_sha256 }}
+      native-archive-sha256: ${{ needs.native_collect.outputs.native_archive_sha256 }}
 
   qualify:
     name: All native evidence and complete original Rust comparisons
@@ -656,7 +680,18 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: hia-native-complete-${{ github.event.pull_request.head.sha || github.sha }}-${{ needs.native_collect.outputs.invocation }}
-          path: ${{ runner.temp }}/hia-runtime-native/
+          path: ${{ runner.temp }}/hia-native-transport/
+
+      - name: Restore every admitted evidence member and verify its original identity
+        run: |
+          python3 -I -B runtime/scripts/hia_native_evidence_transport.py unpack \
+            --source "$RUNNER_TEMP/hia-native-transport/evidence.tar.gz" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --runtime-sha "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --invocation "${{ needs.native_collect.outputs.invocation }}" \
+            --native-sha256 "${{ needs.native_collect.outputs.native_sha256 }}" \
+            --archive-sha256 "${{ needs.native_collect.outputs.native_archive_sha256 }}" \
+            --report "$RUNNER_TEMP/hia-native-transport/restored.json"
 
       - name: Download every successful original group separately
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
