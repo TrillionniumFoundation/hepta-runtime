@@ -1,0 +1,51 @@
+name: Public publisher independent complete readback
+on:
+  push:
+    branches: ['hia-text-publication-public-final-read-6780-v1-20261117']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_FINAL=$GITHUB_WORKSPACE/candidate/qualification/text_publication_public_final_read_v1" "TP_READER=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_recovery_ci/source" "TP_WORK=$RUNNER_TEMP/public-publisher-uploaded-artifacts" "TP_OUTPUT=$RUNNER_TEMP/public-publisher-final-proof" "TP_EXPORT=$RUNNER_TEMP/public-publisher-final-proof-export" "TP_DRIVER=$RUNNER_TEMP/public-publisher-final-proof-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact pure reader and frozen comparison source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/text_publication_public_final_read_v1
+            tests/hia_native/text_publication_public_recovery_ci/source
+      - name: Read all uploaded bytes and complete guarded domains
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          set +e
+          python3 -I -S -B "$TP_FINAL/read_final.py" --reader-source "$TP_READER" --work "$TP_WORK" --output "$TP_OUTPUT" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Seal complete source proof and any failure
+        if: always()
+        run: python3 -I -S -B "$TP_READER/recipe/archive.py" pack --source "$TP_FINAL" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-public-final-proof-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
