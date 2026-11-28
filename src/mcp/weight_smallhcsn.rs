@@ -12,6 +12,8 @@ use serde_json::Value;
 mod bound_io;
 #[path = "weight_smallhcsn/deadline.rs"]
 mod deadline;
+#[path = "weight_smallhcsn/late_quote.rs"]
+mod late_quote;
 #[path = "weight_smallhcsn/matrix.rs"]
 mod matrix;
 #[path = "weight_smallhcsn/model.rs"]
@@ -20,11 +22,19 @@ mod model;
 mod physics;
 #[path = "weight_smallhcsn/semantic.rs"]
 mod semantic;
+#[path = "weight_smallhcsn/trace.rs"]
+mod trace;
 
 pub use bound_io::{BoundModel, Inputs};
 pub use deadline::Deadline;
+pub use late_quote::{
+	bind_candidate as bind_research_mark_candidate, compile as compile_late_quote,
+	goal_met as late_quote_goal_met, FunctionIdentity, LateQuoteMinV1, Phase as ResearchPhase,
+	PhaseBinding, PreparedLateQuote, RequestRoute, ResearchState, WordEdit,
+};
 pub use model::Output;
 pub use semantic::sender_semantic_map;
+pub use trace::{ResearchGraph, TickTrace};
 
 pub fn sha(bytes: &[u8]) -> String {
 	bound_io::sha(bytes)
@@ -40,6 +50,8 @@ pub fn evaluator_identity() -> String {
 		include_bytes!("weight_smallhcsn/physics.rs").as_slice(),
 		include_bytes!("weight_smallhcsn/matrix.rs").as_slice(),
 		include_bytes!("weight_smallhcsn/semantic.rs").as_slice(),
+		include_bytes!("weight_smallhcsn/trace.rs").as_slice(),
+		include_bytes!("weight_smallhcsn/late_quote.rs").as_slice(),
 	]
 	.concat())
 }
@@ -55,6 +67,28 @@ pub fn inputs(raw: &[u8]) -> Result<Inputs> {
 
 pub fn evaluate(model: &BoundModel, inputs: &Inputs, deadline: &Deadline) -> Result<Output> {
 	model::evaluate(model, inputs, deadline)
+}
+
+/// Execute exactly the same full model and retain bounded read-only internal observations.
+/// This performs one model forward. It does not fit, intervene, write weights or infer causality.
+pub fn evaluate_traced(
+	model: &BoundModel,
+	inputs: &Inputs,
+	deadline: &Deadline,
+) -> Result<(Output, Vec<TickTrace>)> {
+	model::evaluate_traced(model, inputs, deadline)
+}
+
+/// Explicit scientific graph control. Only the opt-in closed research profile selects it;
+/// the normal evaluator and existing sender40 route retain the original graph.
+/// The returned observations identify a changed connection pattern, not a pure weight edit.
+pub fn evaluate_research_traced(
+	model: &BoundModel,
+	inputs: &Inputs,
+	deadline: &Deadline,
+	graph: ResearchGraph,
+) -> Result<(Output, Vec<TickTrace>)> {
+	model::evaluate_research_traced(model, inputs, deadline, graph)
 }
 
 /// Rebuild every model tensor from the actual admitted candidate bytes. The existing
@@ -90,3 +124,11 @@ mod native_tests;
 #[cfg(test)]
 #[path = "weight_smallhcsn/semantic_tests.rs"]
 pub(in crate::mcp) mod semantic_tests;
+
+#[cfg(test)]
+#[path = "weight_smallhcsn/trace_tests.rs"]
+mod trace_tests;
+
+#[cfg(test)]
+#[path = "weight_smallhcsn/late_quote_tests.rs"]
+mod late_quote_tests;

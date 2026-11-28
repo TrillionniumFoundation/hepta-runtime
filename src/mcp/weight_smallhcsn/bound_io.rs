@@ -339,6 +339,10 @@ impl Inputs {
 	pub fn queries(&self) -> usize {
 		self.n
 	}
+	/// Validation labels remain separate from the label-free semantic task view.
+	pub fn labels(&self) -> &[u8] {
+		&self.labels
+	}
 	/// A normalized raw key for the fixed shared affine sender, without executing its body.
 	pub fn normalized_sender_key(
 		&self,

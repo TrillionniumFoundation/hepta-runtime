@@ -585,7 +585,16 @@ fn registered_tool_schemas_have_object_roots_and_all_model_session_routes() {
 		.iter()
 		.find(|tool| tool.name == "rea_model_session_weight")
 		.unwrap();
-	assert_eq!(weight.input_schema["anyOf"].as_array().unwrap().len(), 2);
+	assert_eq!(weight.input_schema["anyOf"].as_array().unwrap().len(), 3);
+	let schema = serde_json::to_string(weight.input_schema.as_ref()).unwrap();
+	for operation in [
+		"late_quote_compile",
+		"late_quote_prepare",
+		"late_quote_roundtrip",
+		"late_quote_recover",
+	] {
+		assert!(schema.contains(operation));
+	}
 	assert!(weight.input_schema["$defs"].is_object());
 }
 

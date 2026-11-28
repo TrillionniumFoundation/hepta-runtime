@@ -13,6 +13,8 @@ use super::*;
 pub mod f16_research;
 #[path = "weight_artifact_f32_recovery.rs"]
 pub mod f32_recovery;
+#[path = "weight_artifact_late_quote.rs"]
+pub(in crate::mcp) mod late_quote;
 #[path = "weight_artifact_smallhcsn.rs"]
 pub(in crate::mcp) mod smallhcsn;
 use std::collections::BTreeSet;
@@ -135,6 +137,21 @@ async fn boundary(current: Boundary, requested: Boundary) -> Result<()> {
 			Boundary::None => "none",
 		};
 		if std::env::var("HEPTA_TEST_COHORT_PHASE").as_deref() == Ok(name) {
+			// Isolated crash qualification can stop the second canonical publication
+			// (the inverse), without substituting an in-memory cancellation for SIGKILL.
+			static MATCHES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+			let occurrence = std::env::var("HEPTA_TEST_COHORT_OCCURRENCE")
+				.ok()
+				.map(|v| v.parse::<usize>())
+				.transpose()?
+				.unwrap_or(1);
+			anyhow::ensure!(
+				(1..=2).contains(&occurrence),
+				"bounded test publication occurrence"
+			);
+			if MATCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1 != occurrence {
+				return Ok(());
+			}
 			let marker = std::env::var("HEPTA_TEST_COHORT_MARKER")?;
 			tokio::fs::write(marker, name).await?;
 			loop {
