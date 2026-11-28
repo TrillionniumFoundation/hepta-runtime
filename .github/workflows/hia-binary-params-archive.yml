@@ -1,0 +1,56 @@
+name: Independent uploaded binary typed archive read
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-params-archive-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      BINARY_ARCHIVE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_params/v1/archive_reader
+      BINARY_ARCHIVE_MANIFEST: b9eb4bdb02aa9a935745e37e667ae5eea64220392bd69914bda725978a632076
+    steps:
+      - name: Checkout fixed inert reader and exact uploaded artifact binding
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_params/v1/archive_reader
+          persist-credentials: false
+      - name: Verify all frozen reader and qualified source bytes
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          source=Path(os.environ["BINARY_ARCHIVE_SOURCE"]);sys.path.insert(0,str(source))
+          import archive_reader
+          archive_reader.identity(os.environ["BINARY_ARCHIVE_MANIFEST"])
+          for path in source.rglob("*.py"):compile(path.read_bytes(),str(path),"exec")
+          PY
+      - name: Fetch exact complete uploaded archive without target execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$BINARY_ARCHIVE_SOURCE/driver.py" fetch \
+            --work "$RUNNER_TEMP/binary-params-complete-archive" --source-manifest-sha256 "$BINARY_ARCHIVE_MANIFEST"
+      - name: Read every object, logical file, native buffer and original result
+        run: |
+          python3 -I -S -B "$BINARY_ARCHIVE_SOURCE/driver.py" read \
+            --work "$RUNNER_TEMP/binary-params-complete-archive" --source-manifest-sha256 "$BINARY_ARCHIVE_MANIFEST"
+      - name: Retain complete independent proof and process streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-params-complete-archive-proof-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/binary-params-complete-archive/proof
+            ${{ github.workspace }}/runtime/qualification/binary_params/v1/archive_reader
+          if-no-files-found: error
+          retention-days: 30
