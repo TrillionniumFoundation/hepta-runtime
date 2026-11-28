@@ -51,7 +51,7 @@ def pack(out,native,physical,configuration,images,view_images,view_slots,execute
     if len(extract_images)!=14:raise ValueError('private Extract table differs')
     for slot,image in enumerate(extract_images):patches.append((1,256+symbols['runtime_extract_body_images']+slot*8,indices[image]))
     if ssh_images is not None:
-        if len(ssh_images)!=5:raise ValueError('private SSH table differs')
+        if len(ssh_images)!=6:raise ValueError('private generic SSH table differs')
         for slot,image in enumerate(ssh_images):patches.append((1,256+symbols['runtime_ssh_images']+slot*8,indices[image]))
     raw_images=[image.read_bytes() for image in ordered]
     packed_input=(b'HIAIMG02'+struct.pack('<4Q',len(prefix),len(ordered),len(patches),0)+prefix

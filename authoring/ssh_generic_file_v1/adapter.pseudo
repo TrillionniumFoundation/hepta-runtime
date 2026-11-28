@@ -1,0 +1,218 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if length(s) < 64:
+        return INVALID
+    if load(s, 0) == COMMAND_REQUEST:
+        return command(s, o)
+    if load(s, 0) == RESULT_REQUEST:
+        return result(s, o)
+    return INVALID
+
+def command(s: readbuf, o: mutbuf) -> u32:
+    if load(s, 8) != 1 or load(s, 48) != 0 or load(s, 56) != 0:
+        return INVALID
+    fd = load(s, 16)
+    size = load(s, 24)
+    envc = load(s, 32)
+    envsize = load(s, 40)
+    if fd < 3 or fd > 2147483647 or size < 128 or size > length(s) - 64:
+        return INVALID
+    if envsize != length(s) - 64 - size or envc > envsize // 8:
+        return INVALID
+    if load(s, 64) != PLAN or load(s, 72) != 0 or load(s, 80) < 1 or load(s, 80) > 2 or load(s, 88) == 0:
+        return INVALID
+    if load(s, 96) != 0 or load(s, 104) != 30000 or load(s, 112) != 8388608 or load(s, 120) != 8388608:
+        return INVALID
+    if load(s, 128) != 12 or load(s, 144) != size - 128 or load(s, 152) != 0 or load(s, 160) != 1:
+        return INVALID
+    if load(s, 168) != 0 or load(s, 176) != 0 or load(s, 184) != 0:
+        return INVALID
+    at = 192
+    end = 64 + size
+    index = 0
+    while index < 12:
+        if at > end or end - at < 8:
+            return INVALID
+        n = load(s, at)
+        at = at + 8
+        if n == 0 or n > end - at:
+            return INVALID
+        if index < 10 and fixed_argument(s, at, n, index) == False:
+            return INVALID
+        if ordinary_string(s, at, n) == False:
+            return INVALID
+        at = at + n
+        index = index + 1
+    stdin = load(s, 136)
+    if stdin != end - at:
+        return INVALID
+    input_at = at
+    envat = end
+    index = 0
+    while index < envc:
+        if envat > length(s) or length(s) - envat < 8:
+            return INVALID
+        n = load(s, envat)
+        envat = envat + 8
+        if n > length(s) - envat or ordinary_string(s, envat, n) == False:
+            return INVALID
+        envat = envat + n
+        index = index + 1
+    if envat != length(s):
+        return INVALID
+    digits = 1
+    divisor = 1
+    temp = fd
+    while temp >= 10:
+        digits = digits + 1
+        divisor = divisor * 10
+        temp = temp // 10
+    program = 14 + digits
+    arguments = input_at - 192
+    if envsize > LIMIT or arguments > LIMIT or envc > LIMIT:
+        return INVALID
+    extent = 64 + program + 1 + arguments + 12 + envsize + envc
+    if extent > LIMIT - 64 or stdin > LIMIT - 64 - extent:
+        return INVALID
+    total = 64 + extent + stdin
+    if length(o) < total:
+        return grow(o, total)
+    fill_range(o, 0, 128, 0)
+    put(o, 0, COMMAND_RESULT)
+    put(o, 8, total)
+    put(o, 16, extent)
+    put(o, 24, stdin)
+    put(o, 32, load(s, 80))
+    put(o, 40, load(s, 88))
+    put(o, 64, COMMAND)
+    put(o, 72, program)
+    put(o, 80, 12)
+    put(o, 88, envc)
+    put(o, 96, 7)
+    put(o, 104, extent)
+    at = executable_prefix(o, 128)
+    while digits != 0:
+        store(o, at, 48 + (fd // divisor) % 10)
+        at = at + 1
+        divisor = divisor // 10
+        digits = digits - 1
+    store(o, at, 0)
+    at = at + 1
+    source = 192
+    index = 0
+    while index < 12:
+        n = load(s, source)
+        put(o, at, n)
+        copy_range(o, s, at + 8, source + 8, n)
+        store(o, at + 8 + n, 0)
+        at = at + 9 + n
+        source = source + 8 + n
+        index = index + 1
+    source = end
+    index = 0
+    while index < envc:
+        n = load(s, source)
+        put(o, at, n)
+        copy_range(o, s, at + 8, source + 8, n)
+        store(o, at + 8 + n, 0)
+        at = at + 9 + n
+        source = source + 8 + n
+        index = index + 1
+    if at != 64 + extent:
+        return INVALID
+    copy_range(o, s, at, input_at, stdin)
+    return total
+
+def ordinary_string(s: readbuf, at: u64, n: u64) -> bool:
+    i = 0
+    while i < n:
+        if byte(s, at + i) == 0:
+            return False
+        i = i + 1
+    return True
+
+def executable_prefix(o: mutbuf, at: u64) -> u64:
+    store(o, at, 47)
+    store(o, at + 1, 112)
+    store(o, at + 2, 114)
+    store(o, at + 3, 111)
+    store(o, at + 4, 99)
+    store(o, at + 5, 47)
+    store(o, at + 6, 115)
+    store(o, at + 7, 101)
+    store(o, at + 8, 108)
+    store(o, at + 9, 102)
+    store(o, at + 10, 47)
+    store(o, at + 11, 102)
+    store(o, at + 12, 100)
+    store(o, at + 13, 47)
+    return at + 14
+
+def result(s: readbuf, o: mutbuf) -> u32:
+    if length(s) < 128 or load(s, 8) != 1 or load(s, 16) == 0 or load(s, 24) < 1 or load(s, 24) > 2 or load(s, 32) == 0:
+        return INVALID
+    kind = load(s, 40)
+    reason = load(s, 48)
+    error = load(s, 56)
+    status = load(s, 64)
+    first = load(s, 72)
+    second = load(s, 80)
+    pid = load(s, 88)
+    flags = load(s, 96)
+    if load(s, 112) != 0 or load(s, 120) != 0 or kind > 1 or error > 4095 or status > 4294967295 or flags > 15:
+        return INVALID
+    if first > 8388608 or second > 8388608 or first > length(s) - 128 or second != length(s) - 128 - first:
+        return INVALID
+    if (flags & 8) == 0 or ((flags & 2) != 0 and (flags & 4) == 0):
+        return INVALID
+    if kind == 0:
+        if reason != 0 or error != 0 or flags != 15 or pid == 0:
+            return INVALID
+    elif reason == 0 or reason > 704 or first != 0 or second != 0:
+        return INVALID
+    if length(o) < length(s):
+        return grow(o, length(s))
+    fill_range(o, 0, 128, 0)
+    put(o, 0, RESULT)
+    put(o, 8, kind)
+    put(o, 16, load(s, 16))
+    mapped = 0
+    if kind == 1:
+        mapped = 4
+        if reason == 703 or reason == 102 or reason == 403:
+            mapped = 7
+        elif reason == 704 or reason == 101 or reason == 401:
+            mapped = 5
+        elif reason == 103 or reason == 106 or reason == 402:
+            mapped = 6
+        elif reason == 105:
+            mapped = 3
+        elif reason == 407 or reason == 408:
+            mapped = 8
+        elif reason == 409 or reason == 410:
+            mapped = 9
+        elif reason == 411 or reason == 412:
+            mapped = 10
+        elif reason == 413 or (reason >= 500 and reason < 600):
+            mapped = 11
+    put(o, 24, mapped)
+    put(o, 32, error)
+    put(o, 40, choose((flags & 4) != 0 and (status & 127) == 0, (status >> 8) & 255, MAXIMUM))
+    put(o, 48, status)
+    put(o, 56, first)
+    put(o, 64, second)
+    put(o, 72, pid)
+    put(o, 80, flags)
+    put(o, 88, load(s, 104))
+    put(o, 96, load(s, 24))
+    put(o, 104, load(s, 32))
+    copy_range(o, s, 128, 128, first + second)
+    return length(s)
+
+def grow(o: mutbuf, need: u64) -> u32:
+    put(o, 0, GROW_TAG)
+    put(o, 8, 2)
+    put(o, 16, need)
+    put(o, 24, 0)
+    return GROW

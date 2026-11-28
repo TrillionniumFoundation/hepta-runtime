@@ -21,6 +21,7 @@ from hia_native_build import NativeBuild, json_bytes, write_new
 from hia_native_runtime_mcp_adapter import combine
 from runtime_mcp_publication_async import combine_async
 from text_editor_create_private_pack import pack
+from runtime_ssh_generic_source import generic_owner_source, SOURCES as GENERIC_SSH_SOURCES, EXTENSION as GENERIC_SSH_EXTENSION
 
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
@@ -49,8 +50,8 @@ BOUNDARIES = [
     'scripts/runtime_batch_install.S',
     'scripts/local_batch_body_callable.S',
     'scripts/runtime_mcp_extra_engine.S',
-    'scripts/ssh_native_worker.S',
-    'scripts/runtime_ssh_file_install.S',
+    'scripts/runtime_ssh_generic_worker.S',
+    'scripts/runtime_ssh_generic_install.S',
     'scripts/runtime_ssh_file_bridge.S',
     'scripts/runtime_mcp_authority_bridge.S',
     'scripts/runtime_text_install.S',
@@ -83,7 +84,8 @@ HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
            'scripts/hia_native_runtime_mcp_adapter.py',
            'scripts/hia_native_runtime_mcp_pack.py',
            'scripts/public_nine_build.py',
-           'scripts/text_editor_create_private_pack.py']
+           'scripts/text_editor_create_private_pack.py',
+           'scripts/runtime_ssh_generic_source.py']
 # These names are physical compiled images; selectors in either private engine
 # are specified separately. The configuration Value ABI remains an actual,
 # separately compiled dependency while the public Value interface uses spans.
@@ -207,11 +209,12 @@ MEMBERS = [
     ('file_transport_call', 'file_transport_call', 'history.v1'),
     ('file_transport_policy', 'file_transport_policy_v3', 'history.v1'),
     ('file_transport_result', 'file_transport_result', 'history.v1'),
-    ('ssh_owner', 'ssh_direct_owner', 'history.v1'),
-    ('ssh_registry', 'ssh_direct_registry', 'history.v1'),
-    ('ssh_descriptor_packer', 'ssh_direct_descriptor_packer', 'history.v1'),
-    ('ssh_registry_packer', 'ssh_registry_engine_packer', 'history.v1'),
-    ('ssh_binding_packer', 'ssh_file_binding_packer', 'history.v1'),
+    ('ssh_child', 'ssh_original_child', 'history.v1'),
+    ('ssh_admission', 'ssh_request_admission', 'history.v1'),
+    ('ssh_core', 'ssh_shared_owner', 'history.v1'),
+    ('ssh_io', 'ssh_capture_io', 'history.v1'),
+    ('ssh_future', 'ssh_capture_future', 'history.v1'),
+    ('ssh_file_adapter', 'ssh_generic_file_adapter', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -313,6 +316,7 @@ def source_check(root: Path) -> dict:
     if type(binding.get('sources')) is not dict:
         raise ValueError('public source list must be an object')
     required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS,
+                *GENERIC_SSH_SOURCES, GENERIC_SSH_EXTENSION,
                 'native/runtime_mcp_image_packer.hepta',
                 *('native/' + source + '.hepta' for _, source, _ in MEMBERS)}
     if not required <= binding['sources'].keys():
@@ -358,6 +362,7 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
         source = ('.equ PM_FIXED_FIXTURE_FDS,' + str(int(private_pump_fixture)) + '\n'
                   + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
                   + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
+    source = generic_owner_source(root) + '\n' + source
     source = ('.equ PM_FIXED_PUBLICATION_TRACE,' + str(int(private_publication_trace)) + '\n'
               + '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source)
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
@@ -477,7 +482,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 129
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 130
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -487,7 +492,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                                     authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')],
                                     batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')],
                                     extract_images=[images[n] for n in ('extract_body','lc_read','key','tb_lock','tb_edit','extract_data','tb_history','tb_atomic','cache','lc_path','lc_mkdir','view_error','endpoint','extract_line_verify')],
-                                    ssh_images=[images[n] for n in ('ssh_owner','ssh_registry','ssh_descriptor_packer','ssh_registry_packer','ssh_binding_packer')])
+                                    ssh_images=[images[n] for n in ('ssh_child','ssh_admission','ssh_core','ssh_io','ssh_future','ssh_file_adapter')])
     processes.extend(steps)
     binary = folder / ('filesystem-fixture.elf' if private_fixture else 'task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
@@ -586,6 +591,11 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'file_foreground_public_qualified': False,
               'file_observation_pool_qualified': False,
               'ssh_original_nineteen_qualified': False,
+              'ssh_retained_original_nineteen_evidence_commit': '0037b4695a925b6c8540c15aa41099c4ce56a5a7',
+              'ssh_default_generic_owner_qualified': False,
+              'ssh_default_generic_owner_source': 'asm/ssh_direct/runtime.S',
+              'ssh_sole_process_instance': True,
+              'ssh_api_borrow_contract': 'serialized event-loop; no observer callback',
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
               'frontend_transport_fixed_input_limit': 16777216, 'frontend_reply_fixed_byte_limit': None,

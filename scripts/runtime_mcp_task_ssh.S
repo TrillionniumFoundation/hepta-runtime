@@ -470,6 +470,8 @@ ph_destroy_next:
 ph_destroy_root:
     mov rdi,r13
     call hsw_destroy
+    cmp eax,0xffffffdf
+    je ph_destroy_pending
     test rax,rax
     jnz public_span_fail
     mov rax,[rbx+232]
