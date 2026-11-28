@@ -149,3 +149,80 @@ tests. The original 64-test file remains byte-for-byte unchanged. Full evidence
 and the complete initial c5d failure log are retained under
 `qualification/integrated_source_transition_v2/`. Hosted native execution and
 the complete artifact round trip remain subsequent required gates.
+
+## Catalog source transition v3
+
+The admitted base for this layer is a1ad1319f71265a16c92c4c6b5b95e005012cc91,
+after the normal merges of the v2 registry transition and the published full
+catalog. The physical current native domain now contains 236 HIA files. All ten
+catalog files are fixed, including the assembly capability, authoring source,
+ABI, build reader, composition manifest, verification record, and test source.
+The preceding V1 and V2 authority files retain their complete original bytes.
+
+This layer also fixes the entire preceding selected source tree at
+e8ed8bcfbaa21c316f72bc52147cb701e8609635 / tree
+257cb2b52e3c756d0c86aa92bd14a9483bea7eea: 13,025 regular Git files and
+642,157,774 bytes. This is the complete materializer selection of native,
+scripts, src, tests, .github, authoring, vendor, runtime_support and its five
+declared root files. It is not a claim about every other repository path.
+The deterministic gzip fixture stores the complete path, size, SHA256 and Git
+execution-mode inventory; it does not hide source bytes or replace source
+capture. The complete preceding materializer is retained as a separate fixed
+43,763-byte fixture.
+
+Current admission captures 13,039 physical selected files, including the one
+explicit assembly member. The exact logical predecessor is computed only
+after the physical source and its complete identity have been admitted.
+Six full-file relations cover the current control loader and the five source
+checkout workflows. Composition with the retained V1 workflow relations keeps
+their original predecessors. The complete old reader is restored from its
+fixed fixture; all other preceding files must match the frozen full inventory.
+File identities, directory identities, source bytes, execution modes and the
+complete membership are rechecked before admission completes.
+
+The 16 original integration methods and six original registry methods execute
+against a newly created, complete 13,025-file v2 root with the actual v2 reader.
+Their test method ASTs, assertions and timeouts are unchanged. The registry
+test file itself is byte-for-byte unchanged. Only module-level preparation and
+the loader in the 16-method file change. Twelve separate controls execute
+against the real current 236-source root. The original public-source 12,
+metadata-source eight and pipeline source files remain byte-for-byte unchanged.
+
+The new controls cover explicit-root reads; all ten catalog files; missing,
+changed and mode-altered inputs; both retained authorities; the fixed gzip
+inventory and reader; unregistered current files; physical predecessor
+substitution; symlinked files and directories; late byte changes and same-byte
+inode replacement; late non-native additions; complete old-fixture tampering;
+historical output; and rewritten receipts. Complete original reference domains
+remain 131 and 199 paths, with exactly 195 historical native sources. The
+catalog HIA is excluded only from that owned historical output; all nine other
+catalog files are preserved and checked. The physical current source is left
+unchanged.
+
+Five workflows expand eight runtime source checkouts to include the complete
+selection and the assembly source. Parsed complete YAML objects are identical
+to their e8 predecessors after removing only the runtime sparse-checkout
+field. Run commands, step objects outside that field, dependency rules, checks,
+budgets, and artifact policy are unchanged.
+
+### Actual validation and remaining execution scope
+
+The v3 candidate passed all 150 executed tests with zero skips: the original
+42 source controls, 12 new catalog controls, and the actual materialized
+historical tree's original 15 migration, five snapshot, 64 pipeline and 12
+spawn/capture tests. The pipeline file contains 58 direct methods; its retained
+loader discovers the original total of 64 cases. It was not shortened to fit
+an AST counter. Full materialization took 18.121 seconds in the retained run;
+all eight commands together took approximately 213.9 seconds. Exact command
+arguments, stdout/stderr identities and the final source identities are
+retained in qualification/integrated_source_transition_v3.
+
+These are source and preparation controls. The preceding e8 native GitHub run
+46128373096 / job 140927946149 passed the 22 source controls and the original
+15 + 5 + 64 + 12 tests, then failed in build_batch_plan / module_identity with
+"batch native module identity or capacity differs". Its complete log remains
+retained. The original-recipe admission and archive upload were skipped, so
+this layer makes no completed 81-recipe or complete native execution claim.
+The independent e8 Shell Process run 46128373073 / job 140928020223 completed
+successfully. Current catalog execution remains qualified only by its own
+separate published tests.
