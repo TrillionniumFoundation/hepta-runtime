@@ -1,0 +1,143 @@
+{
+  "actual_fixed_images": 14,
+  "assembler_processes": [
+    {
+      "argv": [
+        "as",
+        "--64",
+        "-o",
+        "fixture.o",
+        "/workspace/scratch/6780eb0cbcc3/batch-public-rebuild-v1/source-v3/native_boundary/local_batch_body_fixture.S"
+      ],
+      "cwd": "/tmp/hia-batch-fixture-pack-author-6780-v3",
+      "elapsed_seconds": 0.006511935000162339,
+      "name": "assemble",
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "timeout_seconds": 30
+    },
+    {
+      "argv": [
+        "ld",
+        "-nostdlib",
+        "-Ttext=0",
+        "-e",
+        "_start",
+        "-o",
+        "fixture-code.elf",
+        "fixture.o"
+      ],
+      "cwd": "/tmp/hia-batch-fixture-pack-author-6780-v3",
+      "elapsed_seconds": 0.002570548998846789,
+      "name": "link",
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "timeout_seconds": 30
+    },
+    {
+      "argv": [
+        "objcopy",
+        "-O",
+        "binary",
+        "--only-section=.text",
+        "fixture-code.elf",
+        "fixture.bin"
+      ],
+      "cwd": "/tmp/hia-batch-fixture-pack-author-6780-v3",
+      "elapsed_seconds": 0.0015381530010927236,
+      "name": "image",
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "timeout_seconds": 30
+    },
+    {
+      "argv": [
+        "readelf",
+        "-rW",
+        "fixture-code.elf"
+      ],
+      "cwd": "/tmp/hia-batch-fixture-pack-author-6780-v3",
+      "elapsed_seconds": 0.0013176680004107766,
+      "name": "relocations",
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 40,
+        "sha256": "15864317fea2c9ccafcbdd8216912d3497e933fce1ffe4a0dbf37d14cbb033d3"
+      },
+      "timeout_seconds": 30
+    },
+    {
+      "argv": [
+        "nm",
+        "-n",
+        "--defined-only",
+        "fixture-code.elf"
+      ],
+      "cwd": "/tmp/hia-batch-fixture-pack-author-6780-v3",
+      "elapsed_seconds": 0.001934329000505386,
+      "name": "symbols",
+      "returncode": 0,
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 13157,
+        "sha256": "8bcd5d0795d289033dc75e9ed5a8fba99478307fc5cbe291742e0219e85a43b3"
+      },
+      "timeout_seconds": 30
+    }
+  ],
+  "callable": {
+    "bytes": 70979,
+    "sha256": "29e3a08373ed344ab6a50616b0e26eaf4b819cf776d170c9b78ea50c56625f07"
+  },
+  "entry_offset": 176,
+  "external_relocations": 0,
+  "fixture": {
+    "bytes": 81981,
+    "sha256": "3dc42652656f64d065fa008277c271c85607568e289391421f2ce55115018500"
+  },
+  "native_packer_executed": false,
+  "packer": {
+    "bytes": 256684,
+    "sha256": "b32b7404e78dc5012da80ec187c691ddce7dba4d3903cb7e188ce9cec8023bef"
+  },
+  "prefix": {
+    "bytes": 14832,
+    "sha256": "c7b6eee5847b9a160002a2e28b6669fb9037a517ca8b0c489cd00d769e42b51b"
+  },
+  "schema": "hepta.runtime.rebuilt-batch-fixture-pack-author.v1",
+  "semantic_qualification": false,
+  "stats": {
+    "blocks": 30,
+    "functions": 11,
+    "operations": 5615
+  },
+  "table_offset": 14720
+}

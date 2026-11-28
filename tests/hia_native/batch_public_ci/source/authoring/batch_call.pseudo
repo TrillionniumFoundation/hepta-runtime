@@ -1,0 +1,27 @@
+def valid_params(s: readbuf, typed: u64) -> bool:
+    if typed < 192 or typed > length(s) - 48:
+        return False
+    if load(s, 48) != PARAMS_RESULT or load(s, 56) != 0 or load(s, 64) != 1 or load(s, 80) != 1:
+        return False
+    path = load(s, 72)
+    content = load(s, 88)
+    i = 96
+    while i < 176:
+        if load(s, i) != 0:
+            return False
+        i = i + 8
+    if path > typed - 128 or content != typed - 128 - path or content < 64:
+        return False
+    at = 176 + path
+    if load(s, at) != RAW_RESULT or load(s, at + 8) != 0 or load(s, at + 16) != path:
+        return False
+    if path > content - 64 or load(s, at + 24) != content - 64 - path:
+        return False
+    if load(s, at + 40) != 0 or load(s, at + 48) != 0 or load(s, at + 56) != 0:
+        return False
+    i = 0
+    while i < path:
+        if byte(s, 176 + i) != byte(s, at + 64 + i):
+            return False
+        i = i + 1
+    return True
