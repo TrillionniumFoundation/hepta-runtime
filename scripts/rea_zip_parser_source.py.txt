@@ -1,0 +1,877 @@
+def entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(i) >= 8:
+        if read64(i, 0) == FIELD_REQUEST:
+            return field_entry(i, o, w)
+    if length(i) != 120:
+        return INVALID
+    if read64(i, 0) != REQUEST:
+        return INVALID
+    if read64(i, 8) > 6:
+        return INVALID
+    if length(w) < WORKSPACE:
+        return CAPACITY
+    if get(w, H) == 0:
+        fill_range(w, H, 1024, 0)
+        copy_range(w, i, INIT, 0, 120)
+        put(w, H, PRIVATE)
+        put(w, H + 32, read64(i, 48))
+        put(w, H + 40, read64(i, 8))
+        put(w, H + 48, read64(i, 16))
+        put(w, H + 56, read64(i, 24))
+        if read64(i, 24) < 1 or read64(i, 24) > 256:
+            fail(w, 1)
+        if get(w, H + 160) == 0:
+            if (read64(i, 56) & 61440) != 32768 or read64(i, 48) < 22 or read64(i, 48) > 9007199254740991:
+                fail(w, 2)
+        if get(w, H + 160) == 0:
+            make_version(w)
+            fill_range(w, TABLE, 1048576, 0)
+            tail = get(w, H + 32)
+            if tail > 65557:
+                tail = 65557
+            put(w, H + 232, tail)
+            put(w, H + 240, get(w, H + 32) - tail)
+            queue(w, 1, get(w, H + 240), tail, TAIL, 1)
+    else:
+        if get(w, H) != PRIVATE:
+            return INVALID
+        j = 0
+        while j < 120:
+            if byte(i, j) != byte(w, INIT + j):
+                return INVALID
+            j = j + 1
+        if get(w, H + 256) == 1:
+            if get(w, P) != EFFECT or get(w, P + 8) != get(w, H + 16):
+                return INVALID
+            if get(w, P + 16) != get(w, H + 336):
+                return INVALID
+            expected = get(w, H + 184) - get(w, H + 200)
+            if expected > 65536:
+                expected = 65536
+            if get(w, P + 24) != get(w, H + 176) + get(w, H + 200) or get(w, P + 32) != expected or get(w, P + 40) != get(w, H + 192) + get(w, H + 200):
+                return INVALID
+            if get(w, P + 48) != get(w, H + 16) or get(w, P + 72) != 0:
+                return INVALID
+            put(w, H + 256, 0)
+            if get(w, P + 64) != 0 or get(w, P + 56) != expected:
+                fail(w, 6)
+            else:
+                put(w, H + 200, get(w, H + 200) + expected)
+                if get(w, H + 200) < get(w, H + 184):
+                    issue(w)
+                else:
+                    put(w, H + 8, get(w, H + 208))
+    while get(w, H + 160) == 0 and get(w, H + 256) == 0 and get(w, H + 8) < 99:
+        phase = get(w, H + 8)
+        if phase == 1:
+            layout_tail(w)
+        else:
+            if phase == 2:
+                layout_bounds(w)
+            else:
+                if phase == 3:
+                    begin_entry(w)
+                else:
+                    if phase == 4:
+                        central_fixed(w)
+                    else:
+                        if phase == 5:
+                            central_variable(w)
+                        else:
+                            if phase == 6:
+                                local_fixed(w)
+                            else:
+                                if phase == 7:
+                                    local_variable(w)
+                                else:
+                                    if phase == 8:
+                                        complete_entry(w)
+                                    else:
+                                        if phase == 9:
+                                            complete_index(w)
+                                        else:
+                                            if phase == 10:
+                                                hash_directory(w)
+                                            else:
+                                                if phase == 11:
+                                                    complete_metadata(w)
+                                                else:
+                                                    fail(w, 48)
+    if get(w, H + 160) != 0:
+        return finish(o, w)
+    if get(w, H + 256) == 1:
+        return PENDING
+    return finish(o, w)
+
+def read64(i:readbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 8:
+        value = value | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def u16(w:mutbuf, at:u64) -> u64:
+    return byte(w, at) | (byte(w, at + 1) << 8)
+
+def u32(w:mutbuf, at:u64) -> u64:
+    return u16(w, at) | (u16(w, at + 2) << 16)
+
+def fail(w:mutbuf, code:u64) -> u64:
+    if get(w, H + 160) == 0:
+        put(w, H + 160, code)
+    return 0
+
+def issue(w:mutbuf) -> u64:
+    amount = get(w, H + 184) - get(w, H + 200)
+    if amount > 65536:
+        amount = 65536
+    put(w, H + 16, get(w, H + 16) + 1)
+    put(w, P, EFFECT)
+    put(w, P + 8, get(w, H + 16))
+    put(w, P + 16, get(w, H + 336))
+    put(w, P + 24, get(w, H + 176) + get(w, H + 200))
+    put(w, P + 32, amount)
+    put(w, P + 40, get(w, H + 192) + get(w, H + 200))
+    fill_range(w, P + 48, 32, 0)
+    put(w, H + 256, 1)
+    return 0
+
+def queue(w:mutbuf, action:u64, offset:u64, amount:u64, target:u64, next_phase:u64) -> u64:
+    if action == 1:
+        if offset > get(w, H + 32) or amount > get(w, H + 32) - offset:
+            return fail(w, 3)
+        if amount > 67108864 - get(w, H + 24):
+            return fail(w, 5)
+        put(w, H + 24, get(w, H + 24) + amount)
+    put(w, H + 176, offset)
+    put(w, H + 184, amount)
+    put(w, H + 192, target)
+    put(w, H + 200, 0)
+    put(w, H + 208, next_phase)
+    put(w, H + 336, action)
+    if amount == 0:
+        put(w, H + 8, next_phase)
+        return 0
+    return issue(w)
+
+def layout_tail(w:mutbuf) -> u64:
+    n = get(w, H + 232)
+    cursor = n - 21
+    found = 0
+    at = 0
+    while cursor > 0 and found == 0:
+        cursor = cursor - 1
+        if u32(w, TAIL + cursor) == 101010256:
+            if cursor + 22 + u16(w, TAIL + cursor + 20) == n:
+                found = 1
+                at = cursor
+    if found == 0:
+        return fail(w, 7)
+    e = TAIL + at
+    put(w, H + 88, get(w, H + 240) + at)
+    put(w, H + 96, n - at)
+    if u16(w, e + 4) != 0 or u16(w, e + 6) != 0 or u16(w, e + 8) != u16(w, e + 10):
+        return fail(w, 8)
+    put(w, H + 64, u16(w, e + 10))
+    put(w, H + 80, u32(w, e + 12))
+    put(w, H + 72, u32(w, e + 16))
+    if get(w, H + 64) == 65535 or get(w, H + 80) == 4294967295 or get(w, H + 72) == 4294967295:
+        return fail(w, 9)
+    if get(w, H + 88) >= 20:
+        return queue(w, 1, get(w, H + 88) - 20, 4, SMALL, 2)
+    put(w, SMALL, 0)
+    put(w, H + 8, 2)
+    return 0
+
+def layout_bounds(w:mutbuf) -> u64:
+    if get(w, H + 88) >= 20 and u32(w, SMALL) == 117853008:
+        return fail(w, 9)
+    if get(w, H + 64) > 50000 or get(w, H + 80) > 16777216:
+        return fail(w, 10)
+    if get(w, H + 72) + get(w, H + 80) != get(w, H + 88):
+        return fail(w, 11)
+    put(w, H + 112, get(w, H + 72))
+    put(w, H + 8, 3)
+    return 0
+
+def begin_entry(w:mutbuf) -> u64:
+    if get(w, H + 104) == get(w, H + 64):
+        put(w, H + 8, 9)
+        return 0
+    cursor = get(w, H + 112)
+    if cursor > get(w, H + 88) or get(w, H + 88) - cursor < 46:
+        return fail(w, 12)
+    return queue(w, 1, cursor, 46, CFIX, 4)
+
+def central_fixed(w:mutbuf) -> u64:
+    if u32(w, CFIX) != 33639248:
+        return fail(w, 13)
+    e = ENTRIES + get(w, H + 104) * 128
+    fill_range(w, e, 128, 0)
+    put(w, e + 32, get(w, H + 112))
+    put(w, e + 40, u32(w, CFIX + 42))
+    put(w, e + 56, u32(w, CFIX + 20))
+    put(w, e + 64, u32(w, CFIX + 24))
+    put(w, e + 72, u16(w, CFIX + 10))
+    put(w, e + 80, u16(w, CFIX + 8))
+    put(w, e + 88, u32(w, CFIX + 16))
+    put(w, H + 272, u16(w, CFIX + 28))
+    put(w, H + 280, u16(w, CFIX + 30))
+    put(w, H + 288, u16(w, CFIX + 32))
+    if u16(w, CFIX + 34) != 0 or get(w, e + 40) == 4294967295 or get(w, e + 56) == 4294967295 or get(w, e + 64) == 4294967295:
+        return fail(w, 14)
+    amount = get(w, H + 272) + get(w, H + 280) + get(w, H + 288)
+    next_cursor = get(w, H + 112) + 46 + amount
+    if next_cursor > get(w, H + 88):
+        return fail(w, 15)
+    put(w, H + 312, next_cursor)
+    return queue(w, 1, get(w, H + 112) + 46, amount, CVAR, 5)
+
+def valid_name(w:mutbuf, at:u64, n:u64, flags:u64) -> u64:
+    if n == 0:
+        return fail(w, 16)
+    if byte(w, at) == 47:
+        return fail(w, 16)
+    if n >= 2:
+        a = byte(w, at)
+        if ((a >= 65 and a <= 90) or (a >= 97 and a <= 122)) and byte(w, at + 1) == 58:
+            return fail(w, 16)
+    j = 0
+    part = 0
+    nonascii = 0
+    while j <= n:
+        c = 47
+        if j < n:
+            c = byte(w, at + j)
+            if c == 0 or c == 92:
+                return fail(w, 16)
+            if c >= 128:
+                nonascii = 1
+        if c == 47:
+            if j - part == 1 and byte(w, at + part) == 46:
+                return fail(w, 16)
+            if j - part == 2 and byte(w, at + part) == 46 and byte(w, at + part + 1) == 46:
+                return fail(w, 16)
+            part = j + 1
+        j = j + 1
+    if (flags & 2048) == 0 and nonascii == 1:
+        return fail(w, 17)
+    if utf8(w, at, n) != 1:
+        return fail(w, 18)
+    return 1
+
+def extra_fields(w:mutbuf, at:u64, n:u64) -> u64:
+    cursor = 0
+    count = 0
+    while cursor < n:
+        if n - cursor < 4:
+            fail(w, 19)
+            return 0
+        ident = u16(w, at + cursor)
+        amount = u16(w, at + cursor + 2)
+        cursor = cursor + 4 + amount
+        if cursor > n:
+            fail(w, 20)
+            return 0
+        if ident == 1:
+            fail(w, 21)
+            return 0
+        if ident == 28789:
+            fail(w, 22)
+            return 0
+        count = count + 1
+    return count
+
+def central_variable(w:mutbuf) -> u64:
+    e = ENTRIES + get(w, H + 104) * 128
+    valid_name(w, CVAR, get(w, H + 272), get(w, e + 80))
+    if get(w, H + 160) != 0:
+        return 0
+    extra_count = extra_fields(w, CVAR + get(w, H + 272), get(w, H + 280))
+    put(w, e + 112, extra_count)
+    if get(w, H + 160) != 0:
+        return 0
+    local = get(w, e + 40)
+    if local > get(w, H + 72) or get(w, H + 72) - local < 30:
+        return fail(w, 23)
+    return queue(w, 1, local, 30, LFIX, 6)
+
+def local_fixed(w:mutbuf) -> u64:
+    e = ENTRIES + get(w, H + 104) * 128
+    if u32(w, LFIX) != 67324752:
+        return fail(w, 24)
+    if u16(w, LFIX + 6) != get(w, e + 80) or u16(w, LFIX + 8) != get(w, e + 72):
+        return fail(w, 25)
+    put(w, H + 296, u16(w, LFIX + 26))
+    put(w, H + 304, u16(w, LFIX + 28))
+    payload = get(w, e + 40) + 30 + get(w, H + 296) + get(w, H + 304)
+    put(w, e + 48, payload)
+    if payload > get(w, H + 72) or get(w, e + 56) > get(w, H + 72) - payload:
+        return fail(w, 26)
+    return queue(w, 1, get(w, e + 40) + 30, get(w, H + 296) + get(w, H + 304), LVAR, 7)
+
+def same(w:mutbuf, left:u64, right:u64, n:u64) -> u64:
+    j = 0
+    while j < n:
+        if byte(w, left + j) != byte(w, right + j):
+            return 0
+        j = j + 1
+    return 1
+
+def local_variable(w:mutbuf) -> u64:
+    e = ENTRIES + get(w, H + 104) * 128
+    if get(w, H + 296) != get(w, H + 272):
+        return fail(w, 27)
+    if same(w, CVAR, LVAR, get(w, H + 272)) == 0:
+        return fail(w, 27)
+    validate_extra(w, LVAR + get(w, H + 296), get(w, H + 304), get(w, e + 72), get(w, e + 80), get(w, e + 48))
+    if get(w, H + 160) != 0:
+        return 0
+    descriptor = get(w, e + 80) & 8
+    local_crc = u32(w, LFIX + 14)
+    local_compressed = u32(w, LFIX + 18)
+    local_uncompressed = u32(w, LFIX + 22)
+    if local_crc != get(w, e + 88) and (descriptor == 0 or local_crc != 0):
+        return fail(w, 28)
+    if local_compressed != get(w, e + 56) and (descriptor == 0 or local_compressed != 0):
+        return fail(w, 28)
+    if local_uncompressed != get(w, e + 64) and (descriptor == 0 or local_uncompressed != 0):
+        return fail(w, 28)
+    if get(w, e + 72) == 0 and (get(w, e + 80) & 1) == 0 and get(w, e + 56) != get(w, e + 64):
+        return fail(w, 29)
+    end = get(w, e + 48) + get(w, e + 56)
+    put(w, e + 120, end)
+    if descriptor != 0:
+        if end > get(w, H + 72) or get(w, H + 72) - end < 12:
+            return fail(w, 30)
+        amount = get(w, H + 72) - end
+        if amount > 16:
+            amount = 16
+        put(w, H + 264, amount)
+        return queue(w, 1, end, amount, SMALL, 8)
+    put(w, H + 8, 8)
+    return 0
+
+def validate_extra(w:mutbuf, at:u64, n:u64, method:u64, flags:u64, payload:u64) -> u64:
+    aligned = 0
+    if method == 0 and (flags & 65) == 0 and n >= 1 and n <= 3 and (payload & 3) == 0:
+        aligned = 1
+        j = 0
+        while j < n:
+            if byte(w, at + j) != 0:
+                aligned = 0
+            j = j + 1
+    if aligned == 0:
+        extra_fields(w, at, n)
+    return 0
+
+def field_entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(i) < 48:
+        return INVALID
+    if length(w) < WORKSPACE:
+        return CAPACITY
+    op = read64(i, 8)
+    n = read64(i, 40)
+    if op < 1 or op > 3 or n > 65535 or n != length(i) - 48:
+        return INVALID
+    if read64(i, 16) > 65535 or read64(i, 24) > 65535:
+        return INVALID
+    fill_range(w, H, 1024, 0)
+    copy_range(w, i, CVAR, 48, n)
+    at = JSON_BASE
+    if op == 1:
+        extra_fields(w, CVAR, n)
+        if get(w, H + 160) == 0:
+            at = emit(w, at, 91)
+            j = 0
+            while j < n:
+                if j > 0:
+                    at = emit(w, at, 44)
+                at = decimal(w, at, u16(w, CVAR + j))
+                j = j + 4 + u16(w, CVAR + j + 2)
+            at = emit(w, at, 93)
+    else:
+        if op == 2:
+            valid_name(w, CVAR, n, read64(i, 16))
+            if get(w, H + 160) == 0:
+                at = emit(w, at, 91)
+                at = quoted(w, at, CVAR, n)
+                at = emit(w, at, 44)
+                if (read64(i, 16) & 2048) != 0:
+                    at = literal(w, at, L_UTF8)
+                else:
+                    at = literal(w, at, L_ASCII)
+                at = emit(w, at, 93)
+        else:
+            validate_extra(w, CVAR, n, read64(i, 24), read64(i, 16), read64(i, 32))
+            at = literal(w, at, L_NULL)
+    put(w, H + 320, at - JSON_BASE)
+    put(w, H + 8, 99)
+    return finish(o, w)
+
+def complete_entry(w:mutbuf) -> u64:
+    e = ENTRIES + get(w, H + 104) * 128
+    if (get(w, e + 80) & 8) != 0:
+        unsigned = 0
+        signed = 0
+        if u32(w, SMALL) == get(w, e + 88) and u32(w, SMALL + 4) == get(w, e + 56) and u32(w, SMALL + 8) == get(w, e + 64):
+            unsigned = 1
+        if get(w, H + 264) == 16 and u32(w, SMALL) == 134695760 and u32(w, SMALL + 4) == get(w, e + 88) and u32(w, SMALL + 8) == get(w, e + 56) and u32(w, SMALL + 12) == get(w, e + 64):
+            signed = 1
+        if unsigned == signed:
+            return fail(w, 31)
+        n = 12
+        if signed == 1:
+            n = 16
+        put(w, e + 96, n)
+        put(w, e + 120, get(w, e + 120) + n)
+    retained = get(w, H + 120) + get(w, H + 272) * 2 + get(w, e + 112) * 2 + 384
+    if retained > 33554432:
+        return fail(w, 32)
+    put(w, H + 120, retained)
+    insert_entry(w, e)
+    if get(w, H + 160) != 0:
+        return 0
+    put(w, H + 104, get(w, H + 104) + 1)
+    put(w, H + 112, get(w, H + 312))
+    put(w, H + 8, 3)
+    return 0
+
+def insert_entry(w:mutbuf, e:u64) -> u64:
+    n = get(w, H + 272)
+    hash = 14695981039346656037
+    j = 0
+    while j < n:
+        hash = (hash ^ byte(w, CVAR + j)) * 1099511628211
+        j = j + 1
+    slot = hash & 131071
+    occupied = get(w, TABLE + slot * 8)
+    while occupied != 0:
+        old = ENTRIES + (occupied - 1) * 128
+        if get(w, old + 8) == n:
+            if same(w, get(w, old), CVAR, n) == 1:
+                return fail(w, 33)
+        slot = (slot + 1) & 131071
+        occupied = get(w, TABLE + slot * 8)
+    put(w, TABLE + slot * 8, get(w, H + 104) + 1)
+    name_at = ARENA + get(w, H + 128)
+    copy_range(w, w, name_at, CVAR, n)
+    put(w, e, name_at)
+    put(w, e + 8, n)
+    put(w, e + 16, classify(w, name_at, n))
+    put(w, e + 24, choose((get(w, e + 80) & 2048) != 0, 1, 0))
+    ids_at = name_at + n
+    put(w, e + 104, ids_at)
+    j = 0
+    used = 0
+    while j < get(w, H + 280):
+        store(w, ids_at + used, byte(w, CVAR + n + j))
+        store(w, ids_at + used + 1, byte(w, CVAR + n + j + 1))
+        used = used + 2
+        j = j + 4 + u16(w, CVAR + n + j + 2)
+    put(w, H + 128, get(w, H + 128) + n + used)
+    put(w, RANGES + get(w, H + 104) * 8, get(w, H + 104))
+    if get(w, H + 40) == 0 or get(w, H + 40) == get(w, e + 16):
+        put(w, H + 136, get(w, H + 136) + 1)
+    if (get(w, e + 80) & 1) != 0:
+        put(w, H + 144, get(w, H + 144) + 1)
+    if matches(w, name_at, n, N_ANDROID) == 1:
+        put(w, H + 152, get(w, H + 152) | 1)
+    if matches(w, name_at, n, N_JAR) == 1:
+        put(w, H + 152, get(w, H + 152) | 2)
+    return 0
+
+def classify(w:mutbuf, at:u64, n:u64) -> u64:
+    if matches(w, at, n, N_ANDROID) == 1 or matches(w, at, n, N_JAR) == 1:
+        return 1
+    if n >= 11:
+        if matches(w, at, 7, N_CLASSES) == 1 and matches(w, at + n - 4, 4, N_DEX) == 1:
+            valid = 1
+            j = 7
+            while j < n - 4:
+                c = byte(w, at + j)
+                if c < 48 or c > 57:
+                    valid = 0
+                j = j + 1
+            if valid == 1:
+                return 2
+    if n >= 3:
+        if matches(w, at + n - 3, 3, N_SO) == 1:
+            return 3
+    if n >= 4:
+        if matches(w, at + n - 4, 4, N_DLL) == 1:
+            return 3
+    if n >= 6:
+        if matches(w, at + n - 6, 6, N_DYLIB) == 1:
+            return 3
+    if n >= 9:
+        if matches(w, at, 9, N_META) == 1:
+            if matches(w, at + n - 4, 4, N_RSA) == 1 or matches(w, at + n - 4, 4, N_DSA) == 1 or matches(w, at + n - 3, 3, N_EC) == 1 or matches(w, at + n - 3, 3, N_SF) == 1:
+                return 6
+    if matches(w, at, n, N_RESOURCE) == 1:
+        return 4
+    if n >= 4:
+        if matches(w, at, 4, N_RES) == 1:
+            return 4
+    if n >= 7:
+        if matches(w, at, 7, N_ASSETS) == 1:
+            return 4
+    if n >= 6:
+        if matches(w, at + n - 6, 6, N_CLASS) == 1:
+            return 5
+    if byte(w, at + n - 1) == 47:
+        return 7
+    return 8
+
+def greater_range(w:mutbuf, a:u64, b:u64) -> u64:
+    ea = ENTRIES + get(w, RANGES + a * 8) * 128
+    eb = ENTRIES + get(w, RANGES + b * 8) * 128
+    if get(w, ea + 40) > get(w, eb + 40):
+        return 1
+    if get(w, ea + 40) == get(w, eb + 40) and get(w, ea + 120) > get(w, eb + 120):
+        return 1
+    return 0
+
+def swap_range(w:mutbuf, a:u64, b:u64) -> u64:
+    value = get(w, RANGES + a * 8)
+    put(w, RANGES + a * 8, get(w, RANGES + b * 8))
+    put(w, RANGES + b * 8, value)
+    return 0
+
+def sift_range(w:mutbuf, root:u64, limit:u64) -> u64:
+    active = 1
+    while active == 1:
+        child = root * 2 + 1
+        if child >= limit:
+            active = 0
+        else:
+            if child + 1 < limit:
+                if greater_range(w, child + 1, child) == 1:
+                    child = child + 1
+            if greater_range(w, child, root) == 0:
+                active = 0
+            else:
+                swap_range(w, root, child)
+                root = child
+    return 0
+
+def sort_ranges(w:mutbuf) -> u64:
+    n = get(w, H + 64)
+    root = n >> 1
+    while root > 0:
+        root = root - 1
+        sift_range(w, root, n)
+    end = n
+    while end > 1:
+        end = end - 1
+        swap_range(w, 0, end)
+        sift_range(w, 0, end)
+    previous = 0
+    j = 0
+    while j < n:
+        e = ENTRIES + get(w, RANGES + j * 8) * 128
+        start = get(w, e + 40)
+        if start < previous or (j == 0 and start != 0):
+            return fail(w, 35)
+        previous = get(w, e + 120)
+        j = j + 1
+    return 0
+
+def sha_append_private(w:mutbuf, start:u64, amount:u64) -> u64:
+    have = get(w, 1096)
+    j = 0
+    while j < amount:
+        store(w, 1112 + have, byte(w, start + j))
+        have = have + 1
+        if have == 64:
+            sha_compress(w)
+            have = 0
+        j = j + 1
+    put(w, 1096, have)
+    put(w, 1088, get(w, 1088) + amount)
+    return 0
+
+def copy_digest(w:mutbuf, at:u64, hexadecimal:u64) -> u64:
+    j = 0
+    while j < 32:
+        c = (get(w, 1024 + (j >> 2) * 8) >> ((3 - (j & 3)) * 8)) & 255
+        if hexadecimal == 1:
+            store(w, at + j * 2, hexchar(c >> 4))
+            store(w, at + j * 2 + 1, hexchar(c & 15))
+        else:
+            store(w, at + j, c)
+        j = j + 1
+    return 0
+
+def make_version(w:mutbuf) -> u64:
+    at = literal(w, VERSION_TEXT, L_VERSION_PREFIX)
+    j = 0
+    while j < 11:
+        if j > 0:
+            at = emit(w, at, 58)
+        value = get(w, INIT + 32 + j * 8)
+        if j >= 7 and (value & 9223372036854775808) != 0:
+            at = emit(w, at, 45)
+            value = 0 - value
+        at = decimal(w, at, value)
+        j = j + 1
+    sha_init(w)
+    sha_append_private(w, VERSION_TEXT, at - VERSION_TEXT)
+    sha_final(w)
+    literal(w, VERSION_VALUE, L_VERSION_TOKEN)
+    copy_digest(w, VERSION_VALUE + 5, 1)
+    return 0
+
+def complete_index(w:mutbuf) -> u64:
+    if get(w, H + 112) != get(w, H + 88):
+        return fail(w, 34)
+    sort_ranges(w)
+    if get(w, H + 160) != 0:
+        return 0
+    sha_init(w)
+    put(w, H + 216, get(w, H + 72))
+    put(w, H + 224, get(w, H + 80))
+    if get(w, H + 224) == 0:
+        return finish_hashes(w)
+    amount = get(w, H + 224)
+    if amount > 65536:
+        amount = 65536
+    return queue(w, 1, get(w, H + 216), amount, CVAR, 10)
+
+def hash_directory(w:mutbuf) -> u64:
+    amount = get(w, H + 184)
+    sha_append_private(w, CVAR, amount)
+    put(w, H + 216, get(w, H + 216) + amount)
+    put(w, H + 224, get(w, H + 224) - amount)
+    if get(w, H + 224) == 0:
+        return finish_hashes(w)
+    amount = get(w, H + 224)
+    if amount > 65536:
+        amount = 65536
+    return queue(w, 1, get(w, H + 216), amount, CVAR, 10)
+
+def finish_hashes(w:mutbuf) -> u64:
+    sha_final(w)
+    copy_digest(w, DIR_DIGEST, 1)
+    sha_init(w)
+    sha_append_private(w, TAIL + get(w, H + 88) - get(w, H + 240), get(w, H + 96))
+    sha_final(w)
+    copy_digest(w, EOCD_DIGEST, 1)
+    if get(w, H + 48) > get(w, H + 136):
+        return fail(w, 36)
+    return queue(w, 2, 0, 88, STAT, 11)
+
+def complete_metadata(w:mutbuf) -> u64:
+    if same(w, STAT, INIT + 32, 88) == 0:
+        return fail(w, 37)
+    put(w, H + 320, render_report(w) - JSON_BASE)
+    put(w, H + 8, 99)
+    return 0
+
+def emit(w:mutbuf, at:u64, value:u64) -> u64:
+    if at < JSON_END:
+        store(w, at, value)
+    else:
+        fail(w, 47)
+    return at + 1
+
+def word(w:mutbuf, at:u64, value:u64) -> u64:
+    if at <= JSON_END - 8:
+        put(w, at, value)
+    else:
+        fail(w, 47)
+    return at + 8
+
+def decimal(w:mutbuf, at:u64, value:u64) -> u64:
+    n = 0
+    if value == 0:
+        return emit(w, at, 48)
+    while value > 0:
+        store(w, NUMBER + n, 48 + (value % 10))
+        value = value // 10
+        n = n + 1
+    while n > 0:
+        n = n - 1
+        at = emit(w, at, byte(w, NUMBER + n))
+    return at
+
+def hexchar(value:u64) -> u64:
+    if value < 10:
+        return 48 + value
+    return 87 + value
+
+def quoted(w:mutbuf, at:u64, source:u64, n:u64) -> u64:
+    at = emit(w, at, 34)
+    j = 0
+    while j < n:
+        c = byte(w, source + j)
+        if c == 34 or c == 92:
+            at = emit(w, at, 92)
+            at = emit(w, at, c)
+        else:
+            if c < 32:
+                at = emit(w, at, 92)
+                short = 0
+                if c == 8:
+                    short = 98
+                if c == 9:
+                    short = 116
+                if c == 10:
+                    short = 110
+                if c == 12:
+                    short = 102
+                if c == 13:
+                    short = 114
+                if short != 0:
+                    at = emit(w, at, short)
+                else:
+                    at = emit(w, at, 117)
+                    at = emit(w, at, 48)
+                    at = emit(w, at, 48)
+                    at = emit(w, at, hexchar(c >> 4))
+                    at = emit(w, at, hexchar(c & 15))
+            else:
+                at = emit(w, at, c)
+        j = j + 1
+    return emit(w, at, 34)
+
+def role_literal(w:mutbuf, at:u64, role:u64) -> u64:
+    if role == 0:
+        return literal(w, at, L_ALL)
+    if role == 1:
+        return literal(w, at, L_MANIFEST)
+    if role == 2:
+        return literal(w, at, L_DEX)
+    if role == 3:
+        return literal(w, at, L_NATIVE)
+    if role == 4:
+        return literal(w, at, L_RESOURCE)
+    if role == 5:
+        return literal(w, at, L_CLASS)
+    if role == 6:
+        return literal(w, at, L_SIGNATURE)
+    if role == 7:
+        return literal(w, at, L_DIRECTORY)
+    return literal(w, at, L_OTHER)
+
+def render_entry(w:mutbuf, at:u64, e:u64) -> u64:
+    at = literal(w, at, L_NAME_KEY)
+    at = quoted(w, at, get(w, e), get(w, e + 8))
+    at = literal(w, at, L_ENCODING_KEY)
+    if get(w, e + 24) == 1:
+        at = literal(w, at, L_UTF8)
+    else:
+        at = literal(w, at, L_ASCII)
+    at = literal(w, at, L_ROLE_KEY)
+    at = role_literal(w, at, get(w, e + 16))
+    at = literal(w, at, L_CENTRAL_KEY)
+    at = decimal(w, at, get(w, e + 32))
+    at = literal(w, at, L_LOCAL_KEY)
+    at = decimal(w, at, get(w, e + 40))
+    at = literal(w, at, L_PAYLOAD_KEY)
+    at = decimal(w, at, get(w, e + 48))
+    at = literal(w, at, L_COMPRESSED_KEY)
+    at = decimal(w, at, get(w, e + 56))
+    at = literal(w, at, L_UNCOMPRESSED_KEY)
+    at = decimal(w, at, get(w, e + 64))
+    at = literal(w, at, L_METHOD_KEY)
+    at = decimal(w, at, get(w, e + 72))
+    at = literal(w, at, L_FLAGS_KEY)
+    at = decimal(w, at, get(w, e + 80))
+    at = literal(w, at, L_ENCRYPTED_KEY)
+    if (get(w, e + 80) & 1) == 1:
+        at = literal(w, at, L_TRUE)
+    else:
+        at = literal(w, at, L_FALSE)
+    at = literal(w, at, L_CRC_KEY)
+    j = 8
+    while j > 0:
+        j = j - 1
+        at = emit(w, at, hexchar((get(w, e + 88) >> (j * 4)) & 15))
+    at = literal(w, at, L_DESCRIPTOR_KEY)
+    at = decimal(w, at, get(w, e + 96))
+    at = literal(w, at, L_EXTRAS_KEY)
+    j = 0
+    while j < get(w, e + 112):
+        if j > 0:
+            at = emit(w, at, 44)
+        at = decimal(w, at, u16(w, get(w, e + 104) + j * 2))
+        j = j + 1
+    return literal(w, at, L_ENTRY_END)
+
+def render_report(w:mutbuf) -> u64:
+    at = literal(w, JSON_BASE, L_REPORT_HEAD)
+    if (get(w, H + 152) & 1) != 0:
+        at = literal(w, at, L_APK_HINT)
+    if (get(w, H + 152) & 2) != 0:
+        if (get(w, H + 152) & 1) != 0:
+            at = emit(w, at, 44)
+        at = literal(w, at, L_JAR_HINT)
+    at = literal(w, at, L_SOURCE_HEAD)
+    at = quoted(w, at, VERSION_VALUE, 69)
+    at = literal(w, at, L_SIZE_KEY)
+    at = decimal(w, at, get(w, H + 32))
+    at = literal(w, at, L_DIRECTORY_OFFSET_KEY)
+    at = decimal(w, at, get(w, H + 72))
+    at = literal(w, at, L_DIRECTORY_BYTES_KEY)
+    at = decimal(w, at, get(w, H + 80))
+    at = literal(w, at, L_DIRECTORY_HASH_KEY)
+    at = quoted(w, at, DIR_DIGEST, 64)
+    at = literal(w, at, L_EOCD_OFFSET_KEY)
+    at = decimal(w, at, get(w, H + 88))
+    at = literal(w, at, L_EOCD_BYTES_KEY)
+    at = decimal(w, at, get(w, H + 96))
+    at = literal(w, at, L_EOCD_HASH_KEY)
+    at = quoted(w, at, EOCD_DIGEST, 64)
+    at = literal(w, at, L_COUNT_KEY)
+    at = decimal(w, at, get(w, H + 64))
+    at = literal(w, at, L_ENCRYPTED_COUNT_KEY)
+    at = decimal(w, at, get(w, H + 144))
+    at = literal(w, at, L_RESULT_FILTER_KEY)
+    at = role_literal(w, at, get(w, H + 40))
+    at = literal(w, at, L_OFFSET_KEY)
+    at = decimal(w, at, get(w, H + 48))
+    at = literal(w, at, L_LIMIT_KEY)
+    at = decimal(w, at, get(w, H + 56))
+    at = literal(w, at, L_TOTAL_KEY)
+    at = decimal(w, at, get(w, H + 136))
+    end = get(w, H + 48) + get(w, H + 56)
+    if end > get(w, H + 136):
+        end = get(w, H + 136)
+    at = literal(w, at, L_NEXT_KEY)
+    if end < get(w, H + 136):
+        at = decimal(w, at, end)
+    else:
+        at = literal(w, at, L_NULL)
+    at = literal(w, at, L_ROWS_KEY)
+    j = 0
+    selected = 0
+    rendered = 0
+    while j < get(w, H + 64):
+        e = ENTRIES + j * 128
+        if get(w, H + 40) == 0 or get(w, H + 40) == get(w, e + 16):
+            if selected >= get(w, H + 48) and selected < end:
+                if rendered > 0:
+                    at = emit(w, at, 44)
+                at = render_entry(w, at, e)
+                rendered = rendered + 1
+            selected = selected + 1
+        j = j + 1
+    return literal(w, at, L_REPORT_END)
+
+def finish(o:mutbuf, w:mutbuf) -> u32:
+    if get(w, H + 160) != 0 and get(w, H + 328) == 0:
+        put(w, H + 320, error_text(w, JSON_BASE, get(w, H + 160)) - JSON_BASE)
+        put(w, H + 328, 1)
+        put(w, H + 8, 99)
+    n = get(w, H + 320)
+    if length(o) < 40 + n:
+        return CAPACITY
+    put(o, 0, RESPONSE)
+    put(o, 8, choose(get(w, H + 160) == 0, 0, 1))
+    put(o, 16, get(w, H + 160))
+    put(o, 24, n)
+    put(o, 32, get(w, H + 24))
+    copy_range(o, w, 40, JSON_BASE, n)
+    return 40 + n
