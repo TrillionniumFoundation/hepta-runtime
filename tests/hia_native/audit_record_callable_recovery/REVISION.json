@@ -1,0 +1,110 @@
+{
+  "all_five_native_producer_processes_completed": true,
+  "archive_and_hot_cache_qualified": false,
+  "begin_finish_caller_qualified": false,
+  "comparison_domain": {
+    "cases": 219,
+    "observer_off_cases": 219,
+    "observer_off_operations": 459,
+    "operations": 459,
+    "physical_admissions": 2,
+    "physical_refusals": 13,
+    "transport_controls": 45
+  },
+  "corrected_reader": {
+    "bytes": 10019,
+    "git_blob": "30a03285bfa81780f08dcf0d2131151545bd0e9b",
+    "mode": "100644",
+    "sha256": "8c60fb651f1651df71b7a6af5c98c8b77c68088f1092bb86ead9a2cac77c78c1"
+  },
+  "correction": "The unchanged read_record first probes .{id}-{id}.tmp, then {id}.json. Missing reads consume two actual openat effects and three HIA owner calls. The reader binds controls to the same complete already-verified ordinary request and its two ENOENT effects.",
+  "diagnosis": {
+    "all_recoveries": 45,
+    "artifact": 14317914835,
+    "complete_report": {
+      "bytes": 102708,
+      "git_blob": "c8cbca56075ef01a9fbcb53e30c19a510d40d2cb",
+      "mode": "100644",
+      "sha256": "7476f116b2d13d405df20775f9665ac7a851b520c3a187c3036ebb408f5707e2"
+    },
+    "filesystem_calls": 2,
+    "head": "dc541116e2c27f41998e623f3318aefd148f08b9",
+    "job": 133967961314,
+    "json_calls": 0,
+    "owner_calls": 3,
+    "run": 44062573614,
+    "sequence": 2,
+    "status": "SUCCESS",
+    "zip": {
+      "bytes": 2739191,
+      "sha256": "e5a5c0a25b00889ca6150bb190af885dae3e886c3dc372f48cc97f82cca65730"
+    }
+  },
+  "native_or_rust_replay": 0,
+  "original_head": "f7273eb417e1f90c4e11b0556f7d6c7d2758bd33",
+  "original_job": 133963332394,
+  "original_reader": {
+    "bytes": 9074,
+    "git_blob": "436e2130c736b18741041b4fb7b9dd3605a07493",
+    "mode": "100644",
+    "sha256": "bb9b91bad3b59717accf9332cb6309617ab6e2a0813a4a14add13ca695626b75"
+  },
+  "original_run": 44061230103,
+  "original_source_manifest_sha256": "f7a18ccac088bb820a2df262b4f5b700f11a2e6ee0f2f307f2ada4fa89f90d4b",
+  "original_status": "FAIL",
+  "preserved_previous_failures": [
+    {
+      "head": "753dcbc708ed1680cc860a01e48ae43f64183c9e",
+      "run": 44059921512,
+      "scope": "pre-job workflow validation; zero native or Rust"
+    },
+    {
+      "head": "8dbcadb5069226ac056a2eee593a43db23031dda",
+      "run": 44060098314,
+      "scope": "exact libc symbol admission; actual native build passed; no record operations"
+    },
+    {
+      "head": "26724abe9a40a964a5e9b04ef2ad7118c8430ff9",
+      "run": 44060714987,
+      "scope": "pure libc inspection relative executable path"
+    },
+    {
+      "head": "f7273eb417e1f90c4e11b0556f7d6c7d2758bd33",
+      "run": 44061230103,
+      "scope": "pure transport recovery counter assertion after all native producers passed"
+    }
+  ],
+  "public_handler_qualified": false,
+  "schema": "hepta.audit-record-callable.reader-recovery.v1",
+  "timeouts": {
+    "ci_job_minutes": 15,
+    "each_pure_reader_seconds": 180
+  },
+  "unchanged_semantic_source": {
+    "assembly": {
+      "bytes": 23454,
+      "git_blob": "ef98f79d0aee17bd30210e55f9cfa89e09c84a5f",
+      "mode": "100644",
+      "sha256": "702270c084bb15ec941d8d746ab0cd3067f2220dbcc4254a3ad9167d522e7d65"
+    },
+    "json": {
+      "bytes": 126320,
+      "git_blob": "a8965eb2c06e0a33b5b3e2324654f2f26664c9c3",
+      "mode": "100644",
+      "sha256": "5146e5c42028692933762ce68bd9c62d52f9760d8ce378124e3888edacb4255b"
+    },
+    "owner": {
+      "bytes": 218029,
+      "git_blob": "c910618ed74789b16a244a4729d7f4dcb306fb85",
+      "mode": "100644",
+      "sha256": "6826f361511a1345b63a1604a92b89252f5405c549fe38337e88e3d8aa8338ea"
+    },
+    "packer": {
+      "bytes": 115302,
+      "git_blob": "aee72072154aeb45d2e00847afa85e49ec6ff9aa",
+      "mode": "100644",
+      "sha256": "7aeedb3d8926fe93657c0f1ff7361e52eb6f09ed759b37deb0025963708bb51a"
+    }
+  },
+  "whole_runtime_replaced": false
+}

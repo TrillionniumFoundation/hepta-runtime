@@ -1,0 +1,562 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<8 or length(s)>=CAPACITY:
+        return INVALID
+    if read64(s,0)==REQUEST:
+        if initial_valid(s)==0:
+            return INVALID
+        if length(o)<8192 or length(w)<16384:
+            return CAPACITY
+        op=read64(s,8)
+        if get(w,0)==WORKSPACE:
+            if stable_valid(w)==0 or read64(s,16)<=get(w,16) or read64(s,24)!=get(w,24):
+                return INVALID
+            if op==1:
+                if get(w,40)!=0:
+                    return INVALID
+            else:
+                if get(w,40)!=1:
+                    return INVALID
+        else:
+            if op!=1:
+                return INVALID
+            fill_range(w,0,16384,0)
+            put(w,0,WORKSPACE)
+            put(w,24,read64(s,24))
+        put(w,8,1)
+        put(w,16,read64(s,16))
+        put(w,32,op)
+        put(w,56,0)
+        put(w,64,0)
+        put(w,72,0)
+        put(w,80,0)
+        put(w,88,0)
+        put(w,96,0)
+        put(w,104,0)
+        put(w,112,0)
+        put(w,136,0)
+        copy_read(s,0,w,256,128)
+        anchor_name(w)
+        if op==1:
+            put(w,48,10)
+        if op==2:
+            put(w,48,100)
+        if op==3:
+            put(w,48,200)
+        return advance(o,w)
+    if read64(s,0)!=ACK:
+        return INVALID
+    if length(o)<8192 or length(w)<16384:
+        return CAPACITY
+    if ack_valid(s,w)==0:
+        return INVALID
+    put(w,160,read64(s,40))
+    put(w,168,read64(s,48))
+    put(w,176,read64(s,56))
+    put(w,184,read64(s,64))
+    copy_read(s,128,w,8192,read64(s,64))
+    put(w,64,0)
+    put(w,72,0)
+    return advance(o,w)
+
+def initial_valid(s:readbuf) -> u64:
+    if length(s)!=128 or read64(s,8)<1 or read64(s,8)>3 or read64(s,16)==0 or read64(s,24)==0:
+        return 0
+    at=32
+    while at<128:
+        if read64(s,at)!=0:
+            return 0
+        at=at+8
+    return 1
+
+def stable_valid(w:mutbuf) -> u64:
+    if get(w,8)!=2 and get(w,8)!=3:
+        return 0
+    if get(w,16)==0 or get(w,24)==0 or get(w,32)<1 or get(w,32)>3 or get(w,40)>1:
+        return 0
+    if get(w,48)!=0 or get(w,64)!=0 or get(w,72)!=0 or get(w,128)>2048:
+        return 0
+    if get(w,40)==0:
+        if get(w,8)!=3 or get(w,120)!=0 or get(w,128)!=0:
+            return 0
+    else:
+        if get(w,8)!=2 or get(w,120)==0 or get(w,120)==get(w,24):
+            return 0
+        if get(w,536)!=get(w,128) or stamp_shape(w,512)==0 or anchor_projection_work(w,7168)==0:
+            return 0
+    return 1
+
+def ack_valid(s:readbuf,w:mutbuf) -> u64:
+    if length(s)<128 or read64(s,72)!=length(s) or read64(s,64)!=length(s)-128:
+        return 0
+    if get(w,0)!=WORKSPACE or get(w,8)!=1 or get(w,16)==0 or get(w,24)==0:
+        return 0
+    if get(w,32)<1 or get(w,32)>3 or get(w,40)>1 or get(w,128)>2048 or get(w,136)>2049:
+        return 0
+    if get(w,16)!=read64(s,8) or get(w,56)!=read64(s,16) or get(w,56)==0 or get(w,56)==18446744073709551615:
+        return 0
+    if get(w,64)!=read64(s,24) or get(w,72)!=read64(s,32):
+        return 0
+    if expected(get(w,48))!=get(w,64)*100+get(w,72) or pending_arguments(w)==0:
+        return 0
+    if get(w,256)!=REQUEST or get(w,264)!=get(w,32) or get(w,272)!=get(w,16) or get(w,280)!=get(w,24):
+        return 0
+    at=288
+    while at<384:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    at=80
+    while at<128:
+        if read64(s,at)!=0:
+            return 0
+        at=at+8
+    status=read64(s,40)
+    error=read64(s,48)
+    value=read64(s,56)
+    size=read64(s,64)
+    op=read64(s,32)
+    if get(w,64)==3:
+        if op!=2 or error!=0:
+            return 0
+        if status==2:
+            if value!=INVALID or size!=0:
+                return 0
+            return 1
+        if status!=0 or value!=128 or size!=128:
+            return 0
+        return anchor_projection_read(s,128)
+    if status==1:
+        if op==3 or error==0 or error>4095 or value!=0 or size!=0:
+            return 0
+        return 1
+    if status!=0 or error>4095:
+        return 0
+    if op!=7 and error!=0:
+        return 0
+    if op==1:
+        if value==0 or value==get(w,24) or size!=0:
+            return 0
+        return 1
+    if op==2 or op==15:
+        if value!=0 or size!=96:
+            return 0
+        if read64(s,128)>4294967295 or read64(s,136)>4294967295 or read64(s,176)>4294967295 or read64(s,216)!=0:
+            return 0
+        return 1
+    if op==3:
+        if value>4294967295 or size!=0:
+            return 0
+        return 1
+    if op==4 or op==16:
+        if value!=size or value>get(w,88):
+            return 0
+        return 1
+    if op==7:
+        if value!=0 or size!=0:
+            return 0
+        return 1
+    return 0
+
+def expected(phase:u64) -> u64:
+    if phase==11:
+        return 201
+    if phase==12 or phase==23 or phase==102 or phase==113:
+        return 202
+    if phase==13 or phase==101:
+        return 203
+    if phase==14 or phase==24 or phase==103 or phase==114:
+        return 215
+    if phase==21:
+        return 204
+    if phase==25:
+        return 302
+    if phase==111:
+        return 216
+    if phase==201 or phase==901:
+        return 207
+    return 0
+
+def pending_arguments(w:mutbuf) -> u64:
+    phase=get(w,48)
+    op=get(w,72)
+    a=get(w,80)
+    b=get(w,88)
+    c=get(w,96)
+    if phase>=100 and phase<200 and (get(w,32)!=2 or get(w,40)!=1):
+        return 0
+    if phase<100 and (get(w,32)!=1 or get(w,40)!=0):
+        return 0
+    if phase==201 and (get(w,32)!=3 or get(w,40)!=1):
+        return 0
+    if phase==901 and (get(w,32)!=1 or get(w,40)!=0 or get(w,104)==0):
+        return 0
+    if phase!=901 and get(w,104)!=0:
+        return 0
+    if op==1:
+        if a!=get(w,24) or b!=2048 or c!=0 or get(w,120)!=0:
+            return 0
+        return 1
+    if get(w,120)==0 or get(w,120)==get(w,24):
+        return 0
+    if get(w,64)==3:
+        if a!=4096 or b!=get(w,136) or c!=0 or b>2048:
+            return 0
+        return 1
+    if op==2 or op==7:
+        if a!=get(w,120) or b!=0 or c!=0:
+            return 0
+        return 1
+    if op==3:
+        if a!=0 or b!=0 or c!=0:
+            return 0
+        return 1
+    if op==15:
+        if a!=get(w,24) or b!=0 or c!=0:
+            return 0
+        return 1
+    if op==4:
+        if a!=get(w,120) or b!=2049-get(w,136) or c!=0 or b==0:
+            return 0
+        return 1
+    if op==16:
+        if get(w,136)>get(w,128) or a!=get(w,120) or b!=get(w,128)-get(w,136) or c!=get(w,136) or b==0:
+            return 0
+        return 1
+    return 0
+
+def advance(o:mutbuf,w:mutbuf) -> u64:
+    result=AGAIN
+    while result==AGAIN:
+        phase=get(w,48)
+        if phase<100:
+            result=open_step(o,w)
+        else:
+            if phase<200:
+                result=fence_step(o,w)
+            else:
+                result=close_step(o,w)
+    return result
+
+def open_step(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,48)
+    if phase==10:
+        return issue(o,w,1,get(w,24),2048,0,768,32,11)
+    if phase==11:
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        put(w,120,get(w,176))
+        return issue(o,w,2,get(w,120),0,0,0,0,12)
+    if phase==12:
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        copy_work(w,8192,512,96)
+        if (get(w,512)&61440)!=32768 or (get(w,512)&4095)!=384:
+            return fail(o,w,2,1)
+        return issue(o,w,3,0,0,0,0,0,13)
+    if phase==13:
+        if get(w,520)!=get(w,176) or get(w,528)!=1 or get(w,536)>2048:
+            return fail(o,w,2,1)
+        return issue(o,w,15,get(w,24),0,0,768,32,14)
+    if phase==14:
+        code=named_error(w)
+        if code!=0:
+            return fail(o,w,2,code)
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,4)
+        put(w,136,0)
+        put(w,48,20)
+        return AGAIN
+    if phase==20:
+        if get(w,136)==2049:
+            put(w,48,22)
+            return AGAIN
+        return issue(o,w,4,get(w,120),2049-get(w,136),0,0,0,21)
+    if phase==21:
+        if get(w,160)!=0:
+            if get(w,168)==4:
+                put(w,48,20)
+                return AGAIN
+            return fail(o,w,1,get(w,168))
+        copy_work(w,8192,4096+get(w,136),get(w,176))
+        put(w,136,get(w,136)+get(w,176))
+        if get(w,176)==0:
+            put(w,48,22)
+        else:
+            put(w,48,20)
+        return AGAIN
+    if phase==22:
+        if get(w,136)>2048 or get(w,136)!=get(w,536):
+            return fail(o,w,2,5)
+        return issue(o,w,2,get(w,120),0,0,0,0,23)
+    if phase==23:
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,5)
+        return issue(o,w,15,get(w,24),0,0,768,32,24)
+    if phase==24:
+        code=named_error(w)
+        if code!=0:
+            return fail(o,w,2,code)
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,5)
+        return json_effect(o,w,25)
+    if phase==25:
+        if get(w,160)==2:
+            return fail(o,w,3,0)
+        copy_work(w,8192,7168,128)
+        copy_work(w,4096,1024,get(w,136))
+        put(w,128,get(w,136))
+        put(w,40,1)
+        return complete(o,w)
+    return INVALID
+
+def fence_step(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,48)
+    if phase==100:
+        if (get(w,512)&61440)!=32768 or (get(w,512)&4095)!=384:
+            return fail(o,w,2,1)
+        return issue(o,w,3,0,0,0,0,0,101)
+    if phase==101:
+        if get(w,520)!=get(w,176) or get(w,528)!=1 or get(w,536)>2048:
+            return fail(o,w,2,1)
+        return issue(o,w,2,get(w,120),0,0,0,0,102)
+    if phase==102:
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,4)
+        return issue(o,w,15,get(w,24),0,0,768,32,103)
+    if phase==103:
+        code=named_error(w)
+        if code!=0:
+            return fail(o,w,2,code)
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,4)
+        put(w,136,0)
+        put(w,48,110)
+        return AGAIN
+    if phase==110:
+        if get(w,136)==get(w,128):
+            put(w,48,112)
+            return AGAIN
+        return issue(o,w,16,get(w,120),get(w,128)-get(w,136),get(w,136),0,0,111)
+    if phase==111:
+        if get(w,160)!=0:
+            if get(w,168)==4:
+                put(w,48,110)
+                return AGAIN
+            return fail(o,w,1,get(w,168))
+        if get(w,176)==0:
+            return fail(o,w,4,0)
+        copy_work(w,8192,4096+get(w,136),get(w,176))
+        put(w,136,get(w,136)+get(w,176))
+        put(w,48,110)
+        return AGAIN
+    if phase==112:
+        if same_work(w,1024,get(w,128),4096,get(w,128))==0:
+            return fail(o,w,2,6)
+        return issue(o,w,2,get(w,120),0,0,0,0,113)
+    if phase==113:
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,5)
+        return issue(o,w,15,get(w,24),0,0,768,32,114)
+    if phase==114:
+        code=named_error(w)
+        if code!=0:
+            return fail(o,w,2,code)
+        if get(w,160)!=0:
+            return fail(o,w,1,get(w,168))
+        if same_work(w,512,96,8192,96)==0:
+            return fail(o,w,2,5)
+        return complete(o,w)
+    return INVALID
+
+def close_step(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,48)
+    if phase==200:
+        return issue(o,w,7,get(w,120),0,0,0,0,201)
+    if phase==201 or phase==901:
+        put(w,120,0)
+        put(w,128,0)
+        put(w,40,0)
+        fill_range(w,512,6784,0)
+        return complete(o,w)
+    if phase==900:
+        if get(w,32)==1 and get(w,120)!=0:
+            return issue(o,w,7,get(w,120),0,0,0,0,901)
+        return complete(o,w)
+    return INVALID
+
+def fail(o:mutbuf,w:mutbuf,family:u64,code:u64) -> u64:
+    put(w,104,family)
+    put(w,112,code)
+    put(w,48,900)
+    return AGAIN
+
+def complete(o:mutbuf,w:mutbuf) -> u64:
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    if get(w,104)!=0:
+        put(o,8,1)
+    put(o,16,get(w,56))
+    put(o,24,get(w,16))
+    put(o,32,get(w,32))
+    put(o,96,get(w,104))
+    put(o,104,get(w,112))
+    extent=128
+    if get(w,32)==1 and get(w,104)==0:
+        put(o,64,128)
+        put(o,72,128)
+        copy_between(w,7168,o,128,128)
+        extent=256
+    put(o,112,extent)
+    put(w,48,0)
+    put(w,64,0)
+    put(w,72,0)
+    if get(w,40)==1:
+        put(w,8,2)
+    else:
+        put(w,8,3)
+    return extent
+
+def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,c:u64,p:u64,n:u64,next_phase:u64) -> u64:
+    put(w,56,get(w,56)+1)
+    put(w,64,2)
+    put(w,72,op)
+    put(w,80,a)
+    put(w,88,b)
+    put(w,96,c)
+    put(w,48,next_phase)
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,2)
+    put(o,16,get(w,56))
+    put(o,24,get(w,16))
+    put(o,32,op)
+    put(o,40,a)
+    put(o,48,b)
+    put(o,56,c)
+    extent=128
+    if n!=0:
+        put(o,64,128)
+        put(o,72,n)
+        copy_between(w,p,o,128,n)
+        extent=128+n
+    put(o,112,extent)
+    return extent
+
+def json_effect(o:mutbuf,w:mutbuf,next_phase:u64) -> u64:
+    size=get(w,136)
+    put(w,56,get(w,56)+1)
+    put(w,64,3)
+    put(w,72,2)
+    put(w,80,4096)
+    put(w,88,size)
+    put(w,96,0)
+    put(w,48,next_phase)
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,3)
+    put(o,16,get(w,56))
+    put(o,24,get(w,16))
+    put(o,32,2)
+    put(o,64,128)
+    put(o,72,24+size)
+    put(o,112,152+size)
+    put(o,128,JSONREQUEST)
+    put(o,136,2)
+    put(o,144,size)
+    copy_between(w,4096,o,152,size)
+    return 152+size
+
+def named_error(w:mutbuf) -> u64:
+    if get(w,160)!=0:
+        if get(w,168)==2:
+            return 2
+        return 0
+    if get(w,8216)>9223372036854775807:
+        return 3
+    return 0
+
+def stamp_shape(w:mutbuf,at:u64) -> u64:
+    if get(w,at)>4294967295 or get(w,at+8)>4294967295 or get(w,at+48)>4294967295 or get(w,at+88)!=0:
+        return 0
+    return 1
+
+def anchor_projection_read(s:readbuf,at:u64) -> u64:
+    if read64(s,at)!=PROJECTION or read64(s,at+8)!=2:
+        return 0
+    index=16
+    while index<64:
+        if read64(s,at+index)!=0:
+            return 0
+        index=index+8
+    index=96
+    while index<128:
+        if read64(s,at+index)!=0:
+            return 0
+        index=index+8
+    return 1
+
+def anchor_projection_work(w:mutbuf,at:u64) -> u64:
+    if get(w,at)!=PROJECTION or get(w,at+8)!=2:
+        return 0
+    index=16
+    while index<64:
+        if get(w,at+index)!=0:
+            return 0
+        index=index+8
+    index=96
+    while index<128:
+        if get(w,at+index)!=0:
+            return 0
+        index=index+8
+    return 1
+
+def anchor_name(w:mutbuf) -> u64:
+    put(w,768,8391162085809418798)
+    put(w,776,7311146942148534573)
+    put(w,784,7164770903919785517)
+    put(w,792,7957705966469934952)
+    return 0
+
+def copy_read(s:readbuf,start:u64,w:mutbuf,dest:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(w,dest+index,byte(s,start+index))
+        index=index+1
+    return 0
+
+def copy_work(w:mutbuf,start:u64,dest:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(w,dest+index,byte(w,start+index))
+        index=index+1
+    return 0
+
+def copy_between(w:mutbuf,start:u64,o:mutbuf,dest:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(o,dest+index,byte(w,start+index))
+        index=index+1
+    return 0
+
+def same_work(w:mutbuf,left:u64,left_size:u64,right:u64,right_size:u64) -> u64:
+    if left_size!=right_size:
+        return 0
+    index=0
+    while index<left_size:
+        if byte(w,left+index)!=byte(w,right+index):
+            return 0
+        index=index+1
+    return 1
+

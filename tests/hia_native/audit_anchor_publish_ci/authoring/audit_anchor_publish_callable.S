@@ -1,0 +1,1334 @@
+/* Copyright 2026 Muvon Un Limited
+ * SPDX-License-Identifier: Apache-2.0
+ * Fixed synchronous effect transport for the anchor-publication HIA owner.
+ * No audit policy, retry, record codec, or ambient pathname resolution lives here.
+ */
+.equ CTX_BYTES,98304
+.equ CAPS,256
+.equ TABLE,640
+.equ OWNER_WORK,1024
+.equ OWNER_OUT,33824
+.equ JSON_WORK,42048
+.equ JSON_OUT,50272
+.equ ACK_BUF,54400
+.equ OWNER_IN,58784
+.equ SCRATCH,63168
+.equ JSON_IN,87776
+.equ OBSERVE,92224
+.equ STAT_BUF,SCRATCH+8224
+.equ DIRENT_BUF,SCRATCH+8384
+.equ STACK_BYTES,392
+.text
+.globl audit_anchor_publish_callable_entry
+.type audit_anchor_publish_callable_entry,@function
+audit_anchor_publish_callable_entry:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $STACK_BYTES,%rsp
+    mov %r8,%r12
+    mov %rdx,%r13
+    mov %rdi,40(%rsp)
+    mov %rsi,48(%rsp)
+    cmp $128,%rsi
+    jne .Linvalid
+    cmp $8192,%rcx
+    jb .Lcapacity
+    cmp $CTX_BYTES,%r9
+    jb .Lcapacity
+    test %rdi,%rdi
+    jz .Linvalid
+    test %r13,%r13
+    jz .Linvalid
+    test %r12,%r12
+    jz .Linvalid
+    test $7,%r12
+    jnz .Linvalid
+    mov %rdi,%rax
+    add %rsi,%rax
+    jc .Linvalid
+    mov %r13,%rdx
+    add $8192,%rdx
+    jc .Linvalid
+    mov %r12,%rcx
+    add $CTX_BYTES,%rcx
+    jc .Linvalid
+    cmp %rdx,%rdi
+    jae .Linput_context
+    cmp %rax,%r13
+    jb .Linvalid
+.Linput_context:
+    cmp %rcx,%rdi
+    jae .Loutput_context
+    cmp %rax,%r12
+    jb .Linvalid
+.Loutput_context:
+    cmp %rcx,%r13
+    jae .Ladmit_context
+    cmp %rdx,%r12
+    jb .Linvalid
+.Ladmit_context:
+    movabs $0x3130584355504148,%rax
+    cmp %rax,(%r12)
+    jne .Linvalid
+    cmpq $0,8(%r12)
+    jne .Lbusy
+    cmpq $21,40(%r12)
+    jne .Linvalid
+    cmpq $0,32(%r12)
+    jne .Linvalid
+    cmpq $2,24(%r12)
+    jb .Linvalid
+    cmpq $0,216(%r12)
+    jne .Linvalid
+    cmpq $0,224(%r12)
+    jne .Linvalid
+    cmpq $0,232(%r12)
+    jne .Linvalid
+    cmpq $0,240(%r12)
+    jne .Linvalid
+    cmpq $0,248(%r12)
+    jne .Linvalid
+    lea TABLE(%r12),%r15
+    xor %ecx,%ecx
+.Ltable_admit:
+    cmpq $0,(%r15,%rcx)
+    je .Linvalid
+    add $8,%ecx
+    cmp $160,%ecx
+    jb .Ltable_admit
+    cmpq $0,160(%r15)
+    jne .Linvalid
+    call .Lquiescent
+    test %eax,%eax
+    jz .Linvalid
+    mov 40(%rsp),%rbx
+    movabs $0x3130515255504148,%rax
+    cmp %rax,(%rbx)
+    jne .Linvalid
+    cmpq $1,24(%rbx)
+    jne .Linvalid
+    movq $1,8(%r12)
+    mov 16(%rbx),%rax
+    mov %rax,64(%r12)
+    movq $0,72(%r12)
+    movq $0,184(%r12)
+    movq $0,200(%r12)
+    call *(%r15)
+    test %rax,%rax
+    jz .Lfailure
+    mov %rax,176(%r12)
+    lea OWNER_OUT(%r12),%r14
+    mov 40(%rsp),%rsi
+    mov 48(%rsp),%rcx
+    jmp .Lcopy_owner_input
+
+.Lresume:
+    lea ACK_BUF(%r12),%rsi
+    mov 152(%r12),%rcx
+.Lcopy_owner_input:
+    cmp $4352,%rcx
+    ja .Lfailure
+    mov %rcx,136(%r12)
+    lea OWNER_IN(%r12),%rdi
+    rep movsb
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    mov $2,%ecx
+    rep stosq
+.Lowner:
+    mov %r14,%rdi
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    mov $1026,%ecx
+    rep stosq
+    lea OWNER_WORK+32768(%r12),%rdi
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    mov $2,%ecx
+    rep stosq
+    call .Lrecord_owner
+    movq $0,8+OBSERVE(%r12)
+    call .Lobserve
+    lea OWNER_IN(%r12),%rdi
+    mov 136(%r12),%rsi
+    mov %r14,%rdx
+    mov $8192,%ecx
+    lea OWNER_WORK(%r12),%r8
+    mov $32768,%r9d
+    call .Lowner_image
+    mov %eax,%eax
+    mov %rax,128(%r12)
+    incq 80(%r12)
+    mov %rax,16+OBSERVE(%r12)
+    movq $1,8+OBSERVE(%r12)
+    call .Lobserve
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    cmp %rax,8192(%r14)
+    jne .Lfailure
+    cmp %rax,8200(%r14)
+    jne .Lfailure
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    cmp %rax,OWNER_WORK+32768(%r12)
+    jne .Lfailure
+    cmp %rax,OWNER_WORK+32776(%r12)
+    jne .Lfailure
+    mov 136(%r12),%rcx
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    cmp %rax,OWNER_IN(%r12,%rcx)
+    jne .Lfailure
+    cmp %rax,OWNER_IN+8(%r12,%rcx)
+    jne .Lfailure
+    mov 128(%r12),%rax
+    cmp $0xffffffff,%eax
+    je .Lhia_refusal
+    cmp $0xfffffffe,%eax
+    je .Lhia_refusal
+    cmp $128,%rax
+    jb .Lfailure
+    cmp $8192,%rax
+    ja .Lfailure
+    cmp %rax,112(%r14)
+    jne .Lfailure
+    cmpq $0,120(%r14)
+    jne .Lfailure
+    mov %rax,144(%r12)
+    movabs $0x3130535255504148,%rax
+    cmp %rax,(%r14)
+    jne .Lfailure
+    mov 64(%r12),%rax
+    cmp %rax,24(%r14)
+    jne .Lfailure
+    mov 8(%r14),%rax
+    cmp $1,%rax
+    jbe .Lterminal
+    cmp $3,%rax
+    ja .Lfailure
+    mov %rax,168(%r12)
+    mov 32(%r14),%rax
+    mov %rax,160(%r12)
+    mov 72(%r12),%rax
+    add $1,%rax
+    jc .Lfailure
+    cmp %rax,16(%r14)
+    jne .Lfailure
+    mov %rax,72(%r12)
+    cmpq $0,96(%r14)
+    jne .Lfailure
+    cmpq $0,104(%r14)
+    jne .Lfailure
+    call .Lspans
+    test %eax,%eax
+    jz .Lfailure
+    call .Lprepare_ack
+    cmpq $3,168(%r12)
+    je .Ljson
+    jmp .Lfilesystem
+
+.Lhia_refusal:
+    cmpq $0,72(%r12)
+    jne .Lfailure
+    call .Lquiescent
+    test %eax,%eax
+    jz .Lfailure
+    movq $0,8(%r12)
+    movq $0,176(%r12)
+    mov 128(%r12),%rax
+    jmp .Lreturn
+.Lterminal:
+    mov 72(%r12),%rax
+    cmp %rax,16(%r14)
+    jne .Lfailure
+    mov 40(%rsp),%rbx
+    mov 8(%rbx),%rax
+    cmp %rax,32(%r14)
+    jne .Lfailure
+    call .Lquiescent
+    test %eax,%eax
+    jz .Lfailure
+    mov %r13,%rdi
+    mov %r14,%rsi
+    mov 128(%r12),%rcx
+    rep movsb
+    movq $0,8(%r12)
+    movq $0,176(%r12)
+    mov 128(%r12),%rax
+    jmp .Lreturn
+
+.Ljson:
+    cmpq $4,160(%r12)
+    jne .Lfailure
+.Ljson_admitted:
+    cmpq $128,64(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov 72(%r14),%rcx
+    cmp $24,%rcx
+    jb .Lfailure
+    cmp $4352,%rcx
+    ja .Lfailure
+    mov %rcx,24(%rsp)
+    lea 128(%r14),%rsi
+    lea JSON_IN(%r12),%rdi
+    rep movsb
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    mov $2,%ecx
+    rep stosq
+    lea JSON_WORK(%r12),%rdi
+    xor %eax,%eax
+    mov $1024,%ecx
+    rep stosq
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    mov $2,%ecx
+    rep stosq
+    lea JSON_OUT(%r12),%rdi
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    mov $514,%ecx
+    rep stosq
+    call .Lrecord_json
+    mov 24(%rsp),%rax
+    mov %rax,32+OBSERVE(%r12)
+    call .Lobserve
+    lea JSON_IN(%r12),%rdi
+    mov 24(%rsp),%rsi
+    lea JSON_OUT(%r12),%rdx
+    mov $4096,%ecx
+    lea JSON_WORK(%r12),%r8
+    mov $8192,%r9d
+    call .Ljson_image
+    mov %eax,%eax
+    mov %rax,24(%rsp)
+    incq 88(%r12)
+    mov %rax,16+OBSERVE(%r12)
+    movq $1,8+OBSERVE(%r12)
+    call .Lobserve
+    movabs $0xa5a5a5a5a5a5a5a5,%rax
+    cmp %rax,JSON_OUT+4096(%r12)
+    jne .Lfailure
+    cmp %rax,JSON_OUT+4104(%r12)
+    jne .Lfailure
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    cmp %rax,JSON_WORK+8192(%r12)
+    jne .Lfailure
+    cmp %rax,JSON_WORK+8200(%r12)
+    jne .Lfailure
+    mov 72(%r14),%rcx
+    movabs $0xc3c3c3c3c3c3c3c3,%rax
+    cmp %rax,JSON_IN(%r12,%rcx)
+    jne .Lfailure
+    cmp %rax,JSON_IN+8(%r12,%rcx)
+    jne .Lfailure
+    mov 24(%rsp),%rax
+    cmp $0xffffffff,%eax
+    je .Ljson_invalid
+    cmp $4096,%rax
+    ja .Lfailure
+    mov %rax,ACK_BUF+56(%r12)
+    mov %rax,ACK_BUF+64(%r12)
+    lea 128(%rax),%rcx
+    mov %rcx,ACK_BUF+72(%r12)
+    mov %rcx,152(%r12)
+    mov %rax,%rcx
+    lea JSON_OUT(%r12),%rsi
+    lea ACK_BUF+128(%r12),%rdi
+    rep movsb
+    jmp .Lresume
+.Ljson_invalid:
+    movq $2,ACK_BUF+40(%r12)
+    mov $0xffffffff,%eax
+    mov %rax,ACK_BUF+56(%r12)
+    jmp .Lresume
+
+.macro LIBCALL index,int32=0
+    mov 176(%r12),%rax
+    mov 184(%r12),%r10d
+    mov %r10d,(%rax)
+    xor %eax,%eax
+    call *(\index*8)(%r15)
+    .if \int32
+    movslq %eax,%rax
+    .endif
+    mov %rax,104(%r12)
+    mov 176(%r12),%rdx
+    mov (%rdx),%edx
+    mov %rdx,112(%r12)
+    mov %rdx,184(%r12)
+.endm
+
+.Lfilesystem:
+    mov 160(%r12),%rax
+    cmp $1,%rax
+    je .Lanchor_fs_allowed
+    cmp $4,%rax
+    je .Lanchor_fs_allowed
+    cmp $5,%rax
+    je .Lanchor_fs_allowed
+    cmp $6,%rax
+    je .Lanchor_fs_allowed
+    cmp $7,%rax
+    je .Lanchor_fs_allowed
+    cmp $8,%rax
+    je .Lanchor_fs_allowed
+    cmp $9,%rax
+    je .Lanchor_fs_allowed
+    cmp $17,%rax
+    je .Lanchor_fs_allowed
+    cmp $18,%rax
+    je .Lanchor_fs_allowed
+    cmp $19,%rax
+    jne .Lfailure
+.Lanchor_fs_allowed:
+    movq $0,104(%r12)
+    movq $0,112(%r12)
+    movq $0,120(%r12)
+    movq $0,192(%r12)
+    cmp $17,%rax
+    je .Lfs_ready
+    cmp $18,%rax
+    je .Lfs_names
+    mov 40(%r14),%rdi
+    call .Lgetcap
+    test %rax,%rax
+    jz .Lfailure
+    mov %rax,192(%r12)
+    mov 160(%r12),%rcx
+    cmp $13,%rcx
+    je .Lrequire_directory
+    cmp $14,%rcx
+    je .Lrequire_directory
+    cmpq $1,8(%rax)
+    jne .Lfailure
+    cmp $7,%rcx
+    je .Lrequire_owned
+    cmp $12,%rcx
+    je .Lrequire_owned
+    jmp .Lfs_shape
+.Lrequire_directory:
+    cmpq $2,8(%rax)
+    jne .Lfailure
+.Lrequire_owned:
+    cmpq $1,(%rax)
+    je .Lfailure
+.Lfs_shape:
+    cmpq $19,160(%r12)
+    je .Lpublish_poll_prepare
+    cmpq $15,160(%r12)
+    je .Lanchor_named_prepare
+    cmpq $1,160(%r12)
+    je .Lfs_names
+    cmpq $8,160(%r12)
+    je .Lfs_names
+    cmpq $9,160(%r12)
+    je .Lfs_names
+    cmpq $10,160(%r12)
+    je .Lfs_names
+    cmpq $2,160(%r12)
+    jne .Lfs_ready
+    lea STAT_BUF(%r12),%rdi
+    xor %eax,%eax
+    mov $18,%ecx
+    rep stosq
+    movq $144,120(%r12)
+    jmp .Lfs_ready
+.Lpublish_poll_prepare:
+    cmpq $1,48(%r14)
+    jne .Lfailure
+    cmpq $-1,56(%r14)
+    jne .Lfailure
+    cmpq $0,72(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov 192(%r12),%rax
+    mov 16(%rax),%eax
+    mov %eax,STAT_BUF(%r12)
+    movl $1,STAT_BUF+4(%r12)
+    movq $8,120(%r12)
+    jmp .Lfs_ready
+.Lanchor_named_prepare:
+    call .Lnames
+    test %eax,%eax
+    jz .Lfailure
+    lea STAT_BUF(%r12),%rdi
+    xor %eax,%eax
+    mov $18,%ecx
+    rep stosq
+    movq $144,120(%r12)
+    jmp .Lfs_ready
+.Lfs_names:
+    call .Lnames
+    test %eax,%eax
+    jz .Lfailure
+.Lfs_ready:
+    call .Lrecord_fs
+    call .Lobserve
+    mov 160(%r12),%rax
+    cmp $17,%rax
+    je .Lpublish_getrandom
+    cmp $18,%rax
+    je .Lpublish_open_absolute
+    cmp $19,%rax
+    je .Lpublish_poll
+    cmp $15,%rax
+    je .Lanchor_fstatat
+    cmp $16,%rax
+    je .Lanchor_pread
+    cmp $1,%rax
+    je .Lfs_open
+    cmp $2,%rax
+    je .Lfs_stat
+    cmp $3,%rax
+    je .Lfs_euid
+    cmp $4,%rax
+    je .Lfs_read
+    cmp $5,%rax
+    je .Lfs_write
+    cmp $6,%rax
+    je .Lfs_sync
+    cmp $7,%rax
+    je .Lfs_close
+    cmp $8,%rax
+    je .Lfs_link
+    cmp $9,%rax
+    je .Lfs_unlink
+    cmp $10,%rax
+    je .Lfs_rename
+    cmp $11,%rax
+    je .Lfs_dup
+    cmp $12,%rax
+    je .Lfs_opendir
+    cmp $13,%rax
+    je .Lfs_readdir
+    jmp .Lfs_closedir
+
+.Lpublish_getrandom:
+    cmpq $32,40(%r14)
+    ja .Lfailure
+    cmpq $0,48(%r14)
+    jne .Lfailure
+    cmpq $0,56(%r14)
+    jne .Lfailure
+    cmpq $0,72(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov $318,%edi
+    lea ACK_BUF+128(%r12),%rsi
+    mov 40(%r14),%rdx
+    xor %ecx,%ecx
+    LIBCALL 17,0
+    jmp .Lfs_return
+.Lpublish_open_absolute:
+    cmpq $524288,40(%r14)
+    jne .Lfailure
+    cmpq $0,48(%r14)
+    jne .Lfailure
+    cmpq $0,56(%r14)
+    jne .Lfailure
+    lea SCRATCH(%r12),%rdi
+    mov 40(%r14),%esi
+    xor %edx,%edx
+    LIBCALL 18,1
+    jmp .Lfs_return
+.Lpublish_poll:
+    lea STAT_BUF(%r12),%rdi
+    mov $1,%esi
+    mov $-1,%edx
+    LIBCALL 19,1
+    jmp .Lfs_return
+.Lfs_open:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea SCRATCH(%r12),%rsi
+    mov 48(%r14),%edx
+    or $0xa0000,%edx
+    mov 56(%r14),%ecx
+    LIBCALL 1,1
+    jmp .Lfs_return
+.Lfs_stat:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea STAT_BUF(%r12),%rsi
+    LIBCALL 2,1
+    jmp .Lfs_return
+.Lfs_euid:
+    LIBCALL 3,0
+    mov %eax,%eax
+    mov %rax,104(%r12)
+    jmp .Lfs_return
+.Lfs_read:
+    mov 48(%r14),%rdx
+    cmp $2049,%rdx
+    ja .Lfailure
+    cmpq $0,72(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea ACK_BUF+128(%r12),%rsi
+    LIBCALL 4,0
+    jmp .Lfs_return
+.Lanchor_fstatat:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea SCRATCH(%r12),%rsi
+    lea STAT_BUF(%r12),%rdx
+    mov $256,%ecx
+    LIBCALL 15,1
+    jmp .Lfs_return
+.Lanchor_pread:
+    mov 48(%r14),%rdx
+    cmp $2048,%rdx
+    ja .Lfailure
+    cmpq $0,72(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov 56(%r14),%rcx
+    cmp $2048,%rcx
+    ja .Lfailure
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea ACK_BUF+128(%r12),%rsi
+    LIBCALL 16,0
+    jmp .Lfs_return
+.Lfs_write:
+    mov 48(%r14),%rdx
+    cmp %rdx,72(%r14)
+    jne .Lfailure
+    cmpq $0,88(%r14)
+    jne .Lfailure
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    mov 64(%r14),%rsi
+    add %r14,%rsi
+    LIBCALL 5,0
+    jmp .Lfs_return
+.Lfs_sync:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    LIBCALL 6,1
+    jmp .Lfs_return
+.Lfs_close:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    LIBCALL 7,1
+    jmp .Lfs_forget
+.Lfs_link:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    mov %edi,%edx
+    lea SCRATCH(%r12),%rsi
+    lea SCRATCH+4112(%r12),%rcx
+    xor %r8d,%r8d
+    LIBCALL 8,1
+    jmp .Lfs_return
+.Lfs_unlink:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    lea SCRATCH(%r12),%rsi
+    xor %edx,%edx
+    LIBCALL 9,1
+    jmp .Lfs_return
+.Lfs_rename:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    mov %edi,%edx
+    lea SCRATCH(%r12),%rsi
+    lea SCRATCH+4112(%r12),%rcx
+    LIBCALL 10,1
+    jmp .Lfs_return
+.Lfs_dup:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    mov $1030,%esi
+    xor %edx,%edx
+    xor %eax,%eax
+    LIBCALL 11,1
+    jmp .Lfs_return
+.Lfs_opendir:
+    mov 192(%r12),%rax
+    mov 16(%rax),%edi
+    LIBCALL 12,0
+    test %rax,%rax
+    jnz .Lfs_forget
+    movq $-1,104(%r12)
+    jmp .Lfs_return
+.Lfs_readdir:
+    movq $0,184(%r12)
+    mov 192(%r12),%rax
+    mov 16(%rax),%rdi
+    LIBCALL 13,0
+    jmp .Lfs_return
+.Lfs_closedir:
+    mov 192(%r12),%rax
+    mov 16(%rax),%rdi
+    LIBCALL 14,1
+.Lfs_forget:
+    mov 192(%r12),%rax
+    movq $0,(%rax)
+    movq $0,8(%rax)
+    movq $0,16(%rax)
+.Lfs_return:
+    mov 104(%r12),%rax
+    test %rax,%rax
+    js .Lfs_os_error
+    mov 160(%r12),%rcx
+    cmp $17,%rcx
+    je .Lpublish_random_value
+    cmp $18,%rcx
+    je .Lfs_new_file
+    cmp $19,%rcx
+    je .Lfs_value
+    cmp $1,%rcx
+    je .Lfs_new_file
+    cmp $11,%rcx
+    je .Lfs_new_file
+    cmp $12,%rcx
+    je .Lfs_new_dir
+    cmp $2,%rcx
+    je .Lfs_metadata
+    cmp $15,%rcx
+    je .Lfs_metadata
+    cmp $16,%rcx
+    je .Lfs_read_value
+    cmp $3,%rcx
+    je .Lfs_value
+    cmp $4,%rcx
+    je .Lfs_read_value
+    cmp $5,%rcx
+    je .Lfs_write_value
+    cmp $7,%rcx
+    je .Lfs_close_errno
+    cmp $13,%rcx
+    je .Lfs_dirent
+    jmp .Lfs_done
+.Lfs_new_file:
+    mov $1,%edx
+    jmp .Lfs_new_capability
+.Lfs_new_dir:
+    mov $2,%edx
+.Lfs_new_capability:
+    mov 104(%r12),%rsi
+    call .Laddcap
+    test %rax,%rax
+    jz .Lnew_resource_failure
+    jmp .Lfs_value
+.Lfs_metadata:
+    lea ACK_BUF+128(%r12),%rdi
+    mov STAT_BUF+24(%r12),%eax
+    mov %rax,(%rdi)
+    mov STAT_BUF+28(%r12),%eax
+    mov %rax,8(%rdi)
+    mov STAT_BUF+16(%r12),%rax
+    mov %rax,16(%rdi)
+    mov STAT_BUF+48(%r12),%rax
+    mov %rax,24(%rdi)
+    mov STAT_BUF(%r12),%rax
+    mov %rax,32(%rdi)
+    mov STAT_BUF+8(%r12),%rax
+    mov %rax,40(%rdi)
+    mov STAT_BUF+32(%r12),%eax
+    mov %rax,48(%rdi)
+    mov STAT_BUF+88(%r12),%rax
+    mov %rax,56(%rdi)
+    mov STAT_BUF+96(%r12),%rax
+    mov %rax,64(%rdi)
+    mov STAT_BUF+104(%r12),%rax
+    mov %rax,72(%rdi)
+    mov STAT_BUF+112(%r12),%rax
+    mov %rax,80(%rdi)
+    mov $96,%eax
+    jmp .Lfs_payload
+.Lpublish_random_value:
+    cmp 40(%r14),%rax
+    ja .Lfailure
+    mov %rax,ACK_BUF+56(%r12)
+    jmp .Lfs_payload
+.Lfs_read_value:
+    cmp 48(%r14),%rax
+    ja .Lfailure
+    mov %rax,ACK_BUF+56(%r12)
+    jmp .Lfs_payload
+.Lfs_write_value:
+    cmp 48(%r14),%rax
+    ja .Lfailure
+.Lfs_value:
+    mov %rax,ACK_BUF+56(%r12)
+    jmp .Lfs_done
+.Lfs_payload:
+    mov %rax,ACK_BUF+64(%r12)
+    add $128,%rax
+    mov %rax,ACK_BUF+72(%r12)
+    jmp .Lfs_done
+.Lfs_close_errno:
+    mov 112(%r12),%rax
+    cmp $4095,%rax
+    ja .Lfailure
+    mov %rax,ACK_BUF+48(%r12)
+    jmp .Lfs_done
+.Lfs_dirent:
+    mov 112(%r12),%rdx
+    cmp $4095,%rdx
+    ja .Lfailure
+    mov %rdx,ACK_BUF+48(%r12)
+    test %rax,%rax
+    jz .Lfs_done
+    movzwl 16(%rax),%ecx
+    cmp $20,%ecx
+    jb .Lfailure
+    cmp $8192,%ecx
+    ja .Lfailure
+    mov %rcx,120(%r12)
+    mov %rax,%rsi
+    lea DIRENT_BUF(%r12),%rdi
+    rep movsb
+    mov $19,%edx
+.Ldirent_nul:
+    cmp 120(%r12),%rdx
+    jae .Lfailure
+    cmp $4115,%edx
+    ja .Lfailure
+    cmpb $0,DIRENT_BUF(%r12,%rdx)
+    je .Ldirent_ready
+    inc %edx
+    jmp .Ldirent_nul
+.Ldirent_ready:
+    sub $19,%edx
+    mov %rdx,24(%rsp)
+    mov DIRENT_BUF(%r12),%rax
+    mov %rax,ACK_BUF+128(%r12)
+    lea DIRENT_BUF+19(%r12),%rsi
+    lea ACK_BUF+136(%r12),%rdi
+    mov %rdx,%rcx
+    rep movsb
+    movq $1,ACK_BUF+56(%r12)
+    mov 24(%rsp),%rax
+    add $8,%rax
+    jmp .Lfs_payload
+.Lfs_os_error:
+    cmpq $13,160(%r12)
+    je .Lfailure
+    mov 112(%r12),%rax
+    test %rax,%rax
+    jz .Lfailure
+    cmp $4095,%rax
+    ja .Lfailure
+    movq $1,ACK_BUF+40(%r12)
+    mov %rax,ACK_BUF+48(%r12)
+.Lfs_done:
+    mov ACK_BUF+72(%r12),%rax
+    cmp $4352,%rax
+    ja .Lfailure
+    mov %rax,152(%r12)
+    incq 96(%r12)
+    call .Lrecord_fs
+    movq $1,8+OBSERVE(%r12)
+    mov 104(%r12),%rax
+    mov %rax,16+OBSERVE(%r12)
+    mov %rax,96+OBSERVE(%r12)
+    mov 112(%r12),%rax
+    mov %rax,104+OBSERVE(%r12)
+    call .Lobserve
+    jmp .Lresume
+
+.Lnew_resource_failure:
+    mov 104(%r12),%rdi
+    cmpq $12,160(%r12)
+    je .Luntracked_directory
+    LIBCALL 7,1
+    jmp .Lfailure
+.Luntracked_directory:
+    LIBCALL 14,1
+    jmp .Lfailure
+
+/* Helpers have no policy and cannot synthesize effect results. */
+.Lquiescent:
+    cmpq $1,CAPS(%r12)
+    jne .Lzero
+    cmpq $1,CAPS+8(%r12)
+    jne .Lzero
+    mov 16(%r12),%rax
+    cmp $0x7fffffff,%rax
+    ja .Lzero
+    cmp %rax,CAPS+16(%r12)
+    jne .Lzero
+    xor %r9d,%r9d
+    cmpq $2,8(%r12)
+    je .Lanchor_caps_scan
+    movabs $0x3130535755504148,%rax
+    cmp %rax,OWNER_WORK(%r12)
+    jne .Lanchor_caps_scan
+    cmpq $2,OWNER_WORK+40(%r12)
+    ja .Lzero
+    jne .Lanchor_caps_scan
+    mov OWNER_WORK+144(%r12),%r9
+    test %r9,%r9
+    jz .Lanchor_caps_scan
+    cmp $1,%r9
+    jbe .Lzero
+.Lanchor_caps_scan:
+    lea CAPS+24(%r12),%rdx
+    mov $15,%ecx
+    xor %r8d,%r8d
+.Lquiescent_words:
+    mov (%rdx),%rax
+    test %rax,%rax
+    jz .Lanchor_empty_slot
+    test %r9,%r9
+    jz .Lzero
+    cmp %r9,%rax
+    jne .Lzero
+    cmpq $1,8(%rdx)
+    jne .Lzero
+    mov 16(%rdx),%rax
+    cmp $0x7fffffff,%rax
+    ja .Lzero
+    inc %r8d
+    cmp $1,%r8d
+    ja .Lzero
+    jmp .Lanchor_next_slot
+.Lanchor_empty_slot:
+    cmpq $0,8(%rdx)
+    jne .Lzero
+    cmpq $0,16(%rdx)
+    jne .Lzero
+.Lanchor_next_slot:
+    add $24,%rdx
+    dec %ecx
+    jnz .Lquiescent_words
+    test %r9,%r9
+    jz .Lanchor_caps_ok
+    cmp $1,%r8d
+    jne .Lzero
+.Lanchor_caps_ok:
+    mov $1,%eax
+    ret
+.Lgetcap:
+    test %rdi,%rdi
+    jz .Lzero
+    lea CAPS(%r12),%rax
+    mov $16,%ecx
+.Lgetcap_loop:
+    cmp %rdi,(%rax)
+    je .Lgetcap_done
+    add $24,%rax
+    dec %ecx
+    jnz .Lgetcap_loop
+.Lzero:
+    xor %eax,%eax
+.Lgetcap_done:
+    ret
+.Laddcap:
+    mov 24(%r12),%rax
+    cmp $2,%rax
+    jb .Lzero
+    cmp $-1,%rax
+    je .Lzero
+    lea CAPS+24(%r12),%rdi
+    mov $15,%ecx
+.Laddcap_loop:
+    cmpq $0,(%rdi)
+    je .Laddcap_found
+    add $24,%rdi
+    dec %ecx
+    jnz .Laddcap_loop
+    jmp .Lzero
+.Laddcap_found:
+    cmpq $0,8(%rdi)
+    jne .Lzero
+    cmpq $0,16(%rdi)
+    jne .Lzero
+    mov %rax,(%rdi)
+    mov %rdx,8(%rdi)
+    mov %rsi,16(%rdi)
+    incq 24(%r12)
+    ret
+.Lspans:
+    mov $128,%edx
+    mov 72(%r14),%rcx
+    test %rcx,%rcx
+    jz .Lspan0_absent
+    cmp %rdx,64(%r14)
+    jne .Lzero
+    mov 144(%r12),%rax
+    sub %rdx,%rax
+    cmp %rax,%rcx
+    ja .Lzero
+    add %rcx,%rdx
+    jmp .Lspan1
+.Lspan0_absent:
+    cmpq $0,64(%r14)
+    jne .Lzero
+.Lspan1:
+    mov 88(%r14),%rcx
+    test %rcx,%rcx
+    jz .Lspan1_absent
+    cmp %rdx,80(%r14)
+    jne .Lzero
+    mov 144(%r12),%rax
+    sub %rdx,%rax
+    cmp %rax,%rcx
+    ja .Lzero
+    add %rcx,%rdx
+    jmp .Lspan_end
+.Lspan1_absent:
+    cmpq $0,80(%r14)
+    jne .Lzero
+.Lspan_end:
+    cmp 144(%r12),%rdx
+    jne .Lzero
+    mov $1,%eax
+    ret
+.Lnames:
+    mov 72(%r14),%rcx
+    test %rcx,%rcx
+    jz .Lzero
+    cmp $4096,%rcx
+    ja .Lzero
+    mov 64(%r14),%rsi
+    add %r14,%rsi
+    lea SCRATCH(%r12),%rdi
+.Lname0_copy:
+    mov (%rsi),%al
+    test %al,%al
+    jz .Lzero
+    mov %al,(%rdi)
+    inc %rsi
+    inc %rdi
+    dec %rcx
+    jnz .Lname0_copy
+    movb $0,(%rdi)
+    mov 88(%r14),%rcx
+    mov 160(%r12),%rax
+    cmp $8,%rax
+    je .Lname1_required
+    cmp $10,%rax
+    je .Lname1_required
+    test %rcx,%rcx
+    jnz .Lzero
+    mov $1,%eax
+    ret
+.Lname1_required:
+    test %rcx,%rcx
+    jz .Lzero
+    cmp $4096,%rcx
+    ja .Lzero
+    mov 80(%r14),%rsi
+    add %r14,%rsi
+    lea SCRATCH+4112(%r12),%rdi
+.Lname1_copy:
+    mov (%rsi),%al
+    test %al,%al
+    jz .Lzero
+    mov %al,(%rdi)
+    inc %rsi
+    inc %rdi
+    dec %rcx
+    jnz .Lname1_copy
+    movb $0,(%rdi)
+    mov $1,%eax
+    ret
+.Lprepare_ack:
+    lea ACK_BUF(%r12),%rdi
+    xor %eax,%eax
+    mov $544,%ecx
+    rep stosq
+    movabs $0x5a5a5a5a5a5a5a5a,%rax
+    mov $2,%ecx
+    rep stosq
+    movabs $0x314b434155504148,%rax
+    mov %rax,ACK_BUF(%r12)
+    mov 64(%r12),%rax
+    mov %rax,ACK_BUF+8(%r12)
+    mov 72(%r12),%rax
+    mov %rax,ACK_BUF+16(%r12)
+    mov 168(%r12),%rax
+    mov %rax,ACK_BUF+24(%r12)
+    mov 160(%r12),%rax
+    mov %rax,ACK_BUF+32(%r12)
+    movq $128,ACK_BUF+72(%r12)
+    movq $128,152(%r12)
+    ret
+
+.macro OBS_BASE
+    lea OBSERVE(%r12),%rdi
+    xor %eax,%eax
+    mov $16,%ecx
+    rep stosq
+    mov %r12,72+OBSERVE(%r12)
+    mov 72(%r12),%rax
+    mov %rax,80+OBSERVE(%r12)
+    mov 64(%r12),%rax
+    mov %rax,88+OBSERVE(%r12)
+.endm
+.Lrecord_owner:
+    OBS_BASE
+    movq $1,OBSERVE(%r12)
+    lea OWNER_IN(%r12),%rax
+    mov %rax,24+OBSERVE(%r12)
+    mov 136(%r12),%rax
+    mov %rax,32+OBSERVE(%r12)
+    lea OWNER_OUT(%r12),%rax
+    mov %rax,40+OBSERVE(%r12)
+    movq $8192,48+OBSERVE(%r12)
+    lea OWNER_WORK(%r12),%rax
+    mov %rax,56+OBSERVE(%r12)
+    movq $32768,64+OBSERVE(%r12)
+    ret
+.Lrecord_json:
+    OBS_BASE
+    movq $2,OBSERVE(%r12)
+    lea JSON_IN(%r12),%rax
+    mov %rax,24+OBSERVE(%r12)
+    mov 72(%r14),%rax
+    mov %rax,32+OBSERVE(%r12)
+    lea JSON_OUT(%r12),%rax
+    mov %rax,40+OBSERVE(%r12)
+    movq $4096,48+OBSERVE(%r12)
+    lea JSON_WORK(%r12),%rax
+    mov %rax,56+OBSERVE(%r12)
+    movq $8192,64+OBSERVE(%r12)
+    ret
+.Lrecord_fs:
+    OBS_BASE
+    movq $3,OBSERVE(%r12)
+    mov %r14,24+OBSERVE(%r12)
+    mov 144(%r12),%rax
+    mov %rax,32+OBSERVE(%r12)
+    lea ACK_BUF(%r12),%rax
+    mov %rax,40+OBSERVE(%r12)
+    movq $4352,48+OBSERVE(%r12)
+    lea CAPS(%r12),%rax
+    mov %rax,56+OBSERVE(%r12)
+    movq $384,64+OBSERVE(%r12)
+    cmpq $0,120(%r12)
+    je .Lrecord_fs_end
+    lea STAT_BUF(%r12),%rax
+    cmpq $13,160(%r12)
+    jne .Lrecord_fs_detail
+    lea DIRENT_BUF(%r12),%rax
+.Lrecord_fs_detail:
+    mov %rax,112+OBSERVE(%r12)
+    mov 120(%r12),%rax
+    mov %rax,120+OBSERVE(%r12)
+.Lrecord_fs_end:
+    ret
+.Lobserve:
+    mov 48(%r12),%rax
+    test %rax,%rax
+    jz .Lobserve_done
+    sub $8,%rsp
+    lea OBSERVE(%r12),%rdi
+    mov 56(%r12),%rsi
+    call *%rax
+    add $8,%rsp
+.Lobserve_done:
+    ret
+
+.Lcleanup:
+    push %rbx
+    lea CAPS+360(%r12),%rbx
+.Lcleanup_loop:
+    cmpq $0,(%rbx)
+    je .Lcleanup_next
+    OBS_BASE
+    movq $4,OBSERVE(%r12)
+    mov %rbx,24+OBSERVE(%r12)
+    movq $24,32+OBSERVE(%r12)
+    lea CAPS(%r12),%rax
+    mov %rax,56+OBSERVE(%r12)
+    movq $384,64+OBSERVE(%r12)
+    call .Lobserve
+    mov 16(%rbx),%rdi
+    cmpq $2,8(%rbx)
+    je .Lcleanup_directory
+    LIBCALL 7,1
+    jmp .Lcleanup_observed
+.Lcleanup_directory:
+    LIBCALL 14,1
+.Lcleanup_observed:
+    mov %rax,16+OBSERVE(%r12)
+    mov %rax,96+OBSERVE(%r12)
+    mov 112(%r12),%rax
+    mov %rax,104+OBSERVE(%r12)
+    movq $1,8+OBSERVE(%r12)
+    movq $0,(%rbx)
+    movq $0,8(%rbx)
+    movq $0,16(%rbx)
+    call .Lobserve
+.Lcleanup_next:
+    sub $24,%rbx
+    lea CAPS(%r12),%rax
+    cmp %rax,%rbx
+    ja .Lcleanup_loop
+    pop %rbx
+    ret
+
+.Lfailure:
+    movq $2,8(%r12)
+    movq $1,200(%r12)
+    call .Lcleanup
+    movq $0,176(%r12)
+    mov $0xfffffffc,%eax
+    jmp .Lreturn
+.Linvalid:
+    mov $0xffffffff,%eax
+    jmp .Lreturn
+.Lcapacity:
+    mov $0xfffffffe,%eax
+    jmp .Lreturn
+.Lbusy:
+    cmpq $1,8(%r12)
+    je .Lbusy_return
+    mov $0xfffffffc,%eax
+    jmp .Lreturn
+.Lbusy_return:
+    mov $0xfffffffd,%eax
+.Lreturn:
+    add $STACK_BYTES,%rsp
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %rbx
+    pop %rbp
+    ret
+.size audit_anchor_publish_callable_entry,.-audit_anchor_publish_callable_entry
+
+.balign 16,0x90
+.globl audit_anchor_publish_callable_initialize
+.type audit_anchor_publish_callable_initialize,@function
+audit_anchor_publish_callable_initialize:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $STACK_BYTES,%rsp
+    mov %rdi,%r12
+    mov %rcx,%rbx
+    mov %rdx,%r14
+    mov %r8,%rbp
+    mov %r9,%r13
+    cmp $CTX_BYTES,%rsi
+    jb .Lcapacity
+    test %r12,%r12
+    jz .Linvalid
+    test $7,%r12
+    jnz .Linvalid
+    test %rbx,%rbx
+    jz .Linvalid
+    test $7,%rbx
+    jnz .Linvalid
+    cmp $0x7fffffff,%r14
+    ja .Linvalid
+    mov %r12,%rax
+    add $CTX_BYTES,%rax
+    jc .Linvalid
+    mov %rbx,%rdx
+    add $168,%rdx
+    jc .Linvalid
+    cmp %rdx,%r12
+    jae .Linit_ranges_ok
+    cmp %rax,%rbx
+    jb .Linvalid
+.Linit_ranges_ok:
+    test %rbp,%rbp
+    jnz .Linit_observer_ok
+    test %r13,%r13
+    jnz .Linvalid
+.Linit_observer_ok:
+    xor %ecx,%ecx
+.Linit_table:
+    cmpq $0,(%rbx,%rcx)
+    je .Linvalid
+    add $8,%ecx
+    cmp $160,%ecx
+    jb .Linit_table
+    cmpq $0,160(%rbx)
+    jne .Linvalid
+    mov %r12,%rdi
+    xor %eax,%eax
+    mov $(CTX_BYTES/8),%ecx
+    repe scasq
+    jne .Linvalid
+    lea TABLE(%r12),%rdi
+    mov %rbx,%rsi
+    mov $21,%ecx
+    rep movsq
+    mov %r14,16(%r12)
+    movq $2,24(%r12)
+    movq $21,40(%r12)
+    mov %rbp,48(%r12)
+    mov %r13,56(%r12)
+    movq $1,CAPS(%r12)
+    movq $1,CAPS+8(%r12)
+    mov %r14,CAPS+16(%r12)
+    movabs $0x3130584355504148,%rax
+    mov %rax,(%r12)
+    xor %eax,%eax
+    jmp .Lreturn
+.size audit_anchor_publish_callable_initialize,.-audit_anchor_publish_callable_initialize
+
+.balign 16,0x90
+.globl audit_anchor_publish_callable_dispose
+.type audit_anchor_publish_callable_dispose,@function
+audit_anchor_publish_callable_dispose:
+    push %rbp
+    push %rbx
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $STACK_BYTES,%rsp
+    mov %rdi,%r12
+    cmp $CTX_BYTES,%rsi
+    jb .Lcapacity
+    test %r12,%r12
+    jz .Linvalid
+    test $7,%r12
+    jnz .Linvalid
+    mov %r12,%rax
+    add $CTX_BYTES,%rax
+    jc .Linvalid
+    movabs $0x3130584355504148,%rax
+    cmp %rax,(%r12)
+    jne .Linvalid
+    cmpq $1,8(%r12)
+    je .Lbusy
+    cmpq $2,8(%r12)
+    ja .Linvalid
+    call .Lquiescent
+    test %eax,%eax
+    jz .Linvalid
+    lea TABLE(%r12),%r15
+    call *(%r15)
+    test %rax,%rax
+    jz .Linvalid
+    mov %rax,176(%r12)
+    movq $0,184(%r12)
+    call .Lcleanup
+    mov %r12,%rdi
+    xor %eax,%eax
+    mov $(CTX_BYTES/8),%ecx
+    rep stosq
+    xor %eax,%eax
+    jmp .Lreturn
+.size audit_anchor_publish_callable_dispose,.-audit_anchor_publish_callable_dispose
+
+.balign 16,0x90
+.globl audit_anchor_publish_callable_owner
+audit_anchor_publish_callable_owner:
+.Lowner_image:
+    .zero 137663
+.globl audit_anchor_publish_callable_json
+audit_anchor_publish_callable_json:
+.Ljson_image:
+    .zero 161260
+.globl audit_anchor_publish_callable_end
+audit_anchor_publish_callable_end:
+.section .note.GNU-stack,"",@progbits

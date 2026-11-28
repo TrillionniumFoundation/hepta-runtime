@@ -1,0 +1,39 @@
+fn publish_archive_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
+	use std::os::fd::AsRawFd;
+	let temporary = format!(".archive-anchor-{}.tmp", new_id()?);
+	let mut file = open_at(
+		root,
+		&temporary,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)?;
+	let result = (|| -> Result<()> {
+		file.write_all(&serde_json::to_vec(anchor)?)?;
+		file.sync_all()?;
+		let source = name(&temporary)?;
+		let target = name(ARCHIVE_ANCHOR)?;
+		if unsafe {
+			libc::linkat(
+				root.as_raw_fd(),
+				source.as_ptr(),
+				root.as_raw_fd(),
+				target.as_ptr(),
+				0,
+			)
+		} < 0
+		{
+			return Err(std::io::Error::last_os_error().into());
+		}
+		if unsafe { libc::unlinkat(root.as_raw_fd(), source.as_ptr(), 0) } < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		root.sync_all()?;
+		Ok(())
+	})();
+	if result.is_err() {
+		if let Ok(component) = name(&temporary) {
+			unsafe { libc::unlinkat(root.as_raw_fd(), component.as_ptr(), 0) };
+		}
+	}
+	result
+}

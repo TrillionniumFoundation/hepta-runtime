@@ -1,0 +1,56 @@
+name: Complete archive publisher physical readback
+on:
+  push:
+    branches: [hia-audit-anchor-publish-physical-v2-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  physical:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          sparse-checkout: tests/hia_native/audit_anchor_publish_physical_v2
+      - name: Freeze complete source before pure controls
+        run: |
+          mkdir "$RUNNER_TEMP/publish-physical"
+          cp -a tests/hia_native/audit_anchor_publish_physical_v2 "$RUNNER_TEMP/publish-physical/source"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=Path(os.environ["RUNNER_TEMP"])/"publish-physical/source";raw=(r/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="8f1eab37b5a904f9b0b961d2e221ed6d91091f636c9a488e725af7d49cb8d8eb"
+          for p,pin in json.loads(raw)["files"].items():
+              b=(r/p).read_bytes();assert len(b)==pin["bytes"] and hashlib.sha256(b).hexdigest()==pin["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==pin["git_blob"]
+              if p.endswith(".py"):compile(b,str(r/p),"exec")
+          PY
+      - name: Download exact passed controls and all retained producers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14331151703/zip > "$RUNNER_TEMP/publish-physical/original.zip"
+      - name: Reopen all archive and logical bytes and modes
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/restore.py" --archive "$RUNNER_TEMP/publish-physical/original.zip" --output "$RUNNER_TEMP/publish-physical/restored"
+          mkdir "$RUNNER_TEMP/publish-physical/restoration-proof"
+          cp "$RUNNER_TEMP/publish-physical/restored/RESTORE.json" "$RUNNER_TEMP/publish-physical/restored/artifact-manifest.json" "$RUNNER_TEMP/publish-physical/restored/original-export.json" "$RUNNER_TEMP/publish-physical/restoration-proof/"
+      - name: Fifteen full physical refusals and two independent relocated admissions
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/run.py" --retained "$RUNNER_TEMP/publish-physical/restored/retained" --output "$RUNNER_TEMP/publish-physical/output" --phase physical
+      - name: Read every retained original/control/physical byte under the unchanged full guard
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/run.py" --retained "$RUNNER_TEMP/publish-physical/restored/retained" --output "$RUNNER_TEMP/publish-physical/output" --phase verify
+      - name: Preserve complete actual success or failure and every physical copy
+        if: always()
+        run: timeout --signal=KILL 180 python3 -I -B "$RUNNER_TEMP/publish-physical/source/export.py" --workspace "$RUNNER_TEMP/publish-physical" --archive "$RUNNER_TEMP/publish-physical/audit-publisher-physical-v2.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: audit-anchor-publisher-physical-v2
+          path: |
+            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v2.tar.gz
+            ${{ runner.temp }}/publish-physical/audit-publisher-physical-v2.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

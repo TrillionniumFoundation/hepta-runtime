@@ -1,0 +1,72 @@
+name: Prepare pinned audit archive anchor sources
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-pinned-anchor-source-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_pinned_anchor_author
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Admit the complete new source and original spans
+        run: |
+          export ANCHOR_PREP_ROOT="$RUNNER_TEMP/audit-pinned-anchor-source"
+          printf 'ANCHOR_PREP_ROOT=%s\n' "$ANCHOR_PREP_ROOT" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,json,os,shutil
+          from pathlib import Path
+          root=Path(os.environ["ANCHOR_PREP_ROOT"])
+          root.mkdir(exist_ok=False)
+          shutil.copytree("runtime/tests/hia_native/audit_pinned_anchor_author",root/"source")
+          raw=(root/"source/SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="28a3a6d59b92106862af4dd83846308a2f57a63229ecc6f77f16e167b0a835cd"
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$ANCHOR_PREP_ROOT/source/source_check.py" > "$ANCHOR_PREP_ROOT/source-check.json"
+          cat "$ANCHOR_PREP_ROOT/source-check.json"
+      - name: Fresh source authoring and HIA compilation with no owner semantic calls
+        run: |
+          python3 -I -B "$ANCHOR_PREP_ROOT/source/prepare.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" --output "$ANCHOR_PREP_ROOT/capture" \
+            > "$ANCHOR_PREP_ROOT/prepare.stdout" 2> "$ANCHOR_PREP_ROOT/prepare.stderr"
+          cat "$ANCHOR_PREP_ROOT/capture/processes/author-owner.stdout"
+          cat "$ANCHOR_PREP_ROOT/capture/processes/author-callable.stdout"
+          cat "$ANCHOR_PREP_ROOT/prepare.stdout"
+      - name: Keep and reread all successful or failed source/build evidence
+        if: always()
+        run: |
+          if test -f "$ANCHOR_PREP_ROOT/source/export_prepare.py"; then
+            python3 -I -B "$ANCHOR_PREP_ROOT/source/export_prepare.py" \
+              --root "$ANCHOR_PREP_ROOT" --archive "$RUNNER_TEMP/audit-pinned-anchor-source.tar.gz"
+          fi
+      - name: Upload complete preparation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-pinned-anchor-source-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-pinned-anchor-source.tar.gz
+            ${{ runner.temp }}/audit-pinned-anchor-source.tar.gz.json
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
