@@ -1,0 +1,39 @@
+name: Export exact public123 source bytes
+on:
+  push:
+    branches: ['hia-text-publication-public-source-export-6780-v1-20261117']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "SOURCE_EXPORT=$GITHUB_WORKSPACE/candidate/qualification/text_publication_public_source_export_v1" "READER=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_public_recovery_ci/source" "WORK=$RUNNER_TEMP/source-byte-work" "OUTPUT=$RUNNER_TEMP/source-byte-output" >> "$GITHUB_ENV"
+      - name: Checkout exact source reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/text_publication_public_source_export_v1
+            tests/hia_native/text_publication_public_recovery_ci/source
+      - name: Read every graph byte and export exact UTF8 sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -S -B "$SOURCE_EXPORT/export.py" --reader-source "$READER" --work "$WORK" --output "$OUTPUT"
+      - name: Upload complete source byte identities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public123-exact-source-${{ github.sha }}
+          path: ${{ env.OUTPUT }}
+          if-no-files-found: error
+          retention-days: 30
