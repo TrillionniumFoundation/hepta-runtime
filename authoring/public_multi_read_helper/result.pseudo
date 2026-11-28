@@ -1,0 +1,24 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<24 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,16)!=length(s)-24:
+        return INVALID
+    mode=load(s,8)
+    if mode>1:
+        return INVALID
+    extra=1
+    if mode==1:
+        extra=PREFIX_SIZE+1
+    size=length(s)-24+extra
+    if length(o)<32+size:
+        return CAPACITY
+    put(o,0,RESPONSE)
+    put(o,8,mode)
+    put(o,16,size)
+    put(o,24,0)
+    at=32
+    if mode==1:
+        at=prefix(o,at)
+    copy_in(s,o,24,at,length(s)-24)
+    store(o,at+length(s)-24,10)
+    return 32
