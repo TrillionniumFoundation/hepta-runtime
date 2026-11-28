@@ -1,4 +1,4 @@
-# Private namespace fingerprint producer v1
+# Private namespace fingerprint producer v2
 
 This package implements the directory-entry fallback from the complete current
 target namespace_version.rs. It does not qualify the inotify Watcher,
@@ -37,3 +37,15 @@ pending until actual production capture, full readers and controls complete.
 All Rust and HIA execution occurs in the authorized fresh CI. No unknown prior
 process is repeated. Per replay group60s, compiler900s and CI job15min remain
 unchanged. Real failed candidates remain failed.
+
+## Preserved first failure and exact lock preparation
+
+Producer 21d4a9e8 / run44111096554 completed fresh HIA build and strict build
+readback, then Cargo --locked rejected the overinclusive seed. No fingerprint
+operation or original replay had started. Its entire failed archive was read
+by inspection CI44111919569. Lock preparation CI44112546184 generated the
+actual22-package feature closure: all package versions/checksums stayed exact,
+and four dependency lists dropped only inactive target feature edges. The
+old46-package seed, complete command proof and failure remain in this package.
+The HIA source, images, native adapter,72/156 domain, all runtime code and
+production locked commands are unchanged.
