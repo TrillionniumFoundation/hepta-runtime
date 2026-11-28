@@ -1,0 +1,76 @@
+name: Pure read recovery of complete audit record I/O capture
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-storage-readback-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_storage_recovery
+      - name: Complete adapter source admission
+        env:
+          EXPECTED_SOURCE: b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,os,sys
+          root=Path('tests/hia_native/audit_storage_recovery').resolve()
+          assert hashlib.sha256((root/'RECOVERY_SOURCE.json').read_bytes()).hexdigest()==os.environ['EXPECTED_SOURCE']
+          sys.path.insert(0,str(root))
+          import read_adapter
+          assert read_adapter.check_adapter()==os.environ['EXPECTED_SOURCE']
+          for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+          python3 -I -B tests/hia_native/audit_storage_recovery/export.py --help
+      - name: Download the exact existing failed producer artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14307841184/zip -o "$RUNNER_TEMP/original-failure.zip"
+      - name: Full original ZIP TAR object and logical file readback
+        run: |
+          mkdir -p "$RUNNER_TEMP/audit-record-io-recovery"
+          timeout 180s python3 -I -B tests/hia_native/audit_storage_recovery/restore.py --zip "$RUNNER_TEMP/original-failure.zip" --destination "$RUNNER_TEMP/audit-record-io-retained" --report "$RUNNER_TEMP/audit-record-io-recovery/RESTORED.json"
+      - name: Full unchanged native and original evidence under the fixed reader guard
+        run: |
+          python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase semantic --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+      - name: All fourteen original physical refusals and two independent admissions
+        run: |
+          python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase controls --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+      - name: Independent final complete guarded read including all physical controls
+        run: |
+          python3 -I -B tests/hia_native/audit_storage_recovery/recover.py --phase final --restored "$RUNNER_TEMP/audit-record-io-retained" --output "$RUNNER_TEMP/audit-record-io-recovery"
+      - name: Preserve original failure unchanged and all complete recovery evidence
+        id: complete_export
+        if: always()
+        run: |
+          python3 -I -B tests/hia_native/audit_storage_recovery/export.py --restored "$RUNNER_TEMP/audit-record-io-retained" --recovery "$RUNNER_TEMP/audit-record-io-recovery" --original-zip "$RUNNER_TEMP/original-failure.zip" --archive "$RUNNER_TEMP/audit-record-io-recovery.tar.gz"
+      - name: Preserve all retained files if the qualified exporter fails
+        if: ${{ always() && steps.complete_export.outcome == 'failure' }}
+        run: |
+          items=()
+          for entry in audit-record-io-retained audit-record-io-recovery original-failure.zip audit-record-io-recovery.tar.gz audit-record-io-recovery.tar.gz.json; do
+            if [ -e "$RUNNER_TEMP/$entry" ]; then items+=("$entry"); fi
+          done
+          tar --format=pax -czf "$RUNNER_TEMP/audit-record-io-recovery-fallback.tar.gz" -C "$RUNNER_TEMP" "${items[@]}" -C "$GITHUB_WORKSPACE" tests/hia_native/audit_storage_recovery
+          sha256sum "$RUNNER_TEMP/audit-record-io-recovery-fallback.tar.gz" > "$RUNNER_TEMP/audit-record-io-recovery-fallback.sha256"
+      - name: Upload full objects and full-byte reread receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-io-recovery-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-record-io-recovery.tar.gz
+            ${{ runner.temp }}/audit-record-io-recovery.tar.gz.json
+            ${{ runner.temp }}/audit-record-io-recovery-fallback.tar.gz
+            ${{ runner.temp }}/audit-record-io-recovery-fallback.sha256
+          if-no-files-found: error
+          retention-days: 14

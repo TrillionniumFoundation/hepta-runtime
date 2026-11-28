@@ -204,7 +204,7 @@ def ack_valid(s:readbuf,w:mutbuf) -> u64:
         return 0
     return 1
 
-def advance(o:mutbuf,w:mutbuf) -> u32:
+def advance(o:mutbuf,w:mutbuf) -> u64:
     result=AGAIN
     while result==AGAIN:
         phase=get(w,48)
@@ -226,7 +226,7 @@ def advance(o:mutbuf,w:mutbuf) -> u32:
                             result=finish_step(o,w)
     return result
 
-def read_step(o:mutbuf,w:mutbuf) -> u32:
+def read_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==100:
         return issue(o,w,1,get(w,24),2048,0,1152,134,0,0,101)
@@ -312,7 +312,7 @@ def read_step(o:mutbuf,w:mutbuf) -> u32:
         return AGAIN
     return INVALID
 
-def cleanup_step(o:mutbuf,w:mutbuf) -> u32:
+def cleanup_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==200:
         valid=staging_valid(w,1408,get(w,144))
@@ -367,7 +367,7 @@ def cleanup_step(o:mutbuf,w:mutbuf) -> u32:
         return AGAIN
     return INVALID
 
-def scan_step(o:mutbuf,w:mutbuf) -> u32:
+def scan_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==250:
         store(w,1792,46)
@@ -426,7 +426,7 @@ def scan_step(o:mutbuf,w:mutbuf) -> u32:
         return AGAIN
     return INVALID
 
-def save_step(o:mutbuf,w:mutbuf) -> u32:
+def save_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==300:
         return issue(o,w,2,get(w,24),0,0,0,0,0,0,301)
@@ -539,7 +539,7 @@ def save_step(o:mutbuf,w:mutbuf) -> u32:
         return AGAIN
     return INVALID
 
-def remove_step(o:mutbuf,w:mutbuf) -> u32:
+def remove_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==400:
         if same_work(w,16512,get(w,88),7168,get(w,456))==0:
@@ -559,7 +559,7 @@ def remove_step(o:mutbuf,w:mutbuf) -> u32:
         return AGAIN
     return INVALID
 
-def finish_step(o:mutbuf,w:mutbuf) -> u32:
+def finish_step(o:mutbuf,w:mutbuf) -> u64:
     phase=get(w,48)
     if phase==900 or phase==901:
         put(w,get(w,552),0)
@@ -591,14 +591,14 @@ def finish_step(o:mutbuf,w:mutbuf) -> u32:
         return issue(o,w,9,get(w,24),0,0,1152,134,0,0,991)
     return complete(o,w)
 
-def fail(o:mutbuf,w:mutbuf,family:u64,code:u64) -> u32:
+def fail(o:mutbuf,w:mutbuf,family:u64,code:u64) -> u64:
     if get(w,104)==0:
         put(w,104,family)
         put(w,112,code)
     put(w,48,990)
     return AGAIN
 
-def close_role(o:mutbuf,w:mutbuf,role:u64,next_phase:u64) -> u32:
+def close_role(o:mutbuf,w:mutbuf,role:u64,next_phase:u64) -> u64:
     if get(w,role)==0:
         put(w,48,next_phase)
         return AGAIN
@@ -606,7 +606,7 @@ def close_role(o:mutbuf,w:mutbuf,role:u64,next_phase:u64) -> u32:
     put(w,560,next_phase)
     return issue(o,w,7,get(w,role),0,0,0,0,0,0,900)
 
-def close_directory(o:mutbuf,w:mutbuf,next_phase:u64) -> u32:
+def close_directory(o:mutbuf,w:mutbuf,next_phase:u64) -> u64:
     if get(w,192)==0:
         put(w,48,next_phase)
         return AGAIN
@@ -614,7 +614,7 @@ def close_directory(o:mutbuf,w:mutbuf,next_phase:u64) -> u32:
     put(w,560,next_phase)
     return issue(o,w,14,get(w,192),0,0,0,0,0,0,901)
 
-def complete(o:mutbuf,w:mutbuf) -> u32:
+def complete(o:mutbuf,w:mutbuf) -> u64:
     fill_range(o,0,128,0)
     put(o,0,RESPONSE)
     kind=0
@@ -637,7 +637,7 @@ def complete(o:mutbuf,w:mutbuf) -> u32:
     put(w,48,999)
     return extent
 
-def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,c:u64,p0:u64,n0:u64,p1:u64,n1:u64,next_phase:u64) -> u32:
+def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,c:u64,p0:u64,n0:u64,p1:u64,n1:u64,next_phase:u64) -> u64:
     put(w,56,get(w,56)+1)
     put(w,64,2)
     put(w,72,op)
@@ -668,7 +668,7 @@ def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,c:u64,p0:u64,n0:u64,p1:u64,n1:u64
     put(o,112,at)
     return at
 
-def json_effect(o:mutbuf,w:mutbuf,op:u64,at:u64,size:u64,next_phase:u64) -> u32:
+def json_effect(o:mutbuf,w:mutbuf,op:u64,at:u64,size:u64,next_phase:u64) -> u64:
     put(w,56,get(w,56)+1)
     put(w,64,3)
     put(w,72,op)

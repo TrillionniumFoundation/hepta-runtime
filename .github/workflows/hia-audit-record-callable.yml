@@ -1,0 +1,122 @@
+name: Qualify native audit record callable
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-callable-qualification-v3-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_callable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Admit complete frozen source and exact compiler checkout
+        run: |
+          export AUDIT_CALLABLE_ROOT="$RUNNER_TEMP/audit-record-callable-v3"
+          printf 'AUDIT_CALLABLE_ROOT=%s\n' "$AUDIT_CALLABLE_ROOT" >> "$GITHUB_ENV"
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import hashlib,json,os,shutil
+          from pathlib import Path
+          original=Path("runtime/tests/hia_native/audit_record_callable").resolve()
+          base=Path(os.environ["AUDIT_CALLABLE_ROOT"])
+          base.mkdir(exist_ok=False)
+          source=base/"source"
+          shutil.copytree(original,source)
+          (base/"admission").mkdir()
+          raw=(source/"SOURCE.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="f7a18ccac088bb820a2df262b4f5b700f11a2e6ee0f2f307f2ada4fa89f90d4b"
+          manifest=json.loads(raw)
+          assert {p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file()}==set(manifest["files"])|{"SOURCE.json"}
+          for name,pin in manifest["files"].items():
+              path=source/name
+              assert not path.is_symlink()
+              body=path.read_bytes()
+              assert len(body)==pin["bytes"] and hashlib.sha256(body).hexdigest()==pin["sha256"],name
+              assert hashlib.sha1(b"blob "+str(len(body)).encode()+b"\0"+body).hexdigest()==pin["git_blob"],name
+          compiler=Path("compiler").resolve()
+          fixed=json.loads((source/"COMPILER_IDENTITY.json").read_bytes())
+          assert len(fixed["files"])==1080
+          for name,expected in fixed["files"].items():
+              assert hashlib.sha256((compiler/name).read_bytes()).hexdigest()==expected,name
+          for path in source.rglob("*.py"):
+              compile(path.read_bytes(),str(path),"exec")
+          PY
+          timeout --signal=KILL 60 python3 -I -B "$AUDIT_CALLABLE_ROOT/source/source_check.py" > "$AUDIT_CALLABLE_ROOT/admission/source-check.json"
+          cat "$AUDIT_CALLABLE_ROOT/admission/source-check.json"
+      - name: Install independent syscall observer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y strace
+      - name: Download and restore the complete already qualified original artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309180653/zip > "$AUDIT_CALLABLE_ROOT/retained-original.zip"
+          timeout --signal=KILL 900 python3 -I -B "$AUDIT_CALLABLE_ROOT/source/retained_admission/read_archive.py" \
+            --zip "$AUDIT_CALLABLE_ROOT/retained-original.zip" \
+            --destination "$AUDIT_CALLABLE_ROOT/retained" \
+            --report "$AUDIT_CALLABLE_ROOT/admission/archive.json"
+      - name: Independently verify every retained original file and all existing physical controls
+        run: |
+          timeout --signal=KILL 180 python3 -I -B "$AUDIT_CALLABLE_ROOT/source/retained_admission/verify_retained.py" \
+            --root "$AUDIT_CALLABLE_ROOT/retained" \
+            --zip "$AUDIT_CALLABLE_ROOT/retained-original.zip" \
+            --report "$AUDIT_CALLABLE_ROOT/admission/qualified-original.json"
+      - name: Fresh HIA build, observed native pump, observer-off native pump, and transport controls
+        run: |
+          python3 -I -B "$AUDIT_CALLABLE_ROOT/source/run_callable.py" \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$AUDIT_CALLABLE_ROOT/run/semantic" \
+            --retained "$AUDIT_CALLABLE_ROOT/retained" \
+            --temporary "$AUDIT_CALLABLE_ROOT/temporary"
+      - name: Read every native buffer and compare every retained original outcome
+        run: |
+          python3 -I -B "$AUDIT_CALLABLE_ROOT/source/qualify_callable.py" --phase semantic \
+            --output "$AUDIT_CALLABLE_ROOT/run" --retained "$AUDIT_CALLABLE_ROOT/retained"
+      - name: Preserve and reject all physical mutations and admit both complete relocated copies
+        run: |
+          python3 -I -B "$AUDIT_CALLABLE_ROOT/source/qualify_callable.py" --phase controls \
+            --output "$AUDIT_CALLABLE_ROOT/run" --retained "$AUDIT_CALLABLE_ROOT/retained"
+      - name: Final guarded read of all native, original, and physical-control evidence
+        run: |
+          python3 -I -B "$AUDIT_CALLABLE_ROOT/source/qualify_callable.py" --phase final \
+            --output "$AUDIT_CALLABLE_ROOT/run" --retained "$AUDIT_CALLABLE_ROOT/retained"
+      - name: Preserve and reread the complete successful or failed capture
+        if: always()
+        run: |
+          if test -f "$AUDIT_CALLABLE_ROOT/source/SOURCE.json"; then
+            python3 -I -B "$AUDIT_CALLABLE_ROOT/source/export_callable.py" \
+              --workspace "$AUDIT_CALLABLE_ROOT" \
+              --archive "$AUDIT_CALLABLE_ROOT/audit-record-callable.tar.gz"
+          fi
+      - name: Upload the exact complete archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-record-callable-v3/audit-record-callable.tar.gz
+            ${{ runner.temp }}/audit-record-callable-v3/audit-record-callable.tar.gz.json
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 30

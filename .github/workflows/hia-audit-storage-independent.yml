@@ -1,0 +1,53 @@
+name: Independent complete audit record I/O readback
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-storage-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: qualification/audit_record_io/independent-v1
+      - name: Admit frozen independent source before any readback
+        run: |
+          mkdir -p "$RUNNER_TEMP/audit-io-independent-proof"
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,sys
+          root=Path('qualification/audit_record_io/independent-v1').resolve()
+          assert hashlib.sha256((root/'SOURCE.json').read_bytes()).hexdigest()=='908e22f78f7a579775366489d1cc2900ba0f0f78d41d04638b8ea29ee067cd88'
+          sys.path.insert(0,str(root))
+          import read_archive
+          assert read_archive.source()=='908e22f78f7a579775366489d1cc2900ba0f0f78d41d04638b8ea29ee067cd88'
+          for path in root.glob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Download only the completed retained evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309180653/zip -o "$RUNNER_TEMP/audit-io-recovery.zip"
+      - name: Read every uploaded byte and restore every complete file independently
+        run: |
+          set -o pipefail
+          timeout --signal=KILL 180s python3 -I -B qualification/audit_record_io/independent-v1/read_archive.py --zip "$RUNNER_TEMP/audit-io-recovery.zip" --destination "$RUNNER_TEMP/audit-io-relocated" --report "$RUNNER_TEMP/audit-io-independent-proof/ARCHIVE.json" 2>"$RUNNER_TEMP/audit-io-independent-proof/archive.stderr" | tee "$RUNNER_TEMP/audit-io-independent-proof/archive.stdout"
+      - name: Complete guarded relocated reader and every retained physical control
+        run: |
+          set -o pipefail
+          timeout --signal=KILL 180s python3 -I -B qualification/audit_record_io/independent-v1/verify_retained.py --root "$RUNNER_TEMP/audit-io-relocated" --zip "$RUNNER_TEMP/audit-io-recovery.zip" --report "$RUNNER_TEMP/audit-io-independent-proof/INDEPENDENT.json" 2>"$RUNNER_TEMP/audit-io-independent-proof/reader.stderr" | tee "$RUNNER_TEMP/audit-io-independent-proof/reader.stdout"
+      - name: Keep complete proof and any exact refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-io-independent-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/audit-io-independent-proof
+            qualification/audit_record_io/independent-v1
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,45 @@
+name: Inspect preserved audit callable libc admission
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-libc-inspection-v2-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_record_callable_diagnostics
+      - name: Read complete prior failure and current actual libc symbols
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14318385717/zip > "$RUNNER_TEMP/audit-record-callable-failed.zip"
+          python3 -I -B - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p=Path("tests/hia_native/audit_record_callable_diagnostics/inspect_libc.py")
+          raw=p.read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="11a0a99c3c2a9dc7335c43327fd5fca02d080e846ce4d8d14165e17e6e3d62dd"
+          compile(raw,str(p),"exec")
+          PY
+          timeout --signal=KILL 60 python3 -I -B tests/hia_native/audit_record_callable_diagnostics/inspect_libc.py \
+            --archive "$RUNNER_TEMP/audit-record-callable-failed.zip" \
+            --output "$RUNNER_TEMP/audit-record-callable-libc-inspection"
+      - name: Preserve every diagnostic byte without replaying HIA or Rust
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-callable-libc-inspection-${{ github.sha }}
+          path: ${{ runner.temp }}/audit-record-callable-libc-inspection
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

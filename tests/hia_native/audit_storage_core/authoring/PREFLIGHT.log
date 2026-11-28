@@ -1,0 +1,555 @@
+﻿2026-11-17T06:56:51.0739222Z Current runner version: '2.338.2'
+2026-11-17T06:56:51.0765445Z ##[group]Runner Image Provisioner
+2026-11-17T06:56:51.0766414Z Hosted Compute Agent
+2026-11-17T06:56:51.0767122Z Version: 20261103.629
+2026-11-17T06:56:51.0767823Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-17T06:56:51.0768611Z Build Date: 2026-11-03T17:26:59Z
+2026-11-17T06:56:51.0769714Z Worker ID: {2102d7cb-f650-49c1-aa64-88fa66dd7b77}
+2026-11-17T06:56:51.0770522Z Region: centralus
+2026-11-17T06:56:51.0771173Z Cloud: Azure
+2026-11-17T06:56:51.0771742Z ##[endgroup]
+2026-11-17T06:56:51.0773287Z ##[group]Operating System
+2026-11-17T06:56:51.0773950Z Ubuntu
+2026-11-17T06:56:51.0774602Z 24.04.5
+2026-11-17T06:56:51.0775160Z LTS
+2026-11-17T06:56:51.0775657Z ##[endgroup]
+2026-11-17T06:56:51.0776290Z ##[group]Runner Image
+2026-11-17T06:56:51.0776930Z Image: ubuntu-24.04
+2026-11-17T06:56:51.0777536Z Version: 20261111.370.1
+2026-11-17T06:56:51.0779182Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-17T06:56:51.0781275Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+2026-11-17T06:56:51.0782313Z ##[endgroup]
+2026-11-17T06:56:51.0783487Z ##[group]GITHUB_TOKEN Permissions
+2026-11-17T06:56:51.0785693Z Contents: read
+2026-11-17T06:56:51.0786411Z Metadata: read
+2026-11-17T06:56:51.0786987Z ##[endgroup]
+2026-11-17T06:56:51.0789647Z Secret source: Actions
+2026-11-17T06:56:51.0790816Z Cache mode: write
+2026-11-17T06:56:51.0791749Z Prepare workflow directory
+2026-11-17T06:56:51.1144379Z Prepare all required actions
+2026-11-17T06:56:51.1217464Z Getting action download info
+2026-11-17T06:56:51.3790892Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-17T06:56:51.5858093Z Complete job name: preflight
+2026-11-17T06:56:51.6849956Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-17T06:56:51.6851103Z with:
+2026-11-17T06:56:51.6851598Z   persist-credentials: false
+2026-11-17T06:56:51.6852223Z   sparse-checkout: tests/hia_native/audit_storage_core
+2026-11-17T06:56:51.6852963Z   repository: TrillionniumFoundation/hepta-runtime
+2026-11-17T06:56:51.6857079Z   token: ***
+2026-11-17T06:56:51.6857522Z   ssh-strict: true
+2026-11-17T06:56:51.6857977Z   ssh-user: git
+2026-11-17T06:56:51.6858404Z   clean: true
+2026-11-17T06:56:51.6859047Z   sparse-checkout-cone-mode: true
+2026-11-17T06:56:51.6859610Z   fetch-depth: 1
+2026-11-17T06:56:51.6860048Z   fetch-tags: false
+2026-11-17T06:56:51.6860501Z   show-progress: true
+2026-11-17T06:56:51.6860967Z   lfs: false
+2026-11-17T06:56:51.6861384Z   submodules: false
+2026-11-17T06:56:51.6861890Z   set-safe-directory: true
+2026-11-17T06:56:51.6862409Z   allow-unsafe-pr-checkout: false
+2026-11-17T06:56:51.6863218Z ##[endgroup]
+2026-11-17T06:56:51.9604902Z Syncing repository: TrillionniumFoundation/hepta-runtime
+2026-11-17T06:56:51.9606967Z ##[group]Getting Git version info
+2026-11-17T06:56:51.9607903Z Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+2026-11-17T06:56:51.9609490Z [command]/usr/bin/git version
+2026-11-17T06:56:51.9725278Z git version 2.56.1
+2026-11-17T06:56:51.9753847Z ##[endgroup]
+2026-11-17T06:56:51.9764772Z Temporarily overriding HOME='/home/runner/work/_temp/6094a8f3-6052-4303-b4d7-0ce5f28bb34d' before making global git config changes
+2026-11-17T06:56:51.9766806Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:56:51.9771497Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-17T06:56:51.9823487Z Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+2026-11-17T06:56:51.9826884Z ##[group]Determining repository object format
+2026-11-17T06:56:51.9828429Z ##[endgroup]
+2026-11-17T06:56:51.9829945Z ##[group]Initializing the repository
+2026-11-17T06:56:51.9834486Z [command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-17T06:56:51.9942426Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-17T06:56:51.9944684Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-17T06:56:51.9946595Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-17T06:56:51.9948188Z hint: call:
+2026-11-17T06:56:51.9949488Z hint:
+2026-11-17T06:56:51.9950634Z hint: 	git config --global init.defaultBranch <name>
+2026-11-17T06:56:51.9951931Z hint:
+2026-11-17T06:56:51.9953316Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-17T06:56:51.9955354Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-17T06:56:51.9956908Z hint:
+2026-11-17T06:56:51.9957845Z hint: 	git branch -m <name>
+2026-11-17T06:56:51.9959117Z hint:
+2026-11-17T06:56:51.9960538Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-17T06:56:51.9962850Z Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+2026-11-17T06:56:51.9966865Z [command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-17T06:56:52.0018652Z ##[endgroup]
+2026-11-17T06:56:52.0020601Z ##[group]Disabling automatic garbage collection
+2026-11-17T06:56:52.0022826Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-17T06:56:52.0060246Z ##[endgroup]
+2026-11-17T06:56:52.0062183Z ##[group]Setting up auth
+2026-11-17T06:56:52.0063286Z Removing SSH command configuration
+2026-11-17T06:56:52.0067777Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:56:52.0110263Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:56:52.0551826Z Removing HTTP extra header
+2026-11-17T06:56:52.0554271Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:56:52.0600248Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:56:52.0852901Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:56:52.0855166Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:56:52.0906254Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:56:52.1185430Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-17T06:56:52.1237353Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:52.1282894Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:52.1329419Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:52.1375778Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:52.1417738Z ##[endgroup]
+2026-11-17T06:56:52.1419991Z ##[group]Fetching the repository
+2026-11-17T06:56:52.1426314Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +3b0ddf305f3844a36cdc0c43443b75688b733605:refs/remotes/origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:52.6485936Z From https://github.com/TrillionniumFoundation/hepta-runtime
+2026-11-17T06:56:52.6489416Z  * [new ref]         3b0ddf305f3844a36cdc0c43443b75688b733605 -> origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:52.6496724Z [command]/usr/bin/git branch --list --remote origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:52.6542202Z   origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:52.6552879Z [command]/usr/bin/git rev-parse refs/remotes/origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:52.6586451Z 3b0ddf305f3844a36cdc0c43443b75688b733605
+2026-11-17T06:56:52.6592657Z ##[endgroup]
+2026-11-17T06:56:52.6594915Z ##[group]Determining the checkout info
+2026-11-17T06:56:52.6597242Z ##[endgroup]
+2026-11-17T06:56:52.6599421Z ##[group]Setting up sparse checkout
+2026-11-17T06:56:52.6601059Z [command]/usr/bin/git sparse-checkout set tests/hia_native/audit_storage_core
+2026-11-17T06:56:52.6663928Z ##[endgroup]
+2026-11-17T06:56:52.6665376Z ##[group]Checking out the ref
+2026-11-17T06:56:52.6670640Z [command]/usr/bin/git checkout --progress --force -B hia-audit-storage-preflight-6780-20261117 refs/remotes/origin/hia-audit-storage-preflight-6780-20261117
+2026-11-17T06:56:53.9681949Z Updating files:   0% (1/765)
+2026-11-17T06:56:53.9689183Z Updating files:   1% (8/765)
+2026-11-17T06:56:53.9696243Z Updating files:   2% (16/765)
+2026-11-17T06:56:53.9703334Z Updating files:   3% (23/765)
+2026-11-17T06:56:53.9709217Z Updating files:   4% (31/765)
+2026-11-17T06:56:53.9715174Z Updating files:   5% (39/765)
+2026-11-17T06:56:53.9724048Z Updating files:   6% (46/765)
+2026-11-17T06:56:53.9732167Z Updating files:   7% (54/765)
+2026-11-17T06:56:53.9741977Z Updating files:   8% (62/765)
+2026-11-17T06:56:53.9750244Z Updating files:   9% (69/765)
+2026-11-17T06:56:53.9761326Z Updating files:  10% (77/765)
+2026-11-17T06:56:53.9773547Z Updating files:  11% (85/765)
+2026-11-17T06:56:53.9787028Z Updating files:  12% (92/765)
+2026-11-17T06:56:53.9796041Z Updating files:  13% (100/765)
+2026-11-17T06:56:53.9803559Z Updating files:  14% (108/765)
+2026-11-17T06:56:53.9808970Z Updating files:  15% (115/765)
+2026-11-17T06:56:53.9816014Z Updating files:  16% (123/765)
+2026-11-17T06:56:53.9821710Z Updating files:  17% (131/765)
+2026-11-17T06:56:53.9832362Z Updating files:  18% (138/765)
+2026-11-17T06:56:53.9838362Z Updating files:  19% (146/765)
+2026-11-17T06:56:53.9852583Z Updating files:  20% (153/765)
+2026-11-17T06:56:53.9867729Z Updating files:  21% (161/765)
+2026-11-17T06:56:53.9873280Z Updating files:  22% (169/765)
+2026-11-17T06:56:53.9894866Z Updating files:  23% (176/765)
+2026-11-17T06:56:53.9901267Z Updating files:  24% (184/765)
+2026-11-17T06:56:53.9908668Z Updating files:  25% (192/765)
+2026-11-17T06:56:53.9919360Z Updating files:  26% (199/765)
+2026-11-17T06:56:53.9928279Z Updating files:  27% (207/765)
+2026-11-17T06:56:53.9948698Z Updating files:  28% (215/765)
+2026-11-17T06:56:53.9956913Z Updating files:  29% (222/765)
+2026-11-17T06:56:53.9964471Z Updating files:  30% (230/765)
+2026-11-17T06:56:53.9970454Z Updating files:  31% (238/765)
+2026-11-17T06:56:53.9976796Z Updating files:  32% (245/765)
+2026-11-17T06:56:53.9986283Z Updating files:  33% (253/765)
+2026-11-17T06:56:54.0008733Z Updating files:  34% (261/765)
+2026-11-17T06:56:54.0015658Z Updating files:  35% (268/765)
+2026-11-17T06:56:54.0025515Z Updating files:  36% (276/765)
+2026-11-17T06:56:54.0031976Z Updating files:  37% (284/765)
+2026-11-17T06:56:54.0039458Z Updating files:  38% (291/765)
+2026-11-17T06:56:54.0052021Z Updating files:  39% (299/765)
+2026-11-17T06:56:54.0062004Z Updating files:  40% (306/765)
+2026-11-17T06:56:54.0067640Z Updating files:  41% (314/765)
+2026-11-17T06:56:54.0073238Z Updating files:  42% (322/765)
+2026-11-17T06:56:54.0078743Z Updating files:  43% (329/765)
+2026-11-17T06:56:54.0084795Z Updating files:  44% (337/765)
+2026-11-17T06:56:54.0089233Z Updating files:  45% (345/765)
+2026-11-17T06:56:54.0114471Z Updating files:  46% (352/765)
+2026-11-17T06:56:54.0121354Z Updating files:  47% (360/765)
+2026-11-17T06:56:54.0126814Z Updating files:  48% (368/765)
+2026-11-17T06:56:54.0134693Z Updating files:  49% (375/765)
+2026-11-17T06:56:54.0140008Z Updating files:  50% (383/765)
+2026-11-17T06:56:54.0145758Z Updating files:  51% (391/765)
+2026-11-17T06:56:54.0155409Z Updating files:  52% (398/765)
+2026-11-17T06:56:54.0169228Z Updating files:  53% (406/765)
+2026-11-17T06:56:54.0185319Z Updating files:  54% (414/765)
+2026-11-17T06:56:54.0200544Z Updating files:  55% (421/765)
+2026-11-17T06:56:54.0207220Z Updating files:  56% (429/765)
+2026-11-17T06:56:54.0214025Z Updating files:  57% (437/765)
+2026-11-17T06:56:54.0222649Z Updating files:  58% (444/765)
+2026-11-17T06:56:54.0229341Z Updating files:  59% (452/765)
+2026-11-17T06:56:54.0235676Z Updating files:  60% (459/765)
+2026-11-17T06:56:54.0242421Z Updating files:  61% (467/765)
+2026-11-17T06:56:54.0248460Z Updating files:  62% (475/765)
+2026-11-17T06:56:54.0255465Z Updating files:  63% (482/765)
+2026-11-17T06:56:54.0262365Z Updating files:  64% (490/765)
+2026-11-17T06:56:54.0269077Z Updating files:  65% (498/765)
+2026-11-17T06:56:54.0277643Z Updating files:  66% (505/765)
+2026-11-17T06:56:54.0281848Z Updating files:  67% (513/765)
+2026-11-17T06:56:54.0288172Z Updating files:  68% (521/765)
+2026-11-17T06:56:54.0294039Z Updating files:  69% (528/765)
+2026-11-17T06:56:54.0301203Z Updating files:  70% (536/765)
+2026-11-17T06:56:54.0312549Z Updating files:  71% (544/765)
+2026-11-17T06:56:54.0328085Z Updating files:  72% (551/765)
+2026-11-17T06:56:54.0333983Z Updating files:  73% (559/765)
+2026-11-17T06:56:54.0343388Z Updating files:  74% (567/765)
+2026-11-17T06:56:54.0352739Z Updating files:  75% (574/765)
+2026-11-17T06:56:54.0361575Z Updating files:  76% (582/765)
+2026-11-17T06:56:54.0366294Z Updating files:  77% (590/765)
+2026-11-17T06:56:54.0373088Z Updating files:  78% (597/765)
+2026-11-17T06:56:54.0379191Z Updating files:  79% (605/765)
+2026-11-17T06:56:54.0387668Z Updating files:  80% (612/765)
+2026-11-17T06:56:54.0395898Z Updating files:  81% (620/765)
+2026-11-17T06:56:54.0404267Z Updating files:  82% (628/765)
+2026-11-17T06:56:54.0411916Z Updating files:  83% (635/765)
+2026-11-17T06:56:54.0422546Z Updating files:  84% (643/765)
+2026-11-17T06:56:54.0430154Z Updating files:  85% (651/765)
+2026-11-17T06:56:54.0436315Z Updating files:  86% (658/765)
+2026-11-17T06:56:54.0445259Z Updating files:  87% (666/765)
+2026-11-17T06:56:54.0451601Z Updating files:  88% (674/765)
+2026-11-17T06:56:54.0458057Z Updating files:  89% (681/765)
+2026-11-17T06:56:54.0465671Z Updating files:  90% (689/765)
+2026-11-17T06:56:54.0475212Z Updating files:  91% (697/765)
+2026-11-17T06:56:54.0483664Z Updating files:  92% (704/765)
+2026-11-17T06:56:54.0491863Z Updating files:  93% (712/765)
+2026-11-17T06:56:54.0498176Z Updating files:  94% (720/765)
+2026-11-17T06:56:54.0506371Z Updating files:  95% (727/765)
+2026-11-17T06:56:54.0514871Z Updating files:  96% (735/765)
+2026-11-17T06:56:54.0521578Z Updating files:  97% (743/765)
+2026-11-17T06:56:54.0528436Z Updating files:  98% (750/765)
+2026-11-17T06:56:54.0534433Z Updating files:  99% (758/765)
+2026-11-17T06:56:54.0535066Z Updating files: 100% (765/765)
+2026-11-17T06:56:54.0535565Z Updating files: 100% (765/765), done.
+2026-11-17T06:56:54.0692691Z Switched to a new branch 'hia-audit-storage-preflight-6780-20261117'
+2026-11-17T06:56:54.0705506Z branch 'hia-audit-storage-preflight-6780-20261117' set up to track 'origin/hia-audit-storage-preflight-6780-20261117'.
+2026-11-17T06:56:54.0716940Z ##[endgroup]
+2026-11-17T06:56:54.0780194Z [command]/usr/bin/git log -1 --format=%H
+2026-11-17T06:56:54.0820040Z 3b0ddf305f3844a36cdc0c43443b75688b733605
+2026-11-17T06:56:54.0830365Z ##[group]Removing auth
+2026-11-17T06:56:54.0830746Z Removing SSH command configuration
+2026-11-17T06:56:54.0834294Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:56:54.0880510Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:56:54.1158747Z Removing HTTP extra header
+2026-11-17T06:56:54.1163206Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:56:54.1208656Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:56:54.1475614Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:56:54.1479136Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:56:54.1519378Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+2026-11-17T06:56:54.1520447Z includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+2026-11-17T06:56:54.1521039Z includeif.gitdir:/github/workspace/.git.path
+2026-11-17T06:56:54.1521484Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-17T06:56:54.1527886Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+2026-11-17T06:56:54.1568619Z /home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:54.1579435Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-a9640331\-10d2\-4077\-bf65\-eb051eeb9dd2\.config
+2026-11-17T06:56:54.1625407Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+2026-11-17T06:56:54.1659792Z /home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:54.1672862Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-a9640331\-10d2\-4077\-bf65\-eb051eeb9dd2\.config
+2026-11-17T06:56:54.1775953Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-11-17T06:56:54.1800076Z /github/runner_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:54.1808337Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-a9640331\-10d2\-4077\-bf65\-eb051eeb9dd2\.config
+2026-11-17T06:56:54.1855607Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-11-17T06:56:54.1890313Z /github/runner_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config
+2026-11-17T06:56:54.1897387Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-a9640331\-10d2\-4077\-bf65\-eb051eeb9dd2\.config
+2026-11-17T06:56:54.1944406Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:56:54.2219625Z Removing credentials config '/home/runner/work/_temp/git-credentials-a9640331-10d2-4077-bf65-eb051eeb9dd2.config'
+2026-11-17T06:56:54.2221209Z ##[endgroup]
+2026-11-17T06:56:54.2437589Z ##[group]Run rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+2026-11-17T06:56:54.2438368Z [36;1mrustup toolchain install 1.95.0 --profile minimal --component rustfmt[0m
+2026-11-17T06:56:54.2463637Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:56:54.2463983Z ##[endgroup]
+2026-11-17T06:56:54.2958708Z info: syncing channel updates for 1.95.0-x86_64-unknown-linux-gnu
+2026-11-17T06:56:54.4708429Z info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+2026-11-17T06:56:54.4709292Z info: downloading 4 components
+2026-11-17T06:57:02.4465178Z 
+2026-11-17T06:57:02.4539493Z   1.95.0-x86_64-unknown-linux-gnu installed - rustc 1.95.0 (59807616e 2026-04-14)
+2026-11-17T06:57:02.4540289Z 
+2026-11-17T06:57:02.4790626Z ##[group]Run python3 -I -B - <<'PY'
+2026-11-17T06:57:02.4790997Z [36;1mpython3 -I -B - <<'PY'[0m
+2026-11-17T06:57:02.4791269Z [36;1mfrom pathlib import Path[0m
+2026-11-17T06:57:02.4791562Z [36;1mimport hashlib,json,sys,subprocess[0m
+2026-11-17T06:57:02.4791943Z [36;1mroot=Path('tests/hia_native/audit_storage_core').resolve()[0m
+2026-11-17T06:57:02.4792304Z [36;1msys.path.insert(0,str(root))[0m
+2026-11-17T06:57:02.4792585Z [36;1mimport common,protocol[0m
+2026-11-17T06:57:02.4792849Z [36;1mprint('SOURCE',common.source())[0m
+2026-11-17T06:57:02.4793246Z [36;1mfor path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')[0m
+2026-11-17T06:57:02.4793644Z [36;1mrows=protocol.cases(root)[0m
+2026-11-17T06:57:02.4793952Z [36;1massert sum(len(c['steps']) for c in rows)==459[0m
+2026-11-17T06:57:02.4794263Z [36;1mfor i,c in enumerate(rows):[0m
+2026-11-17T06:57:02.4794602Z [36;1m    for j,s in enumerate(c['steps']):protocol.initial(i,j,s)[0m
+2026-11-17T06:57:02.4795106Z [36;1mfor name in ('reference/main.rs','reference/mcp/runtime/storage.rs'):[0m
+2026-11-17T06:57:02.4795671Z [36;1m    p=subprocess.run(['rustup','run','1.95.0','rustfmt','--edition','2021','--config',[0m
+2026-11-17T06:57:02.4796270Z [36;1m        'skip_children=true,hard_tabs=true,max_width=100','--emit','stdout',str(root/name)],[0m
+2026-11-17T06:57:02.4796843Z [36;1m        stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=60)[0m
+2026-11-17T06:57:02.4797265Z [36;1m    assert not p.stderr,p.stderr[0m
+2026-11-17T06:57:02.4797686Z [36;1m    print('FORMATTED_FILE_BEGIN '+json.dumps(dict(path=name,bytes=len(p.stdout),[0m
+2026-11-17T06:57:02.4798189Z [36;1m        sha256=hashlib.sha256(p.stdout).hexdigest()),sort_keys=True))[0m
+2026-11-17T06:57:02.4798655Z [36;1m    sys.stdout.write(p.stdout.decode());print('FORMATTED_FILE_END')[0m
+2026-11-17T06:57:02.4799308Z [36;1mprint('SOURCE_PREFLIGHT_PASS_NO_HIA_OR_RUST_REPLAY')[0m
+2026-11-17T06:57:02.4799619Z [36;1mPY[0m
+2026-11-17T06:57:02.4820657Z shell: /usr/bin/bash -e {0}
+2026-11-17T06:57:02.4820903Z ##[endgroup]
+2026-11-17T06:57:02.5758605Z SOURCE abf6f040fa8e30accb7e675077a35d9f1e2751249aa4318fcac2fded7e29b1b4
+2026-11-17T06:57:02.5760134Z FORMATTED_FILE_BEGIN {"bytes": 1844, "path": "reference/main.rs", "sha256": "8785a6b8912912c6fd54c61433f1f4573074996c845ea1eff834854b723f904d"}
+2026-11-17T06:57:02.5761576Z /home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native/audit_storage_core/reference/main.rs:
+2026-11-17T06:57:02.5762315Z 
+2026-11-17T06:57:02.5762484Z // Copyright 2026 Muvon Un Limited
+2026-11-17T06:57:02.5762966Z // Copyright 2026 TrillionniumFoundation
+2026-11-17T06:57:02.5763501Z // SPDX-License-Identifier: Apache-2.0
+2026-11-17T06:57:02.5764222Z //! Persistent private observer; exact target I/O bodies live in the sibling module.
+2026-11-17T06:57:02.5770543Z use anyhow::{anyhow, bail, Result};
+2026-11-17T06:57:02.5771024Z use std::fs::File;
+2026-11-17T06:57:02.5771394Z use std::io::{Read, Write};
+2026-11-17T06:57:02.5771859Z use std::path::PathBuf;
+2026-11-17T06:57:02.5772110Z 
+2026-11-17T06:57:02.5772244Z mod mcp {
+2026-11-17T06:57:02.5772554Z 	pub mod runtime {
+2026-11-17T06:57:02.5772896Z 		pub mod storage;
+2026-11-17T06:57:02.5773233Z 	}
+2026-11-17T06:57:02.5773507Z }
+2026-11-17T06:57:02.5773656Z 
+2026-11-17T06:57:02.5773826Z fn main() -> Result<()> {
+2026-11-17T06:57:02.5774211Z 	let root = PathBuf::from(
+2026-11-17T06:57:02.5774597Z 		std::env::args_os()
+2026-11-17T06:57:02.5774924Z 			.nth(1)
+2026-11-17T06:57:02.5775293Z 			.ok_or_else(|| anyhow!("fixture root required"))?,
+2026-11-17T06:57:02.5775710Z 	);
+2026-11-17T06:57:02.5775970Z 	let input = std::io::stdin();
+2026-11-17T06:57:02.5776379Z 	let output = std::io::stdout();
+2026-11-17T06:57:02.5776789Z 	let mut input = input.lock();
+2026-11-17T06:57:02.5777183Z 	let mut output = output.lock();
+2026-11-17T06:57:02.5777623Z 	let mut current: Option<(u64, File)> = None;
+2026-11-17T06:57:02.5778065Z 	loop {
+2026-11-17T06:57:02.5779121Z 		let mut header = [0_u8; 16];
+2026-11-17T06:57:02.5779857Z 		let first = input.read(&mut header[..1])?;
+2026-11-17T06:57:02.5780343Z 		if first == 0 {
+2026-11-17T06:57:02.5780677Z 			break;
+2026-11-17T06:57:02.5780971Z 		}
+2026-11-17T06:57:02.5781300Z 		input.read_exact(&mut header[1..])?;
+2026-11-17T06:57:02.5781877Z 		let case = u64::from_le_bytes(header[..8].try_into()?);
+2026-11-17T06:57:02.5782501Z 		let size = u64::from_le_bytes(header[8..].try_into()?);
+2026-11-17T06:57:02.5783097Z 		if case >= 10000 || !(128..=8192).contains(&size) {
+2026-11-17T06:57:02.5783622Z 			bail!("fixture case/extent");
+2026-11-17T06:57:02.5784031Z 		}
+2026-11-17T06:57:02.5784355Z 		let mut frame = vec![0_u8; size as usize];
+2026-11-17T06:57:02.5784825Z 		input.read_exact(&mut frame)?;
+2026-11-17T06:57:02.5785341Z 		if current.as_ref().map(|pair| pair.0) != Some(case) {
+2026-11-17T06:57:02.5785885Z 			current = None;
+2026-11-17T06:57:02.5786422Z 			current = Some((case, File::open(root.join(format!("case-{case:04}")))?));
+2026-11-17T06:57:02.5787075Z 		}
+2026-11-17T06:57:02.5787351Z 		let file = &current
+2026-11-17T06:57:02.5787652Z 			.as_ref()
+2026-11-17T06:57:02.5788013Z 			.ok_or_else(|| anyhow!("fixture directory"))?
+2026-11-17T06:57:02.5788538Z 			.1;
+2026-11-17T06:57:02.5789237Z 		let generation = u64::from_le_bytes(frame[16..24].try_into()?);
+2026-11-17T06:57:02.5789950Z 		eprintln!("AUDIT_ORIGINAL_BEGIN {case} {generation}");
+2026-11-17T06:57:02.5790614Z 		let result = mcp::runtime::storage::run(file, &frame)?;
+2026-11-17T06:57:02.5791189Z 		eprintln!("AUDIT_ORIGINAL_END {case} {generation}");
+2026-11-17T06:57:02.5791824Z 		output.write_all(&(result.len() as u64).to_le_bytes())?;
+2026-11-17T06:57:02.5792380Z 		output.write_all(&result)?;
+2026-11-17T06:57:02.5792781Z 		output.flush()?;
+2026-11-17T06:57:02.5793103Z 	}
+2026-11-17T06:57:02.5793381Z 	drop(current);
+2026-11-17T06:57:02.5793697Z 	Ok(())
+2026-11-17T06:57:02.5793973Z }
+2026-11-17T06:57:02.5794255Z FORMATTED_FILE_END
+2026-11-17T06:57:02.5795320Z FORMATTED_FILE_BEGIN {"bytes": 5590, "path": "reference/mcp/runtime/storage.rs", "sha256": "8924ac72858a4ab8e22bd3d329823f173a5aae740eab8d49a978a9407ae0a541"}
+2026-11-17T06:57:02.5796931Z /home/runner/work/hepta-runtime/hepta-runtime/tests/hia_native/audit_storage_core/reference/mcp/runtime/storage.rs:
+2026-11-17T06:57:02.5797747Z 
+2026-11-17T06:57:02.5797914Z // Copyright 2026 Muvon Un Limited
+2026-11-17T06:57:02.5798366Z // Copyright 2026 TrillionniumFoundation
+2026-11-17T06:57:02.5799060Z // SPDX-License-Identifier: Apache-2.0
+2026-11-17T06:57:02.5799664Z //! Observer adapter around exact target record I/O functions.
+2026-11-17T06:57:02.5800269Z use anyhow::{anyhow, bail, Result};
+2026-11-17T06:57:02.5800735Z use serde::{Deserialize, Serialize};
+2026-11-17T06:57:02.5801172Z use std::fs::File;
+2026-11-17T06:57:02.5801531Z use std::io::{Read, Write};
+2026-11-17T06:57:02.5801798Z 
+2026-11-17T06:57:02.5801939Z #[path = "trace.rs"]
+2026-11-17T06:57:02.5802293Z mod trace;
+2026-11-17T06:57:02.5802478Z 
+2026-11-17T06:57:02.5802660Z const MAX_RECORD_BYTES: usize = 2048;
+2026-11-17T06:57:02.5803143Z include!("original_types.rs.txt");
+2026-11-17T06:57:02.5803597Z include!("original_io.rs.txt");
+2026-11-17T06:57:02.5803875Z 
+2026-11-17T06:57:02.5804077Z fn word(raw: &[u8], at: usize) -> Result<u64> {
+2026-11-17T06:57:02.5804545Z 	let bytes: [u8; 8] = raw
+2026-11-17T06:57:02.5804908Z 		.get(at..at + 8)
+2026-11-17T06:57:02.5805304Z 		.ok_or_else(|| anyhow!("fixture word extent"))?
+2026-11-17T06:57:02.5805801Z 		.try_into()?;
+2026-11-17T06:57:02.5806131Z 	Ok(u64::from_le_bytes(bytes))
+2026-11-17T06:57:02.5806563Z }
+2026-11-17T06:57:02.5806723Z 
+2026-11-17T06:57:02.5806928Z fn put(raw: &mut [u8], at: usize, value: u64) {
+2026-11-17T06:57:02.5807515Z 	raw[at..at + 8].copy_from_slice(&value.to_le_bytes());
+2026-11-17T06:57:02.5808016Z }
+2026-11-17T06:57:02.5808188Z 
+2026-11-17T06:57:02.5808417Z fn text(raw: &[u8], at: u64, size: u64) -> Result<String> {
+2026-11-17T06:57:02.5809185Z 	let at: usize = at.try_into()?;
+2026-11-17T06:57:02.5809875Z 	let size: usize = size.try_into()?;
+2026-11-17T06:57:02.5810451Z 	let end = at
+2026-11-17T06:57:02.5810785Z 		.checked_add(size)
+2026-11-17T06:57:02.5811212Z 		.ok_or_else(|| anyhow!("fixture extent overflow"))?;
+2026-11-17T06:57:02.5811727Z 	Ok(std::str::from_utf8(
+2026-11-17T06:57:02.5812105Z 		raw.get(at..end)
+2026-11-17T06:57:02.5812513Z 			.ok_or_else(|| anyhow!("fixture text extent"))?,
+2026-11-17T06:57:02.5812995Z 	)?
+2026-11-17T06:57:02.5813278Z 	.to_owned())
+2026-11-17T06:57:02.5813588Z }
+2026-11-17T06:57:02.5813750Z 
+2026-11-17T06:57:02.5813959Z fn decode_projection(raw: &[u8]) -> Result<Record> {
+2026-11-17T06:57:02.5814587Z 	if raw.len() < 128 || &raw[..8] != b"HAJPR001" || word(raw, 8)? != 1 {
+2026-11-17T06:57:02.5815157Z 		bail!("fixture Record projection");
+2026-11-17T06:57:02.5815541Z 	}
+2026-11-17T06:57:02.5815927Z 	let request_id = text(raw, word(raw, 64)?, word(raw, 72)?)?;
+2026-11-17T06:57:02.5816546Z 	let owner = text(raw, word(raw, 80)?, word(raw, 88)?)?;
+2026-11-17T06:57:02.5817148Z 	let tool_name = text(raw, word(raw, 96)?, word(raw, 104)?)?;
+2026-11-17T06:57:02.5817708Z 	let state = match word(raw, 40)? {
+2026-11-17T06:57:02.5818161Z 		0 => DurableState::Unknown,
+2026-11-17T06:57:02.5818544Z 		1 => DurableState::Completed,
+2026-11-17T06:57:02.5819155Z 		2 => DurableState::Failed,
+2026-11-17T06:57:02.5819516Z 		_ => bail!("fixture state"),
+2026-11-17T06:57:02.5819885Z 	};
+2026-11-17T06:57:02.5820236Z 	let elapsed_ms = match word(raw, 16)? {
+2026-11-17T06:57:02.5820697Z 		0 => None,
+2026-11-17T06:57:02.5820993Z 		1 => Some(word(raw, 48)?),
+2026-11-17T06:57:02.5821381Z 		_ => bail!("fixture elapsed presence"),
+2026-11-17T06:57:02.5821809Z 	};
+2026-11-17T06:57:02.5822065Z 	Ok(Record {
+2026-11-17T06:57:02.5822320Z 		request_id,
+2026-11-17T06:57:02.5822594Z 		owner,
+2026-11-17T06:57:02.5822873Z 		tool_name,
+2026-11-17T06:57:02.5823170Z 		state,
+2026-11-17T06:57:02.5823656Z 		accepted_unix_ms: u128::from(word(raw, 24)?) | (u128::from(word(raw, 32)?) << 64),
+2026-11-17T06:57:02.5824263Z 		elapsed_ms,
+2026-11-17T06:57:02.5824573Z 	})
+2026-11-17T06:57:02.5824832Z }
+2026-11-17T06:57:02.5824980Z 
+2026-11-17T06:57:02.5825186Z fn encode_projection(record: &Record) -> Vec<u8> {
+2026-11-17T06:57:02.5825648Z 	let mut raw =
+2026-11-17T06:57:02.5826206Z 		vec![0_u8; 128 + record.request_id.len() + record.owner.len() + record.tool_name.len()];
+2026-11-17T06:57:02.5826911Z 	raw[..8].copy_from_slice(b"HAJPR001");
+2026-11-17T06:57:02.5827358Z 	put(&mut raw, 8, 1);
+2026-11-17T06:57:02.5827815Z 	put(&mut raw, 16, u64::from(record.elapsed_ms.is_some()));
+2026-11-17T06:57:02.5828384Z 	put(&mut raw, 24, record.accepted_unix_ms as u64);
+2026-11-17T06:57:02.5829165Z 	put(&mut raw, 32, (record.accepted_unix_ms >> 64) as u64);
+2026-11-17T06:57:02.5829656Z 	put(
+2026-11-17T06:57:02.5829944Z 		&mut raw,
+2026-11-17T06:57:02.5830231Z 		40,
+2026-11-17T06:57:02.5830517Z 		match record.state {
+2026-11-17T06:57:02.5830881Z 			DurableState::Unknown => 0,
+2026-11-17T06:57:02.5831304Z 			DurableState::Completed => 1,
+2026-11-17T06:57:02.5831718Z 			DurableState::Failed => 2,
+2026-11-17T06:57:02.5832104Z 		},
+2026-11-17T06:57:02.5832379Z 	);
+2026-11-17T06:57:02.5832741Z 	put(&mut raw, 48, record.elapsed_ms.unwrap_or(0));
+2026-11-17T06:57:02.5833241Z 	let mut at = 128;
+2026-11-17T06:57:02.5833782Z 	for (index, value) in [&record.request_id, &record.owner, &record.tool_name]
+2026-11-17T06:57:02.5834442Z 		.iter()
+2026-11-17T06:57:02.5834733Z 		.enumerate()
+2026-11-17T06:57:02.5835045Z 	{
+2026-11-17T06:57:02.5835365Z 		put(&mut raw, 64 + index * 16, at as u64);
+2026-11-17T06:57:02.5835879Z 		put(&mut raw, 72 + index * 16, value.len() as u64);
+2026-11-17T06:57:02.5836484Z 		raw[at..at + value.len()].copy_from_slice(value.as_bytes());
+2026-11-17T06:57:02.5837004Z 		at += value.len();
+2026-11-17T06:57:02.5837344Z 	}
+2026-11-17T06:57:02.5837510Z 	raw
+2026-11-17T06:57:02.5837667Z }
+2026-11-17T06:57:02.5837763Z 
+2026-11-17T06:57:02.5837939Z fn error_projection(error: &anyhow::Error) -> Result<(u64, u64)> {
+2026-11-17T06:57:02.5838535Z 	if let Some(value) = error.downcast_ref::<std::io::Error>() {
+2026-11-17T06:57:02.5839297Z 		if let Some(errno) = value.raw_os_error() {
+2026-11-17T06:57:02.5839597Z 			return Ok((1, errno.try_into()?));
+2026-11-17T06:57:02.5839837Z 		}
+2026-11-17T06:57:02.5840211Z 		if value.kind() == std::io::ErrorKind::WriteZero {
+2026-11-17T06:57:02.5840895Z 			return Ok((5, 0));
+2026-11-17T06:57:02.5841246Z 		}
+2026-11-17T06:57:02.5841518Z 	}
+2026-11-17T06:57:02.5841928Z 	if error.downcast_ref::<serde_json::Error>().is_some() {
+2026-11-17T06:57:02.5842464Z 		return Ok((3, 0));
+2026-11-17T06:57:02.5842672Z 	}
+2026-11-17T06:57:02.5842913Z 	if error.downcast_ref::<std::str::Utf8Error>().is_some() {
+2026-11-17T06:57:02.5843231Z 		return Ok((4, 0));
+2026-11-17T06:57:02.5843419Z 	}
+2026-11-17T06:57:02.5843620Z 	let code = match error.to_string().as_str() {
+2026-11-17T06:57:02.5843924Z 		"invalid request metadata filename" => 1,
+2026-11-17T06:57:02.5844229Z 		"unexpected private audit staging entry" => 2,
+2026-11-17T06:57:02.5844567Z 		"unexpected private audit staging identity" => 3,
+2026-11-17T06:57:02.5844879Z 		"audit staging inode refused" => 4,
+2026-11-17T06:57:02.5845160Z 		"audit staging hard-link binding refused" => 5,
+2026-11-17T06:57:02.5845478Z 		"private request audit inode refused" => 6,
+2026-11-17T06:57:02.5845782Z 		"request audit metadata size refused" => 7,
+2026-11-17T06:57:02.5846085Z 		"request audit metadata identity refused" => 8,
+2026-11-17T06:57:02.5846386Z 		"request hot cache binding changed" => 9,
+2026-11-17T06:57:02.5846686Z 		"private request audit directory refused" => 10,
+2026-11-17T06:57:02.5847007Z 		"request audit receipt binding changed" => 11,
+2026-11-17T06:57:02.5847306Z 		"request audit record size refused" => 12,
+2026-11-17T06:57:02.5847651Z 		_ => bail!("unclassified actual original error: {error:#}"),
+2026-11-17T06:57:02.5847959Z 	};
+2026-11-17T06:57:02.5848132Z 	Ok((2, code))
+2026-11-17T06:57:02.5848315Z }
+2026-11-17T06:57:02.5848414Z 
+2026-11-17T06:57:02.5848583Z pub fn run(directory: &File, frame: &[u8]) -> Result<Vec<u8>> {
+2026-11-17T06:57:02.5849227Z 	if frame.len() < 128
+2026-11-17T06:57:02.5849444Z 		|| &frame[..8] != b"HAIORQ01"
+2026-11-17T06:57:02.5849703Z 		|| word(frame, 40)? != (frame.len() - 128) as u64
+2026-11-17T06:57:02.5849975Z 	{
+2026-11-17T06:57:02.5850176Z 		bail!("fixture initial frame");
+2026-11-17T06:57:02.5850405Z 	}
+2026-11-17T06:57:02.5850586Z 	let op = word(frame, 8)?;
+2026-11-17T06:57:02.5850819Z 	let flags = word(frame, 32)?;
+2026-11-17T06:57:02.5851053Z 	let payload = &frame[128..];
+2026-11-17T06:57:02.5851286Z 	let result = match op {
+2026-11-17T06:57:02.5851609Z 		1 => read_record(directory, std::str::from_utf8(payload)?).map(Some),
+2026-11-17T06:57:02.5851958Z 		2 => {
+2026-11-17T06:57:02.5852166Z 			let record = decode_projection(payload)?;
+2026-11-17T06:57:02.5852574Z 			save_raw_with_sync(directory, &record, flags & 1 != 0, flags & 2 != 0).map(|_| None)
+2026-11-17T06:57:02.5852956Z 		}
+2026-11-17T06:57:02.5853120Z 		3 => {
+2026-11-17T06:57:02.5853323Z 			let record = decode_projection(payload)?;
+2026-11-17T06:57:02.5853675Z 			remove_record(directory, &record, flags & 2 != 0).map(|_| None)
+2026-11-17T06:57:02.5853996Z 		}
+2026-11-17T06:57:02.5854293Z 		4 => cleanup_staging(directory, std::str::from_utf8(payload)?).map(|_| None),
+2026-11-17T06:57:02.5854681Z 		_ => bail!("fixture operation"),
+2026-11-17T06:57:02.5854916Z 	};
+2026-11-17T06:57:02.5855091Z 	let mut out = vec![0_u8; 64];
+2026-11-17T06:57:02.5855335Z 	out[..8].copy_from_slice(b"HAIOOR01");
+2026-11-17T06:57:02.5855595Z 	put(&mut out, 16, op);
+2026-11-17T06:57:02.5855807Z 	match result {
+2026-11-17T06:57:02.5855998Z 		Ok(record) => {
+2026-11-17T06:57:02.5856206Z 			if let Some(record) = record {
+2026-11-17T06:57:02.5856468Z 				let encoded = encode_projection(&record);
+2026-11-17T06:57:02.5856758Z 				put(&mut out, 40, encoded.len() as u64);
+2026-11-17T06:57:02.5857040Z 				out.extend_from_slice(&encoded);
+2026-11-17T06:57:02.5857276Z 			}
+2026-11-17T06:57:02.5857443Z 		}
+2026-11-17T06:57:02.5857609Z 		Err(error) => {
+2026-11-17T06:57:02.5858070Z 			eprintln!(
+2026-11-17T06:57:02.5858273Z 				"OBSERVED_ORIGINAL_ERROR {}",
+2026-11-17T06:57:02.5858518Z 				serde_json::json!({
+2026-11-17T06:57:02.5858737Z 					"generation": word(frame, 16)?,
+2026-11-17T06:57:02.5859262Z 					"display": error.to_string(),
+2026-11-17T06:57:02.5859552Z 					"debug": format!("{error:#?}"),
+2026-11-17T06:57:02.5859903Z 					"chain": error.chain().map(ToString::to_string).collect::<Vec<_>>(),
+2026-11-17T06:57:02.5860249Z 				})
+2026-11-17T06:57:02.5860417Z 			);
+2026-11-17T06:57:02.5860635Z 			let (family, code) = error_projection(&error)?;
+2026-11-17T06:57:02.5860940Z 			put(&mut out, 8, 1);
+2026-11-17T06:57:02.5861168Z 			put(&mut out, 24, family);
+2026-11-17T06:57:02.5861401Z 			put(&mut out, 32, code);
+2026-11-17T06:57:02.5861642Z 		}
+2026-11-17T06:57:02.5861808Z 	}
+2026-11-17T06:57:02.5861981Z 	Ok(out)
+2026-11-17T06:57:02.5862176Z }
+2026-11-17T06:57:02.5862351Z FORMATTED_FILE_END
+2026-11-17T06:57:02.5862578Z SOURCE_PREFLIGHT_PASS_NO_HIA_OR_RUST_REPLAY
+2026-11-17T06:57:02.5983935Z Post job cleanup.
+2026-11-17T06:57:02.6840022Z [command]/usr/bin/git version
+2026-11-17T06:57:02.6887063Z git version 2.56.1
+2026-11-17T06:57:02.6930908Z Temporarily overriding HOME='/home/runner/work/_temp/f9112b46-899e-4454-926b-048924d85c27' before making global git config changes
+2026-11-17T06:57:02.6932073Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T06:57:02.6936591Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+2026-11-17T06:57:02.6973763Z Removing SSH command configuration
+2026-11-17T06:57:02.6981258Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T06:57:02.7022888Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T06:57:02.7341984Z Removing HTTP extra header
+2026-11-17T06:57:02.7348514Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-17T06:57:02.7391545Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-17T06:57:02.7711341Z Removing includeIf entries pointing to credentials config files
+2026-11-17T06:57:02.7718382Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T06:57:02.7781777Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T06:57:02.8255412Z Cleaning up orphan processes

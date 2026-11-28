@@ -1,0 +1,444 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {fa415014-c8b6-4c7a-bceb-00e7950451f7}
+Region: centralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: independent-read
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  persist-credentials: false
+  sparse-checkout: qualification/audit_record_io/independent-v1
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/cc85d8de-3ff3-4652-96cd-f9229ed77f97' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Deleting the contents of '/home/runner/work/hepta-runtime/hepta-runtime'
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path /home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin +9cb7b75ea80be8995f3654516ec1138b293f5cd2:refs/remotes/origin/hia-audit-storage-independent-6780-20261117
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * [new ref]         9cb7b75ea80be8995f3654516ec1138b293f5cd2 -> origin/hia-audit-storage-independent-6780-20261117
+[command]/usr/bin/git branch --list --remote origin/hia-audit-storage-independent-6780-20261117
+  origin/hia-audit-storage-independent-6780-20261117
+[command]/usr/bin/git rev-parse refs/remotes/origin/hia-audit-storage-independent-6780-20261117
+9cb7b75ea80be8995f3654516ec1138b293f5cd2
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set qualification/audit_record_io/independent-v1
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B hia-audit-storage-independent-6780-20261117 refs/remotes/origin/hia-audit-storage-independent-6780-20261117
+Switched to a new branch 'hia-audit-storage-independent-6780-20261117'
+branch 'hia-audit-storage-independent-6780-20261117' set up to track 'origin/hia-audit-storage-independent-6780-20261117'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+9cb7b75ea80be8995f3654516ec1138b293f5cd2
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/.git.path
+includeif.gitdir:/github/workspace/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path
+/home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-fcae1c6d\-7e0f\-44be\-848f\-2c5c36d5e798\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-fcae1c6d\-7e0f\-44be\-848f\-2c5c36d5e798\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+/github/runner_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-fcae1c6d\-7e0f\-44be\-848f\-2c5c36d5e798\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+/github/runner_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-fcae1c6d\-7e0f\-44be\-848f\-2c5c36d5e798\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-fcae1c6d-7e0f-44be-848f-2c5c36d5e798.config'
+##[endgroup]
+##[group]Run mkdir -p "$RUNNER_TEMP/audit-io-independent-proof"
+[36;1mmkdir -p "$RUNNER_TEMP/audit-io-independent-proof"[0m
+[36;1mpython3 -I -B - <<'PY'[0m
+[36;1mfrom pathlib import Path[0m
+[36;1mimport hashlib,sys[0m
+[36;1mroot=Path('qualification/audit_record_io/independent-v1').resolve()[0m
+[36;1massert hashlib.sha256((root/'SOURCE.json').read_bytes()).hexdigest()=='908e22f78f7a579775366489d1cc2900ba0f0f78d41d04638b8ea29ee067cd88'[0m
+[36;1msys.path.insert(0,str(root))[0m
+[36;1mimport read_archive[0m
+[36;1massert read_archive.source()=='908e22f78f7a579775366489d1cc2900ba0f0f78d41d04638b8ea29ee067cd88'[0m
+[36;1mfor path in root.glob('*.py'):compile(path.read_bytes(),str(path),'exec')[0m
+[36;1mPY[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+##[group]Run curl --fail --location --retry 3 -H "Authorization: ***" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309180653/zip -o "$RUNNER_TEMP/audit-io-recovery.zip"
+[36;1mcurl --fail --location --retry 3 -H "Authorization: ***" -H "Accept: application/vnd.github+json" https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309180653/zip -o "$RUNNER_TEMP/audit-io-recovery.zip"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  GH_TOKEN: ***
+##[endgroup]
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+
+ 54 61.8M   54 33.5M    0     0  25.6M      0  0:00:02  0:00:01  0:00:01 25.6M
+100 61.8M  100 61.8M    0     0  35.2M      0  0:00:01  0:00:01 --:--:-- 63.6M
+##[group]Run set -o pipefail
+[36;1mset -o pipefail[0m
+[36;1mtimeout --signal=KILL 180s python3 -I -B qualification/audit_record_io/independent-v1/read_archive.py --zip "$RUNNER_TEMP/audit-io-recovery.zip" --destination "$RUNNER_TEMP/audit-io-relocated" --report "$RUNNER_TEMP/audit-io-independent-proof/ARCHIVE.json" 2>"$RUNNER_TEMP/audit-io-independent-proof/archive.stderr" | tee "$RUNNER_TEMP/audit-io-independent-proof/archive.stdout"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "all_logical_files_read": true,
+  "all_uploaded_bytes_and_modes_read": true,
+  "logical_bytes": 2322155047,
+  "logical_files": 43411,
+  "native_or_rust_executions": 0,
+  "original_producer_status": "FAIL",
+  "previous_recovery_export_status": "FAIL",
+  "public_handler_qualified": false,
+  "schema": "hepta.audit-record-io.independent-archive.v1",
+  "source_sha256": "908e22f78f7a579775366489d1cc2900ba0f0f78d41d04638b8ea29ee067cd88",
+  "status": "PASS",
+  "tar": {
+    "bytes": 65202915,
+    "sha256": "29c7cc3c799bb37b19c1a400fa89b5dc92dc136216f75394ed69ac4a780fb6a6"
+  },
+  "unique_objects": 2458,
+  "whole_runtime_replaced": false,
+  "zip": {
+    "bytes": 64906591,
+    "sha256": "3971b6fb20eb43d6f858934c687d80ce933399d59dc9900b14e9d1b2d295f364"
+  }
+}
+##[group]Run set -o pipefail
+[36;1mset -o pipefail[0m
+[36;1mtimeout --signal=KILL 180s python3 -I -B qualification/audit_record_io/independent-v1/verify_retained.py --root "$RUNNER_TEMP/audit-io-relocated" --zip "$RUNNER_TEMP/audit-io-recovery.zip" --report "$RUNNER_TEMP/audit-io-independent-proof/INDEPENDENT.json" 2>"$RUNNER_TEMP/audit-io-independent-proof/reader.stderr" | tee "$RUNNER_TEMP/audit-io-independent-proof/reader.stdout"[0m
+shell: /usr/bin/bash -e {0}
+##[endgroup]
+{
+  "complete_entries": 50370,
+  "evidence": {
+    "actual_native_graph_and_original_group_binding": true,
+    "compiler": {
+      "compiler_files": 1080,
+      "compiler_image": {
+        "bytes": 673413,
+        "sha256": "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
+      },
+      "modules": {
+        "audit-json": {
+          "image": {
+            "bytes": 161260,
+            "sha256": "76122331b305e654b6175a3d0a975d080815ee1cfcf542ea837d8aecdb83b2fc"
+          },
+          "manifest": {
+            "bytes": 709,
+            "sha256": "46ec0a34335cbb4db06301d8a5794b5e334e3a22b45c9af67d4da71099d9980b"
+          },
+          "source": {
+            "bytes": 126320,
+            "sha256": "5146e5c42028692933762ce68bd9c62d52f9760d8ce378124e3888edacb4255b"
+          }
+        },
+        "audit-record-io": {
+          "image": {
+            "bytes": 295103,
+            "sha256": "3b290dab82a2c60982a7af947562a4cf7aa407e9399c0d877640354c13112664"
+          },
+          "manifest": {
+            "bytes": 719,
+            "sha256": "65dfecff10dea2fc72e21a8189eaadba7ec79d98eb0ad525c51ad9636fe81ec7"
+          },
+          "source": {
+            "bytes": 218029,
+            "sha256": "6826f361511a1345b63a1604a92b89252f5405c549fe38337e88e3d8aa8338ea"
+          }
+        }
+      }
+    },
+    "complete_filesystem_and_durable_order_equal": true,
+    "controls": {
+      "admissions": 2,
+      "all_physical_controls_retained": true,
+      "guard_probes": 192,
+      "native_or_rust_executions": 0,
+      "reader_writes": 0,
+      "refusals": 14
+    },
+    "dependencies": {
+      "archive_member_bytes": 23585916,
+      "archive_members": 1297,
+      "packages": 19,
+      "retained_cargo_metadata_files": [
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "anyhow-1.0.104",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "itoa-1.0.18",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 46,
+          "mode": 420,
+          "package": "libc-0.2.189",
+          "path": ".gitignore",
+          "sha256": "2c6be680ae3173f3fa5cb35f52625547ef9ff4333b076cd236f26cdd212b6a5f"
+        },
+        {
+          "bytes": 93,
+          "mode": 420,
+          "package": "memchr-2.8.3",
+          "path": ".gitignore",
+          "sha256": "0dbac962f4ec8a8f95158677e768b3163914026973cd77a9043c30c55ef84638"
+        },
+        {
+          "bytes": 28,
+          "mode": 420,
+          "package": "once_cell-1.21.4",
+          "path": ".gitignore",
+          "sha256": "a7d1bce3ba42de5fc6338b20f544f36a4e3d8bf684105abedd553c20890eb8ac"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "proc-macro2-1.0.107",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "quote-1.0.47",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 21,
+          "mode": 420,
+          "package": "serde_json-1.0.151",
+          "path": ".gitignore",
+          "sha256": "07d64eb09a56c853b7853a47276799b38d7d6d25a4314b0c1abc10432c214e17"
+        },
+        {
+          "bytes": 207,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitattributes",
+          "sha256": "ae8eb6d0bcfdf98794d1f0d4134ca8999c30ae0f6d4fe7f1a5858dcf92e30394"
+        },
+        {
+          "bytes": 36,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": ".gitignore",
+          "sha256": "ab4f11740636387dbd09e6f976467f0168d1d51cd888db6a736ee1f867874b40"
+        },
+        {
+          "bytes": 14,
+          "mode": 420,
+          "package": "unicode-ident-1.0.26",
+          "path": "tests/fst/.gitignore",
+          "sha256": "2cd419079c0a08bb15766520880998651dd1c72c55347a31f43357595b16ac10"
+        },
+        {
+          "bytes": 20,
+          "mode": 420,
+          "package": "zmij-1.0.23",
+          "path": ".gitignore",
+          "sha256": "c1e953ee360e77de57f7b02f1b7880bd6a3dc22d1a69e953c2ac2c52cc52d247"
+        }
+      ],
+      "source_bytes": 23585367,
+      "source_files": 1285
+    },
+    "exact_serde_diagnostic_replacement": false,
+    "native": {
+      "calls": 5764,
+      "effects": 4243,
+      "json_calls": 404,
+      "logical_buffer_bytes": 452279602,
+      "refusals": 658
+    },
+    "native_or_rust_executions": 0,
+    "original": {
+      "cases": 219,
+      "complete_stdout": {
+        "bytes": 70220,
+        "sha256": "d9f7b766b4385ac7f1181053bc15b6089c7476db9efffe7d1afb73e63540fde0"
+      },
+      "durable_syscalls": 608,
+      "filesystem_equal": true,
+      "full_actual_strace": {
+        "bytes": 27981111,
+        "sha256": "7be22c1e6473bcb272a728b0149cf338e462b7bffed47696aed6121c409a956e"
+      },
+      "operations": 459,
+      "original_errors": 96
+    },
+    "processes": 10,
+    "public_handler_qualified": false,
+    "qualified_scope": "four private record I/O functions with actual ordinary Linux effects",
+    "reader_adapter_source_sha256": "b15f253b6fd6a0ae306c1844cef269df1c5477f9fcaac09b8f9cec6581129e8d",
+    "reader_writes": 0,
+    "schema": "hepta.audit-record-io.readback.v1",
+    "source_manifest_sha256": "35b5d7c107e0583ac3a25cdcabf5ec9f547fbb31840079c49b5486230b8281e6",
+    "status": "PASS",
+    "whole_audit_caller_qualified": false,
+    "whole_runtime_replaced": false
+  },
+  "guards": 12,
+  "native_or_rust_executions": 0,
+  "original_producer_status": "FAIL",
+  "previous_recovery_export_status": "FAIL",
+  "reader_writes": 0,
+  "retained_bytes": 2322155047,
+  "retained_files": 43411,
+  "status": "PASS"
+}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: audit-io-independent-9cb7b75ea80be8995f3654516ec1138b293f5cd2
+  path: /home/runner/work/_temp/audit-io-independent-proof
+qualification/audit_record_io/independent-v1
+
+  if-no-files-found: error
+  retention-days: 14
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+##[endgroup]
+(node:2245) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work. This will be the root directory of the artifact
+With the provided path, there will be 10 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:2245) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 5830511
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is be74cd71a5acf47ca7ca07b355f1e5816f07fa28762d182d9ab29ab6cfaf54eb
+Finalizing artifact upload
+Artifact audit-io-independent-9cb7b75ea80be8995f3654516ec1138b293f5cd2.zip successfully finalized. Artifact ID 14309172471
+Artifact audit-io-independent-9cb7b75ea80be8995f3654516ec1138b293f5cd2 has been successfully uploaded! Final size is 5830511 bytes. Artifact ID is 14309172471
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44040641561/artifacts/14309172471
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/a94b87c1-65d5-4f88-b475-2707a6f4c792' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
