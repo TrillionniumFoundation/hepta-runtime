@@ -1,0 +1,275 @@
+# Private closed actor: workspace[144]=mode, [152]=max_bytes; other state zero.
+# Mode 0 retains the admitted descriptor; 1 reads bounded; 2 reads private.
+# The caller holds input/output/workspace exclusively at stable addresses.
+def entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(w) < 69632 or length(o) < 128:
+        return 4294967294
+    if get(w, 0) == 0:
+        if length(i) >= 4294967296 or length(i) > length(w) - 4224:
+            return 4294967294
+        if length(i) < 32 or read64(i, 0) != PATH_REQUEST or read64(i, 8) != 1:
+            return 4294967295
+        mode = get(w, 144)
+        maximum = get(w, 152)
+        if mode > 2:
+            return 4294967295
+        limit = maximum + 1
+        if mode != 0 and limit > length(o) - 128:
+            return 4294967294
+        code = path_policy(i, o, w)
+        if code == 4294967295 or code == 4294967294:
+            return code
+        if code < 48 or code > length(o) or get(o, 0) != PATH_RESPONSE:
+            return 4294967295
+        error = get(o, 16)
+        cursor = 0
+        while cursor < 144:
+            put(w, cursor, 0)
+            cursor = cursor + 8
+        put(w, 0, STATE_MAGIC)
+        put(w, 128, length(w))
+        put(w, 136, length(o))
+        put(w, 104, limit)
+        if error != 0:
+            return finish(w, o, error, 0)
+        copy_range(w, o, 4096, 0, code)
+        root_size = get(w, 4120)
+        components = get(w, 4128)
+        if components == 0 or root_size + 49 > code:
+            return 4294967295
+        put(w, 80, root_size)
+        put(w, 72, components)
+        put(w, 88, code)
+        put(w, 64, 4145 + root_size)
+        return request(w, 1, 1, 0, 4144, root_size, 720896, 0)
+    if get(w, 0) != STATE_MAGIC or get(w, 128) != length(w) or get(w, 136) != length(o):
+        return 4294967295
+    mode = get(w, 144)
+    if mode > 2:
+        return 4294967295
+    phase = get(w, 8)
+    if phase == 8:
+        return finish(w, o, get(w, 24), get(w, 32))
+    if phase < 1 or phase > 13 or phase == 11:
+        return 4294967295
+    if get(w, 256) != ACTION_MAGIC or get(w, 264) != get(w, 16):
+        return 4294967295
+    if get(w, 320) != get(w, 16) or get(w, 344) != 0:
+        return 4294967295
+    error = get(w, 336)
+    result = get(w, 328)
+    if error > 4095 or error != 0 and result != 0:
+        return 4294967295
+    if phase != 9 and phase != 10 and phase != 13 and result != 0:
+        return 4294967295
+    if phase == 1:
+        if get(w, 272) != 1 or get(w, 280) != 0:
+            return 4294967295
+        if error != 0:
+            return finish(w, o, 11, error)
+        return next_open(w)
+    if phase == 2:
+        if get(w, 272) != 2 or get(w, 280) != get(w, 56):
+            return 4294967295
+        if error != 0:
+            return finish(w, o, 12, error)
+        return request(w, 3, 8, get(w, 48), 0, 0, 0, 0)
+    if phase == 3:
+        if get(w, 272) != 8 or get(w, 280) != get(w, 48):
+            return 4294967295
+        put(w, 48, get(w, 56))
+        put(w, 40, get(w, 40) + 1)
+        return next_open(w)
+    if phase == 4:
+        if get(w, 272) != 3 or get(w, 280) != 2:
+            return 4294967295
+        if error != 0:
+            return finish(w, o, 13, error)
+        return request(w, 5, 4, 2, 512, 88, 0, 0)
+    if phase == 5:
+        if get(w, 272) != 4 or get(w, 280) != 2:
+            return 4294967295
+        if error != 0:
+            return finish(w, o, 14, error)
+        if get(w, 536) & 61440 != 32768:
+            return finish(w, o, 15, 0)
+        return request(w, 6, 8, get(w, 48), 0, 0, 0, 0)
+    if phase == 6:
+        if get(w, 272) != 8 or get(w, 280) != get(w, 48):
+            return 4294967295
+        return request(w, 7, 4, 2, 512, 88, 0, 0)
+    if phase == 7:
+        if get(w, 272) != 4 or get(w, 280) != 2:
+            return 4294967295
+        if error != 0:
+            if mode == 0:
+                return finish(w, o, 14, error)
+            return finish(w, o, 18, error)
+        if mode == 0:
+            return finish(w, o, 0, 0)
+        if get(w, 528) > get(w, 152):
+            return finish(w, o, 16, 0)
+        copy_range(w, w, 704, 512, 88)
+        if mode == 2:
+            return request(w, 9, 5, 2, 0, 0, 0, 0)
+        return next_read(w, o)
+    if phase == 9:
+        if get(w, 272) != 5 or get(w, 280) != 2 or error != 0 or result > 4294967295:
+            return 4294967295
+        if private_valid(w, result) == 0:
+            return finish(w, o, 9, 0)
+        return next_read(w, o)
+    if phase == 10:
+        if get(w, 272) != 7 or get(w, 280) != 2:
+            return 4294967295
+        if error == 4:
+            return request(w, 10, 7, 2, 4096, get(w, 96), 0, 0)
+        if error != 0:
+            return finish(w, o, 17, error)
+        if result > get(w, 96):
+            return 4294967295
+        if result == 0:
+            return after_read(w, o)
+        count = get(w, 112)
+        if count > length(o) - 128 or result > length(o) - 128 - count:
+            return 4294967295
+        copy_range(o, w, 128 + count, 4096, result)
+        put(w, 112, count + result)
+        return next_read(w, o)
+    if phase == 12:
+        if get(w, 272) != 4 or get(w, 280) != 2:
+            return 4294967295
+        if error != 0:
+            return finish(w, o, 18, error)
+        index = 0
+        while index < 88:
+            if get(w, 512 + index) != get(w, 704 + index):
+                return finish(w, o, 10, 0)
+            index = index + 8
+        if mode == 2:
+            return request(w, 13, 5, 2, 0, 0, 0, 0)
+        return finish(w, o, 0, 0)
+    if phase == 13:
+        if get(w, 272) != 5 or get(w, 280) != 2 or error != 0 or result > 4294967295:
+            return 4294967295
+        if private_valid(w, result) == 0:
+            return finish(w, o, 9, 0)
+        return finish(w, o, 0, 0)
+    return 4294967295
+
+def next_open(w:mutbuf) -> u32:
+    cursor = get(w, 64)
+    total = get(w, 88)
+    end = 4096 + total
+    if total > length(w) - 4096 or cursor < 4145 or cursor >= end:
+        return 4294967295
+    last = cursor
+    while last < end and byte(w, last) != 0:
+        last = last + 1
+    if last == end or last == cursor:
+        return 4294967295
+    index = get(w, 40)
+    count = get(w, 72)
+    parent = get(w, 48)
+    if index >= count or parent > 1:
+        return 4294967295
+    put(w, 64, last + 1)
+    if index + 1 == count:
+        if last + 1 != end:
+            return 4294967295
+        return request(w, 4, 3, 2, cursor, last - cursor, 657408, parent)
+    child = 1 - parent
+    put(w, 56, child)
+    return request(w, 2, 2, child, cursor, last - cursor, 720896, parent)
+
+def next_read(w:mutbuf, o:mutbuf) -> u32:
+    count = get(w, 112)
+    limit = get(w, 104)
+    if count > limit:
+        return 4294967295
+    if count == limit:
+        return after_read(w, o)
+    amount = limit - count
+    if amount > 65536:
+        amount = 65536
+    put(w, 96, amount)
+    return request(w, 10, 7, 2, 4096, amount, 0, 0)
+
+def after_read(w:mutbuf, o:mutbuf) -> u32:
+    if get(w, 112) > get(w, 152):
+        return finish(w, o, 16, 0)
+    return request(w, 12, 4, 2, 512, 88, 0, 0)
+
+def private_valid(w:mutbuf, euid:u64) -> u64:
+    mode = get(w, 536)
+    if mode & 61440 != 32768 or get(w, 560) != 1 or get(w, 544) != euid or mode & 511 != 384:
+        return 0
+    return 1
+
+def request(w:mutbuf, phase:u64, operation:u64, slot:u64, span:u64, amount:u64, argument:u64, parent:u64) -> u32:
+    sequence = get(w, 16)
+    if sequence == 18446744073709551615:
+        return 4294967295
+    sequence = sequence + 1
+    put(w, 8, phase)
+    put(w, 16, sequence)
+    put(w, 256, ACTION_MAGIC)
+    put(w, 264, sequence)
+    put(w, 272, operation)
+    put(w, 280, slot)
+    put(w, 288, span)
+    put(w, 296, amount)
+    put(w, 304, argument)
+    put(w, 312, parent)
+    put(w, 320, 0)
+    put(w, 328, 0)
+    put(w, 336, 0)
+    put(w, 344, 0)
+    return 4294967280
+
+def finish(w:mutbuf, o:mutbuf, error:u64, number:u64) -> u32:
+    put(w, 8, 8)
+    put(w, 24, error)
+    put(w, 32, number)
+    cursor = 0
+    while cursor < 128:
+        put(o, cursor, 0)
+        cursor = cursor + 8
+    put(o, 0, RESULT_MAGIC)
+    if error != 0:
+        put(o, 8, 1)
+    put(o, 16, error)
+    put(o, 24, number)
+    if error == 0:
+        copy_range(o, w, 32, 512, 88)
+        count = get(w, 112)
+        if count > length(o) - 128 or count >= 4294967168:
+            return 4294967295
+        put(o, 120, count)
+        return 128 + count
+    return 128
+
+def get(w:mutbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 8:
+        value = value | (byte(w, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def read64(i:readbuf, at:u64) -> u64:
+    value = 0
+    j = 0
+    while j < 8:
+        value = value | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return value
+
+def put(w:mutbuf, at:u64, value:u64) -> u64:
+    j = 0
+    while j < 8:
+        store(w, at + j, value & 255)
+        value = value >> 8
+        j = j + 1
+    return 0
+

@@ -1,0 +1,205 @@
+# HIA author input for the exact Unix REA file-admission policy.
+# It emits no filesystem calls. Its closed native owner must perform the
+# requested root/child opens and feed metadata from the same retained fd.
+
+def entry(i:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(i) < 16 or read64(i, 0) != REQUEST_MAGIC:
+        return 4294967295
+    operation = read64(i, 8)
+    if operation == 1:
+        return path_plan(i, o)
+    if operation == 2:
+        if length(i) != 192:
+            return 4294967295
+        at = 0
+        while at < 88:
+            if read64(i, 16 + at) != read64(i, 104 + at):
+                return response(o, 10)
+            at = at + 8
+        return response(o, 0)
+    if operation == 3:
+        if length(i) != 112:
+            return 4294967295
+        euid = read64(i, 16)
+        mode = read64(i, 48)
+        uid = read64(i, 56)
+        links = read64(i, 72)
+        if mode & 61440 != 32768 or links != 1 or uid != euid or mode & 511 != 384:
+            return response(o, 9)
+        return response(o, 0)
+    return 4294967295
+
+def path_plan(i:readbuf, o:mutbuf) -> u32:
+    if length(i) < 32:
+        return 4294967295
+    size = read64(i, 16)
+    count = read64(i, 24)
+    if size > length(i) - 32:
+        return 4294967295
+    end = 32 + size
+    if count > ((length(i) - end) >> 3):
+        return 4294967295
+    cursor = end
+    j = 0
+    while j < count:
+        if length(i) - cursor < 8:
+            return 4294967295
+        amount = read64(i, cursor)
+        cursor = cursor + 8
+        if amount > length(i) - cursor:
+            return 4294967295
+        cursor = cursor + amount
+        j = j + 1
+    if cursor != length(i) or length(i) >= 4294967296:
+        return 4294967295
+    if size == 0 or byte(i, 32) != 47:
+        return response(o, 1)
+    if count == 0:
+        return response(o, 2)
+    cursor = end
+    j = 0
+    while j < count:
+        amount = read64(i, cursor)
+        root = cursor + 8
+        if amount == 0 or byte(i, root) != 47:
+            return response(o, 3)
+        tail = prefix_tail(i, 32, end, root, root + amount)
+        if tail != 18446744073709551615:
+            return chosen_plan(i, o, tail, end, root, amount)
+        cursor = root + amount
+        j = j + 1
+    return response(o, 8)
+
+def next_component(i:readbuf, cursor:u64, end:u64) -> u64:
+    while cursor < end:
+        while cursor < end and byte(i, cursor) == 47:
+            cursor = cursor + 1
+        if cursor == end:
+            return 18446744073709551615
+        first = cursor
+        while cursor < end and byte(i, cursor) != 47:
+            cursor = cursor + 1
+        if cursor != first + 1 or byte(i, first) != 46:
+            return (first << 32) | cursor
+    return 18446744073709551615
+
+def prefix_tail(i:readbuf, path:u64, path_end:u64, root:u64, root_end:u64) -> u64:
+    p = path + 1
+    r = root + 1
+    while r <= root_end:
+        item = next_component(i, r, root_end)
+        if item == 18446744073709551615:
+            return p
+        a = item >> 32
+        b = item & 4294967295
+        other = next_component(i, p, path_end)
+        if other == 18446744073709551615:
+            return 18446744073709551615
+        c = other >> 32
+        d = other & 4294967295
+        if b - a != d - c:
+            return 18446744073709551615
+        if same_bytes(i, a, c, b - a) == 0:
+            return 18446744073709551615
+        r = b
+        p = d
+    return p
+
+def chosen_plan(i:readbuf, o:mutbuf, relative:u64, path_end:u64, root:u64, root_size:u64) -> u32:
+    cursor = relative
+    names = 0
+    components = 0
+    item = next_component(i, cursor, path_end)
+    while item != 18446744073709551615:
+        first = item >> 32
+        last = item & 4294967295
+        if last == first + 2 and byte(i, first) == 46 and byte(i, first + 1) == 46:
+            return response(o, 4)
+        p = first
+        while p < last:
+            if byte(i, p) == 0:
+                return response(o, 5)
+            p = p + 1
+        names = names + last - first + 1
+        components = components + 1
+        cursor = last
+        item = next_component(i, cursor, path_end)
+    if components == 0:
+        return response(o, 6)
+    p = root
+    while p < root + root_size:
+        if byte(i, p) == 0:
+            return response(o, 7)
+        p = p + 1
+    total = 48 + root_size + 1 + names
+    if length(o) < total or total >= 4294967296:
+        return 4294967294
+    header(o, 0)
+    put(o, 24, root_size)
+    put(o, 32, components)
+    put(o, 40, names)
+    at = 48
+    p = 0
+    while p < root_size:
+        store(o, at, byte(i, root + p))
+        p = p + 1
+        at = at + 1
+    store(o, at, 0)
+    at = at + 1
+    cursor = relative
+    item = next_component(i, cursor, path_end)
+    while item != 18446744073709551615:
+        first = item >> 32
+        last = item & 4294967295
+        while first < last:
+            store(o, at, byte(i, first))
+            first = first + 1
+            at = at + 1
+        store(o, at, 0)
+        at = at + 1
+        cursor = last
+        item = next_component(i, cursor, path_end)
+    return total
+
+def response(o:mutbuf, error:u64) -> u32:
+    if length(o) < 48:
+        return 4294967294
+    header(o, error)
+    return 48
+
+def header(o:mutbuf, error:u64) -> u64:
+    put(o, 0, RESPONSE_MAGIC)
+    if error == 0:
+        put(o, 8, 0)
+    else:
+        put(o, 8, 1)
+    put(o, 16, error)
+    put(o, 24, 0)
+    put(o, 32, 0)
+    put(o, 40, 0)
+    return 0
+
+def same_bytes(i:readbuf, a:u64, b:u64, count:u64) -> u64:
+    j = 0
+    while j < count:
+        if byte(i, a + j) != byte(i, b + j):
+            return 0
+        j = j + 1
+    return 1
+
+def read64(i:readbuf, at:u64) -> u64:
+    result = 0
+    j = 0
+    while j < 8:
+        result = result | (byte(i, at + j) << (j * 8))
+        j = j + 1
+    return result
+
+def put(w:mutbuf, at:u64, value:u64) -> u64:
+    j = 0
+    while j < 8:
+        store(w, at + j, value & 255)
+        value = value >> 8
+        j = j + 1
+    return 0
+
