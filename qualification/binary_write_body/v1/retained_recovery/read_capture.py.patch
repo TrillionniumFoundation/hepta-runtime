@@ -1,0 +1,68 @@
+--- actual/scripts/read_capture.py
++++ retained_recovery/read_capture.py
+@@ -6,7 +6,7 @@
+ from protocol import U,I,result,wire,stat_decode,version,prior_value
+ from read_write_journal import Journal,invocation,formatter
+ from read_kernel import read_trace
+-from kernel_binding import bind,fd_history
++from kernel_binding import bind,fd_history,duplicates_fd
+ PYTHON=dict(bytes=8020928,sha256="e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f")
+ def walk(value,reader):
+     if isinstance(value,dict):
+@@ -250,8 +250,16 @@
+     history=fd_history(trace,through=eof_calls[0]["ordinal"])
+     control_fd=0
+     if q["control_fd0"]!="none":
+-        moves=[r for r in trace["calls"]if r["number"]in(32,33,292)and"exit"in r and r["exit"]["result"]>=0 and r["args"][0]==0]
+-        require(len(moves)==1,"one actual stdin descriptor relocation");control_fd=moves[0]["exit"]["result"]
++        moves=[r for r in trace["calls"]if duplicates_fd(r["number"],r["args"])and"exit"in r
++            and r["exit"]["result"]>=0 and r["args"][0]==0]
++        require(len(moves)==1,"one actual stdin descriptor relocation")
++        movement_scope="exchange-"+str(chain["control_move_exchange"])+"-command-17"
++        require(moves[0]["scope"]==movement_scope,"stdin duplication belongs to actual relocation exchange")
++        closes=[r for r in trace["calls"]if r["scope"]==movement_scope and r["number"]==3
++            and r["args"][0]==0 and"exit"in r and r["exit"]["result"]==0
++            and r["ordinal"]>moves[0]["ordinal"]]
++        require(len(closes)==1,"actual relocation closes original stdin once after duplication")
++        control_fd=moves[0]["exit"]["result"]
+     base=set(chain["fds_before"])-{str(v)for v in parents.values()}
+     if control_fd:base.discard(str(control_fd))
+     require(set(eof["fds"])==base|{str(fd)for fd in history["live"]},"full EOF descriptors equal actual kernel open/close history")
+@@ -408,9 +416,25 @@
+     """Compare actual identity/change relations while retaining every unmodified raw field."""
+     def __init__(self,case):
+         self.root=case["fixture_root"];self.temps={x:"$STAGE_"+str(i)for i,x in enumerate(case["_temporaries"])}
+-        self.objects={};self.times={}
++        self.objects={};self.times={};self.closed_parent_paths={}
++        if case["input"]["close_parent_before"]:
++            pid=case["process"]["pid"]
++            require(type(pid)is int and pid>0 and case["_trace"]["start"]["pid"]==pid,
++                "closed-parent observation belongs to actual captured process")
++            for row in case["actual"]["chain"]["parents"].values():
++                fd=row["fd"]
++                require(type(fd)is int and 0<=fd<=2147483647 and"closed_exchange"in row,
++                    "closed-parent observation binds actual caller-owned descriptor")
++                path="/proc/"+str(pid)+"/fd/"+str(fd)
++                label="/proc/$PROCESS/fd/"+str(fd)
++                self.closed_parent_paths[path]=label
++                self.closed_parent_paths["[Errno 2] No such file or directory: "+repr(path)]=(
++                    "[Errno 2] No such file or directory: "+repr(label))
+     def text(self,value):
+         if not isinstance(value,str):return value
++        # Only the two complete recorded forms for this process/held FD qualify.
++        # Other PIDs, FDs, error classes, or text containing a path stay literal.
++        if value in self.closed_parent_paths:return self.closed_parent_paths[value]
+         value=value.replace(self.root,"$FIXTURE")
+         for name,label in self.temps.items():value=value.replace(name,label)
+         return value
+@@ -436,8 +460,8 @@
+     observed=row["observed_after"]["entries"][parent+"/"+case["physical_name"]]
+     require(observed["exists"]and observed["kind"]=="regular","successful real target is regular")
+     content=observed["content"];st=observed["stat"];raw=bytes.fromhex(content["hex"])
+-    import base64
+-    admitted=base64.b64decode(q["data_base64"],validate=True)
++    from base64_3123 import strict_decode
++    admitted=strict_decode(q["data_base64"])
+     require(len(admitted)<=1048576 and result["written"]==len(admitted)and raw==admitted
+         and content==dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),hex=raw.hex())
+         and set(result)=={"written","size","version","sha256","mode"}
