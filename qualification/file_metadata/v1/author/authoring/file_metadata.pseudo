@@ -1,0 +1,936 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,88)!=length(s)-96:
+        return INVALID
+    command=load(s,8)
+    if command!=1 and command!=2:
+        return INVALID
+    if length(o)<64:
+        return CAPACITY
+    if command==1:
+        mode=load(s,24)
+        if mode<1 or mode>3 or load(s,16)!=0:
+            return INVALID
+        if load(s,32)>2147483647 or load(s,40)>2147483647:
+            return INVALID
+        if load(s,56)!=0 or load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+            return INVALID
+        if load(s,48)!=length(s)-96:
+            return INVALID
+        if mode==2:
+            if load(s,32)!=0 or load(s,40)!=0 or load(s,48)>SNAP_CAP:
+                return INVALID
+            if length(o)<65624:
+                return short_header(o,5,65624)
+        else:
+            if load(s,48)!=0:
+                return INVALID
+            if mode==1 and load(s,40)!=0:
+                return INVALID
+        needed=required(mode)
+        if length(w)<needed:
+            return short_header(o,4,needed)
+        if get(w,0)==WORK_MAGIC and get(w,8)!=999:
+            return INVALID
+        fill_range(w,0,8192,0)
+        layout(w,mode)
+        put(w,0,WORK_MAGIC)
+        put(w,8,999)
+        put(w,56,mode)
+        put(w,64,load(s,32))
+        put(w,72,load(s,40))
+        if mode==2:
+            copy_in(s,w,96,SNAPSHOT0,load(s,48))
+            if valid_snapshot(w,SNAPSHOT0,load(s,48))==0:
+                return INVALID
+            put(w,8,300)
+        else:
+            capture_start(w,load(s,32),SNAPSHOT0,100)
+    else:
+        if length(w)<8192 or get(w,0)!=WORK_MAGIC:
+            return INVALID
+        if length(w)<get(w,384):
+            return short_header(o,4,get(w,384))
+        if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+            return INVALID
+        if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0 or length(s)-96>65536:
+            return INVALID
+        if negative(load(s,24))!=0 and length(s)!=96:
+            return INVALID
+        seq=load(s,16)
+        if get(w,24)!=0:
+            if seq!=get(w,24):
+                return INVALID
+            copy_in(s,w,96,REPLY,length(s)-96)
+            put(w,32,seq)
+            put(w,40,load(s,24))
+            put(w,48,length(s)-96)
+            put(w,24,0)
+        else:
+            if seq!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                return INVALID
+            at=0
+            while at<get(w,48):
+                if byte(s,96+at)!=byte(w,REPLY+at):
+                    return INVALID
+                at=at+1
+    status=NEXT
+    while status==NEXT:
+        phase=get(w,8)
+        if phase<100:
+            status=capture_flow(o,w)
+        else:
+            if phase<300:
+                status=preserve_flow(o,w)
+            else:
+                if phase<900:
+                    status=summary_flow(o,w)
+                else:
+                    status=finish(o,w)
+    return status
+
+def required(mode:u64) -> u64:
+    count=1
+    if mode==3:
+        count=3
+    return 8192+SNAP_CAP*count+65536*4+24+16384+2048+900000
+
+def layout(w:mutbuf,mode:u64) -> u64:
+    count=1
+    if mode==3:
+        count=3
+    at=8192+SNAP_CAP*count
+    put(w,304,at)
+    at=at+65536
+    put(w,312,at)
+    at=at+65536
+    put(w,320,at)
+    at=at+65536
+    put(w,328,at)
+    at=at+65536+24
+    put(w,336,at)
+    at=at+16384
+    put(w,344,at)
+    at=at+2048
+    put(w,352,at)
+    put(w,384,required(mode))
+    return 0
+
+def short_header(o:mutbuf,kind:u64,size:u64) -> u32:
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,32,size)
+    return 64
+
+def request(w:mutbuf,o:mutbuf,phase:u64,kind:u64,op:u64,a:u64,b:u64,c:u64,at:u64,size:u64) -> u64:
+    if size>length(w) or at>length(w)-size:
+        return INVALID
+    if length(o)<64+size:
+        return short_header(o,5,64+size)
+    sequence=get(w,16)+1
+    if sequence==0:
+        return INVALID
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,op)
+    put(o,32,a)
+    put(o,40,b)
+    put(o,48,c)
+    put(o,56,size)
+    copy_out(w,o,at,64,size)
+    put(w,16,sequence)
+    put(w,24,sequence)
+    put(w,8,phase)
+    return 64
+
+def fail(w:mutbuf,code:u64) -> u64:
+    put(w,216,code)
+    put(w,224,0)
+    put(w,264,0)
+    put(w,8,900)
+    return NEXT
+
+def os_fail(w:mutbuf,number:u64,named_fd:u64) -> u64:
+    put(w,216,0)
+    put(w,224,number)
+    put(w,264,named_fd)
+    put(w,8,900)
+    return NEXT
+
+def negative(value:u64) -> u64:
+    if value>=9223372036854775808:
+        return 1
+    return 0
+
+def capture_start(w:mutbuf,fd:u64,base:u64,after:u64) -> u64:
+    fill_range(w,base,VALUE_START,0)
+    put(w,80,fd)
+    put(w,88,base)
+    put(w,96,after)
+    put(w,104,0)
+    put(w,112,256)
+    put(w,120,0)
+    put(w,128,0)
+    put(w,136,0)
+    put(w,8,10)
+    put(w,base,SNAP_MAGIC)
+    put(w,base+8,1)
+    put(w,base+80,VALUE_START)
+    put(w,base+96,128)
+    put(w,base+104,NAME_START)
+    put(w,base+112,VALUE_START)
+    return NEXT
+
+def capture_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    base=get(w,88)
+    if phase==10:
+        return request(w,o,11,1,1,get(w,80),0,0,0,0)
+    if phase==11:
+        if result==MAXIMUM-3:
+            put(w,8,10)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return INVALID
+        copy_within(w,OLD_STAT,REPLY,144)
+        mode=u32_at(w,OLD_STAT+24)
+        if (mode&61440)!=32768:
+            return fail(w,1)
+        put(w,base+16,u32_at(w,OLD_STAT+28))
+        put(w,base+24,u32_at(w,OLD_STAT+32))
+        put(w,base+32,mode&4095)
+        put(w,base+40,get(w,OLD_STAT+16))
+        put(w,base+48,0)
+        put(w,8,12)
+        return NEXT
+    if phase==12:
+        return request(w,o,13,1,2,get(w,80),get(w,112),0,0,0)
+    if phase==13:
+        if result==MAXIMUM-33 and get(w,112)==256:
+            put(w,112,65536)
+            put(w,8,12)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,get(w,80)+1)
+        if result!=get(w,48) or result>get(w,112):
+            return INVALID
+        copy_within(w,base+NAME_START,REPLY,result)
+        put(w,base+64,result)
+        put(w,104,result)
+        put(w,120,0)
+        put(w,8,14)
+        return NEXT
+    if phase==14:
+        if get(w,120)>=get(w,104):
+            put(w,8,20)
+            return NEXT
+        at=get(w,120)
+        end=at
+        while end<get(w,104) and byte(w,base+NAME_START+end)!=0:
+            end=end+1
+        if end==get(w,104):
+            return INVALID
+        put(w,128,end-at)
+        put(w,136,128)
+        copy_within(w,NAME,base+NAME_START+at,end-at)
+        store(w,NAME+end-at,0)
+        put(w,8,15)
+        return NEXT
+    if phase==15:
+        return request(w,o,16,1,3,get(w,80),get(w,136),0,NAME,get(w,128)+1)
+    if phase==16:
+        if result==MAXIMUM-33 and get(w,136)==128:
+            put(w,136,65536)
+            put(w,8,15)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,get(w,80)+1)
+        if result!=get(w,48) or result>get(w,136):
+            return INVALID
+        status=store_attribute(w,base,get(w,120),get(w,128),result)
+        if get(w,8)==900:
+            return NEXT
+        if status!=NEXT:
+            return status
+        put(w,120,get(w,120)+get(w,128)+1)
+        put(w,8,14)
+        return NEXT
+    if phase==20:
+        return request(w,o,21,1,1,get(w,80),0,0,0,0)
+    if phase==21:
+        if result==MAXIMUM-3:
+            put(w,8,20)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return INVALID
+        if same_stat(w,OLD_STAT,REPLY)==0:
+            return fail(w,3)
+        put(w,8,get(w,96))
+        return NEXT
+    return INVALID
+
+def same_stat(w:mutbuf,left:u64,right:u64) -> u64:
+    if get(w,left)!=get(w,right) or get(w,left+8)!=get(w,right+8) or get(w,left+48)!=get(w,right+48):
+        return 0
+    if get(w,left+88)!=get(w,right+88) or get(w,left+96)!=get(w,right+96):
+        return 0
+    if get(w,left+104)!=get(w,right+104) or get(w,left+112)!=get(w,right+112):
+        return 0
+    return 1
+
+def equal(w:mutbuf,left:u64,right:u64,size:u64) -> u64:
+    at=0
+    while at<size:
+        if byte(w,left+at)!=byte(w,right+at):
+            return 0
+        at=at+1
+    return 1
+
+def find_attribute(w:mutbuf,base:u64,name:u64,size:u64) -> u64:
+    index=0
+    while index<get(w,base+56):
+        row=base+128+index*32
+        if get(w,row+8)==size and equal(w,base+get(w,row),name,size)!=0:
+            return index
+        index=index+1
+    return MAXIMUM
+
+def store_attribute(w:mutbuf,base:u64,name_offset:u64,name_size:u64,size:u64) -> u64:
+    index=find_attribute(w,base,base+NAME_START+name_offset,name_size)
+    count=get(w,base+56)
+    old_size=0
+    old_at=0
+    if index==MAXIMUM:
+        index=count
+        count=count+1
+    else:
+        old_at=get(w,base+128+index*32+16)
+        old_size=get(w,base+128+index*32+24)
+    total=get(w,base+72)-old_size+size
+    if count>256 or total>4194304:
+        return fail(w,2)
+    if old_size!=0:
+        used=get(w,base+72)
+        copy_within(w,base+old_at,base+old_at+old_size,VALUE_START+used-old_at-old_size)
+        other=0
+        while other<get(w,base+56):
+            row=base+128+other*32
+            if get(w,row+16)>old_at:
+                put(w,row+16,get(w,row+16)-old_size)
+            other=other+1
+    row=base+128+index*32
+    if index==get(w,base+56):
+        put(w,row,NAME_START+name_offset)
+        put(w,row+8,name_size)
+    at=VALUE_START+get(w,base+72)-old_size
+    copy_within(w,base+at,REPLY,size)
+    put(w,row+16,at)
+    put(w,row+24,size)
+    put(w,base+56,count)
+    put(w,base+72,total)
+    put(w,base+80,VALUE_START+total)
+    return NEXT
+
+def valid_snapshot(w:mutbuf,base:u64,size:u64) -> u64:
+    if size<VALUE_START or size>SNAP_CAP:
+        return 0
+    if get(w,base)!=SNAP_MAGIC or get(w,base+8)!=1 or get(w,base+80)!=size:
+        return 0
+    if get(w,base+16)>4294967295 or get(w,base+24)>4294967295 or get(w,base+32)>4095:
+        return 0
+    if get(w,base+48)!=0 or get(w,base+56)>256 or get(w,base+64)>65536:
+        return 0
+    if get(w,base+72)!=size-VALUE_START or get(w,base+88)!=0:
+        return 0
+    if get(w,base+96)!=128 or get(w,base+104)!=NAME_START or get(w,base+112)!=VALUE_START or get(w,base+120)!=0:
+        return 0
+    index=0
+    while index<get(w,base+56):
+        row=base+128+index*32
+        at=get(w,row)
+        count=get(w,row+8)
+        if at<NAME_START or at>=NAME_START+get(w,base+64):
+            return 0
+        if count>=NAME_START+get(w,base+64)-at:
+            return 0
+        i=0
+        while i<count:
+            if byte(w,base+at+i)==0:
+                return 0
+            i=i+1
+        if byte(w,base+at+count)!=0:
+            return 0
+        at=get(w,row+16)
+        count=get(w,row+24)
+        if at<VALUE_START or at>size or count>size-at or count>65536:
+            return 0
+        index=index+1
+    index=0
+    while index<get(w,base+56):
+        row=base+128+index*32
+        if find_attribute(w,base,base+get(w,row),get(w,row+8))!=index:
+            return 0
+        index=index+1
+    return 1
+
+def xattrs_equal(w:mutbuf,left:u64,right:u64) -> u64:
+    if get(w,left+56)!=get(w,right+56):
+        return 0
+    index=0
+    while index<get(w,left+56):
+        row=left+128+index*32
+        other=find_attribute(w,right,left+get(w,row),get(w,row+8))
+        if other==MAXIMUM:
+            return 0
+        found=right+128+other*32
+        if get(w,row+24)!=get(w,found+24):
+            return 0
+        if equal(w,left+get(w,row+16),right+get(w,found+16),get(w,row+24))==0:
+            return 0
+        index=index+1
+    return 1
+
+def snapshot_equal(w:mutbuf,left:u64,right:u64) -> u64:
+    at=16
+    while at<=48:
+        if get(w,left+at)!=get(w,right+at):
+            return 0
+        at=at+8
+    if get(w,left+88)!=get(w,right+88):
+        return 0
+    return xattrs_equal(w,left,right)
+
+def named_attribute(w:mutbuf,base:u64,kind:u64) -> u64:
+    size=0
+    if kind==1:
+        size=literal_capability(w,NAME)-NAME
+    else:
+        size=literal_acl(w,NAME)-NAME
+    return find_attribute(w,base,NAME,size)
+
+def is_acl(w:mutbuf,row:u64) -> u64:
+    size=literal_acl(w,NAME)-NAME
+    if get(w,row+8)!=size:
+        return 0
+    return equal(w,SNAPSHOT0+get(w,row),NAME,size)
+
+def preserve_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==100:
+        if get(w,56)==1:
+            put(w,232,get(w,SNAPSHOT0+80))
+            put(w,240,SNAPSHOT0)
+            put(w,8,999)
+            return NEXT
+        if get(w,SNAPSHOT0+40)!=1:
+            return fail(w,4)
+        if (get(w,SNAPSHOT0+32)&3584)!=0 or get(w,SNAPSHOT0+48)!=0:
+            return fail(w,5)
+        if named_attribute(w,SNAPSHOT0,1)!=MAXIMUM:
+            return fail(w,6)
+        put(w,8,101)
+        return NEXT
+    if phase==101:
+        return request(w,o,102,1,1,get(w,72),0,0,0,0)
+    if phase==102:
+        if result==MAXIMUM-3:
+            put(w,8,101)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=144:
+            return INVALID
+        if get(w,SNAPSHOT0+16)!=u32_at(w,REPLY+28) or get(w,SNAPSHOT0+24)!=u32_at(w,REPLY+32):
+            put(w,8,103)
+        else:
+            put(w,8,105)
+        return NEXT
+    if phase==103:
+        return request(w,o,104,1,4,get(w,72),get(w,SNAPSHOT0+16),get(w,SNAPSHOT0+24),0,0)
+    if phase==104:
+        if result==MAXIMUM-3:
+            put(w,8,103)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,8,105)
+        return NEXT
+    if phase==105:
+        return request(w,o,106,1,5,get(w,72),get(w,SNAPSHOT0+32),0,0,0)
+    if phase==106:
+        if result==MAXIMUM-3:
+            put(w,8,105)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,112,256)
+        put(w,8,110)
+        return NEXT
+    if phase<180:
+        return preserve_attributes(o,w)
+    if phase==180:
+        if get(w,SNAPSHOT0+16)!=get(w,SNAPSHOT1+16):
+            return fail(w,7)
+        if get(w,SNAPSHOT0+24)!=get(w,SNAPSHOT1+24):
+            return fail(w,8)
+        if get(w,SNAPSHOT0+32)!=get(w,SNAPSHOT1+32):
+            return fail(w,9)
+        if xattrs_equal(w,SNAPSHOT0,SNAPSHOT1)==0:
+            return fail(w,10)
+        if get(w,SNAPSHOT0+88)!=get(w,SNAPSHOT1+88):
+            return fail(w,11)
+        return capture_start(w,get(w,64),SNAPSHOT2,200)
+    if phase==200:
+        if snapshot_equal(w,SNAPSHOT0,SNAPSHOT2)==0:
+            return fail(w,12)
+        put(w,8,201)
+        return NEXT
+    if phase==201:
+        return request(w,o,202,1,8,get(w,72),0,0,0,0)
+    if phase==202:
+        if result==MAXIMUM-3:
+            put(w,8,201)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,8,300)
+        return NEXT
+    return INVALID
+
+def preserve_attributes(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==110:
+        return request(w,o,111,1,2,get(w,72),get(w,112),0,0,0)
+    if phase==111:
+        if result==MAXIMUM-33 and get(w,112)==256:
+            put(w,112,65536)
+            put(w,8,110)
+            return NEXT
+        if negative(result)!=0:
+            return os_fail(w,0-result,get(w,72)+1)
+        if result!=get(w,48) or result>get(w,112):
+            return INVALID
+        copy_within(w,LIST,REPLY,result)
+        put(w,104,result)
+        put(w,120,0)
+        put(w,8,112)
+        return NEXT
+    if phase==112:
+        if get(w,120)>=get(w,104):
+            put(w,144,0)
+            put(w,152,0)
+            put(w,8,120)
+            return NEXT
+        at=get(w,120)
+        end=at
+        while end<get(w,104) and byte(w,LIST+end)!=0:
+            end=end+1
+        if end==get(w,104):
+            return INVALID
+        put(w,128,end-at)
+        if find_attribute(w,SNAPSHOT0,LIST+at,end-at)!=MAXIMUM:
+            put(w,120,end+1)
+            return NEXT
+        copy_within(w,NAME,LIST+at,end-at+1)
+        return request(w,o,113,1,6,get(w,72),0,0,NAME,end-at+1)
+    if phase==113:
+        if negative(result)!=0:
+            return os_fail(w,0-result,get(w,72)+1)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,120,get(w,120)+get(w,128)+1)
+        put(w,8,112)
+        return NEXT
+    if phase==120:
+        index=get(w,144)
+        if index==get(w,SNAPSHOT0+56):
+            if get(w,152)==0:
+                put(w,152,1)
+                put(w,144,0)
+                return NEXT
+            return capture_start(w,get(w,72),SNAPSHOT1,180)
+        row=SNAPSHOT0+128+index*32
+        if is_acl(w,row)!=get(w,152):
+            put(w,144,index+1)
+            return NEXT
+        size=get(w,row+8)
+        count=get(w,row+24)
+        copy_within(w,LIST,SNAPSHOT0+get(w,row),size)
+        store(w,LIST+size,0)
+        copy_within(w,LIST+size+1,SNAPSHOT0+get(w,row+16),count)
+        return request(w,o,121,1,7,get(w,72),size,count,LIST,size+1+count)
+    if phase==121:
+        if negative(result)!=0:
+            return os_fail(w,0-result,get(w,72)+1)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,144,get(w,144)+1)
+        put(w,8,120)
+        return NEXT
+    return INVALID
+
+def scalar(w:mutbuf,at:u64,end:u64) -> u64:
+    first=byte(w,at)
+    if first<128:
+        return (first<<3)|1
+    width=0
+    value=0
+    minimum=0
+    if first>=194 and first<=223:
+        width=2
+        value=first&31
+        minimum=128
+    if first>=224 and first<=239:
+        width=3
+        value=first&15
+        minimum=2048
+    if first>=240 and first<=244:
+        width=4
+        value=first&7
+        minimum=65536
+    if width==0 or width>end-at:
+        return ((56320+first)<<3)|1
+    i=1
+    while i<width:
+        next=byte(w,at+i)
+        if next<128 or next>191:
+            return ((56320+first)<<3)|1
+        value=(value<<6)|(next&63)
+        i=i+1
+    if value<minimum or value>1114111 or (value>=55296 and value<=57343):
+        return ((56320+first)<<3)|1
+    return (value<<3)|width
+
+def name_less(w:mutbuf,left:u64,right:u64) -> u64:
+    a=SNAPSHOT0+get(w,left)
+    b=SNAPSHOT0+get(w,right)
+    ae=a+get(w,left+8)
+    be=b+get(w,right+8)
+    while a<ae and b<be:
+        ac=scalar(w,a,ae)
+        bc=scalar(w,b,be)
+        if (ac>>3)<(bc>>3):
+            return 1
+        if (ac>>3)>(bc>>3):
+            return 0
+        a=a+(ac&7)
+        b=b+(bc&7)
+    if a==ae and b!=be:
+        return 1
+    return 0
+
+def sort_names(w:mutbuf) -> u64:
+    count=get(w,SNAPSHOT0+56)
+    i=0
+    while i<count:
+        put(w,ORDER+i*8,i)
+        j=i
+        moving=1
+        while j>0 and moving!=0:
+            left=get(w,ORDER+(j-1)*8)
+            if name_less(w,SNAPSHOT0+128+i*32,SNAPSHOT0+128+left*32)==0:
+                moving=0
+            else:
+                put(w,ORDER+j*8,left)
+                j=j-1
+        put(w,ORDER+j*8,i)
+        i=i+1
+    return 0
+
+def unicode_escape(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,92)
+    store(w,at+1,117)
+    store(w,at+2,hex_digit((value>>12)&15))
+    store(w,at+3,hex_digit((value>>8)&15))
+    store(w,at+4,hex_digit((value>>4)&15))
+    store(w,at+5,hex_digit(value&15))
+    return at+6
+
+def json_name(w:mutbuf,at:u64,source:u64,size:u64) -> u64:
+    store(w,at,34)
+    at=at+1
+    end=source+size
+    while source<end:
+        code=scalar(w,source,end)
+        source=source+(code&7)
+        value=code>>3
+        if value==34 or value==92:
+            store(w,at,92)
+            store(w,at+1,value)
+            at=at+2
+        else:
+            if value==8 or value==9 or value==10 or value==12 or value==13:
+                escaped=98
+                if value==9:
+                    escaped=116
+                if value==10:
+                    escaped=110
+                if value==12:
+                    escaped=102
+                if value==13:
+                    escaped=114
+                store(w,at,92)
+                store(w,at+1,escaped)
+                at=at+2
+            else:
+                if value<32 or value>=127:
+                    if value<=65535:
+                        at=unicode_escape(w,at,value)
+                    else:
+                        value=value-65536
+                        at=unicode_escape(w,at,55296+(value>>10))
+                        at=unicode_escape(w,at,56320+(value&1023))
+                else:
+                    store(w,at,value)
+                    at=at+1
+    store(w,at,34)
+    return at+1
+
+def summary_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==300:
+        sort_names(w)
+        put(w,160,0)
+        put(w,8,301)
+        return NEXT
+    if phase==301:
+        index=get(w,160)
+        if index==get(w,SNAPSHOT0+56):
+            put(w,8,310)
+            return NEXT
+        row=SNAPSHOT0+128+index*32
+        codec(w)
+        size=get(w,row+24)
+        copy_within(w,CODEC+24,SNAPSHOT0+get(w,row+16),size)
+        return request(w,o,302,2,1,0,0,0,CODEC,24+size)
+    if phase==302:
+        if result!=64 or get(w,48)!=64 or digest_valid(w,REPLY)==0:
+            return INVALID
+        copy_within(w,HASHES+get(w,160)*64,REPLY,64)
+        put(w,160,get(w,160)+1)
+        put(w,8,301)
+        return NEXT
+    if phase==310:
+        index=named_attribute(w,SNAPSHOT0,2)
+        size=0
+        codec(w)
+        if index!=MAXIMUM:
+            row=SNAPSHOT0+128+index*32
+            size=get(w,row+24)
+            copy_within(w,CODEC+24,SNAPSHOT0+get(w,row+16),size)
+        return request(w,o,311,2,1,0,0,0,CODEC,24+size)
+    if phase==311:
+        if result!=64 or get(w,48)!=64 or digest_valid(w,REPLY)==0:
+            return INVALID
+        copy_within(w,ACL_DIGEST,REPLY,64)
+        put(w,8,320)
+        return NEXT
+    if phase==320:
+        size=render_summary(w)-RESULT
+        if size>900000:
+            return INVALID
+        put(w,232,size)
+        put(w,240,RESULT)
+        put(w,8,999)
+        return NEXT
+    return INVALID
+
+def codec(w:mutbuf) -> u64:
+    put(w,CODEC,CODEC_TAG)
+    put(w,CODEC+8,2)
+    put(w,CODEC+16,0)
+    return 0
+
+def digest_valid(w:mutbuf,at:u64) -> u64:
+    i=0
+    while i<64:
+        value=byte(w,at+i)
+        if value<48 or value>102 or (value>57 and value<97):
+            return 0
+        i=i+1
+    return 1
+
+def render_summary(w:mutbuf) -> u64:
+    at=wire_uid(w,RESULT)
+    at=decimal(w,at,get(w,SNAPSHOT0+16))
+    at=wire_gid(w,at)
+    at=decimal(w,at,get(w,SNAPSHOT0+24))
+    at=wire_mode(w,at)
+    at=decimal(w,at,get(w,SNAPSHOT0+32))
+    at=wire_links(w,at)
+    at=decimal(w,at,get(w,SNAPSHOT0+40))
+    at=wire_names(w,at)
+    index=0
+    while index<get(w,SNAPSHOT0+56):
+        if index!=0:
+            store(w,at,44)
+            at=at+1
+        row=SNAPSHOT0+128+get(w,ORDER+index*8)*32
+        at=json_name(w,at,SNAPSHOT0+get(w,row),get(w,row+8))
+        index=index+1
+    at=wire_hashes(w,at)
+    index=0
+    while index<get(w,SNAPSHOT0+56):
+        if index!=0:
+            store(w,at,44)
+            at=at+1
+        row=SNAPSHOT0+128+index*32
+        at=json_name(w,at,SNAPSHOT0+get(w,row),get(w,row+8))
+        store(w,at,58)
+        at=json_name(w,at+1,HASHES+index*64,64)
+        index=index+1
+    at=wire_acl_hash(w,at)
+    at=json_name(w,at,ACL_DIGEST,64)
+    return wire_platform(w,at)
+
+def exception_class(w:mutbuf) -> u64:
+    if get(w,216)!=0:
+        return 1
+    number=get(w,224)
+    if number==1 or number==13:
+        return 2
+    if number==2:
+        return 4
+    if number==20:
+        return 5
+    if number==21:
+        return 6
+    if number==17:
+        return 7
+    if number==4:
+        return 8
+    if number==11 or number==114 or number==115:
+        return 9
+    if number==32 or number==108:
+        return 10
+    if number==110:
+        return 11
+    if number==104:
+        return 12
+    if number==103:
+        return 13
+    if number==111:
+        return 14
+    return 3
+
+def finish(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    if phase==900:
+        size=0
+        if get(w,216)!=0:
+            size=error_literal(w,RESULT,get(w,216))-RESULT
+        put(w,288,size)
+        if get(w,264)!=0:
+            put(w,RESULT+size,get(w,264)-1)
+            size=size+8
+        put(w,232,size)
+        put(w,240,RESULT)
+        put(w,8,999)
+        return NEXT
+    if phase!=999:
+        return INVALID
+    size=get(w,232)
+    if length(o)<64+size:
+        return short_header(o,5,64+size)
+    fill_range(o,0,64,0)
+    put(o,0,RESPONSE)
+    put(o,16,get(w,16))
+    put(o,24,get(w,56))
+    if get(w,216)!=0 or get(w,224)!=0:
+        put(o,8,3)
+        put(o,24,exception_class(w))
+        put(o,32,get(w,224))
+        put(o,40,get(w,288))
+        if get(w,264)!=0:
+            put(o,48,2)
+    put(o,56,size)
+    copy_out(w,o,get(w,240),64,size)
+    return 64
+def load(s:readbuf,at:u64) -> u64:
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)|(byte(s,at+4)<<32)|(byte(s,at+5)<<40)|(byte(s,at+6)<<48)|(byte(s,at+7)<<56)
+
+def get(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)|(byte(w,at+4)<<32)|(byte(w,at+5)<<40)|(byte(w,at+6)<<48)|(byte(w,at+7)<<56)
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value)
+    store(w,at+1,value>>8)
+    store(w,at+2,value>>16)
+    store(w,at+3,value>>24)
+    store(w,at+4,value>>32)
+    store(w,at+5,value>>40)
+    store(w,at+6,value>>48)
+    store(w,at+7,value>>56)
+    return 0
+
+def u32_at(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)
+
+def copy_in(s:readbuf,w:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(w,dst+at,load(s,src+at))
+        at=at+8
+    while at<size:
+        store(w,dst+at,byte(s,src+at))
+        at=at+1
+    return size
+
+def copy_out(w:mutbuf,o:mutbuf,src:u64,dst:u64,size:u64) -> u64:
+    at=0
+    while size-at>=8:
+        put(o,dst+at,get(w,src+at))
+        at=at+8
+    while at<size:
+        store(o,dst+at,byte(w,src+at))
+        at=at+1
+    return size
+
+def hex_digit(value:u64) -> u64:
+    if value<10:
+        return value+48
+    return value+87
+
+
+def decimal(w:mutbuf,at:u64,value:u64) -> u64:
+    if value==0:
+        store(w,at,48)
+        return at+1
+    size=0
+    while value!=0:
+        quotient=0
+        remainder=0
+        shift=64
+        while shift!=0:
+            shift=shift-1
+            remainder=(remainder<<1)|((value>>shift)&1)
+            if remainder>=10:
+                remainder=remainder-10
+                quotient=quotient|(1<<shift)
+        store(w,DECIMAL+size,48+remainder)
+        size=size+1
+        value=quotient
+    while size!=0:
+        size=size-1
+        store(w,at,byte(w,DECIMAL+size))
+        at=at+1
+    return at
+
