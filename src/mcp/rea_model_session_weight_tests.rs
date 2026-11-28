@@ -846,13 +846,14 @@ fn typed_session_wire_has_no_caller_authority_or_paths() {
 }
 
 #[test]
-fn session_request_schema_preserves_both_closed_object_branches() {
+fn session_request_schema_preserves_all_three_closed_object_branches() {
 	let schema = serde_json::to_value(schemars::schema_for!(SessionWeightRequest)).unwrap();
 	assert_eq!(schema["type"], "object");
 	let branches = schema["anyOf"].as_array().expect("untagged alternatives");
-	assert_eq!(branches.len(), 2);
+	assert_eq!(branches.len(), 3);
 	for (branch, required) in branches.iter().zip([
 		["operation", "parent_sha256", "readout", "session_id"],
+		["operation", "parent_sha256", "profile", "session_id"],
 		["operation", "parent_sha256", "profile", "session_id"],
 	]) {
 		let reference = branch["$ref"].as_str().expect("typed object reference");
@@ -870,6 +871,20 @@ fn session_request_schema_preserves_both_closed_object_branches() {
 		actual.sort_unstable();
 		assert_eq!(actual, required);
 	}
+	for (branch, expected) in branches.iter().skip(1).zip([
+		"smallhcsn_centered_sender_drive_and_bias40_v1",
+		"smallhcsn_late_quote_min_mark4_task_route_v1",
+	]) {
+		let reference = branch["$ref"].as_str().unwrap();
+		let payload = schema
+			.pointer(reference.strip_prefix('#').unwrap())
+			.unwrap();
+		let profile_ref = payload["properties"]["profile"]["$ref"].as_str().unwrap();
+		let profile = schema
+			.pointer(profile_ref.strip_prefix('#').unwrap())
+			.unwrap();
+		assert_eq!(profile["enum"], json!([expected]));
+	}
 	let encoded = serde_json::to_string(&schema).unwrap();
 	for operation in [
 		"f32_prepare",
@@ -880,24 +895,36 @@ fn session_request_schema_preserves_both_closed_object_branches() {
 		"smallhcsn_prepare",
 		"smallhcsn_roundtrip",
 		"smallhcsn_recover",
+		"late_quote_compile",
+		"late_quote_prepare",
+		"late_quote_roundtrip",
+		"late_quote_recover",
 	] {
 		assert!(encoded.contains(operation), "missing {operation}");
 	}
 }
 
 #[test]
-fn session_request_wire_keeps_f32_and_fixed_profile_disjoint() {
+fn session_request_wire_keeps_f32_and_both_fixed_profiles_disjoint() {
 	let f32 = json!({"session_id":"rms1_test","parent_sha256":"0".repeat(64),
 		"readout":{"weight_tensor":"w","weight_payload_sha256":"0".repeat(64),"bias_tensor":"b","bias_payload_sha256":"1".repeat(64),"outputs":2,"columns":2},
 		"operation":{"kind":"f32_recover","journal_id":"wgj1_test","expected_candidate_sha256":"2".repeat(64),"candidate_artifact_id":null}});
 	let hidden = json!({"session_id":"rms1_test","parent_sha256":"0".repeat(64),
 		"profile":"smallhcsn_centered_sender_drive_and_bias40_v1",
 		"operation":{"kind":"smallhcsn_recover","journal_id":"3".repeat(64),"expected_candidate_sha256":"2".repeat(64)}});
-	for (wire, expects_f32) in [(&f32, true), (&hidden, false)] {
+	let late = json!({"session_id":"rms1_test","parent_sha256":"0".repeat(64),
+		"profile":"smallhcsn_late_quote_min_mark4_task_route_v1",
+		"operation":{"kind":"late_quote_recover","journal_id":"3".repeat(64),"expected_plan_sha256":"4".repeat(64)}});
+	let wires = [(&f32, "f32"), (&hidden, "smallhcsn"), (&late, "late_quote")];
+	for (wire, expected) in wires {
 		let decoded: SessionWeightRequest = serde_json::from_value(wire.clone()).unwrap();
 		assert_eq!(
-			matches!(&decoded, SessionWeightRequest::F32(_)),
-			expects_f32
+			match &decoded {
+				SessionWeightRequest::F32(_) => "f32",
+				SessionWeightRequest::SmallHcsn(_) => "smallhcsn",
+				SessionWeightRequest::LateQuote(_) => "late_quote",
+			},
+			expected
 		);
 		assert_eq!(serde_json::to_value(decoded).unwrap(), *wire);
 		for field in [
@@ -914,13 +941,41 @@ fn session_request_wire_keeps_f32_and_fixed_profile_disjoint() {
 		let mut unknown_operation_field = wire.clone();
 		unknown_operation_field["operation"]["path"] = json!("forged");
 		assert!(serde_json::from_value::<SessionWeightRequest>(unknown_operation_field).is_err());
-		let mut swapped = wire.clone();
-		swapped["operation"] = (if expects_f32 { &hidden } else { &f32 })["operation"].clone();
-		assert!(serde_json::from_value::<SessionWeightRequest>(swapped).is_err());
+		for (other, other_kind) in wires {
+			if expected == other_kind {
+				continue;
+			}
+			let mut swapped = wire.clone();
+			swapped["operation"] = other["operation"].clone();
+			assert!(serde_json::from_value::<SessionWeightRequest>(swapped).is_err());
+			if wire.get("profile").is_some() && other.get("profile").is_some() {
+				let mut swapped_profile = wire.clone();
+				swapped_profile["profile"] = other["profile"].clone();
+				assert!(serde_json::from_value::<SessionWeightRequest>(swapped_profile).is_err());
+			}
+		}
 	}
-	let mut hybrid = f32;
-	hybrid["profile"] = hidden["profile"].clone();
-	assert!(serde_json::from_value::<SessionWeightRequest>(hybrid).is_err());
+	for profiled in [&hidden, &late] {
+		let mut hybrid = f32.clone();
+		hybrid["profile"] = profiled["profile"].clone();
+		assert!(serde_json::from_value::<SessionWeightRequest>(hybrid).is_err());
+	}
+	let request = json!({"profile_json":"{}","raw_input_hex":"00",
+		"retention_profile_json":"{}","retention_raw_input_hex":"00",
+		"minimum_accuracy_percent":95,"maximum_update_l2_norm":1.0});
+	for operation in [
+		json!({"kind":"late_quote_compile","request":request}),
+		json!({"kind":"late_quote_prepare","request":request}),
+		json!({"kind":"late_quote_roundtrip","request":request,"expected_journal_id":"3".repeat(64)}),
+	] {
+		let mut wire = late.clone();
+		wire["operation"] = operation;
+		let decoded: SessionWeightRequest = serde_json::from_value(wire.clone()).unwrap();
+		assert!(matches!(&decoded, SessionWeightRequest::LateQuote(_)));
+		assert_eq!(serde_json::to_value(decoded).unwrap(), wire);
+		wire["operation"]["request"]["owner"] = json!("forged");
+		assert!(serde_json::from_value::<SessionWeightRequest>(wire).is_err());
+	}
 	for non_object in [Value::Null, json!([]), json!("rms1_test")] {
 		assert!(serde_json::from_value::<SessionWeightRequest>(non_object).is_err());
 	}

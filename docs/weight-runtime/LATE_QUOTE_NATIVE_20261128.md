@@ -113,3 +113,10 @@ process crash controls. A source mapping entry remains an OPEN native interface
 mapping until execution evidence supports a narrower qualification. Historical
 REA evidence, upstream provenance and broader circuit understanding are not
 silently requalified by this change.
+
+CI's two isolated-test steps in each lane omit DWARF debug symbols. The integrated
+debug test harness otherwise exceeds the 512 MiB executable-identity read cap.
+Assertions, overflow checks, isolated processes, zero retries and the complete
+feature matrix remain enabled. The entire actual executable is still freshly
+hashed through the original cap; no test-only digest or expanded byte permission
+is substituted. Release builds retain their original profile and command.
