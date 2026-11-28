@@ -6,6 +6,8 @@ on:
       - '.github/workflows/hia-historical-source-custody.yml'
       - 'tests/hia_native/historical_public58/**'
       - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'tests/hia_native/test_historical_metadata_source_custody.py'
+      - 'vendor/**'
       - 'native/**'
       - 'scripts/**'
       - 'src/**'
@@ -16,6 +18,8 @@ on:
       - '.github/workflows/hia-historical-source-custody.yml'
       - 'tests/hia_native/historical_public58/**'
       - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'tests/hia_native/test_historical_metadata_source_custody.py'
+      - 'vendor/**'
       - 'native/**'
       - 'scripts/**'
       - 'src/**'
@@ -44,4 +48,6 @@ jobs:
             vendor
             runtime_support
       - name: Check fixed authorities, independent roots and terminal drift
-        run: python3 -I -B tests/hia_native/test_historical_public_source_custody.py -v
+        run: |
+          python3 -I -B tests/hia_native/test_historical_public_source_custody.py -v
+          python3 -I -B tests/hia_native/test_historical_metadata_source_custody.py -v

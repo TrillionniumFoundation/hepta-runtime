@@ -3,7 +3,8 @@
 The current default executable is never changed. Only the owned new output
 directory receives the exact historical graph closure and excludes the exact
 current-public-only additions. A separate fixed authority restores the complete original runtime and workdir
-reference domains. Every source outside both explicit restore sets is kept.
+reference domains. An independent extension restores the complete original
+production metadata domain. Every source outside the explicit restore sets is kept.
 """
 from pathlib import Path
 import argparse,ast,hashlib,importlib.util,json,shutil,stat,sys
@@ -167,6 +168,117 @@ def verify_native_reference_inventory(root, reference):
     reference_require(terminal == actual, "historical native inventory changed at terminal readback")
     return {"native_components": 195, "excluded_current_only_paths": 1}
 
+
+# This extension is independent of the retained 131-path/195-component authority.
+METADATA_REFERENCE_PROFILE = PREFIX / "METADATA_REFERENCE_PROFILE.json"
+METADATA_REFERENCE_SOURCE = PREFIX / "metadata_source"
+METADATA_REFERENCE_PROFILE_PIN = {"bytes":17577,"sha256":"69b1db7be27a1a7657c23902413745fccdac315dec64d7abb9b65d6b5d73cd91","git_blob":"b2d916e4ce6adeb7522742c3e96f27227d43bd93"}
+
+def metadata_reference_authority(source):
+    captured = {}
+    def capture(name):
+        name = Path(name).as_posix()
+        raw = read(source, name)
+        reference_require(name not in captured or captured[name] == raw,
+            "production metadata authority changed between captures: " + name)
+        captured[name] = raw
+        return raw
+    raw = capture(METADATA_REFERENCE_PROFILE)
+    reference_require(pin(raw) == METADATA_REFERENCE_PROFILE_PIN,
+        "historical production metadata profile changed")
+    value = json.loads(raw)
+    reference_require(value["schema"] == "hepta.historical-public58.production-metadata-source-profile.v1",
+        "historical production metadata profile schema changed")
+    reference_raw = capture(REFERENCE_PROFILE)
+    reference_require(pin(reference_raw) == REFERENCE_PROFILE_PIN
+        and value["retained_reference_profile"] == REFERENCE_PROFILE_PIN,
+        "retained original reference authority changed")
+    reference = json.loads(reference_raw)
+    authority = value["original_source_authority"]
+    source_raw = capture(authority["path"])
+    reference_require(pin(source_raw) == {key: authority[key] for key in ("bytes", "sha256", "git_blob")},
+        "complete original production metadata authority changed")
+    manifest = json.loads(source_raw)
+    reference_require(manifest["schema"] == "hepta.runtime.shell-process-original-source.v1"
+        and manifest["source_commit"] == value["original_commit"]
+        and manifest["source_tree"] == value["original_tree"],
+        "original production metadata commit or tree changed")
+    expected = {name: {"bytes": identity["bytes"], "sha256": identity["sha256"],
+                      "git_blob": identity["git_blob_sha1"]}
+                for name, identity in manifest["production_metadata_inputs"].items()}
+    reference_require(value["original_metadata_files"] == expected
+        and len(expected) == value["original_metadata_paths"] == 71,
+        "complete original 71-path production metadata domain changed")
+    workdir = reference["workdir_authority"]
+    workdir_raw = capture(workdir["path"])
+    reference_require(pin(workdir_raw) == {key: workdir[key] for key in ("bytes", "sha256", "git_blob")},
+        "retained workdir authority changed during metadata composition")
+    prior = {name: {key: identity[key] for key in ("bytes", "sha256")}
+             for name, identity in reference["original_runtime_files"].items()}
+    for name, identity in json.loads(workdir_raw)["files"].items():
+        reference_require(name not in prior or prior[name] == identity,
+            "retained original reference identities conflict")
+        prior[name] = identity
+    reference_require(len(prior) == 131 and len(set(prior) | set(expected))
+        == value["complete_reference_and_metadata_paths"] == 199,
+        "complete reference and production metadata union changed")
+    for name in set(prior) & set(expected):
+        reference_require(prior[name] == {key: expected[name][key] for key in ("bytes", "sha256")},
+            "original reference and production metadata disagree: " + name)
+    restore = value["restore"]
+    reference_require(set(restore) == set(value["current_inputs"])
+        == {"vendor/ruzstd/HEPTA_PATCH.md", "vendor/ruzstd/UPSTREAM_SOURCE.json"}
+        and all(expected.get(name) == identity for name, identity in restore.items()),
+        "production metadata restoration scope changed")
+    fixture = source / METADATA_REFERENCE_SOURCE
+    actual = {path.relative_to(fixture).as_posix() for path in fixture.rglob("*") if path.is_file()}
+    reference_require(actual == set(restore), "production metadata fixture inventory changed")
+    for name, identity in restore.items():
+        reference_require(pin(capture(METADATA_REFERENCE_SOURCE / name)) == identity,
+            "original production metadata fixture changed: " + name)
+    for name, data in captured.items():
+        reference_require(read(source, name) == data,
+            "production metadata authority changed at terminal readback: " + name)
+    terminal = {path.relative_to(fixture).as_posix() for path in fixture.rglob("*") if path.is_file()}
+    reference_require(terminal == actual, "production metadata fixture inventory changed at terminal readback")
+    return value
+
+def check_current_metadata_references(source, profile, reference, metadata):
+    reference_require(not (set(metadata["restore"]) & (set(profile["restore"])
+        | set(reference["restore"]) | set(profile["remove_current_public_only"])
+        | set(reference["excluded_current_only_files"]))),
+        "production metadata restoration overlaps a retained source transition")
+    captured = {}
+    for name, identity in metadata["original_metadata_files"].items():
+        if name in metadata["restore"]:
+            root, expected = source, metadata["current_inputs"][name]
+        elif name in reference["restore"]:
+            root, expected = source / REFERENCE_SOURCE, identity
+        elif name in profile["restore"]:
+            root, expected = source / PREFIX / "source", identity
+        else:
+            root, expected = source, identity
+        raw = read(root, name)
+        reference_require(pin(raw) == expected,
+            "current production metadata source differs from its fixed relation: " + name)
+        captured[(root, name)] = raw
+    for (root, name), raw in captured.items():
+        reference_require(read(root, name) == raw,
+            "current production metadata source changed at terminal readback: " + name)
+
+def verify_metadata_reference_domains(root, metadata):
+    captured = {}
+    for name, identity in metadata["original_metadata_files"].items():
+        raw = read(root, name)
+        reference_require(pin(raw) == identity,
+            "materialized original production metadata source differs: " + name)
+        captured[name] = raw
+    for name, raw in captured.items():
+        reference_require(read(root, name) == raw,
+            "materialized original production metadata changed at terminal readback: " + name)
+    return {"original_production_metadata_paths": 71, "additional_restored_metadata_paths": 2,
+            "complete_reference_and_metadata_paths": 199}
+
 def check(source):
     raw=read(source,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(raw)
     assert profile["schema"]=="hepta.historical-public58.source-profile.v8"
@@ -201,6 +313,8 @@ def check(source):
         value=pin(read(fixture,name));assert {key:value[key] for key in ("bytes","sha256")}==expected
     reference,required=reference_authority(source)
     check_current_references(source,profile,reference,required)
+    metadata=metadata_reference_authority(source)
+    check_current_metadata_references(source,profile,reference,metadata)
     return profile,SHA(raw)
 def selected(source):
     paths={}
@@ -220,26 +334,31 @@ def selected(source):
 def verify_materialized(root):
     receipt=json.loads(read(root,"HISTORICAL_PUBLIC_SOURCE.json"))
     profile_raw=read(root,(PREFIX/"PROFILE.json").as_posix());profile=json.loads(profile_raw)
-    assert receipt["schema"]=="hepta.historical-public58.materialized-source.v2"
+    assert receipt["schema"]=="hepta.historical-public58.materialized-source.v3"
     assert receipt["status"]=="SOURCE_PROFILE_MATERIALIZED"
     reference,required=reference_authority(root)
+    metadata=metadata_reference_authority(root)
     assert receipt["reference_profile"]==REFERENCE_PROFILE_PIN
     assert receipt["original_reference_restored_paths"]==sorted(reference["restore"])
     assert receipt["original_reference_domains"]==verify_reference_domains(root,reference,required)
+    assert receipt["metadata_reference_profile"]==METADATA_REFERENCE_PROFILE_PIN
+    assert receipt["metadata_reference_domains"]==verify_metadata_reference_domains(root,metadata)
+    assert receipt["metadata_reference_restored_paths"]==sorted(metadata["restore"])
     assert receipt["native_reference_inventory"]==verify_native_reference_inventory(root,reference)
     assert receipt["additional_excluded_current_only_paths"]==sorted(reference["excluded_current_only_files"])
     assert receipt["output_source"]==str(root.resolve(strict=True))
     assert receipt["profile_sha256"]==SHA(profile_raw)
     assert receipt["historical_public_images"]==58 and receipt["current_default_images"]==126
     assert receipt["historical_graph_restored_paths"]==sorted(profile["restore"])
-    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"]))
+    assert receipt["restored_paths"]==sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"]))
     assert receipt["excluded_current_only_paths"]==profile["remove_current_public_only"]
     assert {name:pin(path.read_bytes()) for name,path in selected(root).items()}==receipt["files"]
     for name,identity in profile["restore"].items():assert pin(read(root,name))==identity,name
     for name in profile["remove_current_public_only"]:assert not (root/name).exists(),name
     return dict(status="HISTORICAL58_COMPLETE_SOURCE_PROFILE_VERIFIED",files=len(receipt["files"]),
         profile_sha256=SHA(profile_raw),reference_profile=REFERENCE_PROFILE_PIN,
-        original_reference_domains=receipt["original_reference_domains"],historical_images=58,current_default_images=126,
+        original_reference_domains=receipt["original_reference_domains"],
+        metadata_reference_domains=receipt["metadata_reference_domains"],historical_images=58,current_default_images=126,
         native_or_rust_executed=False,historical_pass_relabelled=False)
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -247,10 +366,12 @@ def main():
     p.add_argument("--check-only",action="store_true");a=p.parse_args()
     source=a.source.resolve(strict=True);profile,profile_sha=check(source)
     reference,required=reference_authority(source)
+    metadata=metadata_reference_authority(source)
     if a.check_only:
         print(json.dumps(dict(status="CURRENT126_AND_HISTORICAL58_AUTHORITY_SOURCE_IDENTITIES_PASS",
             current_graph_files=544,current_authority_profile_files=6,current_workflow_files=4,historical_files=120,profile_sha256=profile_sha,
             original_runtime_reference_paths=53,workdir_reference_paths=84,original_reference_restores=18,
+            production_metadata_paths=71,additional_metadata_restores=2,complete_reference_and_metadata_paths=199,
             default_current_images=126,historical_images=58,native_or_rust_executed=False),sort_keys=True));return
     assert a.output is not None;output=a.output.absolute()
     assert not output.exists() and not output.is_relative_to(source)
@@ -273,7 +394,12 @@ def main():
         assert pin(read(output,name))==reference["current_inputs"][name],name
         raw=read(source/REFERENCE_SOURCE,name);destination=output/name
         destination.write_bytes(raw);expected[name]=identity
+    for name,identity in metadata["restore"].items():
+        assert pin(read(output,name))==metadata["current_inputs"][name],name
+        raw=read(source/METADATA_REFERENCE_SOURCE,name);destination=output/name
+        destination.write_bytes(raw);expected[name]=identity
     reference_domains=verify_reference_domains(output,reference,required)
+    metadata_domains=verify_metadata_reference_domains(output,metadata)
     native_reference_inventory=verify_native_reference_inventory(output,reference)
     actual={name:pin(path.read_bytes()) for name,path in selected(output).items()}
     assert actual==expected
@@ -285,12 +411,14 @@ def main():
     members=[node for node in parsed.body if isinstance(node,ast.Assign) and any(
         isinstance(target,ast.Name) and target.id=="MEMBERS" for target in node.targets)]
     assert len(members)==1 and len(ast.literal_eval(members[0].value))==58
-    receipt=dict(schema="hepta.historical-public58.materialized-source.v2",status="SOURCE_PROFILE_MATERIALIZED",
+    receipt=dict(schema="hepta.historical-public58.materialized-source.v3",status="SOURCE_PROFILE_MATERIALIZED",
         input_source=str(source),output_source=str(output),profile_sha256=profile_sha,
-        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])),
+        files=expected,restored_paths=sorted(set(profile["restore"])|set(reference["restore"])|set(metadata["restore"])),
         historical_graph_restored_paths=sorted(profile["restore"]),
         original_reference_restored_paths=sorted(reference["restore"]),
         reference_profile=REFERENCE_PROFILE_PIN,original_reference_domains=reference_domains,
+        metadata_reference_profile=METADATA_REFERENCE_PROFILE_PIN,metadata_reference_domains=metadata_domains,
+        metadata_reference_restored_paths=sorted(metadata["restore"]),
         native_reference_inventory=native_reference_inventory,
         additional_excluded_current_only_paths=sorted(reference["excluded_current_only_files"]),
         excluded_current_only_paths=profile["remove_current_public_only"],
