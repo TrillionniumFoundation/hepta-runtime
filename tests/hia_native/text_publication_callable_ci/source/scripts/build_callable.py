@@ -101,6 +101,8 @@ def build(source,hepta,output):
     with NativeModule(link_manifest,manifest_sha256=members["linker"]["identity"]["sha256"]) as module:
         code,raw,work=module.invoke_raw(frame,output_capacity=8<<20,workspace_capacity=32<<20,output_fill=0,workspace_fill=0)
     (output/"link.output.bin").write_bytes(raw);(output/"link.workspace.bin").write_bytes(work)
+    (output/"link.receipt.json").write_bytes(encoded(dict(actual_return=code,input=pin(output/"link.input.bin"),
+        output=pin(output/"link.output.bin"),workspace=pin(output/"link.workspace.bin"))))
     text_end=256+len(text);aligned=(text_end+4095)&~4095
     require(256<text_end<=code==aligned<=len(raw),"linked output extent differs")
     prefix=raw[:code];(output/"prefix.elf").write_bytes(prefix)
@@ -141,7 +143,7 @@ def build(source,hepta,output):
         linked_return=code,packer_return=pack_code,patches=patches,image_offsets=positions,
         image_order=["publication","codec","errno"],exports={k:v for k,v in symbols.items() if k.startswith("text_publication_")},
         artifacts={name:pin(output/name) for name in ("combined.S","bridge.o","link.input.bin",
-            "link.output.bin","link.workspace.bin","prefix.elf","pack.input.bin","pack.output.bin","pack.workspace.bin")},
+            "link.output.bin","link.workspace.bin","link.receipt.json","prefix.elf","pack.input.bin","pack.output.bin","pack.workspace.bin")},
         executable=pin(elf),scope=SCOPE,native_semantics_executed=False,
         runtime_python_required=False,runtime_libc_required=False)
     (output/"BUILD.json").write_bytes(encoded(result));print(json.dumps(result,sort_keys=True))

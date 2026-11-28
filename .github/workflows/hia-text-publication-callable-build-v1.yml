@@ -2,7 +2,7 @@ name: Build fixed text publication native callable
 on:
   workflow_dispatch:
   push:
-    branches: ['hia-text-publication-callable-build-6780-v3-20261117']
+    branches: ['hia-text-publication-callable-build-6780-v4-20261117']
 permissions:
   contents: read
 env:
@@ -31,13 +31,18 @@ jobs:
       - name: Verify exact source closure
         run: |
           test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
-          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = ebea2936498de46c47415211f2c68151828f30bc747a522191d14e4a4e34404f
+          test "$(sha256sum "$PC_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 32c27c2c9efe0f4166a93d7fe8b2fc09027369d047ba7a3ba99c3cc994e2055e
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
           test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
           python3 -I -S -B "$PC_SOURCE/scripts/build_callable.py" check --source "$PC_SOURCE"
       - name: Five fresh HIA compiles and actual HIA link and pack
         run: |
+          set +e
           python3 -I -S -B "$PC_SOURCE/scripts/build_callable.py" build --source "$PC_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PC_OUTPUT" > "$PC_DRIVER.stdout" 2> "$PC_DRIVER.stderr"
+          pc_status=$?
+          cat "$PC_DRIVER.stderr"
+          test "$pc_status" -ne 0 || cat "$PC_DRIVER.stdout"
+          exit "$pc_status"
       - name: Preserve full source and actual build bytes
         if: always()
         run: |
