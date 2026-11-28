@@ -1,4 +1,4 @@
-# Frozen v4 task pump: complete public Bellman CI
+# Frozen v4 task pump: complete public Bellman CI, recipe revision 2
 
 This is an isolated qualification recipe. It does not install a production
 runtime, change the main branch, replace historical evidence, or mark the full
@@ -124,3 +124,19 @@ A successful serial corpus does not qualify notification cancellation,
 EOF/future-drop timing, asynchronous request generations, the entire
 server router/audit layer, all configurations, or all tools. Those flags
 remain false and require their own actual current-SDK comparisons.
+
+## Preserved first fresh-CI failure
+
+Revision 1, commit 36ad2437bfc59e8b32a8e37c41ca60f087fefb7b,
+run 43908796631, built the fresh worker, packed port and all three graph
+entries and passed the complete build reader. Its fourth physical reader
+control then failed with PermissionError while writing a newly copied
+packed ELF whose exact source mode was 0555. The original Rust job passed;
+the complete public observer was not started. The failed run remains failed.
+
+Revision 2 temporarily adds owner-write only to the newly created control
+clone file, writes the declared mutation, and restores the exact mode in a
+finally block. The pure reader checks every clone file mode as well as the
+complete byte inventory. No graph, HIA, Rust, corpus or deadline is changed.
+The byte-only readback run 43910449753 verified all 18,483 archived files
+and 2,566,125,379 logical bytes without native or Rust execution.

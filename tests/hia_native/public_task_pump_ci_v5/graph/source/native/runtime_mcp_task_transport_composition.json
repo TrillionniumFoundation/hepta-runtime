@@ -1,0 +1,47 @@
+{
+  "active_async_drain_policy_owner": 58,
+  "active_worker_capability": 57,
+  "baseline_sha256": "ae665b4d0e4780ce777450756c90a01fc73a321a4c8a9afa879b0797c2ea6088",
+  "changes": [
+    {
+      "after": "    sub rsp, 4096\n    mov r12, rsp\n    xor eax, eax\n    mov rdi, r12\n    mov ecx, 4096\n    rep stosb\n    mov [r12 + 248], r15\n",
+      "before": "    sub rsp, 256\n    mov r12, rsp\n    mov [r12 + 248], r15\n    xor eax, eax\n    mov rdi, r12\n    mov ecx, 240\n    rep stosb\n"
+    },
+    {
+      "after": "    call pump_initialize\n    mov edi, 4096\n    call view_allocate\n",
+      "before": "    mov edi, 4096\n    call view_allocate\n"
+    },
+    {
+      "after": "public_span_scan:\n    call pump_tick\n    cmp qword ptr [r12 + PM_BARRIER], 0\n    jne public_span_wait_input\n",
+      "before": "public_span_scan:\n"
+    },
+    {
+      "after": "public_span_wait_input:\n    call pump_wait\n    jmp public_span_scan\n",
+      "before": "public_span_wait_input:\n    mov dword ptr [r12 + 192], 0\n    mov dword ptr [r12 + 196], 1\n    lea rdi, [r12 + 192]\n    mov esi, 1\n    mov rdx, -1\n    mov eax, 7\n    syscall\n    cmp rax, -4\n    je public_span_wait_input\n    cmp rax, 1\n    jne public_span_fail\n    jmp public_span_scan\n"
+    },
+    {
+      "after": "public_span_request_ready:\n    call pump_accept\n    jmp public_span_next\n",
+      "before": "public_span_request_ready:\n    mov r8d, 18\n    call runtime_grow_owned\n    cmp eax, 64\n    jne public_span_fail\n    mov rdx, [r15 + 8]\n    add rdx, 18 * 64\n    mov r13, [rdx + 32]\n    mov rax, [r13 + 16]\n    mov [r12 + 40], rax\n    cmp qword ptr [r13 + 8], 0\n    je public_span_silent\n    cmp qword ptr [r13 + 8], 2\n    je public_span_publish\n    cmp qword ptr [r13 + 8], 3\n    je public_span_publish_raw\n    cmp qword ptr [r13 + 8], 1\n    jne public_span_fail\n    cmp qword ptr [r13 + 32], 0\n    jne public_span_fail\n    mov edi, 1\n    lea rsi, [r13 + 64]\n    mov rdx, [r13 + 24]\n    call public_span_write\n    test eax, eax\n    jnz public_span_fail\n    jmp public_span_newline\npublic_span_publish_raw:\n    cmp qword ptr [r13 + 32], 0\n    jne public_span_fail\n    lea rdi, [r13 + 64]\n    mov rsi, [r13 + 24]\n    call runtime_publication_raw_span\n    test eax, eax\n    jnz public_span_fail\n    jmp public_span_newline\npublic_span_publish:\n    lea rdi, [r13 + 64]\n    mov rsi, [r13 + 24]\n    lea rdx, [rdi + rsi]\n    mov rcx, [r13 + 32]\n    mov r8, [r13 + 40]\n    call runtime_publication_span\n    test eax, eax\n    jnz public_span_fail\npublic_span_newline:\n    mov edi, 1\n    lea rsi, [rip + newline]\n    mov edx, 1\n    call public_span_write\n    test eax, eax\n    jnz public_span_fail\n    jmp public_span_next\npublic_span_silent:\n    mov rax, [r13 + 24]\n    or rax, [r13 + 32]\n    or rax, [r13 + 40]\n    jnz public_span_fail\n    jmp public_span_next\n"
+    },
+    {
+      "after": "public_span_finish:\n    call pump_finish\n    /* SDK registry58 has closed transport and drained owned tasks. */\n",
+      "before": "public_span_finish:\n    /* Every public response has completed its actual write/ACK/DROP above.\n     * This serial graph has no pending handler registry. The shared HIA\n     * shutdown owner receives the observed empty send/child counts. */\n    mov eax, 1\n    mov ecx, 1\n    call public_span_shutdown_step\n    test eax, eax\n    jnz public_span_fail\n    mov eax, 2\n    mov ecx, 2\n    call public_span_shutdown_step\n    test eax, eax\n    jnz public_span_fail\n    mov eax, 4\n    mov ecx, 3\n    call public_span_shutdown_step\n    test eax, eax\n    jnz public_span_fail\n    mov edi, 1\n    mov eax, 3\n    syscall\n    cmp rax, -4 /* Linux has already released this descriptor on EINTR. */\n    je public_span_writer_closed\n    test rax, rax\n    jnz public_span_fail\npublic_span_writer_closed:\n    mov eax, 5\n    mov ecx, 4\n    call public_span_shutdown_step\n    test eax, eax\n    jnz public_span_fail\n"
+    },
+    {
+      "after": "    .zero 472 /* 59 fixed slots; Bellman57 and SDK registry58. */",
+      "before": "    .zero 456 /* 57 fixed slots; authority56 is a private callable capability. */"
+    },
+    {
+      "after": "public_span_fail:\n    call pump_restore_fd_flags\n    mov r15, [r12 + 248]\n",
+      "before": "public_span_fail:\n    mov r15, [r12 + 248]\n"
+    }
+  ],
+  "failure_restores_observed_fd_flags": true,
+  "framing_owner_bytes_preserved": true,
+  "full_async_runtime_qualified": false,
+  "historical_serial_evidence_upgraded": false,
+  "inverse_exact": true,
+  "old_serial_shutdown53_preserved_as_unchanged_component": true,
+  "output_sha256": "04e1994e015a01b848ddd70e23cb7eb7cbffcf6a29de513d8903835b33fdaf16",
+  "schema": "hepta.runtime.task-pump.transport-delta.v2"
+}

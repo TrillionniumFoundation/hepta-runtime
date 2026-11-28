@@ -1,0 +1,193 @@
+name: Read frozen task pump v5 evidence with exact directory restoration
+on:
+  push:
+    branches: [hia-task-pump-v5-readback-r2-6780-20261116]
+    paths: ['.github/workflows/hia-task-pump-v5-readback-r2.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set isolated readback paths
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/task-pump-v5-readback"
+          test ! -e "$root"
+          mkdir "$root"
+          echo "READBACK_ROOT=$root" >> "$GITHUB_ENV"
+      - name: Download the three exact existing artifact ZIPs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14252025154 > "$READBACK_ROOT/build-metadata.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14252025154/zip > "$READBACK_ROOT/build.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14250616104 > "$READBACK_ROOT/original-metadata.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14250616104/zip > "$READBACK_ROOT/original.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14250547773 > "$READBACK_ROOT/native-metadata.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14250547773/zip > "$READBACK_ROOT/native.zip"
+      - name: Independently verify all members and replay the strict read-only reader
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib,json,os,shutil,stat,subprocess,sys,tarfile,time,zipfile
+          EXPECTED=json.loads(r'''{"head":"63c366a278a51c1407e5929524b66684747a6e23","run":43916467554,"manifest":"877a86169f0a21ec8ccd6ec8e6cd37b66122ea30d640300e80645fc97b645dd7","artifacts":{"build":{"id":14252025154,"bytes":568017321,"sha256":"b95d14734827f998a6bdc48999fa5be197d32d5b80cadeb74c4ce740c65bede3"},"original":{"id":14250616104,"bytes":198490678,"sha256":"d1e1a23414a746c36fd34f77195a7e104e8ff1a5436fc548acbbd6139cae8285"},"native":{"id":14250547773,"bytes":196135388,"sha256":"ccd381290ba93461e34537083bcaed2cc37eee20bc9f9b00abbd6a03c90d6b7a"}}}''')
+          root=Path(os.environ['READBACK_ROOT']).resolve(strict=True)
+          reports=root/'reports';reports.mkdir()
+          def pin(path):
+              with path.open('rb') as f:return dict(bytes=path.stat().st_size,sha256=hashlib.file_digest(f,'sha256').hexdigest())
+          def put(path,value):
+              path.parent.mkdir(parents=True,exist_ok=True)
+              path.write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          def safe(name):
+              p=PurePosixPath(name)
+              assert name and p.as_posix()==name and not p.is_absolute() and all(x not in ('','.','..') for x in p.parts)
+          archives={}
+          for label,identity in EXPECTED['artifacts'].items():
+              archive=root/(label+'.zip')
+              metadata=json.loads((root/(label+'-metadata.json')).read_bytes())
+              assert metadata['id']==identity['id'] and metadata['workflow_run']['id']==EXPECTED['run']
+              assert metadata['workflow_run']['head_sha']==EXPECTED['head'] and metadata['expired'] is False
+              assert metadata['size_in_bytes']==identity['bytes'] and metadata['digest']=='sha256:'+identity['sha256']
+              assert pin(archive)=={k:identity[k] for k in ('bytes','sha256')}
+              shutil.copyfile(root/(label+'-metadata.json'),reports/(label+'-metadata.json'))
+              output=root/'extracted'/label;output.mkdir(parents=True)
+              with zipfile.ZipFile(archive) as z:
+                  assert len(z.infolist())==2 and set(z.namelist())=={'archive.json','capture.tar.gz'}
+                  receipt_raw=z.read('archive.json');receipt=json.loads(receipt_raw)
+                  assert receipt['schema']=='hepta.runtime.complete-ci-archive-receipt.v1'
+                  assert receipt['label']==label and receipt['git_head']==EXPECTED['head']
+                  assert receipt['run_id']==str(EXPECTED['run']) and receipt['run_attempt']=='1'
+                  assert receipt['source_manifest_sha256']==EXPECTED['manifest']
+                  assert receipt['captured_tree_modified_by_export'] is False and receipt['qualification_inferred_from_archive'] is False
+                  with z.open('capture.tar.gz') as stream:
+                      tar_pin=dict(bytes=z.getinfo('capture.tar.gz').file_size,sha256=hashlib.file_digest(stream,'sha256').hexdigest())
+                  assert tar_pin==receipt['archive']
+                  seen=set();inventory=None;total=0
+                  with z.open('capture.tar.gz') as compressed,tarfile.open(fileobj=compressed,mode='r|gz') as tar:
+                      for member in tar:
+                          assert member.isfile() and not member.issym() and not member.islnk()
+                          assert member.name.startswith('capture/')
+                          name=member.name.removeprefix('capture/');safe(name)
+                          assert name not in seen
+                          target=output/name;target.parent.mkdir(parents=True,exist_ok=True)
+                          digest=hashlib.sha256();count=0
+                          with tar.extractfile(member) as source,target.open('xb') as dest:
+                              while raw:=source.read(1<<20):
+                                  dest.write(raw);digest.update(raw);count+=len(raw)
+                          row=dict(bytes=count,sha256=digest.hexdigest(),mode=member.mode)
+                          assert count==member.size
+                          if inventory is None:
+                              assert name=='artifact-manifest.json' and member.mode==0o600
+                              assert {k:row[k] for k in ('bytes','sha256')}==receipt['manifest']
+                              manifest=json.loads(target.read_bytes())
+                              assert manifest['schema']=='hepta.runtime.complete-ci-archive.v1'
+                              assert manifest['label']==label and manifest['source_manifest_sha256']==EXPECTED['manifest']
+                              assert manifest['qualification_inferred_from_archive'] is False
+                              inventory=dict(manifest['files']);assert name not in inventory
+                              for item,info in inventory.items():
+                                  safe(item)
+                                  assert set(info)=={'bytes','sha256','mode'} and type(info['bytes']) is int and info['bytes']>=0
+                                  assert type(info['mode']) is int and 0<=info['mode']<=0o777
+                              inventory[name]=row
+                              shutil.copyfile(target,reports/(label+'-artifact-manifest.json'))
+                          assert name in inventory and row==inventory[name],(label,name)
+                          os.chmod(target,member.mode)
+                          seen.add(name);total+=count
+                  assert seen==set(inventory) and receipt['readback']==dict(files=len(seen),logical_bytes=total)
+              (reports/(label+'-archive.json')).write_bytes(receipt_raw)
+              package=output/'ci-package'
+              assert pin(package/'PACKAGE.json')['sha256']==EXPECTED['manifest']
+              files=json.loads((package/'PACKAGE.json').read_bytes())['files']
+              assert len(files)==426
+              actual={p.relative_to(package).as_posix():p for p in package.rglob('*') if p.is_file()}
+              assert set(actual)==set(files)|{'PACKAGE.json'}
+              for name,row in files.items():
+                  assert pin(actual[name])=={k:row[k] for k in ('bytes','sha256')},name
+              archives[label]=dict(zip={k:identity[k] for k in ('bytes','sha256')},artifact=identity['id'],
+                  tar=tar_pin,manifest=receipt['manifest'],files=len(seen),logical_bytes=total)
+              print(json.dumps({'label':label,'status':'ALL_EXISTING_BYTES_AND_METADATA_READ','files':len(seen),'logical_bytes':total}),flush=True)
+          put(reports/'ARCHIVE_READBACK.json',dict(status='COMPLETE_THREE_ARCHIVE_BYTE_READBACK_PASS',
+              original=EXPECTED,archives=archives,native_executions=0,rust_executions=0,source_or_evidence_modified=False))
+          # Restore only directory objects/modes from the captured exact fixture snapshots.
+          # The tar inventories contain every regular file but intentionally have no directory entries.
+          # Historical device/inode/time observations remain provenance; no original capture is edited.
+          restored=[]
+          for session in (0,1):
+              folder=root/'extracted/native/public'/('session-'+str(session))
+              snapshot=folder/'fixture-after.json';rows=json.loads(snapshot.read_bytes())
+              before=json.loads((folder/'fixture-before.json').read_bytes())
+              assert {x['path'] for x in before}=={'.','controller-state','workspace','runtime.json'}
+              table={x['path']:x for x in rows};assert len(table)==len(rows)
+              assert list(table)==['.',*sorted(x for x in table if x!='.')]
+              physical=folder/'fixture'
+              existing={x.relative_to(physical).as_posix():pin(x) for x in physical.rglob('*') if x.is_file()}
+              expected_files={name:dict(bytes=row['bytes'],sha256=row['sha256']) for name,row in table.items() if stat.S_ISREG(row['mode'])}
+              assert existing==expected_files
+              for name,row in table.items():
+                  if name!='.':safe(name)
+                  target=physical/name
+                  if stat.S_ISDIR(row['mode']):
+                      assert stat.S_IMODE(row['mode'])==0o700
+                      if target.exists():assert target.is_dir() and not target.is_symlink()
+                      target.mkdir(mode=0o700,parents=False,exist_ok=True)
+                      os.chmod(target,stat.S_IMODE(row['mode']))
+                      restored.append(dict(session=session,path=name,mode=row['mode'],snapshot=pin(snapshot)))
+                  else:
+                      assert stat.S_ISREG(row['mode']) and target.is_file() and not target.is_symlink()
+                      assert target.stat().st_mode==row['mode']
+                      raw=target.read_bytes()
+                      assert raw.hex()==row['content_hex'] and pin(target)==expected_files[name]
+              assert {x.relative_to(physical).as_posix() for x in [physical,*physical.rglob('*')]}==set(table)
+              assert {x.relative_to(physical).as_posix():pin(x) for x in physical.rglob('*') if x.is_file()}==existing
+          put(reports/'DIRECTORY_RESTORATION.json',dict(status='EXACT_RECORDED_FIXTURE_DIRECTORIES_RESTORED',
+              directories=restored,regular_file_bytes_or_modes_changed=False,original_archives_changed=False,
+              snapshot_contents_changed=False,native_executions=0,rust_executions=0))
+          package=root/'extracted/build/ci-package'
+          cmd=[sys.executable,'-I','-S','-B',str(package/'ci/read_all.py'),
+              '--package',str(package),'--build',str(root/'extracted/build'),
+              '--original',str(root/'extracted/original'),'--capture',str(root/'extracted/native'),
+              '--manifest-sha256',EXPECTED['manifest']]
+          started=time.monotonic_ns()
+          with (reports/'full-readonly.stdout').open('xb') as out,(reports/'full-readonly.stderr').open('xb') as err:
+              proc=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=out,stderr=err)
+              code=proc.wait()
+          record=dict(command=cmd,pid=proc.pid,exit_code=code,elapsed_ns=time.monotonic_ns()-started,
+              stdout=pin(reports/'full-readonly.stdout'),stderr=pin(reports/'full-readonly.stderr'),
+              native_executions=0,rust_executions=0,outer_timeout_added=False,workflow_job_limit_minutes=15)
+          put(reports/'READER_PROCESS.json',record)
+          assert code==0 and (reports/'full-readonly.stderr').read_bytes()==b'',record
+          joined=json.loads((reports/'full-readonly.stdout').read_bytes())
+          assert joined['status']=='FRESH_GRAPH_AND_CURRENT_SERIAL1394_PASS'
+          q=joined['qualification'];g=joined['read_only']
+          assert q['source_manifest_sha256']==EXPECTED['manifest']
+          assert q['ci']==dict(git_head=EXPECTED['head'],run_id=str(EXPECTED['run']),run_attempt='1')
+          assert q['public_records']==1394 and q['tool_cases']==1366 and q['complete_responses']==1393
+          assert q['runtime_hia_images']==100 and q['fresh_direct_members']==92 and q['packed_hia_members']==8
+          assert q['process_deadline_seconds']==180 and q['exchange_deadline_seconds']==60
+          assert g['before']==g['after'] and len(g['probes'])==11 and g['source_bound_guard'] is True
+          assert g['reader_writes']==g['native_or_rust_executions']==0
+          for key in ('full_sdk_qualified','full_router_qualified','async_pending_registry_qualified','cross_session_pool_qualified','production_activated','old_stack_removed'):
+              assert q[key] is False,key
+          put(reports/'READBACK.json',dict(status='INDEPENDENT_COMPLETE_ARCHIVE_AND_STRICT_READER_PASS',
+              original=EXPECTED,archives=archives,qualification=q,reader_process=record,
+              guard=dict(probes=len(g['probes']),source_bound=g['source_bound_guard'],before_equals_after=True,
+                  native_or_rust_executions=0,reader_writes=0),
+              captured_tree_modified=False,source_modified=False,serial_domain_only=True,
+              relocation_directory_metadata_restored_from_exact_snapshots=True))
+          print(json.dumps({'status':'INDEPENDENT_COMPLETE_ARCHIVE_AND_STRICT_READER_PASS','qualification':q,
+              'archive_files':sum(x['files'] for x in archives.values()),'logical_bytes':sum(x['logical_bytes'] for x in archives.values())},sort_keys=True))
+          PY
+      - name: Retain complete readback reports and failure streams
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: task-pump-v5-independent-readback-r2
+          path: ${{ env.READBACK_ROOT }}/reports/
+          compression-level: 6
+          retention-days: 30
+          if-no-files-found: error

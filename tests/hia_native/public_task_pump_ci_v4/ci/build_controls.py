@@ -36,6 +36,17 @@ def mutation(before,kind):
     data["members"][0]["fresh_compile"]=False
     return (json.dumps(data,sort_keys=True,indent=2)+"\n").encode()
 
+def mutate_owned_clone(path,kind):
+    """Change only a newly copied control file and restore its exact mode."""
+    before=path.read_bytes()
+    mode=stat.S_IMODE(path.stat().st_mode)
+    try:
+        path.chmod(mode|stat.S_IWUSR)
+        path.write_bytes(mutation(before,kind))
+    finally:
+        path.chmod(mode)
+    require(stat.S_IMODE(path.stat().st_mode)==mode,"control clone mode was not restored")
+
 def rejection(package,clone,manifest_sha256):
     try:
         verify_build(package,clone,manifest_sha256)
@@ -56,6 +67,8 @@ def verify_controls(package,build,manifest_sha256):
         wanted=mutation((build/relative).read_bytes(),kind)
         actual=files(clone)
         require(set(actual)==set(declared),"control clone source file set differs")
+        require(all(stat.S_IMODE((clone/n).stat().st_mode)==stat.S_IMODE((build/n).stat().st_mode)
+                    for n in declared),"control clone file modes differ")
         expected=dict(declared)
         expected[relative]={"bytes":len(wanted),"sha256":__import__("hashlib").sha256(wanted).hexdigest()}
         require(actual==expected and (clone/relative).read_bytes()==wanted,"control physical mutation differs")
@@ -97,7 +110,7 @@ def main():
             shutil.copyfile(build/file,target)
             target.chmod(stat.S_IMODE((build/file).stat().st_mode))
         changed=clone/relative
-        changed.write_bytes(mutation(changed.read_bytes(),kind))
+        mutate_owned_clone(changed,kind)
         failure=rejection(package,clone,a.manifest_sha256)
         row={"case":name,"changed_path":relative,"before":inventory[relative],
             "after":pin(changed),"reader_rejection":failure,"native_or_rust_executed":False}

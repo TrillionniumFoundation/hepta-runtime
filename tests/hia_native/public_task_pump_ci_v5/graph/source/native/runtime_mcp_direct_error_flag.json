@@ -1,0 +1,26 @@
+{
+  "accepted_is_error_values": [
+    0,
+    1
+  ],
+  "accepted_kind": 1,
+  "after_sha256": "a82c4dfccead322e9a5ed83a2e8f8889c425b6c19dffdcfa49621b7558d9cf78",
+  "all_hia_and_external_port_source_bytes_unchanged": true,
+  "author_sha256": "6c19ef5d44170276667e72c2f1be566aeec69e7c548282c4dfff625c0fe44d89",
+  "before_sha256": "5155e172a408cf2176a327b74f8b9216536f969440e45c418d2c951277b2a67f",
+  "before_source_binding_sha256": "a910597f39e0ae0f62ef6368d6c9ec5bbc2af13c41b5c72d06fd5d297a0398bd",
+  "body_length_must_remain_zero": true,
+  "complete_wire_is_copied_without_new_serialization": true,
+  "exact_reversible_change": {
+    "after": "pump_send_direct:\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    /* Kind1 is the complete JSON-RPC envelope, including a typed decoding\n     * error when isError is one. The direct writer preserves its bytes. */\n    cmp qword ptr [r13+40],1\n    ja public_span_fail\n",
+    "before": "pump_send_direct:\n    cmp qword ptr [r13+32],0\n    jne public_span_fail\n    cmp qword ptr [r13+40],0\n    jne public_span_fail\n"
+  },
+  "fresh_ci_qualified": false,
+  "frontend_boolean_and_extent_checks_unchanged": true,
+  "full_async_qualified": false,
+  "full_public_qualified": false,
+  "kind_0_2_3_4_and_actual_write_ack_lifetimes_unchanged": true,
+  "new_source_executed": false,
+  "path": "scripts/runtime_mcp_task_send.S",
+  "schema": "hepta.runtime.task-pump.direct-json-rpc-error-flag.v1"
+}
