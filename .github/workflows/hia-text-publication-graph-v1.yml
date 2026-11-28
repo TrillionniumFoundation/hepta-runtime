@@ -1,0 +1,85 @@
+name: Publisher configured private graph build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-graph-6780-v1-20261117']
+    paths: ['tests/hia_native/text_publication_graph_ci/**', '.github/workflows/hia-text-publication-graph-v1.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  graph:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_graph_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-graph" "TP_EXPORT=$RUNNER_TEMP/text-publication-graph-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-graph-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact graph candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_graph_ci/source
+      - name: Checkout exact installed111 base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: base
+          ref: 99d107c062a6eb3f226dd82b05283aeecbd3c495
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /native/
+            /scripts/
+            /runtime_support/
+            /authoring/
+            /tests/constructor_cases.py
+            /tests/hia_native/runtime_mcp*
+            /tests/hia_native/test_runtime_mcp.py
+            /tests/hia_native/view_call_oracle/
+            /tests/hia_native/workdir_oracle/
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify package and compose exact source closure
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C "$GITHUB_WORKSPACE/base" rev-parse HEAD)" = 99d107c062a6eb3f226dd82b05283aeecbd3c495
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 77a009f9cfedbdcf0de366f56a2d78fd01bc3f382c36155affdf4a7631023bb9
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py" --source "$TP_PACKAGE"
+          python3 -I -S -B "$TP_PACKAGE/recipe/compose_graph.py" --base "$GITHUB_WORKSPACE/base" --package "$TP_PACKAGE" --output "$TP_OUTPUT/composition"
+      - name: Build fresh private116 graph and actual HIA link and pack
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/build_graph.py" --source "$TP_OUTPUT/composition/source" --hepta "$GITHUB_WORKSPACE/compiler" --output "$TP_OUTPUT/native-build" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          test "$tp_status" -ne 0 || cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Independently read complete controller build archive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B "$TP_PACKAGE/recipe/read_controllers_archive.py" --output "$TP_OUTPUT/retained-controllers"
+      - name: Preserve complete source and native build including any failure
+        if: always()
+        run: |
+          python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-graph-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

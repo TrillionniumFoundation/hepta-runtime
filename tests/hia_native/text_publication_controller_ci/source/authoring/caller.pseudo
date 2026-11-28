@@ -1,0 +1,349 @@
+def valid_typed(s: readbuf, size: u64) -> bool:
+    return valid_params(s, 48, size)
+
+def valid_params(s: readbuf, base: u64, size: u64) -> bool:
+    if base > length(s) or size > length(s) - base or size < 128:
+        return False
+    if load(s, base) != PARAMS_RESULT or load(s, base + 8) != 0:
+        return False
+    mode = load(s, base + 16)
+    if mode < 1 or mode > 3:
+        return False
+    i = 48
+    while i < 128:
+        if load(s, base + i) != 0:
+            return False
+        i = i + 8
+    left = size - 128
+    path = load(s, base + 24)
+    content = load(s, base + 32)
+    expected = load(s, base + 40)
+    if path > left:
+        return False
+    left = left - path
+    if content > left:
+        return False
+    return expected == left - content
+
+def after_resolve(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    state = get(w, 424)
+    if state == 0:
+        return after_presence(s, o, w, code, size)
+    if state == 1:
+        return after_path(s, o, w, code, size)
+    if state == 2:
+        return after_local_policy(s, o, w, code, size)
+    return INVALID
+
+def after_body(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    state = get(w, 440)
+    if state == 0:
+        return after_publication(s, o, w, code, size)
+    if state == 1:
+        return after_cache_key(s, o, w, code, size)
+    if state == 2:
+        return after_forget(s, o, w, code, size)
+    return INVALID
+
+def prepare_resolve(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    state = get(w, 424)
+    if state == 0:
+        if valid_expectation(s) == False:
+            count = publisher_literal(w, 2048, 1)
+            return preflight_error(s, o, w, 2048, count)
+        if load(s, 80) > 65536:
+            count = publisher_literal(w, 2048, 2)
+            return preflight_error(s, o, w, 2048, count)
+        return prepare_presence(o, w)
+    if state == 1:
+        return prepare_path(s, o, w)
+    if state == 2:
+        return prepare_local_policy(o, w)
+    return INVALID
+
+def prepare_body(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if get(w, 424) != 3:
+        return INVALID
+    state = get(w, 440)
+    if state == 0:
+        return prepare_publication(s, o, w)
+    if state == 1:
+        return prepare_cache_key(o, w)
+    if state == 2:
+        return prepare_forget(o, w)
+    return INVALID
+
+def valid_expectation(s: readbuf) -> bool:
+    start = 176 + load(s, 72) + load(s, 80)
+    count = load(s, 88)
+    if load(s, 64) == 1:
+        if count != 6:
+            return False
+        if byte(s, start) != 97 or byte(s, start + 1) != 98 or byte(s, start + 2) != 115:
+            return False
+        if byte(s, start + 3) != 101 or byte(s, start + 4) != 110 or byte(s, start + 5) != 116:
+            return False
+        return True
+    if count != 64:
+        return False
+    i = 0
+    while i < count:
+        value = byte(s, start + i)
+        if ((value >= 48 and value <= 57) or (value >= 97 and value <= 102)) == False:
+            return False
+        i = i + 1
+    return True
+
+def equal_workspace(w: mutbuf, left: u64, right: u64, count: u64) -> bool:
+    i = 0
+    while i < count:
+        if byte(w, left + i) != byte(w, right + i):
+            return False
+        i = i + 1
+    return True
+
+def prepare_presence(o: mutbuf, w: mutbuf) -> u32:
+    if reserve(w, 0, 24) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 128) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    put(w, at, CONFIG_REQUEST)
+    put(w, at + 8, 7)
+    put(w, at + 16, 0)
+    return child(w, 3, 24, 2)
+
+def after_presence(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 3 or code != size or size < 32:
+        return INVALID
+    if get(w, at) != MESSAGE or get(w, at + 24) != size - 32:
+        return INVALID
+    if get(w, at + 8) == 1 and get(w, at + 16) == 9:
+        count = publisher_literal(w, 2048, 5)
+        if count != size - 32:
+            return INVALID
+        if equal_workspace(w, at + 32, 2048, count) == False:
+            return INVALID
+        count = publisher_literal(w, 2048, 3)
+        return business_error(s, o, w, 2048, count)
+    if size != 40 or get(w, at + 8) != 0 or get(w, at + 16) != 0:
+        return INVALID
+    put(w, 424, 1)
+    return prepare(s, o, w, 2)
+
+def prepare_path(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    path = load(s, 72)
+    workdir = get(w, 80)
+    if path > MAXIMUM - 56 or workdir > MAXIMUM - 56 - path:
+        return request_grow(o, w, 3, 0)
+    size = 56 + path + workdir
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 96) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 56, 0)
+    put(w, at, PATH_REQUEST)
+    put(w, at + 8, 2)
+    put(w, at + 16, path)
+    put(w, at + 24, workdir)
+    copy_range(w, s, at + 56, 176, path)
+    copy_range(w, s, at + 56 + path, 48 + get(w, 72), workdir)
+    return child(w, 1, size, 2)
+
+def after_path(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 1 or code != 96 or size < 96 or get(w, at) != PATH_RESULT:
+        return INVALID
+    host = get(w, at + 40)
+    user = get(w, at + 48)
+    path = get(w, at + 56)
+    if host > size - 96 or user > size - 96 - host or path != size - 96 - host - user:
+        return INVALID
+    i = 64
+    while i < 96:
+        if get(w, at + i) != 0:
+            return INVALID
+        i = i + 8
+    kind = get(w, at + 8)
+    if kind > 1:
+        return INVALID
+    if kind == 1:
+        count = publisher_literal(w, 2048, 4)
+        return business_error(s, o, w, 2048, count)
+    if host != 0 or user != 0:
+        return INVALID
+    if reserve(w, 2, size) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 2), at, size)
+    put(w, 136, size)
+    put(w, 424, 2)
+    return prepare(s, o, w, 2)
+
+def prepare_local_policy(o: mutbuf, w: mutbuf) -> u32:
+    source = region(w, 2)
+    count = get(w, source + 56)
+    if count > MAXIMUM - 24:
+        return request_grow(o, w, 3, 0)
+    size = 24 + count
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    put(w, at, LOCAL_POLICY_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 16, count)
+    copy_range(w, w, at + 24, source + 96, count)
+    return child(w, 4, size, 2)
+
+def after_local_policy(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 4 or code != 32 or size < 32 or get(w, at) != LOCAL_POLICY_RESULT:
+        return INVALID
+    if get(w, at + 24) != size - 32:
+        return INVALID
+    kind = get(w, at + 8)
+    if kind == 1:
+        return business_error(s, o, w, at + 32, size - 32)
+    if kind != 0 or get(w, at + 16) != 0 or size != 32:
+        return INVALID
+    put(w, 424, 3)
+    put(w, 440, 0)
+    put(w, 448, 0)
+    return prepare(s, o, w, 3)
+
+def prepare_publication(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    source = region(w, 2)
+    path = get(w, source + 56)
+    content = load(s, 80)
+    expected = load(s, 88)
+    if path > MAXIMUM - 64:
+        return request_grow(o, w, 3, 0)
+    if content > MAXIMUM - 64 - path:
+        return request_grow(o, w, 3, 0)
+    if expected > MAXIMUM - 64 - path - content:
+        return request_grow(o, w, 3, 0)
+    size = 64 + path + content + expected
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 64, 0)
+    put(w, at, BODY_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 24, get(w, 64))
+    put(w, at + 32, path)
+    put(w, at + 40, content)
+    put(w, at + 48, expected)
+    put(w, at + 56, path + content + expected)
+    copy_range(w, w, at + 64, source + 96, path)
+    copy_range(w, s, at + 64 + path, 176 + load(s, 72), content + expected)
+    return child(w, 2, size, 3)
+
+def after_publication(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 2 or code != 64 or size < 64 or get(w, at) != BODY_RESULT:
+        return INVALID
+    kind = get(w, at + 8)
+    if kind != 0 and kind != 3:
+        return INVALID
+    count = get(w, at + 56)
+    if count != size - 64:
+        return INVALID
+    i = 24
+    while i < 56:
+        if get(w, at + i) != 0:
+            return INVALID
+        i = i + 8
+    if reserve(w, 4, count) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 4), at + 64, count)
+    put(w, 200, count)
+    put(w, 216, choose(kind == 0, 0, 1))
+    if kind == 3:
+        return prepare(s, o, w, 5)
+    put(w, 440, 1)
+    return prepare(s, o, w, 3)
+
+def prepare_cache_key(o: mutbuf, w: mutbuf) -> u32:
+    count = get(w, 136)
+    if count > MAXIMUM - 64:
+        return request_grow(o, w, 3, 0)
+    size = 64 + count
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 32) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 64, 0)
+    put(w, at, KEY_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 16, count)
+    copy_range(w, w, at + 64, region(w, 2), count)
+    return child(w, 5, size, 3)
+
+def after_cache_key(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 5 or code != size or size < 32 or get(w, at) != KEY_RESULT:
+        return INVALID
+    if get(w, at + 8) != 1 or get(w, at + 16) != size - 32 or get(w, at + 24) != 0:
+        return INVALID
+    count = size - 32
+    if reserve(w, 6, count) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 6), at + 32, count)
+    put(w, 448, count)
+    put(w, 440, 2)
+    return prepare(s, o, w, 3)
+
+def prepare_forget(o: mutbuf, w: mutbuf) -> u32:
+    count = get(w, 448)
+    if count > MAXIMUM - 112:
+        return request_grow(o, w, 3, 0)
+    size = 112 + count
+    if reserve(w, 0, size) == 0:
+        return pending_grow(o, w)
+    if reserve(w, 1, 96) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    fill_range(w, at, 112, 0)
+    put(w, at, SCOPE_REQUEST)
+    put(w, at + 8, 9)
+    put(w, at + 16, get(w, 112))
+    put(w, at + 24, get(w, 120))
+    put(w, at + 48, 48 + count)
+    put(w, at + 64, CACHE_REQUEST)
+    put(w, at + 72, 3)
+    put(w, at + 80, 1)
+    put(w, at + 88, count)
+    copy_range(w, w, at + 112, region(w, 6), count)
+    return child(w, 0, size, 3)
+
+def after_forget(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if get(w, 48) != 0 or code != 96 or size != 96 or get(w, at) != SCOPE_RESULT:
+        return INVALID
+    if get(w, at + 8) != get(w, 112) or get(w, at + 16) != get(w, 120):
+        return INVALID
+    if get(w, at + 24) != 1 or get(w, at + 32) != 5:
+        return INVALID
+    if get(w, at + 40) != get(w, 96) or get(w, at + 48) != get(w, 128) or get(w, at + 56) != 32:
+        return INVALID
+    if get(w, at + 64) != CACHE_RESULT:
+        return INVALID
+    if get(w, at + 72) != 0 or get(w, at + 80) != 0 or get(w, at + 88) != 0:
+        return INVALID
+    put(w, 440, 3)
+    return prepare(s, o, w, 4)
+
+def preflight_error(s: readbuf, o: mutbuf, w: mutbuf, at: u64, count: u64) -> u32:
+    if reserve(w, 4, count) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 4), at, count)
+    put(w, 200, count)
+    put(w, 216, 1)
+    put(w, 8, 105)
+    return prepare_scope(o, w, 5)
