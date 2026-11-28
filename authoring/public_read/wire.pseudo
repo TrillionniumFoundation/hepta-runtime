@@ -1,0 +1,427 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 64:
+        return 4294967294
+    if valid_outer(s) == 0:
+        return INVALID
+    typed_size = load(s, 80)
+    if typed_size < 256 or typed_size > load(s, 16) - 64:
+        return INVALID
+    if typed_size > 4294901711:
+        return grow(o, 3, 0)
+    if length(w) < typed_size + 48:
+        return grow(o, 1, typed_size + 48)
+    copy_range(w, s, 48, 128, typed_size)
+    if valid_request(s)==0:
+        return INVALID
+    if load(s,8)==3:
+        if valid_multi(s)==0:
+            return INVALID
+    else:
+        if valid_typed(w,typed_size)==0:
+            return INVALID
+    if valid_bootstrap(s) == 0 or valid_environment(s) == 0:
+        return INVALID
+    target = 128 + typed_size + load(s, 88)
+    if contains_nul(s, target, load(s, 96)) != 0:
+        clear(o, 0, 64)
+        put(o, 0, WIRE_RESULT)
+        put(o, 8, 1)
+        put(o, 16, 205)
+        put(o, 24, 22)
+        return 64
+    frame_size = command_frame_size(s)
+    packet_size=96+load(s,88)+load(s,224)+load(s,240)
+    if load(s,8)==3:
+        packet_size=80+load(s,88)+load(s,192)
+    total = 64 + frame_size + packet_size
+    if total >= 4294901760:
+        return grow(o, 3, 0)
+    if length(o) < total:
+        return grow(o, 2, total)
+    clear(o, 0, 64)
+    put(o, 0, WIRE_RESULT)
+    put(o, 16, frame_size)
+    put(o, 24, packet_size)
+    if emit_command(s, o, frame_size) == 0:
+        return INVALID
+    emit_packet(s, o, 64 + frame_size, packet_size)
+    return 64
+
+def valid_outer(s: readbuf) -> u64:
+    if length(s) < 64 or load(s, 0) != WIRE_REQUEST or load(s, 56) != 0:
+        return 0
+    kind = load(s, 8)
+    request_size = load(s, 16)
+    bootstrap_size = load(s, 24)
+    if kind < 1 or kind > 3 or request_size < 64 or bootstrap_size < 64 or load(s, 48) == 0:
+        return 0
+    left = length(s) - 64
+    if request_size > left:
+        return 0
+    left = left - request_size
+    if bootstrap_size > left or load(s, 32) != left - bootstrap_size:
+        return 0
+    return 1
+
+def valid_request(s: readbuf) -> u64:
+    if load(s, 64) != SSH_REQUEST or load(s, 72) != load(s, 8) or load(s, 112) != 0 or load(s, 120) != 0:
+        return 0
+    if load(s,144)!=choose(load(s,8)==3,1,load(s,8)):
+        return 0
+    left = load(s, 16) - 64 - load(s, 80)
+    root_size = load(s, 88)
+    if root_size > left:
+        return 0
+    left = left - root_size
+    target_size = load(s, 96)
+    if target_size > left or load(s, 104) != left - target_size:
+        return 0
+    return 1
+
+def valid_bootstrap(s: readbuf) -> u64:
+    at = 64 + load(s, 16)
+    helper_size = load(s, 48)
+    if load(s, at) != BOOTSTRAP_RESULT or load(s, at + 8) != helper_size:
+        return 0
+    if load(s, at + 16) != helper_size // 65536 or load(s, at + 24) != helper_size % 65536:
+        return 0
+    if load(s, at + 32) != 0 or load(s, at + 40) != 0 or load(s, at + 48) != 0:
+        return 0
+    if load(s, at + 56) != load(s, 24) - 64:
+        return 0
+    return 1
+
+def valid_environment(s: readbuf) -> u64:
+    count = load(s, 40)
+    if count > load(s, 32) // 9:
+        return 0
+    cursor = 64 + load(s, 16) + load(s, 24)
+    i = 0
+    while i < count:
+        if length(s) - cursor < 9:
+            return 0
+        size = load(s, cursor)
+        if size > length(s) - cursor - 9:
+            return 0
+        cursor = cursor + 8
+        if contains_nul(s, cursor, size) != 0 or byte(s, cursor + size) != 0:
+            return 0
+        cursor = cursor + size + 1
+        i = i + 1
+    return choose(cursor == length(s), 1, 0)
+
+def contains_nul(s: readbuf, at: u64, size: u64) -> u64:
+    i = 0
+    while i < size:
+        if byte(s, at + i) == 0:
+            return 1
+        i = i + 1
+    return 0
+
+def command_frame_size(s: readbuf) -> u64:
+    total = 64 + 4 + load(s, 32) + load(s, 96) + load(s, 24) - 64 + 18
+    i = 0
+    while i < 10:
+        total = total + 9 + literal_size(i)
+        i = i + 1
+    return total
+
+def emit_command(s: readbuf, o: mutbuf, size: u64) -> u64:
+    clear(o, 64, 64)
+    put(o, 64, COMMAND_MAGIC)
+    put(o, 72, 3)
+    put(o, 80, 12)
+    put(o, 88, load(s, 40))
+    put(o, 96, 7)
+    put(o, 104, size)
+    store(o, 128, 115)
+    store(o, 129, 115)
+    store(o, 130, 104)
+    store(o, 131, 0)
+    at = 132
+    i = 0
+    while i < 10:
+        at = literal_argument(o, at, i)
+        i = i + 1
+    target_size = load(s, 96)
+    put(o, at, target_size)
+    copy_range(o, s, at + 8, 128 + load(s, 80) + load(s, 88), target_size)
+    store(o, at + 8 + target_size, 0)
+    at = at + 9 + target_size
+    command_size = load(s, 24) - 64
+    put(o, at, command_size)
+    copy_range(o, s, at + 8, 128 + load(s, 16), command_size)
+    store(o, at + 8 + command_size, 0)
+    at = at + 9 + command_size
+    environment_size = load(s, 32)
+    copy_range(o, s, at, 64 + load(s, 16) + load(s, 24), environment_size)
+    return choose(at + environment_size == 64 + size, 1, 0)
+
+def emit_packet(s: readbuf, o: mutbuf, at: u64, size: u64) -> u64:
+    clear(o, at, 96)
+    kind=load(s,8)
+    if kind==3:
+        return emit_multi_packet(s,o,at,size)
+    root_size = load(s, 88)
+    path_size = load(s, 224)
+    expected_size = load(s, 240)
+    put(o, at, choose(kind == 1, INFO_PACKET, READ_PACKET))
+    put(o, at + 8, 1)
+    put(o, at + 24, 1)
+    put(o, at + 32, root_size)
+    put(o, at + 40, path_size)
+    put(o, at + 48, expected_size)
+    put(o, at + 56, choose((load(s, 160) & 16) != 0, 1, 0))
+    if kind == 2:
+        put(o, at + 64, load(s, 176))
+        limit = 32768
+        if (load(s, 160) & 1024) != 0:
+            limit = load(s, 184)
+        if limit < 1:
+            limit = 1
+        if limit > 65536:
+            limit = 65536
+        put(o, at + 72, limit)
+    put(o, at + 88, size - 96)
+    copy_range(o, s, at + 96, 128 + load(s, 80), root_size)
+    source = 384 + load(s, 216)
+    copy_range(o, s, at + 96 + root_size, source, path_size)
+    copy_range(o, s, at + 96 + root_size + path_size, source + path_size, expected_size)
+    return 0
+
+def clear(o: mutbuf, at: u64, size: u64) -> u64:
+    i = 0
+    while i < size:
+        put(o, at + i, 0)
+        i = i + 8
+    return 0
+
+def literal_size(ident: u64) -> u64:
+    if ident == 0:
+        return 3
+    if ident == 1:
+        return 2
+    if ident == 2:
+        return 2
+    if ident == 3:
+        return 13
+    if ident == 4:
+        return 2
+    if ident == 5:
+        return 16
+    if ident == 6:
+        return 2
+    if ident == 7:
+        return 25
+    if ident == 8:
+        return 2
+    if ident == 9:
+        return 15
+    return 0
+
+def literal_argument(o: mutbuf, at: u64, ident: u64) -> u64:
+    if ident == 0:
+        put(o, at, 3)
+        store(o, at + 8, 115)
+        store(o, at + 9, 115)
+        store(o, at + 10, 104)
+        store(o, at + 11, 0)
+        return at + 12
+    if ident == 1:
+        put(o, at, 2)
+        store(o, at + 8, 45)
+        store(o, at + 9, 84)
+        store(o, at + 10, 0)
+        return at + 11
+    if ident == 2:
+        put(o, at, 2)
+        store(o, at + 8, 45)
+        store(o, at + 9, 111)
+        store(o, at + 10, 0)
+        return at + 11
+    if ident == 3:
+        put(o, at, 13)
+        store(o, at + 8, 66)
+        store(o, at + 9, 97)
+        store(o, at + 10, 116)
+        store(o, at + 11, 99)
+        store(o, at + 12, 104)
+        store(o, at + 13, 77)
+        store(o, at + 14, 111)
+        store(o, at + 15, 100)
+        store(o, at + 16, 101)
+        store(o, at + 17, 61)
+        store(o, at + 18, 121)
+        store(o, at + 19, 101)
+        store(o, at + 20, 115)
+        store(o, at + 21, 0)
+        return at + 22
+    if ident == 4:
+        put(o, at, 2)
+        store(o, at + 8, 45)
+        store(o, at + 9, 111)
+        store(o, at + 10, 0)
+        return at + 11
+    if ident == 5:
+        put(o, at, 16)
+        store(o, at + 8, 67)
+        store(o, at + 9, 111)
+        store(o, at + 10, 110)
+        store(o, at + 11, 110)
+        store(o, at + 12, 101)
+        store(o, at + 13, 99)
+        store(o, at + 14, 116)
+        store(o, at + 15, 84)
+        store(o, at + 16, 105)
+        store(o, at + 17, 109)
+        store(o, at + 18, 101)
+        store(o, at + 19, 111)
+        store(o, at + 20, 117)
+        store(o, at + 21, 116)
+        store(o, at + 22, 61)
+        store(o, at + 23, 56)
+        store(o, at + 24, 0)
+        return at + 25
+    if ident == 6:
+        put(o, at, 2)
+        store(o, at + 8, 45)
+        store(o, at + 9, 111)
+        store(o, at + 10, 0)
+        return at + 11
+    if ident == 7:
+        put(o, at, 25)
+        store(o, at + 8, 83)
+        store(o, at + 9, 116)
+        store(o, at + 10, 114)
+        store(o, at + 11, 105)
+        store(o, at + 12, 99)
+        store(o, at + 13, 116)
+        store(o, at + 14, 72)
+        store(o, at + 15, 111)
+        store(o, at + 16, 115)
+        store(o, at + 17, 116)
+        store(o, at + 18, 75)
+        store(o, at + 19, 101)
+        store(o, at + 20, 121)
+        store(o, at + 21, 67)
+        store(o, at + 22, 104)
+        store(o, at + 23, 101)
+        store(o, at + 24, 99)
+        store(o, at + 25, 107)
+        store(o, at + 26, 105)
+        store(o, at + 27, 110)
+        store(o, at + 28, 103)
+        store(o, at + 29, 61)
+        store(o, at + 30, 121)
+        store(o, at + 31, 101)
+        store(o, at + 32, 115)
+        store(o, at + 33, 0)
+        return at + 34
+    if ident == 8:
+        put(o, at, 2)
+        store(o, at + 8, 45)
+        store(o, at + 9, 111)
+        store(o, at + 10, 0)
+        return at + 11
+    if ident == 9:
+        put(o, at, 15)
+        store(o, at + 8, 70)
+        store(o, at + 9, 111)
+        store(o, at + 10, 114)
+        store(o, at + 11, 119)
+        store(o, at + 12, 97)
+        store(o, at + 13, 114)
+        store(o, at + 14, 100)
+        store(o, at + 15, 65)
+        store(o, at + 16, 103)
+        store(o, at + 17, 101)
+        store(o, at + 18, 110)
+        store(o, at + 19, 116)
+        store(o, at + 20, 61)
+        store(o, at + 21, 110)
+        store(o, at + 22, 111)
+        store(o, at + 23, 0)
+        return at + 24
+    return at
+
+def valid_multi(s:readbuf) -> u64:
+    typed=load(s,80)
+    if typed<256 or load(s,128)!=MULTI_TYPED or load(s,136)!=0 or load(s,144)!=1:
+        return 0
+    mask=load(s,152)
+    if mask>3 or load(s,200)!=0 or load(s,208)!=0:
+        return 0
+    if (mask&1)==0 and load(s,160)!=0:
+        return 0
+    if (mask&2)==0 and load(s,168)!=0:
+        return 0
+    cursor=216
+    while cursor<384:
+        if byte(s,cursor)!=0:
+            return 0
+        cursor=cursor+1
+    host=load(s,184)
+    if host>typed-256 or load(s,192)!=typed-256-host:
+        return 0
+    if utf8(s,384,host)==0:
+        return 0
+    count=load(s,176)
+    if count<1 or count>16:
+        return 0
+    root_size=load(s,88)
+    if root_size<16:
+        return 0
+    base=128+typed
+    file=load(s,base)
+    response=load(s,base+8)
+    if file!=choose((mask&1)!=0,load(s,160),16384) or response!=choose((mask&2)!=0,load(s,168),65536):
+        return 0
+    if file<1 or file>65536 or response<1024 or response>262144:
+        return 0
+    paths_left=load(s,192)
+    roots_left=root_size-16
+    paths=384+host
+    roots=base+16
+    index=0
+    while index<count:
+        if paths_left<8 or roots_left<8:
+            return 0
+        path_size=load(s,paths)
+        root_length=load(s,roots)
+        if path_size>paths_left-8 or root_length>roots_left-8:
+            return 0
+        if utf8(s,paths+8,path_size)==0 or utf8(s,roots+8,root_length)==0:
+            return 0
+        paths=paths+8+path_size
+        roots=roots+8+root_length
+        paths_left=paths_left-8-path_size
+        roots_left=roots_left-8-root_length
+        index=index+1
+    return choose(paths_left==0 and roots_left==0,1,0)
+
+def emit_multi_packet(s:readbuf,o:mutbuf,at:u64,size:u64) -> u64:
+    base=128+load(s,80)
+    count=load(s,176)
+    put(o,at,MULTI_PACKET)
+    put(o,at+8,1)
+    put(o,at+24,3)
+    put(o,at+32,count)
+    put(o,at+40,load(s,base))
+    put(o,at+48,load(s,base+8))
+    put(o,at+88,size-96)
+    paths=384+load(s,184)
+    roots=base+16
+    out=at+96
+    index=0
+    while index<count:
+        path_size=load(s,paths)
+        root_size=load(s,roots)
+        put(o,out,root_size)
+        put(o,out+8,path_size)
+        copy_range(o,s,out+16,roots+8,root_size)
+        copy_range(o,s,out+16+root_size,paths+8,path_size)
+        out=out+16+root_size+path_size
+        paths=paths+8+path_size
+        roots=roots+8+root_size
+        index=index+1
+    return 0

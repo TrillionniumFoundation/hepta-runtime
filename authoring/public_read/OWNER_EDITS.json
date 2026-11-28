@@ -1,0 +1,162 @@
+{
+  "scripts/hia_native_runtime_mcp_build.py": {
+    "after": {
+      "bytes": 9406,
+      "sha256": "3435c3e9c33f6dc5adaac137ee713db5dd61eba46bef646dff01ce76cf04c228"
+    },
+    "before": {
+      "bytes": 9179,
+      "sha256": "9480f9e41a09973e2898c0d102afbf1d1c094aba53353215a7cf96d19c72d50b"
+    },
+    "edits": [
+      [
+        "118 direct HIA members",
+        "120 direct HIA members"
+      ],
+      [
+        "schema=\"hepta.runtime.public126-binary-owners.build.v1\"",
+        "schema=\"hepta.runtime.public128-read-owners.build.v1\""
+      ],
+      [
+        "len(MEMBERS) == 118 and len(EXTRA) == 71",
+        "len(MEMBERS) == 120 and len(EXTRA) == 73"
+      ],
+      [
+        "and EXTRA[69:] == [\"binary_write_params\", \"binary_call_plan\"],",
+        "and EXTRA[69:71] == [\"binary_write_params\", \"binary_call_plan\"]\n                and EXTRA[71:] == [\"file_info_params\", \"binary_read_params\"],"
+      ],
+      [
+        "md[\"physical_images\"] == 119 and len(md[\"members\"]) == 118 and md[\"runtime_hia_images\"] == 126",
+        "md[\"physical_images\"] == 121 and len(md[\"members\"]) == 120 and md[\"runtime_hia_images\"] == 128"
+      ],
+      [
+        "fresh == 118 - len(reuse)",
+        "fresh == 120 - len(reuse)"
+      ],
+      [
+        "physical_images=119, runtime_hia_images=126",
+        "physical_images=121, runtime_hia_images=128"
+      ],
+      [
+        "direct_hia_members=118, packed_hia_members=8",
+        "direct_hia_members=120, packed_hia_members=8"
+      ],
+      [
+        "binary_write_params_slot=69, binary_call_plan_slot=70, public_binary_write_registered=False,",
+        "binary_write_params_slot=69, binary_call_plan_slot=70, public_binary_write_registered=False,\n            file_info_params_slot=71, binary_read_params_slot=72, configured_ssh_target_operation=10,\n            public_read_routes_qualified=False,"
+      ]
+    ]
+  },
+  "scripts/public_nine_build.py": {
+    "after": {
+      "bytes": 37663,
+      "sha256": "ed020ad46fe7329eab950eea4a62382e7154b3f2af19235b4896aebbfc4d14cb"
+    },
+    "before": {
+      "bytes": 37316,
+      "sha256": "10a9763e2dded295df4619217eaddc4787d18f71a2d7fbff445bcd1523e1a762"
+    },
+    "edits": [
+      [
+        "    ('rf_owner', 'effect_owner_fence', 'standard'),",
+        "    ('file_info_params', 'file_info_params', 'history.v1'),\n    ('binary_read_params', 'binary_read_params', 'history.v1'),\n    ('rf_owner', 'effect_owner_fence', 'standard'),"
+      ],
+      [
+        "EXTRA.extend(['binary_write_params', 'binary_call_plan'])",
+        "EXTRA.extend(['binary_write_params', 'binary_call_plan'])\nEXTRA.extend(['file_info_params', 'binary_read_params'])"
+      ],
+      [
+        "len(MEMBERS) != 118",
+        "len(MEMBERS) != 120"
+      ],
+      [
+        "'private_slots': 71, 'private_work_high': 12736, 'private_output_high': 12744,",
+        "'private_slots': 73, 'private_work_high': 12864, 'private_output_high': 12872,\n              'file_info_params_slot': 71, 'binary_read_params_slot': 72,\n              'configured_ssh_target_operation': 10, 'public_read_routes_qualified': False,"
+      ]
+    ]
+  },
+  "scripts/runtime_mcp_extra_engine.S": {
+    "after": {
+      "bytes": 64519,
+      "sha256": "2c1235df32c3ad3a434a6465de5a3b5db6f002bdf70c0e68cd8fc60f0bbbfbb0"
+    },
+    "before": {
+      "bytes": 62440,
+      "sha256": "5d3c8ed77e2e0eddf136a3490b4f6cf2110151a4ecd15604dd163fac32cbf406"
+    },
+    "edits": [
+      [
+        ".equ RG_SLOTS, 71",
+        ".equ RG_SLOTS, 73"
+      ],
+      [
+        ".equ RG_WORK_HIGH, 12736",
+        ".equ RG_WORK_HIGH, 12864"
+      ],
+      [
+        ".equ RG_OUTPUT_HIGH, 12744",
+        ".equ RG_OUTPUT_HIGH, 12872"
+      ],
+      [
+        "    cmp rax, 9\n    ja runtime_grow_bad\nruntime_grow_config_query_admitted:",
+        "    cmp rax, 10\n    ja runtime_grow_bad\nruntime_grow_config_query_admitted:"
+      ],
+      [
+        "    /* op1/2/6/7/9 are installed-state reads without state-setting effects.",
+        "    /* op1/2/6/7/9/10 are installed-state reads without state-setting effects."
+      ],
+      [
+        "    mov rdx, [rsp]\n    cmp qword ptr [rdx + 8], 9\n    je runtime_grow_config_output",
+        "    mov rdx, [rsp]\n    cmp qword ptr [rdx + 8], 10\n    je runtime_grow_config_output\n    cmp qword ptr [rdx + 8], 9\n    je runtime_grow_config_output"
+      ],
+      [
+        "    cmp ebp, 69\n    je runtime_grow_binary_write_params_result",
+        "    cmp ebp, 71\n    je runtime_grow_binary_read_params_result\n    cmp ebp, 72\n    je runtime_grow_binary_read_params_result\n    cmp ebp, 69\n    je runtime_grow_binary_write_params_result"
+      ],
+      [
+        "/* Qualified binary leaves keep application decisions in their HIA owners.",
+        "\n/* The two closed read parameter kinds share the qualified HBPRR001 ABI.\n * Capacity and extent handling are mechanical; field semantics remain HIA-owned. */\nruntime_grow_binary_read_params_result:\n    cmp eax, 256\n    jne runtime_grow_bad\n    mov rdx, 0x3130305252504248\n    cmp [r13], rdx\n    jne runtime_grow_bad\n    mov rdx, rbp\n    sub rdx, 70\n    cmp [r13 + 16], rdx\n    jne runtime_grow_bad\n    xor ecx, ecx\nruntime_grow_binary_read_reserved:\n    cmp qword ptr [r13 + rcx * 8 + 152], 0\n    jne runtime_grow_bad\n    inc ecx\n    cmp ecx, 13\n    jb runtime_grow_binary_read_reserved\n    mov rax, [r13 + 8]\n    cmp rax, 4\n    ja runtime_grow_bad\n    test rax, rax\n    jz runtime_grow_binary_read_success\n    mov rdx, [r13 + 24]\n    or rdx, [r13 + 32]\n    or rdx, [r13 + 40]\n    or rdx, [r13 + 48]\n    or rdx, [r13 + 56]\n    or rdx, [r13 + 64]\n    xor ecx, ecx\nruntime_grow_binary_read_nonvalue:\n    or rdx, [r13 + rcx * 8 + 88]\n    inc ecx\n    cmp ecx, 8\n    jb runtime_grow_binary_read_nonvalue\n    test rdx, rdx\n    jnz runtime_grow_bad\n    cmp rax, 1\n    je runtime_grow_binary_read_error\n    cmp qword ptr [r13 + 72], 0\n    jne runtime_grow_bad\n    cmp rax, 4\n    je runtime_grow_resource\n    mov rdx, [r13 + 80]\n    lea rsi, [rax - 1]\n    jmp runtime_grow_resize_requested\nruntime_grow_binary_read_error:\n    cmp qword ptr [r13 + 80], 0\n    jne runtime_grow_bad\n    mov rax, [r13 + 72]\n    add rax, 256\n    jc runtime_grow_bad\n    jmp runtime_grow_extent_ready\nruntime_grow_binary_read_success:\n    mov rdx, [r13 + 72]\n    or rdx, [r13 + 80]\n    jnz runtime_grow_bad\n    mov eax, 256\n    xor ecx, ecx\nruntime_grow_binary_read_extent:\n    add rax, [r13 + rcx * 8 + 88]\n    jc runtime_grow_bad\n    inc ecx\n    cmp ecx, 8\n    jb runtime_grow_binary_read_extent\n    jmp runtime_grow_extent_ready\n\n/* Qualified binary leaves keep application decisions in their HIA owners."
+      ],
+      [
+        "    .quad 0, 0 /* 69 binary typed params and 70 pure plan: no child action. */",
+        "    .quad 0, 0 /* 69 binary typed params and 70 pure plan: no child action. */\n    .quad 0, 0 /* 71 FileInfoParams and 72 BinaryReadParams: closed HIA leaves. */"
+      ]
+    ]
+  },
+  "scripts/runtime_mcp_filesystem_fixture.S": {
+    "after": {
+      "bytes": 11526,
+      "sha256": "724ab89bcf21e037b1d83bf2829dbfeff7e9d30d8de83a3dffe5680d0d2d8640"
+    },
+    "before": {
+      "bytes": 11386,
+      "sha256": "677d4ed150c9b24570bcbec2c29e9a6ecabfab27080770c72d937dbca780e659"
+    },
+    "edits": [
+      [
+        "    cmp qword ptr [r12 + 80], 69\n    je fs_fixture_authority_selector",
+        "    cmp qword ptr [r12 + 80], 71\n    je fs_fixture_authority_selector\n    cmp qword ptr [r12 + 80], 72\n    je fs_fixture_authority_selector\n    cmp qword ptr [r12 + 80], 69\n    je fs_fixture_authority_selector"
+      ],
+      [
+        "    .zero 568 /* 71 fixed slots; private extract selector64 remains a fixture alias. */",
+        "    .zero 584 /* 73 fixed slots; private extract selector64 remains a fixture alias. */"
+      ]
+    ]
+  },
+  "scripts/runtime_mcp_transport.S": {
+    "after": {
+      "bytes": 12714,
+      "sha256": "64eab3f0256b13edd4d34343ac9891d8327ffdbf73288f34d6b6a31ae55e70a7"
+    },
+    "before": {
+      "bytes": 12715,
+      "sha256": "70385401c053e98884c37907b99f3a2311b3cbc460a590928d0ca8f9a2f25555"
+    },
+    "edits": [
+      [
+        "    .zero 568 /* 71 fixed slots; existing routes plus binary owners69..70. */",
+        "    .zero 584 /* 73 fixed slots; existing routes and binary owners69..72. */"
+      ]
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "edits": [
+    {
+      "after": ".equ PM_READ_ENV,1208\n.equ PM_READ_HUB,1216",
+      "before": ".equ PM_READ_ENV,1208",
+      "path": "scripts/runtime_mcp_task_storage.S"
+    },
+    {
+      "after": "    mov [r15 + 480], rdx\n    lea rdx, [r12 + PM_READ_HUB]\n    mov [r15 + 472], rdx /* Borrow the process-owned singleton cell. */\n    mov rax, [r12 + 224]",
+      "before": "    mov [r15 + 480], rdx\n    mov rax, [r12 + 224]",
+      "path": "scripts/runtime_mcp_transport.S"
+    },
+    {
+      "after": "    mov r14,[r15+472]\n    test r14,r14\n    jz rrp_invalid_active\n    mov r13,[r14]",
+      "before": "    mov r13,[rip+runtime_read_process_hub]",
+      "path": "scripts/runtime_mcp_read_bridge.S"
+    },
+    {
+      "after": "    mov [r14],rax\nrrp_hub:",
+      "before": "    mov [rip+runtime_read_process_hub],rax\nrrp_hub:\n    mov [r15+472],r13",
+      "path": "scripts/runtime_mcp_read_bridge.S"
+    },
+    {
+      "after": "    mov rdi,[rdi] /* Trusted process-owned singleton cell. */",
+      "before": "    mov rdi,[rip+runtime_read_process_hub]",
+      "path": "scripts/runtime_mcp_read_bridge.S"
+    },
+    {
+      "after": "\n",
+      "before": "\n.section .data\n.balign 8\nruntime_read_process_hub:\n    .quad 0\n.section .text\n",
+      "path": "scripts/runtime_mcp_read_bridge.S"
+    },
+    {
+      "after": "pr_close_again:\n    lea rdi,[r12+PM_READ_HUB]\n    call runtime_read_public_close",
+      "before": "pr_close_again:\n    call runtime_read_public_close",
+      "path": "scripts/runtime_mcp_task_read.S"
+    }
+  ],
+  "prior_failure": "public-route-build-v1/status.json",
+  "public_routes_qualified": false,
+  "reason": "The original packer requires a relocation-free executable prefix. Process-owned writable singleton state belongs to the existing transport arena; the engine borrows its exact cell.",
+  "schema": "hepta.runtime.public-read.hub-storage.v1"
+}

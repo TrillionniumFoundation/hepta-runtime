@@ -11,11 +11,11 @@
 .global runtime_grow_owned
 .global runtime_grow_suspended
 .global runtime_grow_target
-.equ RG_SLOTS, 71
+.equ RG_SLOTS, 82
 .equ RG_ENGINE, 16384
 .equ RG_TABLE, 8192
-.equ RG_WORK_HIGH, 12736
-.equ RG_OUTPUT_HIGH, 12744
+.equ RG_WORK_HIGH, 13440
+.equ RG_OUTPUT_HIGH, 13448
 .equ RG_HIGH_BYTES, 8
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -133,6 +133,9 @@ runtime_grow_destroy_admit:
     cmp ebp, RG_SLOTS
     jb runtime_grow_destroy_admit
     call runtime_publication_body_destroy
+    test rax, rax
+    jnz runtime_grow_destroy_done
+    call runtime_read_public_destroy
     test rax, rax
     jnz runtime_grow_destroy_done
     call runtime_authority_release
@@ -278,6 +281,10 @@ runtime_grow_entry:
     jne runtime_grow_bad_early
     cmp qword ptr [r12 + 8], 0
     jne runtime_grow_bad_early
+    cmp ebp, 74
+    je runtime_grow_read_body_dispatch
+    cmp ebp, 80
+    je runtime_grow_bad_early
     cmp ebp, 63
     je runtime_grow_extract_body_dispatch
     cmp ebp, 68
@@ -323,6 +330,9 @@ runtime_grow_regular_dispatch:
     cmp ebp, 44
     jbe runtime_grow_allocate_work
 runtime_grow_allocate_ordinary_work:
+    mov edi, 268435456
+    cmp ebp, 81
+    je runtime_grow_allocate_work
     mov edi, 4096
     cmp ebp, 4
     jne runtime_grow_allocate_work
@@ -457,7 +467,7 @@ runtime_grow_publication_installed:
     je runtime_grow_config_query_admitted
     cmp rax, 7
     jb runtime_grow_bad
-    cmp rax, 9
+    cmp rax, 12
     ja runtime_grow_bad
 runtime_grow_config_query_admitted:
     mov rcx, [rsp + 8]
@@ -515,9 +525,15 @@ runtime_grow_classify_return:
     jne runtime_grow_classify_result
     cmp ebp, 11
     jne runtime_grow_classify_result
-    /* op1/2/6/7/9 are installed-state reads without state-setting effects.
+    /* op1/2/6/7/9/10 are installed-state reads without state-setting effects.
      * A short output is retried only for these exact operations. */
     mov rdx, [rsp]
+    cmp qword ptr [rdx + 8], 11
+    je runtime_grow_config_output
+    cmp qword ptr [rdx + 8], 12
+    je runtime_grow_config_output
+    cmp qword ptr [rdx + 8], 10
+    je runtime_grow_config_output
     cmp qword ptr [rdx + 8], 9
     je runtime_grow_config_output
     cmp qword ptr [rdx + 8], 1
@@ -544,6 +560,8 @@ runtime_grow_config_output:
     mov esi, 2
     jmp runtime_grow_resize_requested
 runtime_grow_classify_result:
+    cmp ebp, 73
+    je runtime_grow_text_gateway_result
     cmp ebp, 64
     je runtime_grow_text_gateway_result
     cmp ebp, 66
@@ -608,6 +626,18 @@ runtime_grow_text_classified:
     je runtime_grow_extract_params_result
     cmp ebp, 65
     je runtime_grow_publication_params_result
+    cmp ebp, 71
+    je runtime_grow_binary_read_params_result
+    cmp ebp, 72
+    je runtime_grow_binary_read_params_result
+    cmp ebp, 75
+    je runtime_grow_multi_read_params_result
+    cmp ebp, 76
+    je runtime_grow_multi_read_plan_result
+    cmp ebp, 77
+    je runtime_grow_public_read_result
+    cmp ebp, 78
+    je runtime_grow_public_read_wire_result
     cmp ebp, 69
     je runtime_grow_binary_write_params_result
     cmp ebp, 70
@@ -1089,6 +1119,75 @@ runtime_grow_publication_params_error:
     or rdx, [r13 + 40]
     jnz runtime_grow_bad
     jmp runtime_grow_text_params_error
+
+
+/* The two closed read parameter kinds share the qualified HBPRR001 ABI.
+ * Capacity and extent handling are mechanical; field semantics remain HIA-owned. */
+runtime_grow_binary_read_params_result:
+    cmp eax, 256
+    jne runtime_grow_bad
+    mov rdx, 0x3130305252504248
+    cmp [r13], rdx
+    jne runtime_grow_bad
+    mov rdx, rbp
+    sub rdx, 70
+    cmp [r13 + 16], rdx
+    jne runtime_grow_bad
+    xor ecx, ecx
+runtime_grow_binary_read_reserved:
+    cmp qword ptr [r13 + rcx * 8 + 152], 0
+    jne runtime_grow_bad
+    inc ecx
+    cmp ecx, 13
+    jb runtime_grow_binary_read_reserved
+    mov rax, [r13 + 8]
+    cmp rax, 4
+    ja runtime_grow_bad
+    test rax, rax
+    jz runtime_grow_binary_read_success
+    mov rdx, [r13 + 24]
+    or rdx, [r13 + 32]
+    or rdx, [r13 + 40]
+    or rdx, [r13 + 48]
+    or rdx, [r13 + 56]
+    or rdx, [r13 + 64]
+    xor ecx, ecx
+runtime_grow_binary_read_nonvalue:
+    or rdx, [r13 + rcx * 8 + 88]
+    inc ecx
+    cmp ecx, 8
+    jb runtime_grow_binary_read_nonvalue
+    test rdx, rdx
+    jnz runtime_grow_bad
+    cmp rax, 1
+    je runtime_grow_binary_read_error
+    cmp qword ptr [r13 + 72], 0
+    jne runtime_grow_bad
+    cmp rax, 4
+    je runtime_grow_resource
+    mov rdx, [r13 + 80]
+    lea rsi, [rax - 1]
+    jmp runtime_grow_resize_requested
+runtime_grow_binary_read_error:
+    cmp qword ptr [r13 + 80], 0
+    jne runtime_grow_bad
+    mov rax, [r13 + 72]
+    add rax, 256
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_binary_read_success:
+    mov rdx, [r13 + 72]
+    or rdx, [r13 + 80]
+    jnz runtime_grow_bad
+    mov eax, 256
+    xor ecx, ecx
+runtime_grow_binary_read_extent:
+    add rax, [r13 + rcx * 8 + 88]
+    jc runtime_grow_bad
+    inc ecx
+    cmp ecx, 8
+    jb runtime_grow_binary_read_extent
+    jmp runtime_grow_extent_ready
 
 /* Qualified binary leaves keep application decisions in their HIA owners.
  * Only complete private ABI frames and owned capacity are interpreted here. */
@@ -1672,6 +1771,8 @@ runtime_grow_suspend:
 runtime_grow_resume_suspended:
     cmp qword ptr [r12], 1
     jne runtime_grow_bad_early
+    cmp ebp, 74
+    je runtime_grow_resume_read_body
     cmp ebp, 63
     je runtime_grow_resume_extract_body
     cmp ebp, 67
@@ -1763,6 +1864,13 @@ runtime_grow_resume_span_disjoint:
     mov r9, [rsp + 80]
     call runtime_grow_suspended
     jmp runtime_grow_child_returned
+runtime_grow_resume_read_body:
+    cmp qword ptr [r12 + 8], 0
+    jne runtime_grow_bad_early
+    mov rdx, [rsp + 80]
+    call runtime_read_public_resume
+    jmp runtime_grow_done
+
 runtime_grow_resume_extract_body:
     cmp qword ptr [r12 + 8], 0
     jne runtime_grow_bad_early
@@ -1784,6 +1892,8 @@ runtime_grow_extract_chain:
     cmp esi, 59
     je runtime_grow_extract_chain_ok
     cmp esi, 64
+    je runtime_grow_extract_chain_ok
+    cmp esi, 73
     je runtime_grow_extract_chain_ok
     jmp runtime_grow_extract_chain_bad
 runtime_grow_extract_chain_59:
@@ -1812,8 +1922,14 @@ runtime_grow_publication_chain_64:
     jmp runtime_grow_extract_chain_ok
 runtime_grow_publication_chain_66:
     cmp edi, 66
-    jne runtime_grow_extract_chain_bad
+    jne runtime_grow_read_chain_73
     cmp esi, 67
+    jne runtime_grow_extract_chain_bad
+    jmp runtime_grow_extract_chain_ok
+runtime_grow_read_chain_73:
+    cmp edi, 73
+    jne runtime_grow_extract_chain_bad
+    cmp esi, 74
     jne runtime_grow_extract_chain_bad
 runtime_grow_extract_chain_ok:
     xor eax, eax
@@ -1821,6 +1937,10 @@ runtime_grow_extract_chain_ok:
 runtime_grow_extract_chain_bad:
     mov eax, RG_INVALID
     ret
+
+runtime_grow_read_body_dispatch:
+    call runtime_read_public_owned
+    jmp runtime_grow_done
 
 runtime_grow_extract_body_dispatch:
     call runtime_extract_body_owned
@@ -2040,6 +2160,8 @@ runtime_grow_trace_restore:
 
 /* Exact private graph: rdi parent slot, rsi local selector. */
 runtime_grow_target:
+    cmp edi, 73
+    je runtime_grow_target_read_gateway
     cmp edi, 64
     je runtime_grow_target_publication_gateway
     cmp edi, 66
@@ -2087,6 +2209,11 @@ runtime_grow_target:
     cmp edi, 27
     je runtime_grow_target_fence
     jmp runtime_grow_target_invalid
+runtime_grow_target_read_gateway:
+    cmp rsi, 10
+    ja runtime_grow_target_invalid
+    lea rdx, [rip + runtime_grow_read_gateway_targets]
+    jmp runtime_grow_target_byte
 runtime_grow_target_extract_gateway:
     cmp rsi, 8
     ja runtime_grow_target_invalid
@@ -2163,7 +2290,7 @@ runtime_grow_target_sdk_protocol:
     lea rdx, [rip + runtime_grow_sdk_protocol_targets]
     jmp runtime_grow_target_byte
 runtime_grow_target_frontend:
-    cmp rsi, 16
+    cmp rsi, 17
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_frontend_targets]
     jmp runtime_grow_target_byte
@@ -2206,6 +2333,86 @@ runtime_grow_target_byte:
 runtime_grow_target_invalid:
     mov rax, -1
     ret
+
+
+/* Dynamic typed-vector result; business path count remains HIA-owned. */
+runtime_grow_multi_read_params_result:
+    cmp eax,256
+    jne runtime_grow_bad
+    cmp qword ptr [rbx+40],256
+    jb runtime_grow_bad
+    mov rdx,0x3130305250524d48
+    cmp [r13],rdx
+    jne runtime_grow_bad
+    mov rdx,[r13+8]
+    cmp rdx,2
+    je runtime_grow_multi_read_work
+    cmp rdx,3
+    je runtime_grow_multi_read_output
+    cmp rdx,4
+    je runtime_grow_resource
+    cmp rdx,1
+    ja runtime_grow_bad
+    je runtime_grow_multi_read_typed_error
+    mov rax,[r13+56]
+    add rax,[r13+64]
+    jc runtime_grow_bad
+    jmp runtime_grow_multi_read_extent
+runtime_grow_multi_read_typed_error:
+    mov rax,[r13+72]
+runtime_grow_multi_read_extent:
+    add rax,256
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_multi_read_work:
+    mov esi,1
+    jmp runtime_grow_multi_read_resize
+runtime_grow_multi_read_output:
+    mov esi,2
+runtime_grow_multi_read_resize:
+    mov rdx,[r13+80]
+    jmp runtime_grow_resize_requested
+runtime_grow_multi_read_plan_result:
+    cmp rax,64
+    jb runtime_grow_bad
+    mov rdx,0x313030524c524d48
+    cmp [r13],rdx
+    jne runtime_grow_bad
+    mov rdx,[r13+48]
+    add rdx,[r13+56]
+    jc runtime_grow_bad
+    add rdx,64
+    jc runtime_grow_bad
+    cmp rax,rdx
+    jne runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_public_read_result:
+    cmp eax,64
+    jne runtime_grow_bad
+    mov rdx,0x3130305252545248
+    cmp [r13],rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13+8],2
+    ja runtime_grow_bad
+    mov rax,[r13+56]
+    add rax,64
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
+runtime_grow_public_read_wire_result:
+    cmp eax,64
+    jne runtime_grow_bad
+    mov rdx,0x3130305252575248
+    cmp [r13],rdx
+    jne runtime_grow_bad
+    cmp qword ptr [r13+8],1
+    ja runtime_grow_bad
+    je runtime_grow_extent_ready
+    mov rax,[r13+16]
+    add rax,[r13+24]
+    jc runtime_grow_bad
+    add rax,64
+    jc runtime_grow_bad
+    jmp runtime_grow_extent_ready
 
 .balign 8
 runtime_grow_action_magics:
@@ -2254,6 +2461,11 @@ runtime_grow_action_magics:
     .quad 0 /* 67 descriptor-owned synchronous publisher capability */
     .quad 0 /* 68 fixed publisher Forget Scope output loan */
     .quad 0, 0 /* 69 binary typed params and 70 pure plan: no child action. */
+    .quad 0, 0 /* 71 FileInfoParams and 72 BinaryReadParams: closed HIA leaves. */
+    .ascii "HRDWGA01" /* 73 owned read gateway */
+    .zero 64 /* 74..81 fixed read dependencies; no caller-selected code. */
+runtime_grow_read_gateway_targets:
+    .byte 71, 72, 70, 11, 74, 77, 10, 81, 75, 76, 46
 runtime_grow_publication_gateway_targets:
     .byte 65, 27, 5, 6, 11, 9, 7, 66, 3
 runtime_grow_publication_caller_targets:
@@ -2271,7 +2483,7 @@ runtime_grow_filesystem_caller_targets:
 runtime_grow_fence_targets:
     .byte 11, 28, 17
 runtime_grow_frontend_targets:
-    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47, 57, 59, 64
+    .byte 19, 1, 0, 10, 2, 13, 11, 20, 21, 37, 46, 54, 56, 47, 57, 59, 64, 73
 runtime_grow_context_targets:
     .byte 6, 10, 7, 8
 runtime_grow_workdir_targets:

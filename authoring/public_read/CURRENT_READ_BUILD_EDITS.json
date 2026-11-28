@@ -1,0 +1,17 @@
+{
+  "edits": [
+    {
+      "after": "    current_path=root/\"native/public_binary_read_body.hepta\"\n    current_proof_path=root/\"native/public_binary_read_body_composition.json\"\n    current_proof=json.loads(current_proof_path.read_bytes())\n    source_pins[str(current_path)]=pin(current_path)\n    source_pins[str(current_proof_path)]=pin(current_proof_path)\n    require(current_proof[\"baseline\"]==pin(root/\"native/binary_read_body.hepta\"),\"current read predecessor differs\")\n    require(current_proof[\"source_bytes\"]==current_path.stat().st_size and current_proof[\"source_sha256\"]==pin(current_path)[\"sha256\"],\"current read body identity differs\")\n    original=(root/\"native/binary_read_body.hepta\").read_bytes()\n    current=current_path.read_bytes();function=current_proof[\"changed_functions\"]\n    require(function==[\"f40\"],\"current read changes a nonliteral function\")\n    marker=b\"fn f40(\"\n    begin=original.index(marker);end=original.index(b\"\\nend\",begin)+4\n    current_begin=current.index(marker);current_end=current.index(b\"\\nend\",current_begin)+4\n    require(current[:current_begin]+original[begin:end]+current[current_end:]==original,\"current read whole-body inverse differs\")\n    manifest=builder.compile(\"public-read-stdio-current-body\",current_path,standalone=None,buffer_profile=\"history.v1\")\n    meta=json.loads(manifest.read_bytes())\n    production_members=dict(members)\n    production_members[\"body\"]=dict(manifest=str(manifest.relative_to(output)),identity=pin(manifest),\n        source=pin(current_path),image=pin(manifest.parent/meta[\"image\"]))\n    production = output/\"production\"; production.mkdir()\n    production_result = module.build_variant(root,production,output,production_members,0)",
+      "before": "    production = output/\"production\"; production.mkdir()\n    production_result = module.build_variant(root,production,output,members,0)",
+      "path": "scripts/hia_native_public_read_dependencies.py"
+    },
+    {
+      "after": "status=\"PASS\",members=production_members,baseline_members=members,current_body=current_proof,\n                  baseline=baseline_result",
+      "before": "status=\"PASS\",members=members,\n                  baseline=baseline_result",
+      "path": "scripts/hia_native_public_read_dependencies.py"
+    }
+  ],
+  "original_read_baseline_preserved": true,
+  "public_routes_qualified": false,
+  "schema": "hepta.runtime.public-read.current-body-build.v1"
+}

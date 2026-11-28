@@ -43,8 +43,10 @@ def main():
     from tools.generate_hia_selfhost import Builder, compact_authoring_cfg, total_scalar_functions
     from hepta.hia_agent_assembly import assemble_program, render_assembly
 
-    baseline_path = ROOT / "native/config_directory_owner_span.hepta"
+    baseline_path = ROOT / "qualification/binary_root/v1/source/native/config_directory_owner_span.hepta"
     baseline = baseline_path.read_bytes()
+    if SHA(baseline) != "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5":
+        raise ValueError("complete original retained UTF-8 source changed")
     original = copy.deepcopy(next(fn for fn in assemble_program(baseline).as_dict()["functions"]
                                   if fn["name"] == "f44"))
     if (original["returns"] != ["u64"] or
@@ -94,11 +96,20 @@ def main():
         "author_sha256": SHA(Path(__file__).read_bytes()),
         "retained_utf8": {"source": str(baseline_path.relative_to(ROOT)), "source_sha256": SHA(baseline),
                           "original_function": "f44", "function_sha256": SHA(CANON(original))},
+        "retained_utf8_origin": {
+            "commit": "8ac803a79135f4cd2d5efc93c77905d63f4bc2ea",
+            "path": "native/config_directory_owner_span.hepta",
+            "source_sha256": "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5",
+            "frozen_path": str(baseline_path.relative_to(ROOT)),
+            "git_blob": hashlib.sha1(b"blob " + str(len(baseline)).encode() + b"\0" + baseline).hexdigest(),
+        },
         "inherited_bootstrap_commit": "819ed071a9ddd37643d52ef442cf54fd92de2945",
         "profile": "explicit-native-local-read",
         "configured_host_alias_mapping": False, "default_public_route": False,
         "ssh_lifecycle_qualified": False, "whole_runtime_replaced": False,
     }
+    if baseline_path.read_bytes() != baseline:
+        raise ValueError("retained UTF-8 source changed during authoring")
     source.with_name("native_read_bootstrap_composition.json").write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"source_sha256": record["source_sha256"], "source_bytes": len(raw),

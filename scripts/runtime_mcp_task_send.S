@@ -198,6 +198,7 @@ pump_tick:
     call pump_service_worker
     call pump_service_extract
     call pump_service_publication
+    call pump_service_read
     call pump_deliver_context_cancellation
     call pump_claim_responses
     call pump_send_progress
