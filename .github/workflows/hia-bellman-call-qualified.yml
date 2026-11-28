@@ -1,0 +1,56 @@
+name: Complete private HIA Bellman caller
+on:
+  push:
+    branches: [hia-bellman-call-qualified-6780-20261116]
+    paths:
+      - 'tests/hia_native/bellman_call_ci/**'
+      - '.github/workflows/hia-bellman-call-qualified.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualified:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: '1.95.0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONHASHSEED: '0'
+    steps:
+      - name: Checkout frozen caller and worker source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/bellman_call_ci
+      - name: Checkout exact compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Verify exact source and install original toolchain
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          rustup toolchain install 1.95.0 --profile minimal --no-self-update
+      - name: Rebuild complete native caller and compare complete original domains
+        run: |
+          umask 077
+          python3 -I -S -B runtime/tests/hia_native/bellman_call_ci/recipe.py --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/bellman-call-qualified" > "$RUNNER_TEMP/bellman-call-qualified-driver.stdout" 2> "$RUNNER_TEMP/bellman-call-qualified-driver.stderr"
+      - name: Archive every source, buffer and process stream
+        if: always()
+        run: |
+          python3 -I -S -B runtime/tests/hia_native/bellman_call_ci/archive.py --capture "$RUNNER_TEMP/bellman-call-qualified" --output "$RUNNER_TEMP/bellman-call-artifact" --driver-prefix "$RUNNER_TEMP/bellman-call-qualified-driver"
+      - name: Retain complete success or failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bellman-call-qualified-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bellman-call-artifact/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

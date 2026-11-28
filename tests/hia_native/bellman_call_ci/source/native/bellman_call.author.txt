@@ -1,0 +1,959 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if valid_input(s) == False:
+        return INVALID
+    if length(o) < 32:
+        return CAPACITY
+    if length(w) < 4096:
+        return request_grow(o, w, 1, 4096)
+    if get(w, 0) != 0 and get(w, 0) != STATE_MAGIC:
+        return INVALID
+    if get(w, 0) == 0:
+        if load(s, 8) != 1:
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        fill_range(w, 0, 1024, 0)
+        put(w, 0, STATE_MAGIC)
+        put(w, 384, 4096)
+    phase = get(w, PHASE)
+    if phase == 0:
+        if load(s, 8) != 1 or load(s, 16) <= get(w, 88):
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        put(w, 24, load(s, 16))
+        put(w, 32, 0)
+        put(w, 40, 1)
+        put(w, 88, load(s, 16))
+        put(w, 96, 0)
+        put(w, 104, 0)
+        put(w, 128, 0)
+        put(w, 144, length(s))
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, PHASE, 100)
+        return prepare_start(s, o, w)
+    if phase == 10:
+        if load(s, 8) == 1 or load(s, 16) != get(w, 24):
+            return INVALID
+        if length(w) < get(w, 384):
+            return INVALID
+        if length(o) < 64:
+            return request_grow(o, w, 2, 64)
+        put(w, 40, load(s, 8))
+        put(w, INPUT_LENGTH, length(s))
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, WORK_LENGTH, length(w))
+        put(w, PHASE, 103)
+        if load(s, 8) == 3:
+            put(w, PHASE, 105)
+        return prepare_control(o, w)
+    if load(s, 8) != get(w, 40) or load(s, 16) != get(w, 24) or length(s) != get(w, INPUT_LENGTH):
+        return INVALID
+    if load(s, 8) == 1 and get(w, 128) == 1:
+        if same_input(s, w) == False:
+            return INVALID
+    if admit_growth(o, w) == False:
+        return INVALID
+    if phase == 100:
+        return prepare_start(s, o, w)
+    if phase == 101:
+        return prepare_diagnostic(o, w)
+    if phase == 102:
+        return prepare_submit(o, w)
+    if phase == 103 or phase == 104 or phase == 105:
+        return prepare_control(o, w)
+    if phase == 110:
+        return finish(o, w)
+    if phase < 1 or phase > 6:
+        return INVALID
+    if complete_child(w) == False:
+        return INVALID
+    code = get(w, ACTION + 72)
+    if code == DELIVERY:
+        return delivery_again(o, w)
+    if code >= FIRST_ERROR:
+        return code
+    size = get(w, ACTION + 96)
+    if code != size or size > region_capacity(w, 1):
+        return INVALID
+    if phase == 1:
+        return after_params(o, w, size)
+    if phase == 2:
+        return after_diagnostic(o, w, size)
+    return after_worker(o, w, size, phase)
+
+def valid_input(s:readbuf) -> bool:
+    if length(s) < 64 or load(s, 0) != REQUEST_MAGIC:
+        return False
+    if load(s, 8) < 1 or load(s, 8) > 3 or load(s, 16) == 0:
+        return False
+    if load(s, 24) != length(s) - 64:
+        return False
+    if load(s, 32) != 0 or load(s, 40) != 0 or load(s, 48) != 0 or load(s, 56) != 0:
+        return False
+    if load(s, 8) == 1:
+        return load(s, 24) != 0
+    return length(s) == 64
+
+def same_input(s:readbuf, w:mutbuf) -> bool:
+    start = region(w, 2)
+    size = get(w, 144)
+    if size != length(s):
+        return False
+    at = 0
+    while size - at >= 8:
+        if load(s, at) != get(w, start + at):
+            return False
+        at = at + 8
+    while at < size:
+        if byte(s, at) != byte(w, start + at):
+            return False
+        at = at + 1
+    return True
+
+def prepare_start(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    size = length(s)
+    if get(w, 128) == 0:
+        if reserve(w, 2, size) == 0:
+            return pending_grow(o, w)
+        copy_range(w, s, region(w, 2), 0, size)
+        put(w, 128, 1)
+    if reserve(w, 0, size) == 0 or reserve(w, 1, 128) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    params_header(w, at, size - 64)
+    copy_within(w, at + 64, region(w, 2) + 64, size - 64)
+    return child(w, 0, size, 1)
+
+def params_header(w:mutbuf, at:u64, size:u64) -> u64:
+    fill_range(w, at, 64, 0)
+    put(w, at, PARAMS_REQUEST)
+    put(w, at + 8, 1)
+    put(w, at + 16, size)
+    return 0
+
+def after_params(o:mutbuf, w:mutbuf, size:u64) -> u32:
+    at = region(w, 1)
+    if size < 128 or get(w, at) != PARAMS_RESULT or get(w, at + 8) > 1:
+        return INVALID
+    if get(w, at + 24) != 0 or get(w, at + 104) != 0 or get(w, at + 112) != 0 or get(w, at + 120) != 0:
+        return INVALID
+    if get(w, at + 8) == 1:
+        if size != 128 or get(w, at + 16) != 0 or get(w, at + 32) != 0:
+            return INVALID
+        if reserve(w, 3, 128) == 0:
+            return pending_grow(o, w)
+        copy_within(w, region(w, 3), at, 128)
+        put(w, PHASE, 101)
+        return prepare_diagnostic(o, w)
+    if get(w, at + 16) != size - 128 or size < 144:
+        return INVALID
+    if get(w, at + 128) != GRAPH_MAGIC or get(w, at + 136) != get(w, at + 32):
+        return INVALID
+    count = get(w, at + 32)
+    if count == 0 or count > 4096:
+        if size != 144:
+            return INVALID
+    elif size != 144 + count * 720:
+        return INVALID
+    pos = 40
+    while pos < 104:
+        if get(w, at + pos) != 0:
+            return INVALID
+        pos = pos + 8
+    if reserve(w, 3, size - 128) == 0:
+        return pending_grow(o, w)
+    copy_within(w, region(w, 3), at + 128, size - 128)
+    put(w, 152, size - 128)
+    put(w, PHASE, 102)
+    return prepare_submit(o, w)
+
+def prepare_diagnostic(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 144)
+    if size > MAXIMUM - 128:
+        return RESOURCE
+    if reserve(w, 0, size + 128) == 0 or reserve(w, 1, 64) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    copy_within(w, at, region(w, 3), 128)
+    params_header(w, at + 128, size - 64)
+    copy_within(w, at + 192, region(w, 2) + 64, size - 64)
+    return child(w, 1, size + 128, 2)
+
+def after_diagnostic(o:mutbuf, w:mutbuf, size:u64) -> u32:
+    at = region(w, 1)
+    if size < 64 or get(w, at) != DIAGNOSTIC_RESULT or get(w, at + 8) != 0:
+        return INVALID
+    if get(w, at + 16) != size - 64 or get(w, at + 24) != 0:
+        return INVALID
+    if get(w, at + 32) != 0 or get(w, at + 40) != 0 or get(w, at + 48) != 0 or get(w, at + 56) != 0:
+        return INVALID
+    prefix = literal_size(1)
+    if size - 64 > MAXIMUM - prefix:
+        return RESOURCE
+    if reserve(w, 4, prefix + size - 64) == 0:
+        return pending_grow(o, w)
+    literal(w, region(w, 4), 1)
+    copy_within(w, region(w, 4) + prefix, at + 64, size - 64)
+    put(w, 96, 1)
+    put(w, 104, prefix + size - 64)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def prepare_submit(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 152)
+    if size > MAXIMUM - 64:
+        return RESOURCE
+    if reserve(w, 0, size + 64) == 0 or reserve(w, 1, 192) == 0:
+        return pending_grow(o, w)
+    worker_header(w, region(w, 0), 1, 0, size)
+    copy_within(w, region(w, 0) + 64, region(w, 3), size)
+    return child(w, 2, size + 64, 3)
+
+def prepare_control(o:mutbuf, w:mutbuf) -> u32:
+    if reserve(w, 0, 64) == 0 or reserve(w, 1, 192) == 0:
+        return pending_grow(o, w)
+    command = 2
+    phase = 4
+    if get(w, PHASE) == 104:
+        command = 4
+        phase = 5
+    elif get(w, PHASE) == 105:
+        command = 3
+        phase = 6
+    elif get(w, PHASE) != 103:
+        return INVALID
+    worker_header(w, region(w, 0), command, get(w, 32), 0)
+    return child(w, 2, 64, phase)
+
+def worker_header(w:mutbuf, at:u64, command:u64, job:u64, size:u64) -> u64:
+    fill_range(w, at, 64, 0)
+    put(w, at, WORKER_REQUEST)
+    put(w, at + 8, command)
+    put(w, at + 16, get(w, 24))
+    put(w, at + 24, job)
+    put(w, at + 40, size)
+    return 0
+
+def after_worker(o:mutbuf, w:mutbuf, size:u64, phase:u64) -> u32:
+    at = region(w, 1)
+    if size < 192 or get(w, at) != WORKER_RESULT or get(w, at + 8) != size:
+        return INVALID
+    if get(w, at + 16) != 1 or get(w, at + 24) != get(w, 24) or get(w, at + 56) != 0:
+        return INVALID
+    if get(w, at + 48) != size - 192 or get(w, at + 40) > 4294967295:
+        return INVALID
+    if pool_header(w, at + 64) == False:
+        return INVALID
+    if phase == 3:
+        if size != 192 or get(w, at + 40) != 128:
+            return INVALID
+        return after_submit(o, w, at)
+    if get(w, at + 32) != get(w, 32) or get(w, at + 96) != get(w, 32):
+        return INVALID
+    if phase == 5:
+        return after_take(o, w, at, size)
+    if size != 192 or get(w, at + 40) != 128:
+        return INVALID
+    if phase == 4:
+        return after_poll(o, w, at)
+    if phase == 6:
+        return after_cancel(o, w, at)
+    return INVALID
+
+def pool_header(w:mutbuf, at:u64) -> bool:
+    if get(w, at) != POOL_RESULT or get(w, at + 8) != 128:
+        return False
+    if get(w, at + 16) > 5 or get(w, at + 16) == 4:
+        return False
+    if get(w, at + 40) > 4 or get(w, at + 48) > 2 or get(w, at + 56) > 1:
+        return False
+    if get(w, at + 80) > 4294967295 or get(w, at + 96) > 2:
+        return False
+    flags = get(w, at + 88)
+    if flags != 0 and flags != 1 and flags != 256 and flags != 257 and flags != 512 and flags != 513:
+        return False
+    return True
+
+def after_submit(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    status = get(w, pool + 16)
+    if status == 1:
+        if get(w, at + 32) != 0 or get(w, pool + 24) != 1 or get(w, pool + 32) != 0:
+            return INVALID
+        if get(w, pool + 40) != 0 or get(w, pool + 48) != 0 or get(w, pool + 56) != 0 or get(w, pool + 96) != 2:
+            return INVALID
+        return final_literal(o, w, 2)
+    if status == 5:
+        put(w, PHASE, 0)
+        return RESOURCE
+    if status != 0 or get(w, at + 32) == 0 or get(w, at + 32) != get(w, pool + 32):
+        return INVALID
+    if get(w, pool + 24) != 2 or get(w, pool + 40) != 2 or get(w, pool + 48) != 0 or get(w, pool + 56) != 1:
+        return INVALID
+    if get(w, pool + 64) != 0 or get(w, pool + 72) != 0 or get(w, pool + 80) != 0 or get(w, pool + 88) != 0:
+        return INVALID
+    put(w, 32, get(w, at + 32))
+    put(w, PHASE, 10)
+    return publish(o, w, 3, 0)
+
+def after_poll(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 24) != 4 or get(w, pool + 48) != 0:
+        return INVALID
+    status = get(w, pool + 16)
+    if status == 3:
+        if get(w, pool + 40) < 2 or get(w, pool + 40) > 3 or get(w, pool + 56) != 1:
+            return INVALID
+        put(w, PHASE, 10)
+        return publish(o, w, 3, 0)
+    if status == 5:
+        return RESOURCE
+    if status != 0 or get(w, pool + 40) != 4 or get(w, pool + 56) != 0 or get(w, pool + 88) > 1:
+        return INVALID
+    put(w, 160, get(w, pool + 80))
+    put(w, PHASE, 104)
+    return prepare_control(o, w)
+
+def after_cancel(o:mutbuf, w:mutbuf, at:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 16) != 0 or get(w, pool + 24) != 6 or get(w, pool + 48) != 1:
+        return INVALID
+    phase = get(w, pool + 40)
+    if phase < 2 or phase > 4:
+        return INVALID
+    if phase == 4:
+        if get(w, pool + 56) != 0:
+            return INVALID
+    elif get(w, pool + 56) != 1:
+        return INVALID
+    put(w, 96, 4)
+    put(w, 104, 0)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def after_take(o:mutbuf, w:mutbuf, at:u64, size:u64) -> u32:
+    pool = at + 64
+    if get(w, pool + 16) != 0 or get(w, pool + 24) != 7 or get(w, pool + 40) != 4:
+        return INVALID
+    if get(w, pool + 48) != 2 or get(w, pool + 56) != 0 or get(w, pool + 88) > 1:
+        return INVALID
+    code = get(w, at + 40)
+    if code != get(w, 160) or code != get(w, pool + 80):
+        return INVALID
+    if body_valid(w, at + 192, size - 192, code) == False:
+        return INVALID
+    if code != 0:
+        index = error_literal(code)
+        if index == 0:
+            return RESOURCE
+        return final_literal(o, w, index)
+    body = at + 192
+    render = body + 96 + get(w, body + 16) + get(w, body + 24)
+    amount = get(w, body + 32)
+    if amount < 64 or get(w, render) != RENDER_RESULT or get(w, render + 8) != 0:
+        return INVALID
+    if get(w, render + 16) != amount - 64 or get(w, render + 24) != 0:
+        return INVALID
+    if get(w, render + 32) != 0 or get(w, render + 40) != 0 or get(w, render + 48) != 0 or get(w, render + 56) != 0:
+        return INVALID
+    if reserve(w, 4, amount - 64) == 0:
+        return pending_grow(o, w)
+    copy_within(w, region(w, 4), render + 64, amount - 64)
+    put(w, 96, 0)
+    put(w, 104, amount - 64)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def body_valid(w:mutbuf, at:u64, size:u64, code:u64) -> bool:
+    if size < 96 or get(w, at) != BODY_RESULT or get(w, at + 8) != size:
+        return False
+    core = get(w, at + 16)
+    commit = get(w, at + 24)
+    render = get(w, at + 32)
+    if core > size - 96 or commit > size - 96 - core or render != size - 96 - core - commit:
+        return False
+    if get(w, at + 72) != code or get(w, at + 80) != 0:
+        return False
+    if get(w, at + 48) < get(w, at + 40):
+        return False
+    sample = get(w, at + 88)
+    if sample != 0:
+        if sample < get(w, at + 40) or sample > get(w, at + 48):
+            return False
+    elif code == 0 or get(w, at + 56) != 0:
+        return False
+    if code == 0:
+        if core < 128 or commit < 128 or render < 64:
+            return False
+        if get(w, at + 96) != CORE_RESULT or get(w, at + 96 + core) != COMMIT_RESULT:
+            return False
+    elif render != 0:
+        return False
+    return True
+
+def final_literal(o:mutbuf, w:mutbuf, index:u64) -> u32:
+    size = literal_size(index)
+    if size == 0:
+        return INVALID
+    if reserve(w, 4, size) == 0:
+        return pending_grow(o, w)
+    literal(w, region(w, 4), index)
+    put(w, 96, 2)
+    put(w, 104, size)
+    put(w, PHASE, 110)
+    return finish(o, w)
+
+def finish(o:mutbuf, w:mutbuf) -> u32:
+    size = get(w, 104)
+    if size > MAXIMUM - 64:
+        return RESOURCE
+    if length(o) < size + 64:
+        return request_grow(o, w, 2, size + 64)
+    status = get(w, 96)
+    if status > 2 and status != 4:
+        return INVALID
+    if size != 0:
+        copy_range(o, w, 64, region(w, 4), size)
+    put(w, PHASE, 0)
+    return publish(o, w, status, size)
+
+def publish(o:mutbuf, w:mutbuf, status:u64, size:u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESULT_MAGIC)
+    put(o, 8, status)
+    put(o, 16, get(w, 24))
+    put(o, 24, get(w, 32))
+    put(o, 32, size)
+    return 64
+
+def child(w:mutbuf, target:u64, size:u64, phase:u64) -> u32:
+    seq = get(w, SEQUENCE)
+    if seq == MAXIMUM:
+        return RESOURCE
+    seq = seq + 1
+    put(w, SEQUENCE, seq)
+    put(w, PHASE, phase)
+    put(w, 48, target)
+    put(w, 56, size)
+    fill_range(w, ACTION, 112, 0)
+    put(w, ACTION, ACTION_MAGIC)
+    put(w, ACTION + 8, seq)
+    put(w, ACTION + 16, target)
+    put(w, ACTION + 32, region(w, 0))
+    put(w, ACTION + 40, size)
+    put(w, ACTION + 48, region(w, 1))
+    put(w, ACTION + 56, region_capacity(w, 1))
+    return CALL
+
+def complete_child(w:mutbuf) -> bool:
+    if get(w, ACTION) != ACTION_MAGIC or get(w, ACTION + 8) != get(w, SEQUENCE) or get(w, ACTION + 64) != get(w, SEQUENCE):
+        return False
+    if get(w, ACTION + 16) != get(w, 48) or get(w, ACTION + 24) > 1:
+        return False
+    if get(w, ACTION + 32) != region(w, 0) or get(w, ACTION + 40) != get(w, 56):
+        return False
+    if get(w, ACTION + 48) != region(w, 1) or get(w, ACTION + 56) != region_capacity(w, 1):
+        return False
+    if get(w, ACTION + 80) != 0 or get(w, ACTION + 88) != 0 or get(w, ACTION + 104) != 0:
+        return False
+    return True
+
+def region(w: mutbuf, which: u64) -> u64:
+    return get(w, 512 + which * 32)
+
+def region_capacity(w: mutbuf, which: u64) -> u64:
+    return get(w, 520 + which * 32)
+
+def reserve(w: mutbuf, which: u64, needed: u64) -> u64:
+    row = 512 + which * 32
+    at = get(w, row)
+    capacity = get(w, row + 8)
+    used = get(w, row + 16)
+    high = get(w, 384)
+    if high < 4096 or high > length(w) or which > 7:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    if at != 0:
+        if at < 4096 or at > high or capacity > high - at or (used > capacity):
+            put(w, 400, 3)
+            put(w, 392, 0)
+            return 0
+    elif capacity != 0 or used != 0:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    if at != 0 and needed <= capacity:
+        put(w, row + 16, needed)
+        return at
+    size = choose(needed < 64, 64, needed)
+    if capacity <= 9223372036854775807:
+        if size < capacity * 2:
+            size = capacity * 2
+    if size > 18446744073709551615 - high:
+        put(w, 400, 3)
+        put(w, 392, 0)
+        return 0
+    required = high + size
+    if required > length(w):
+        put(w, 400, 1)
+        put(w, 392, required)
+        return 0
+    if used != 0:
+        copy_range(w, w, high, at, used)
+    put(w, row, high)
+    put(w, row + 8, size)
+    put(w, row + 16, needed)
+    put(w, 384, required)
+    return high
+
+def request_grow(o: mutbuf, w: mutbuf, kind: u64, required: u64) -> u32:
+    if length(w) >= 4096:
+        put(w, 400, kind)
+        put(w, 392, required)
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, required)
+    put(o, 24, 0)
+    return GROW
+
+def pending_grow(o: mutbuf, w: mutbuf) -> u32:
+    return request_grow(o, w, get(w, 400), get(w, 392))
+
+def admit_growth(o: mutbuf, w: mutbuf) -> bool:
+    old_work = get(w, WORK_LENGTH)
+    old_output = get(w, OUTPUT_LENGTH)
+    if old_work != length(w):
+        if get(w, 400) != 1 or get(w, 392) > length(w) or length(w) <= old_work:
+            return False
+    if old_output != length(o):
+        if get(w, 400) != 2 or get(w, 392) > length(o) or length(o) <= old_output:
+            return False
+    if old_work != length(w):
+        put(w, WORK_LENGTH, length(w))
+        put(w, 400, 0)
+    if old_output != length(o):
+        put(w, OUTPUT_LENGTH, length(o))
+        put(w, 400, 0)
+    return True
+
+def delivery_again(o: mutbuf, w: mutbuf) -> u32:
+    needed = get(w, ACTION + 96)
+    if needed <= region_capacity(w, 1) or needed < 32:
+        return INVALID
+    if reserve(w, 1, needed) == 0:
+        return pending_grow(o, w)
+    put(w, ACTION + 24, 1)
+    put(w, ACTION + 48, region(w, 1))
+    put(w, ACTION + 56, region_capacity(w, 1))
+    put(w, ACTION + 64, 0)
+    put(w, ACTION + 72, 0)
+    put(w, ACTION + 96, 0)
+    return CALL
+
+def error_literal(code:u64) -> u64:
+    if code == 4294966753:
+        return 3
+    if code == 4294966768:
+        return 4
+    if code == 4294966785:
+        return 5
+    if code == 4294966786:
+        return 6
+    if code == 4294966787:
+        return 7
+    if code == 4294966788:
+        return 8
+    if code == 4294966789:
+        return 9
+    if code == 4294966790:
+        return 10
+    if code == 4294966791:
+        return 11
+    if code == 4294966792:
+        return 12
+    if code == 4294966793:
+        return 13
+    if code == 4294966794:
+        return 14
+    if code == 4294966795:
+        return 15
+    if code == 4294966796:
+        return 16
+    if code == 4294966797:
+        return 17
+    if code == 4294966798:
+        return 18
+    if code == 4294966799:
+        return 19
+    if code == 4294966800:
+        return 20
+    if code == 4294967040:
+        return 21
+    if code == 4294967041:
+        return 22
+    if code == 4294967042:
+        return 23
+    if code == 4294967043:
+        return 24
+    if code == 4294967044:
+        return 25
+    return 0
+
+def literal_size(index:u64) -> u64:
+    if index == 1:
+        return 34
+    if index == 2:
+        return 60
+    if index == 5:
+        return 50
+    if index == 6:
+        return 52
+    if index == 7:
+        return 45
+    if index == 8:
+        return 39
+    if index == 9:
+        return 56
+    if index == 10:
+        return 51
+    if index == 11:
+        return 48
+    if index == 12:
+        return 50
+    if index == 13:
+        return 59
+    if index == 14:
+        return 53
+    if index == 15:
+        return 81
+    if index == 16:
+        return 80
+    if index == 17:
+        return 49
+    if index == 18:
+        return 60
+    if index == 19:
+        return 61
+    if index == 20:
+        return 64
+    if index == 22:
+        return 61
+    if index == 23:
+        return 66
+    if index == 24:
+        return 59
+    if index == 25:
+        return 56
+    if index == 4:
+        return 56
+    if index == 3:
+        return 53
+    if index == 21:
+        return 39
+    return 0
+
+def literal(w:mutbuf, at:u64, index:u64) -> u64:
+    if index == 1:
+        put(w, at + 0, 8367798494427701606)
+        put(w, at + 8, 7598247067624153199)
+        put(w, at + 16, 7021147439288118369)
+        put(w, at + 24, 8318823012299006322)
+        store(w, at + 32, 58)
+        store(w, at + 33, 32)
+        return 34
+    if index == 2:
+        put(w, at + 0, 4764919965007765870)
+        put(w, at + 8, 8079579096229375077)
+        put(w, at + 16, 2334956330918240620)
+        put(w, at + 24, 8751735851445150051)
+        put(w, at + 32, 8391179591946364192)
+        put(w, at + 40, 8583983408546014309)
+        put(w, at + 48, 7596838514762412655)
+        store(w, at + 56, 116)
+        store(w, at + 57, 116)
+        store(w, at + 58, 101)
+        store(w, at + 59, 100)
+        return 60
+    if index == 5:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 3328477279581201774)
+        put(w, at + 16, 8031079452768220206)
+        put(w, at + 24, 7017568537345290096)
+        put(w, at + 32, 7306090317113551980)
+        put(w, at + 40, 8386112018954085746)
+        store(w, at + 48, 101)
+        store(w, at + 49, 115)
+        return 50
+    if index == 6:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 7310503753711379305)
+        put(w, at + 40, 8511922461450268018)
+        store(w, at + 48, 97)
+        store(w, at + 49, 108)
+        store(w, at + 50, 117)
+        store(w, at + 51, 101)
+        return 52
+    if index == 7:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7599101345461596003)
+        put(w, at + 16, 8028075780944717678)
+        put(w, at + 24, 2334101993198482286)
+        put(w, at + 32, 7021782659461164593)
+        store(w, at + 40, 110)
+        store(w, at + 41, 99)
+        store(w, at + 42, 104)
+        store(w, at + 43, 101)
+        store(w, at + 44, 115)
+        return 45
+    if index == 8:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 2338323018190911589)
+        put(w, at + 16, 3978143235749147753)
+        put(w, at + 24, 7521977167448780086)
+        store(w, at + 32, 32)
+        store(w, at + 33, 98)
+        store(w, at + 34, 117)
+        store(w, at + 35, 100)
+        store(w, at + 36, 103)
+        store(w, at + 37, 101)
+        store(w, at + 38, 116)
+        return 39
+    if index == 9:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8242185926623650665)
+        put(w, at + 40, 8030604370047626849)
+        put(w, at + 48, 8751735890233155938)
+        return 56
+    if index == 10:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8242185926623650665)
+        put(w, at + 40, 8603408146677067361)
+        store(w, at + 48, 97)
+        store(w, at + 49, 114)
+        store(w, at + 50, 100)
+        return 51
+    if index == 11:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8242185926623650665)
+        put(w, at + 40, 7306358259854831201)
+        return 48
+    if index == 12:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7811883199053656688)
+        put(w, at + 16, 7953674096907744361)
+        put(w, at + 24, 7863411828718968932)
+        put(w, at + 32, 7935454015552516981)
+        put(w, at + 40, 7598805567992131183)
+        store(w, at + 48, 118)
+        store(w, at + 49, 101)
+        return 50
+    if index == 13:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8030889439828079987)
+        put(w, at + 16, 2338621054691341170)
+        put(w, at + 24, 8749496146393724019)
+        put(w, at + 32, 7306075973079953440)
+        put(w, at + 40, 8079583528501146656)
+        put(w, at + 48, 8391086215161803361)
+        store(w, at + 56, 97)
+        store(w, at + 57, 116)
+        store(w, at + 58, 101)
+        return 59
+    if index == 14:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8246126576297599849)
+        put(w, at + 40, 8388354980832174703)
+        store(w, at + 48, 121)
+        store(w, at + 49, 32)
+        store(w, at + 50, 115)
+        store(w, at + 51, 117)
+        store(w, at + 52, 109)
+        return 53
+    if index == 15:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7811883199053656688)
+        put(w, at + 16, 8461454954893767785)
+        put(w, at + 24, 8367808458864489587)
+        put(w, at + 32, 7599578516227563631)
+        put(w, at + 40, 3271074719715649652)
+        put(w, at + 48, 7935465062204650033)
+        put(w, at + 56, 7024042483049656943)
+        put(w, at + 64, 2338328219548084596)
+        put(w, at + 72, 7308623593077892464)
+        store(w, at + 80, 100)
+        return 81
+    if index == 16:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7935469423008248947)
+        put(w, at + 16, 7791355315855058277)
+        put(w, at + 24, 7308901430452248933)
+        put(w, at + 32, 6998712986536078368)
+        put(w, at + 40, 7953674075600680035)
+        put(w, at + 48, 8317987022935498852)
+        put(w, at + 56, 8026294624021913716)
+        put(w, at + 64, 7453010386429244526)
+        put(w, at + 72, 8317708060514804000)
+        return 80
+    if index == 17:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 2338323018190911589)
+        put(w, at + 16, 7809632574953976937)
+        put(w, at + 24, 7526756817219646049)
+        put(w, at + 32, 8031924071781655917)
+        put(w, at + 40, 7306919375752162162)
+        store(w, at + 48, 116)
+        return 49
+    if index == 18:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 2328678140909478761)
+        put(w, at + 40, 7310594991874535267)
+        put(w, at + 48, 7598528537149662062)
+        store(w, at + 56, 100)
+        store(w, at + 57, 117)
+        store(w, at + 58, 97)
+        store(w, at + 59, 108)
+        return 60
+    if index == 19:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7234316338103084402)
+        put(w, at + 16, 7598807758542304032)
+        put(w, at + 24, 7449362155136118383)
+        put(w, at + 32, 8388366762212943218)
+        put(w, at + 40, 7309940825422110824)
+        put(w, at + 48, 6998704207573446499)
+        store(w, at + 56, 99)
+        store(w, at + 57, 116)
+        store(w, at + 58, 105)
+        store(w, at + 59, 111)
+        store(w, at + 60, 110)
+        return 61
+    if index == 20:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 7022836327513088873)
+        put(w, at + 40, 8317708033335850348)
+        put(w, at + 48, 2340010807195366249)
+        put(w, at + 56, 7809652302963500402)
+        return 64
+    if index == 22:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 7521891461221081961)
+        put(w, at + 40, 8461244959899806825)
+        put(w, at + 48, 8223699867746181221)
+        store(w, at + 56, 101)
+        store(w, at + 57, 119)
+        store(w, at + 58, 97)
+        store(w, at + 59, 114)
+        store(w, at + 60, 100)
+        return 61
+    if index == 23:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8242185926623650665)
+        put(w, at + 40, 7957688057428405857)
+        put(w, at + 48, 8028075772695439732)
+        put(w, at + 56, 7359008730583408750)
+        store(w, at + 64, 101)
+        store(w, at + 65, 101)
+        return 66
+    if index == 24:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 7311348178641511273)
+        put(w, at + 40, 7142819395917080425)
+        put(w, at + 48, 8386113098216664687)
+        store(w, at + 56, 105)
+        store(w, at + 57, 111)
+        store(w, at + 58, 110)
+        return 59
+    if index == 25:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 8315178084276987250)
+        put(w, at + 16, 2334399978034259488)
+        put(w, at + 24, 8387230176444510817)
+        put(w, at + 32, 8245845101320889193)
+        put(w, at + 40, 7161040498066613604)
+        put(w, at + 48, 7887336905538234740)
+        return 56
+    if index == 4:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7453010356363947120)
+        put(w, at + 16, 7306075981636724000)
+        put(w, at + 24, 3473155417879158884)
+        put(w, at + 32, 2334111931572777773)
+        put(w, at + 40, 2334400029607685987)
+        put(w, at + 48, 7308895159530382692)
+        return 56
+    if index == 3:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7017568567410188643)
+        put(w, at + 16, 7809639168886382700)
+        put(w, at + 24, 2336927755366660713)
+        put(w, at + 32, 7234298763096062053)
+        put(w, at + 40, 7018125684865526048)
+        store(w, at + 48, 100)
+        store(w, at + 49, 108)
+        store(w, at + 50, 105)
+        store(w, at + 51, 110)
+        store(w, at + 52, 101)
+        return 53
+    if index == 21:
+        put(w, at + 0, 2336912379250238786)
+        put(w, at + 8, 7017568567410188643)
+        put(w, at + 16, 8315181416903221356)
+        put(w, at + 24, 7234299854336630900)
+        store(w, at + 32, 115)
+        store(w, at + 33, 32)
+        store(w, at + 34, 56)
+        store(w, at + 35, 32)
+        store(w, at + 36, 77)
+        store(w, at + 37, 105)
+        store(w, at + 38, 66)
+        return 39
+    return 0
+
+def load(s:readbuf, p:u64) -> u64:
+    return byte(s,p) | (byte(s,p+1)<<8) | (byte(s,p+2)<<16) | (byte(s,p+3)<<24) | (byte(s,p+4)<<32) | (byte(s,p+5)<<40) | (byte(s,p+6)<<48) | (byte(s,p+7)<<56)
+def get(w:mutbuf, p:u64) -> u64:
+    return byte(w,p) | (byte(w,p+1)<<8) | (byte(w,p+2)<<16) | (byte(w,p+3)<<24) | (byte(w,p+4)<<32) | (byte(w,p+5)<<40) | (byte(w,p+6)<<48) | (byte(w,p+7)<<56)
+def put(w:mutbuf, p:u64, v:u64) -> u64:
+    store(w,p,v)
+    store(w,p+1,v>>8)
+    store(w,p+2,v>>16)
+    store(w,p+3,v>>24)
+    store(w,p+4,v>>32)
+    store(w,p+5,v>>40)
+    store(w,p+6,v>>48)
+    store(w,p+7,v>>56)
+    return 0

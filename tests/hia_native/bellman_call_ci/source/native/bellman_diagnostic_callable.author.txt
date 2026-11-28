@@ -1,0 +1,42 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    code = wide(qualified(s, o, w))
+    if code == CAPACITY and length(o) >= 32 and length(o) < MINIMUM:
+        return grow(o, 2, MINIMUM)
+    if code != MINIMUM:
+        return code
+    if get(o, 0) != RESPONSE:
+        return INVALID
+    status = get(o, 8)
+    if status == 2:
+        required = get(o, 24)
+        if required <= length(w):
+            return INVALID
+        return grow(o, 1, required)
+    if status == 3:
+        required = get(o, 24)
+        if required <= length(o):
+            return INVALID
+        return grow(o, 2, required)
+    return code
+
+def grow(o:mutbuf, kind:u64, required:u64) -> u32:
+    put(o, 0, GROW_MAGIC)
+    put(o, 8, kind)
+    put(o, 16, required)
+    put(o, 24, 0)
+    return GROW
+
+def load(s:readbuf, p:u64) -> u64:
+    return byte(s,p) | (byte(s,p+1)<<8) | (byte(s,p+2)<<16) | (byte(s,p+3)<<24) | (byte(s,p+4)<<32) | (byte(s,p+5)<<40) | (byte(s,p+6)<<48) | (byte(s,p+7)<<56)
+def get(w:mutbuf, p:u64) -> u64:
+    return byte(w,p) | (byte(w,p+1)<<8) | (byte(w,p+2)<<16) | (byte(w,p+3)<<24) | (byte(w,p+4)<<32) | (byte(w,p+5)<<40) | (byte(w,p+6)<<48) | (byte(w,p+7)<<56)
+def put(w:mutbuf, p:u64, v:u64) -> u64:
+    store(w,p,v)
+    store(w,p+1,v>>8)
+    store(w,p+2,v>>16)
+    store(w,p+3,v>>24)
+    store(w,p+4,v>>32)
+    store(w,p+5,v>>40)
+    store(w,p+6,v>>48)
+    store(w,p+7,v>>56)
+    return 0
