@@ -5,6 +5,6 @@
   },
   {
     "before": "    let mut sessions = executor.block_on(async {",
-    "after": "    if stdio_mode {\n        return executor.block_on(async {\n            let running = servers[0].clone().serve(tokio::io::stdio()).await?;\n            running.waiting().await?;\n            Ok(())\n        });\n    }\n    let mut sessions = executor.block_on(async {"
+    "after": "    if stdio_mode {\n        return executor.block_on(async {\n            let running = servers[0].clone().serve(rmcp::transport::stdio()).await?;\n            running.waiting().await?;\n            Ok(())\n        });\n    }\n    let mut sessions = executor.block_on(async {"
   }
 ]
