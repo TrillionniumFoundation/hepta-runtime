@@ -1,0 +1,3028 @@
+{
+  "actual_original": {
+    "direct-deadline-comparison-v2": {
+      "native": {
+        "elapsed_seconds": 30.000741406,
+        "errno": 0,
+        "generation": 1,
+        "join": 0,
+        "kind": 1,
+        "reason": 703,
+        "stderr_bytes": 0,
+        "stdout_bytes": 0,
+        "waitstatus": 0
+      },
+      "original": {
+        "chain": [
+          "direct SSH original deadline expired; no automatic retry",
+          "deadline has elapsed"
+        ],
+        "display": "direct SSH original deadline expired; no automatic retry",
+        "elapsed_seconds": 30.000876852,
+        "kind": "error",
+        "shutdown": "pass"
+      },
+      "path": "/home/qq/hia-runtime-public-read-20261128-03da85/direct-deadline-comparison-v2/result.json",
+      "sha256": "d910a0ae44e4f0f7ed96f51b5686f2bbbeaf26ca8b722dd6869764654dbf1dae"
+    },
+    "direct-deadline-comparison-v3": {
+      "native": {
+        "elapsed_seconds": 30.05059729,
+        "errno": 0,
+        "generation": 1,
+        "join": 0,
+        "kind": 1,
+        "reason": 403,
+        "stderr_bytes": 0,
+        "stdout_bytes": 0,
+        "waitstatus": 0
+      },
+      "original": {
+        "chain": [
+          "direct SSH original deadline expired; no automatic retry",
+          "deadline has elapsed"
+        ],
+        "display": "direct SSH original deadline expired; no automatic retry",
+        "elapsed_seconds": 30.001361623,
+        "kind": "error",
+        "shutdown": "pass"
+      },
+      "path": "/home/qq/hia-runtime-public-read-20261128-03da85/direct-deadline-comparison-v3/result.json",
+      "sha256": "56f7a2413d6f6dc39f75133eb4629cdc3bf53c0dedd8584683985606e0ef2c69"
+    }
+  },
+  "after_function": {
+    "blocks": [
+      {
+        "id": "b0",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 105
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v1",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v0",
+              "v1"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v2",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 205
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v3",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v0",
+              "v3"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v4",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v2",
+              "v4"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v5",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v0",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v5",
+          "else": {
+            "args": [
+              "v0"
+            ],
+            "target": "b2"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b1"
+          }
+        }
+      },
+      {
+        "id": "b1",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 7
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v8",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v8"
+          ]
+        }
+      },
+      {
+        "id": "b2",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 101
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v9",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v7",
+              "v9"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v10",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 704
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v11",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v7",
+              "v11"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v12",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v10",
+              "v12"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v13",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v7",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v13",
+          "else": {
+            "args": [
+              "v7"
+            ],
+            "target": "b4"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b3"
+          }
+        }
+      },
+      {
+        "id": "b3",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 8
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v16",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v16"
+          ]
+        }
+      },
+      {
+        "id": "b4",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 106
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v17",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v15",
+              "v17"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v18",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v15",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v18",
+          "else": {
+            "args": [
+              "v15"
+            ],
+            "target": "b6"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b5"
+          }
+        }
+      },
+      {
+        "id": "b5",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 9
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v21",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v21"
+          ]
+        }
+      },
+      {
+        "id": "b6",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 103
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v22",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v20",
+              "v22"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v23",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v20",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v23",
+          "else": {
+            "args": [
+              "v20"
+            ],
+            "target": "b8"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b7"
+          }
+        }
+      },
+      {
+        "id": "b7",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 10
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v26",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v26"
+          ]
+        }
+      },
+      {
+        "id": "b8",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 403
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v27",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v25",
+              "v27"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v28",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 703
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v29",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v25",
+              "v29"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v30",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v28",
+              "v30"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v31",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v25",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v31",
+          "else": {
+            "args": [
+              "v25"
+            ],
+            "target": "b10"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b9"
+          }
+        }
+      },
+      {
+        "id": "b9",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 11
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v34",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v34"
+          ]
+        }
+      },
+      {
+        "id": "b10",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 401
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v35",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v33",
+              "v35"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v36",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v33",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v36",
+          "else": {
+            "args": [
+              "v33"
+            ],
+            "target": "b12"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b11"
+          }
+        }
+      },
+      {
+        "id": "b11",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 12
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v39",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v39"
+          ]
+        }
+      },
+      {
+        "id": "b12",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 402
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v40",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v38",
+              "v40"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v41",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v38",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v41",
+          "else": {
+            "args": [
+              "v38"
+            ],
+            "target": "b14"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b13"
+          }
+        }
+      },
+      {
+        "id": "b13",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 13
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v44",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v44"
+          ]
+        }
+      },
+      {
+        "id": "b14",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 404
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v45",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v43",
+              "v45"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v46",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v43",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v46",
+          "else": {
+            "args": [
+              "v43"
+            ],
+            "target": "b16"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b15"
+          }
+        }
+      },
+      {
+        "id": "b15",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 14
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v49",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v49"
+          ]
+        }
+      },
+      {
+        "id": "b16",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 405
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v50",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v48",
+              "v50"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v51",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v48",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v51",
+          "else": {
+            "args": [
+              "v48"
+            ],
+            "target": "b18"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b17"
+          }
+        }
+      },
+      {
+        "id": "b17",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 15
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v54",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v54"
+          ]
+        }
+      },
+      {
+        "id": "b18",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 406
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v55",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v53",
+              "v55"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v56",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v53",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v56",
+          "else": {
+            "args": [
+              "v53"
+            ],
+            "target": "b20"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b19"
+          }
+        }
+      },
+      {
+        "id": "b19",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 16
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v59",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v59"
+          ]
+        }
+      },
+      {
+        "id": "b20",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 408
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v60",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v58",
+              "v60"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v61",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v58",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v61",
+          "else": {
+            "args": [
+              "v58"
+            ],
+            "target": "b22"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b21"
+          }
+        }
+      },
+      {
+        "id": "b21",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 17
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v64",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v64"
+          ]
+        }
+      },
+      {
+        "id": "b22",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 411
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v65",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v63",
+              "v65"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v66",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 412
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v67",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v63",
+              "v67"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v68",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v66",
+              "v68"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v69",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v63",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v69",
+          "else": {
+            "args": [
+              "v63"
+            ],
+            "target": "b24"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b23"
+          }
+        }
+      },
+      {
+        "id": "b23",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 18
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v72",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v72"
+          ]
+        }
+      },
+      {
+        "id": "b24",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 501
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v73",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v71",
+              "v73"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v74",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 502
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v75",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v71",
+              "v75"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v76",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v74",
+              "v76"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v77",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v71",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v77",
+          "else": {
+            "args": [
+              "v71"
+            ],
+            "target": "b26"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b25"
+          }
+        }
+      },
+      {
+        "id": "b25",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 19
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v80",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v80"
+          ]
+        }
+      },
+      {
+        "id": "b26",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 504
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v81",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v79",
+              "v81"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v82",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v79",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v82",
+          "else": {
+            "args": [
+              "v79"
+            ],
+            "target": "b28"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b27"
+          }
+        }
+      },
+      {
+        "id": "b27",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 20
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v85",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v85"
+          ]
+        }
+      },
+      {
+        "id": "b28",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 503
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v86",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v84",
+              "v86"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v87",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v84",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v87",
+          "else": {
+            "args": [
+              "v84"
+            ],
+            "target": "b30"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b29"
+          }
+        }
+      },
+      {
+        "id": "b29",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 21
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v90",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v90"
+          ]
+        }
+      },
+      {
+        "id": "b30",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 505
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v91",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v89",
+              "v91"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v92",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 22
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v93",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 0
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v94",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v92",
+              "v93",
+              "v94"
+            ],
+            "attrs": {},
+            "op": "select",
+            "out": [
+              {
+                "name": "v95",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v89",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v95"
+          ]
+        }
+      }
+    ],
+    "effects": [
+      "read",
+      "write",
+      "trap"
+    ],
+    "entry": "b0",
+    "name": "f9",
+    "params": [
+      {
+        "name": "v0",
+        "type": "u64"
+      }
+    ],
+    "returns": [
+      "u64"
+    ]
+  },
+  "after_source_sha256": "32f122de6260800de48710d3e25951ce5f92a6b868a5e2723b6d89614ba9f69f",
+  "before_function": {
+    "blocks": [
+      {
+        "id": "b0",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 105
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v1",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v0",
+              "v1"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v2",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 205
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v3",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v0",
+              "v3"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v4",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v2",
+              "v4"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v5",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v0",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v5",
+          "else": {
+            "args": [
+              "v0"
+            ],
+            "target": "b2"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b1"
+          }
+        }
+      },
+      {
+        "id": "b1",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 7
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v8",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v8"
+          ]
+        }
+      },
+      {
+        "id": "b2",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 101
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v9",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v7",
+              "v9"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v10",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 403
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v11",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v7",
+              "v11"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v12",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v10",
+              "v12"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v13",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 704
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v14",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v7",
+              "v14"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v15",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v13",
+              "v15"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v16",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v7",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v16",
+          "else": {
+            "args": [
+              "v7"
+            ],
+            "target": "b4"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b3"
+          }
+        }
+      },
+      {
+        "id": "b3",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 8
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v19",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v19"
+          ]
+        }
+      },
+      {
+        "id": "b4",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 106
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v20",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v18",
+              "v20"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v21",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v18",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v21",
+          "else": {
+            "args": [
+              "v18"
+            ],
+            "target": "b6"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b5"
+          }
+        }
+      },
+      {
+        "id": "b5",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 9
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v24",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v24"
+          ]
+        }
+      },
+      {
+        "id": "b6",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 103
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v25",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v23",
+              "v25"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v26",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v23",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v26",
+          "else": {
+            "args": [
+              "v23"
+            ],
+            "target": "b8"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b7"
+          }
+        }
+      },
+      {
+        "id": "b7",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 10
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v29",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v29"
+          ]
+        }
+      },
+      {
+        "id": "b8",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 703
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v30",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v28",
+              "v30"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v31",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v28",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v31",
+          "else": {
+            "args": [
+              "v28"
+            ],
+            "target": "b10"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b9"
+          }
+        }
+      },
+      {
+        "id": "b9",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 11
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v34",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v34"
+          ]
+        }
+      },
+      {
+        "id": "b10",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 401
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v35",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v33",
+              "v35"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v36",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v33",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v36",
+          "else": {
+            "args": [
+              "v33"
+            ],
+            "target": "b12"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b11"
+          }
+        }
+      },
+      {
+        "id": "b11",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 12
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v39",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v39"
+          ]
+        }
+      },
+      {
+        "id": "b12",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 402
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v40",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v38",
+              "v40"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v41",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v38",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v41",
+          "else": {
+            "args": [
+              "v38"
+            ],
+            "target": "b14"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b13"
+          }
+        }
+      },
+      {
+        "id": "b13",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 13
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v44",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v44"
+          ]
+        }
+      },
+      {
+        "id": "b14",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 404
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v45",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v43",
+              "v45"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v46",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v43",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v46",
+          "else": {
+            "args": [
+              "v43"
+            ],
+            "target": "b16"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b15"
+          }
+        }
+      },
+      {
+        "id": "b15",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 14
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v49",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v49"
+          ]
+        }
+      },
+      {
+        "id": "b16",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 405
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v50",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v48",
+              "v50"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v51",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v48",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v51",
+          "else": {
+            "args": [
+              "v48"
+            ],
+            "target": "b18"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b17"
+          }
+        }
+      },
+      {
+        "id": "b17",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 15
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v54",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v54"
+          ]
+        }
+      },
+      {
+        "id": "b18",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 406
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v55",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v53",
+              "v55"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v56",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v53",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v56",
+          "else": {
+            "args": [
+              "v53"
+            ],
+            "target": "b20"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b19"
+          }
+        }
+      },
+      {
+        "id": "b19",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 16
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v59",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v59"
+          ]
+        }
+      },
+      {
+        "id": "b20",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 408
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v60",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v58",
+              "v60"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v61",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v58",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v61",
+          "else": {
+            "args": [
+              "v58"
+            ],
+            "target": "b22"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b21"
+          }
+        }
+      },
+      {
+        "id": "b21",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 17
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v64",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v64"
+          ]
+        }
+      },
+      {
+        "id": "b22",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 411
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v65",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v63",
+              "v65"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v66",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 412
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v67",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v63",
+              "v67"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v68",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v66",
+              "v68"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v69",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v63",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v69",
+          "else": {
+            "args": [
+              "v63"
+            ],
+            "target": "b24"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b23"
+          }
+        }
+      },
+      {
+        "id": "b23",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 18
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v72",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v72"
+          ]
+        }
+      },
+      {
+        "id": "b24",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 501
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v73",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v71",
+              "v73"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v74",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 502
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v75",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v71",
+              "v75"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v76",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v74",
+              "v76"
+            ],
+            "attrs": {},
+            "op": "bool.or",
+            "out": [
+              {
+                "name": "v77",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v71",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v77",
+          "else": {
+            "args": [
+              "v71"
+            ],
+            "target": "b26"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b25"
+          }
+        }
+      },
+      {
+        "id": "b25",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 19
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v80",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v80"
+          ]
+        }
+      },
+      {
+        "id": "b26",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 504
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v81",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v79",
+              "v81"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v82",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v79",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v82",
+          "else": {
+            "args": [
+              "v79"
+            ],
+            "target": "b28"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b27"
+          }
+        }
+      },
+      {
+        "id": "b27",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 20
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v85",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v85"
+          ]
+        }
+      },
+      {
+        "id": "b28",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 503
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v86",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v84",
+              "v86"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v87",
+                "type": "bool"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v84",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "cond": "v87",
+          "else": {
+            "args": [
+              "v84"
+            ],
+            "target": "b30"
+          },
+          "op": "branch",
+          "then": {
+            "args": [],
+            "target": "b29"
+          }
+        }
+      },
+      {
+        "id": "b29",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 21
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v90",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v90"
+          ]
+        }
+      },
+      {
+        "id": "b30",
+        "ops": [
+          {
+            "args": [],
+            "attrs": {
+              "value": 505
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v91",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v89",
+              "v91"
+            ],
+            "attrs": {},
+            "op": "compare.eq",
+            "out": [
+              {
+                "name": "v92",
+                "type": "bool"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 22
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v93",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [],
+            "attrs": {
+              "value": 0
+            },
+            "op": "const",
+            "out": [
+              {
+                "name": "v94",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "args": [
+              "v92",
+              "v93",
+              "v94"
+            ],
+            "attrs": {},
+            "op": "select",
+            "out": [
+              {
+                "name": "v95",
+                "type": "u64"
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "v89",
+            "type": "u64"
+          }
+        ],
+        "term": {
+          "op": "ret",
+          "values": [
+            "v95"
+          ]
+        }
+      }
+    ],
+    "effects": [
+      "read",
+      "write",
+      "trap"
+    ],
+    "entry": "b0",
+    "name": "f9",
+    "params": [
+      {
+        "name": "v0",
+        "type": "u64"
+      }
+    ],
+    "returns": [
+      "u64"
+    ]
+  },
+  "before_source_sha256": "6145d80a0e82a61fa23249950674f6a5df83d545c453bf436cb1bdddef442f3e",
+  "changed_function": "f9",
+  "context": "403 is the active transport IO deadline; ordinary token notifications do not drop this future and actual future destruction publishes no result; 101 pre-admission and 704 post-reply inactivity retain their original generic message",
+  "original_deadline_seconds": 30,
+  "previous_public_failure": {
+    "path": "/home/qq/hia-runtime-public-read-20261128-03da85/default-lifecycle-probe-v5/result.json",
+    "sha256": "be3e49b416b8fb06124ad53e2712f5d22952ba37128a4c4b72484d980fdbe8c7"
+  },
+  "public_route_qualified": false,
+  "retained_functions": {
+    "f0": "3a42044e110c480ab490ade6472bab3c354aaadda4c97903ec9623e2ef1d6a06",
+    "f1": "82f140eb4a4b346744eab949c82afab237084b7768af6cce4ee20a4af67deccb",
+    "f10": "34e92923c3fcdc86f43adbec94ec2f8587821902a97d7d51af61ba66e596e9d2",
+    "f11": "9f7a43998a306259831f7ae23f421c1a32c1b4ef0277d374552b58d77b305dca",
+    "f12": "a60699258ed1edc4f4c2f4e9bc474a4d38b75893e23d0dd18cc6498ac378df3b",
+    "f13": "04bdba80aca3a29bbf58f4a2bd6972ad6c2ca4ee62573784b6967125b9647f2b",
+    "f14": "6be7bf777676a2d0c22b20f847f406cd361b13aa64c22c2315b611d2d2dc88a5",
+    "f15": "a854ec1bba92a1f2290050523088305db7dfc23df55c7ebe62319cd7632110bc",
+    "f16": "b209b5df04c33aae2aca674789bef3bc6fff91fd4cdc4898f9a3bb2b4f9ad653",
+    "f17": "1899773a315cd73af98583f861e9033c1f1b4889dd188ac140e7a9f446ea73e2",
+    "f18": "24e4b678399d88114aa161b9a6ac50dbfc9dbd8a49a61528a4983d673bd09c4f",
+    "f19": "10cb40cc0ebe9456fc7d609f6982d228460e93d32e3bdca59eab553a62098a9d",
+    "f2": "2d0b0d0b997405926a5b14e0ce63e1542610965dac676d02c1ea1821e4494028",
+    "f20": "f87e7cb90d804b03390c35074866fe85c46b2af1f0d2bb8d7366a432f465b3be",
+    "f21": "d213b1917cd51651a08ca42fa47eb19f25c4a2682361cb19ad421db43ab4d5fb",
+    "f22": "84a03fb9f2c3d47ea9a940e69a2aec75c14c4b1a7e5df9138ca7206bb162ddfa",
+    "f23": "8f98f4d3adcad29885c312f1ad2321beb0249746dfb8f6be4fc52ab44caf54bc",
+    "f24": "ff925862da3e4cd8115172b7262936584e712352a8055e5729f17b075ba53bb9",
+    "f25": "431596181fd453ad9b41493dc3e6a53f4b885cc18be0b0f65ad81f68e6855f94",
+    "f26": "e80f75ed41e39ab82d90bc105d6c07960cccef3f9f0ae8118a6d748367694f8b",
+    "f27": "28964ba59c325095ac310dabd41981e68e137e04a42c09716c1f703a119b079f",
+    "f28": "09c4fb2c31784392b4705583e4a5fdd53b20166914faa15ad9e61e6ad9c224cf",
+    "f29": "e142ec59f900da4c0e743552d94028271db0b2acf9b9ea5d3a84351e5184bef8",
+    "f3": "a9a0a5da143943a179f3214b865134b74f8d9b26042e58974fac292a5c0a569e",
+    "f4": "fafd352da968695e7bd3b6412446d94ca8c0e01ac5e1bdf2e21f988b32b6a48e",
+    "f5": "be95005d7f94abc8b428bcd1bef70760c10d63d82b39414f477463903eedad0c",
+    "f6": "e5ebbf635cada5174a05e6939403987b1f27a8be387a24def96d4d4efbe50433",
+    "f7": "72334619d879b9b1c9735b4bd130fadedf7e25d73a339fb2fd5d7e582ee275e8",
+    "f8": "1e1e26ad54d6d90432c6a6a5009064d481236c5b2ab071999ccaf48c79644cec"
+  },
+  "schema": "hepta.runtime.public-read.deadline-error-context.v1",
+  "unchanged_fixed_ssh_owner": true,
+  "whole_pseudo_inverse": true
+}

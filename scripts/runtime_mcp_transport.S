@@ -14,6 +14,7 @@ public_span_start:
     mov ecx, 4096
     rep stosb
     mov [r12 + 248], r15
+    mov [r12 + PM_READ_ENV], r14
     mov rdi, r14
     call runtime_filesystem_hub_create
     cmp rax, -4095
@@ -32,6 +33,10 @@ public_span_start:
     jae public_span_fail
     mov r15, rax
     mov [r12 + 240], rax
+    mov rdx, [r12 + PM_READ_ENV]
+    mov [r15 + 480], rdx
+    lea rdx, [r12 + PM_READ_HUB]
+    mov [r15 + 472], rdx /* Borrow the process-owned singleton cell. */
     mov rax, [r12 + 224]
     mov [r15 + 400], rax
     mov rdi, [r12 + 232]
@@ -395,7 +400,7 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 568 /* 71 fixed slots; existing routes plus binary owners69..70. */
+    .zero 656 /* 73 fixed slots; existing routes and binary owners69..72. */
 
 /* G2 selects the actual final SDK initialization outcome. This fixed boundary
  * writes its admitted stderr span and retains its exit across config teardown. */

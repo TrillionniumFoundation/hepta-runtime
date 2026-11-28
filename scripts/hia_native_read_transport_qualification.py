@@ -26,6 +26,8 @@ EXTRA = (
     "tests/hia_native/test_native_read_bootstrap_state.py", "tests/hia_native/test_file_info_ready_reap.py",
     "tests/hia_native/test_file_info_guard.py", "tests/hia_native/info_guard_supervisor.py",
     "tests/hia_native/io_fault_supervisor.py",
+    "qualification/binary_root/v1/source/native/config_directory_owner_span.hepta",
+    "authoring/public_read/BOOTSTRAP_DEPENDENCY_PROJECTION.json",
 )
 TRANSPORT_COUNTS = {"actual_elf_responses": 15, "binary_read_original_comparisons": 3,
     "file_info_original_comparisons": 3, "invalid_elf_refusals": 1,
@@ -45,6 +47,56 @@ def require(value, message):
     if not value:
         raise ValueError(message)
 
+
+
+def admit_bootstrap_reference():
+    commit = "8ac803a79135f4cd2d5efc93c77905d63f4bc2ea"
+    path = "qualification/binary_root/v1/source/native/config_directory_owner_span.hepta"
+    original_path = "native/config_directory_owner_span.hepta"
+    original = local.git(ROOT, "show", commit + ":" + original_path)
+    require(local.digest(original) == "cb22aa72a33b4a429356fdb7d70dd33828492676de1a89c11837d9d8f68a55b5"
+            and local.blob(original) == "a3fd5c4a7f9a57644015f144e0c2a1e0aea31e55",
+            "original retained UTF8 Git object differs")
+    require((ROOT/path).read_bytes() == original, "complete frozen UTF8 source differs")
+    proof_path = ROOT/"authoring/public_read/BOOTSTRAP_DEPENDENCY_PROJECTION.json"
+    proof = json.loads(proof_path.read_bytes())
+    require(proof["baseline_commit"] == commit and proof["original_dependency_path"] == original_path
+            and proof["frozen_dependency_path"] == path
+            and proof["original_dependency_git_blob"] == local.blob(original)
+            and proof["original_dependency_sha256"] == local.digest(original),
+            "bootstrap dependency origin receipt differs")
+    names = ("scripts/author_native_read_bootstrap.py", "native/native_read_bootstrap_composition.json",
+             "native/native_read_bootstrap.hepta", path)
+    require(set(proof["before"]) == set(names) == set(proof["after"]),
+            "bootstrap complete projection domain differs")
+    for name in names:
+        prior = local.git(ROOT, "show", commit + ":" + name)
+        current = (ROOT/name).read_bytes()
+        for key, raw in (("before", prior), ("after", current)):
+            require(proof[key][name] == {"bytes": len(raw), "sha256": local.digest(raw),
+                                        "git_blob": local.blob(raw)},
+                    "bootstrap projection whole source differs: " + key + "." + name)
+    prior = json.loads(local.git(ROOT, "show", commit + ":native/native_read_bootstrap_composition.json"))
+    current = json.loads((ROOT/"native/native_read_bootstrap_composition.json").read_bytes())
+    require(current["retained_utf8_origin"] == {
+                "commit": commit, "path": original_path, "frozen_path": path,
+                "source_sha256": local.digest(original), "git_blob": local.blob(original)},
+            "bootstrap complete UTF8 origin differs")
+    require(current["retained_utf8"]["source"] == path
+            and current["author_sha256"] == local.digest((ROOT/names[0]).read_bytes()),
+            "bootstrap current author/frozen source path differs")
+    current["author_sha256"] = prior["author_sha256"]
+    current["retained_utf8"]["source"] = prior["retained_utf8"]["source"]
+    del current["retained_utf8_origin"]
+    require(current == prior, "complete original bootstrap metadata inverse differs")
+    require((ROOT/names[2]).read_bytes() == local.git(ROOT, "show", commit + ":" + names[2]),
+            "original bootstrap HIA bytes changed")
+    require((ROOT/path).read_bytes() == original, "bootstrap frozen source changed during admission")
+    return {"baseline_commit": commit, "original_path": original_path, "frozen_path": path,
+            "git_blob": local.blob(original), "sha256": local.digest(original),
+            "projection_receipt_sha256": local.digest(proof_path.read_bytes()),
+            "whole_source_and_complete_metadata_inverse": True,
+            "native_bootstrap_bytes_unchanged": True}
 
 def run_test(output, test, result_key, env):
     label = Path(test).stem
@@ -75,6 +127,7 @@ def qualify(hepta, output, report):
     require(sys.flags.isolated == 1 and sys.flags.optimize == 0, "isolated unoptimized Python required")
     report["sources"] = local.freeze(ROOT)
     report["sources"].update({name: local.file_identity(ROOT/name) for name in EXTRA})
+    report["bootstrap_reference"] = admit_bootstrap_reference()
     report["local"] = {}
     local.qualify(ROOT, hepta, output/"local", report["local"])
     build = NativeBuild(hepta, output/"bootstrap")

@@ -1,0 +1,631 @@
+def read_kind(w: mutbuf) -> u64:
+    return choose(get(w,224)==MULTI_REQUEST,3,choose(get(w,224)==INFO_REQUEST,1,2))
+
+def after_params(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    kind=read_kind(w)
+    if code != 256 or size < 256 or get(w, at) != choose(kind==3,MULTI_PARAMS_RESULT,PARAMS_RESULT) or get(w, at + 16) != choose(kind==3,1,kind):
+        return INVALID
+    status = get(w, at + 8)
+    if status == 1:
+        if get(w, at + 72) != size - 256:
+            return INVALID
+        return finish(o, w, 2, at + 256, size - 256)
+    if status != 0:
+        return INVALID
+    if reserve(w, 2, size) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 2), region(w, 1), size)
+    put(w,232,size)
+    put(w,408,0)
+    put(w,416,0)
+    put(w,424,0)
+    return prepare(s, o, w, 2)
+
+def after_fence(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64, ending: bool) -> u32:
+    at = region(w, 1)
+    if ending:
+        if read_kind(w)==3:
+            return after_multi_budget(s,o,w,code,size)
+        return after_json_diagnostic(s,o,w,code,size)
+    if read_kind(w)==3:
+        return after_multi_plan(s,o,w,code,size)
+    if code != size or size < 64 or get(w, at) != PLAN_RESULT or get(w, at + 16) != read_kind(w):
+        return INVALID
+    if get(w, at + 56) != size - 64:
+        return INVALID
+    if get(w, at + 8) == 1:
+        return finish(o, w, 1, at + 64, size - 64)
+    if get(w, at + 8) != 2 or get(w, at + 24) != 2:
+        return INVALID
+    if reserve(w, 3, size - 64) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 3), region(w, 1) + 64, size - 64)
+    put(w, 200, size - 64)
+    return prepare(s, o, w, 3)
+
+def after_context(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if code != size or size < 32 or get(w, at) != MESSAGE or get(w, at + 16) != 0 or get(w, at + 24) != size - 32:
+        return INVALID
+    if read_kind(w)==3:
+        if get(w,at+8)>1:
+            return INVALID
+        if reserve(w,3,size)==0:
+            return pending_grow(o,w)
+        copy_range(w,w,region(w,3),region(w,1),size)
+        put(w,200,size)
+        return prepare(s,o,w,4)
+    if get(w, at + 8) == 1:
+        return finish(o, w, 1, at + 32, size - 32)
+    if get(w, at + 8) != 0:
+        return INVALID
+    if reserve(w, 4, size) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 4), region(w, 1), size)
+    put(w, 216, size)
+    return prepare(s, o, w, 4)
+
+def after_current(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    if read_kind(w)==3:
+        return after_multi_plan(s,o,w,code,size)
+    at = region(w, 1)
+    if code != size or size < 64 or get(w, at) != PLAN_RESULT or get(w, at + 16) != read_kind(w) or get(w, at + 56) != size - 64:
+        return INVALID
+    if get(w, at + 8) == 1:
+        return finish(o, w, 1, at + 64, size - 64)
+    if get(w, at + 8) != 3:
+        return INVALID
+    if reserve(w, 5, size - 64) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 5), region(w, 1) + 64, size - 64)
+    put(w, 208, size - 64)
+    return prepare(s, o, w, 5)
+
+def after_config(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if code != size or size < 32 or get(w, at) != MESSAGE or get(w, at + 16) != 0 or get(w, at + 24) != size - 32:
+        return INVALID
+    if get(w, at + 8) == 1:
+        return finish(o, w, 1, at + 32, size - 32)
+    if get(w, at + 8) != 0:
+        return INVALID
+    if reserve(w, 6, size - 32) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 6), region(w, 1) + 32, size - 32)
+    put(w, 240, size - 32)
+    return prepare(s, o, w, 6)
+
+def after_resolve(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    if code==4294967287 and size==0:
+        return finish(o,w,3,0,0)
+    at = region(w, 1)
+    if code != 128 or size < 128 or get(w, at) != CAPTURE_RESULT:
+        return INVALID
+    if reserve(w, 7, size) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 7), region(w, 1), size)
+    put(w, 248, size)
+    return prepare(s, o, w, 7)
+
+def after_policy(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64, parsed: bool) -> u32:
+    at = region(w, 1)
+    if parsed:
+        if code != 32 or size < 32 or get(w, at) != VALUE_RESULT:
+            return INVALID
+        if get(w,at+8)==1:
+            if read_kind(w)==3:
+                return multi_transport_error(o,w)
+            return prepare(s,o,w,10)
+        if reserve(w, 3, size) == 0:
+            return pending_grow(o, w)
+        copy_range(w, w, region(w, 3), region(w, 1), size)
+        put(w, 200, size)
+        return prepare(s, o, w, 9)
+    if code != 64 or size < 64 or get(w, at) != TRANSPORT_RESULT or get(w, at + 56) != size - 64:
+        return INVALID
+    status = get(w, at + 8)
+    if status < 2:
+        return after_transport_ready(s,o,w,status,size)
+    if status != 2:
+        return INVALID
+    if reserve(w, 3, size - 64) == 0:
+        return pending_grow(o, w)
+    copy_range(w, w, region(w, 3), region(w, 1) + 64, size - 64)
+    put(w, 200, size - 64)
+    return prepare(s, o, w, 8)
+
+def after_caller(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    at = region(w, 1)
+    if code != 64 or size < 64 or get(w, at) != TRANSPORT_RESULT or get(w, at + 56) != size - 64 or get(w, at + 8) > 1:
+        return INVALID
+    return after_transport_ready(s,o,w,get(w,at+8),size)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf, phase: u64) -> u32:
+    if phase < 1 or phase > 11:
+        return INVALID
+    put(w, 8, 100 + phase)
+    if reserve(w, 1, 256) == 0:
+        return pending_grow(o, w)
+    if phase == 1:
+        size = get(w, 72)
+        if size > MAXIMUM - 24:
+            return request_grow(o, w, 3, 0)
+        if reserve(w, 0, size + 24) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        kind=read_kind(w)
+        put(w,at,choose(kind==3,MULTI_PARAMS_REQUEST,PARAMS_REQUEST))
+        put(w,at+8,size)
+        put(w,at+16,choose(kind==3,1,kind))
+        copy_range(w,s,at+24,48,size)
+        return child(w,choose(kind==3,8,kind-1),size+24,phase)
+    if phase == 2 or phase == 4:
+        if read_kind(w)==3:
+            return prepare_multi_plan(s,o,w,phase)
+        typed_size = get(w, 232)
+        feedback = choose(phase == 4, get(w, 216), 0)
+        if typed_size > MAXIMUM - 48 or feedback > MAXIMUM - 48 - typed_size:
+            return request_grow(o, w, 3, 0)
+        size = 48 + typed_size + feedback
+        if reserve(w, 0, size) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        clear_words(w, at, 48)
+        put(w, at, PLAN_REQUEST)
+        put(w, at + 8, choose(phase == 4, 2, 0))
+        put(w, at + 24, typed_size)
+        put(w, at + 32, feedback)
+        copy_range(w, w, at + 48, region(w, 2), typed_size)
+        if feedback != 0:
+            copy_range(w, w, at + 48 + typed_size, region(w, 4), feedback)
+        return child(w, 2, size, phase)
+    if phase == 3 or phase == 8:
+        size = get(w, 200)
+        if reserve(w, 0, size) == 0:
+            return pending_grow(o, w)
+        copy_range(w, w, region(w, 0), region(w, 3), size)
+        return child(w, choose(phase == 3, 3, 6), size, phase)
+    if phase == 5:
+        host=get(w,region(w,2)+choose(read_kind(w)==3,56,88))
+        if host > MAXIMUM - 64:
+            return request_grow(o, w, 3, 0)
+        if reserve(w, 0, host + 64) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        clear_words(w, at, 64)
+        put(w, at, CONFIG_REQUEST)
+        put(w, at + 8, 10)
+        put(w, at + 16, host + 40)
+        put(w, at + 48, host)
+        copy_range(w, w, at + 64, region(w, 2) + 256, host)
+        return child(w, 3, host + 64, phase)
+    if phase == 6:
+        typed_size = get(w, 232)
+        root=choose(read_kind(w)==3,16+get(w,424),get(w,216)-32)
+        target = get(w, 240)
+        plan = get(w, 208)
+        if typed_size > MAXIMUM - 64 or root > MAXIMUM - 64 - typed_size:
+            return request_grow(o, w, 3, 0)
+        size = 64 + typed_size + root
+        if target > MAXIMUM - size or plan > MAXIMUM - size - target:
+            return request_grow(o, w, 3, 0)
+        size = size + target + plan
+        if reserve(w, 0, size) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        clear_words(w, at, 64)
+        put(w, at, SSH_REQUEST)
+        put(w, at + 8, read_kind(w))
+        put(w, at + 16, typed_size)
+        put(w, at + 24, root)
+        put(w, at + 32, target)
+        put(w, at + 40, plan)
+        copy_range(w, w, at + 64, region(w, 2), typed_size)
+        if read_kind(w)==3:
+            put(w,at+64+typed_size,get(w,432))
+            put(w,at+72+typed_size,get(w,440))
+            copy_range(w,w,at+80+typed_size,region(w,4),root-16)
+        else:
+            copy_range(w,w,at+64+typed_size,region(w,4)+32,root)
+        copy_range(w, w, at + 64 + typed_size + root, region(w, 6), target)
+        copy_range(w, w, at + 64 + typed_size + root + target, region(w, 5), plan)
+        return child(w, 4, size, phase)
+    if phase == 10:
+        if read_kind(w)==3:
+            size=get(w,200)
+            if size>MAXIMUM-64:
+                return request_grow(o,w,3,0)
+            if reserve(w,0,size+64)==0:
+                return pending_grow(o,w)
+            at=region(w,0)
+            clear_words(w,at,64)
+            put(w,at,TEXT_REQUEST)
+            put(w,at+8,1)
+            put(w,at+32,size)
+            copy_range(w,w,at+64,region(w,3),size)
+            return child(w,10,size+64,phase)
+        size=get(w,region(w,7)+40)
+        if size>8388608 or size>MAXIMUM-24:
+            return INVALID
+        if reserve(w,0,size+24)==0:
+            return pending_grow(o,w)
+        at=region(w,0)
+        put(w,at,DIAGNOSTIC_REQUEST)
+        put(w,at+8,1)
+        put(w,at+16,size)
+        copy_range(w,w,at+24,region(w,7)+128,size)
+        return child(w,7,size+24,phase)
+    if phase == 7 or phase == 9 or phase == 11:
+        target = get(w, 240)
+        capture = get(w, 248)
+        feedback = choose(phase == 7, 0, get(w, 200))
+        if target > MAXIMUM - 64 or capture > MAXIMUM - 64 - target:
+            return request_grow(o, w, 3, 0)
+        size = 64 + target + capture
+        if feedback > MAXIMUM - size:
+            return request_grow(o, w, 3, 0)
+        size = size + feedback
+        if reserve(w, 0, size) == 0:
+            return pending_grow(o, w)
+        at = region(w, 0)
+        clear_words(w, at, 64)
+        put(w, at, TRANSPORT_REQUEST)
+        put(w, at + 8, choose(phase == 11, 2, choose(phase == 9, 1, 0)))
+        put(w, at + 16, target)
+        put(w, at + 24, capture)
+        put(w, at + 32, feedback)
+        copy_range(w, w, at + 64, region(w, 6), target)
+        copy_range(w, w, at + 64 + target, region(w, 7), capture)
+        if feedback != 0:
+            copy_range(w, w, at + 64 + target + capture, region(w, 3), feedback)
+        return child(w, 5, size, phase)
+    return INVALID
+
+def clear_words(w: mutbuf, at: u64, size: u64) -> u64:
+    i = 0
+    while i < size:
+        put(w, at + i, 0)
+        i = i + 8
+    return 0
+
+def after_json_diagnostic(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=size or size<64 or get(w,at)!=DIAGNOSTIC_RESULT or get(w,at+8)!=1:
+        return INVALID
+    if get(w,at+40)!=size-64 or get(w,at+48)!=0 or get(w,at+56)!=0:
+        return INVALID
+    if reserve(w,3,size)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,3),region(w,1),size)
+    put(w,200,size)
+    return prepare(s,o,w,11)
+
+def after_client(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    return after_caller(s,o,w,code,size)
+
+
+def prepare_multi_plan(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    typed=get(w,232)
+    roots=choose(phase==2,0,get(w,424))
+    feedback=choose(phase==2,0,get(w,200))
+    if typed>MAXIMUM-48 or roots>MAXIMUM-48-typed:
+        return request_grow(o,w,3,0)
+    size=48+typed+roots
+    if feedback>MAXIMUM-size:
+        return request_grow(o,w,3,0)
+    size=size+feedback
+    if reserve(w,0,size)==0:
+        return pending_grow(o,w)
+    at=region(w,0)
+    clear_words(w,at,48)
+    put(w,at,MULTI_PLAN_REQUEST)
+    put(w,at+8,choose(phase==2,0,get(w,408)))
+    put(w,at+16,choose(phase==2,0,get(w,416)))
+    put(w,at+24,typed)
+    put(w,at+32,roots)
+    put(w,at+40,feedback)
+    copy_range(w,w,at+48,region(w,2),typed)
+    if roots!=0:
+        copy_range(w,w,at+48+typed,region(w,4),roots)
+    if feedback!=0:
+        copy_range(w,w,at+48+typed+roots,region(w,3),feedback)
+    return child(w,9,size,phase)
+
+def after_multi_plan(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=size or size<64 or get(w,at)!=MULTI_PLAN_RESULT:
+        return INVALID
+    payload=get(w,at+48)
+    roots=get(w,at+56)
+    if payload>size-64 or roots!=size-64-payload:
+        return INVALID
+    status=get(w,at+8)
+    if status==1:
+        if roots!=0:
+            return INVALID
+        return finish(o,w,1,at+64,payload)
+    if status==2:
+        phase=get(w,at+16)
+        index=get(w,at+24)
+        if phase<1 or phase>2:
+            return INVALID
+        if reserve(w,3,payload)==0 or reserve(w,4,roots)==0:
+            return pending_grow(o,w)
+        at=region(w,1)
+        copy_range(w,w,region(w,3),at+64,payload)
+        copy_range(w,w,region(w,4),at+64+payload,roots)
+        put(w,200,payload)
+        put(w,408,phase)
+        put(w,416,index)
+        put(w,424,roots)
+        return prepare(s,o,w,3)
+    if status!=3 or roots!=0 or get(w,408)!=2 or get(w,200)<32:
+        return INVALID
+    feedback=region(w,3)
+    last=get(w,200)-32
+    prior=get(w,424)
+    if get(w,feedback)!=MESSAGE or get(w,feedback+8)!=0 or get(w,feedback+16)!=0 or get(w,feedback+24)!=last:
+        return INVALID
+    if prior>MAXIMUM-8 or last>MAXIMUM-8-prior:
+        return request_grow(o,w,3,0)
+    total=prior+8+last
+    file=get(w,at+32)
+    response=get(w,at+40)
+    if reserve(w,5,payload)==0 or reserve(w,4,total)==0:
+        return pending_grow(o,w)
+    at=region(w,1)
+    copy_range(w,w,region(w,5),at+64,payload)
+    put(w,region(w,4)+prior,last)
+    copy_range(w,w,region(w,4)+prior+8,region(w,3)+32,last)
+    put(w,424,total)
+    put(w,432,file)
+    put(w,440,response)
+    put(w,208,payload)
+    return prepare(s,o,w,5)
+
+def after_transport_ready(s:readbuf,o:mutbuf,w:mutbuf,status:u64,size:u64) -> u32:
+    if read_kind(w)!=3:
+        return finish(o,w,status,region(w,1)+64,size-64)
+    if status!=0:
+        return multi_transport_error(o,w)
+    if reserve(w,3,size-64)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,3),region(w,1)+64,size-64)
+    put(w,200,size-64)
+    return prepare(s,o,w,10)
+
+def after_multi_budget(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=64 or size<64 or get(w,at)!=TEXT_RESULT:
+        return INVALID
+    if get(w,at+8)!=0 or get(w,at+16)!=0 or get(w,at+24)!=0:
+        return INVALID
+    if get(w,at+32)!=64 or get(w,at+40)!=size-64 or get(w,at+48)!=0 or get(w,at+56)!=0:
+        return INVALID
+    if size-64>get(w,440):
+        return multi_budget_error(o,w)
+    return finish(o,w,0,region(w,3),get(w,200))
+
+def multi_transport_error(o:mutbuf,w:mutbuf) -> u32:
+    if reserve(w,3,122)==0:
+        return pending_grow(o,w)
+    at=region(w,3)
+    store(w,at+0,109)
+    store(w,at+1,117)
+    store(w,at+2,108)
+    store(w,at+3,116)
+    store(w,at+4,105)
+    store(w,at+5,45)
+    store(w,at+6,102)
+    store(w,at+7,105)
+    store(w,at+8,108)
+    store(w,at+9,101)
+    store(w,at+10,32)
+    store(w,at+11,114)
+    store(w,at+12,101)
+    store(w,at+13,97)
+    store(w,at+14,100)
+    store(w,at+15,32)
+    store(w,at+16,99)
+    store(w,at+17,111)
+    store(w,at+18,117)
+    store(w,at+19,108)
+    store(w,at+20,100)
+    store(w,at+21,32)
+    store(w,at+22,110)
+    store(w,at+23,111)
+    store(w,at+24,116)
+    store(w,at+25,32)
+    store(w,at+26,99)
+    store(w,at+27,111)
+    store(w,at+28,109)
+    store(w,at+29,112)
+    store(w,at+30,108)
+    store(w,at+31,101)
+    store(w,at+32,116)
+    store(w,at+33,101)
+    store(w,at+34,59)
+    store(w,at+35,32)
+    store(w,at+36,118)
+    store(w,at+37,101)
+    store(w,at+38,114)
+    store(w,at+39,105)
+    store(w,at+40,102)
+    store(w,at+41,121)
+    store(w,at+42,32)
+    store(w,at+43,99)
+    store(w,at+44,111)
+    store(w,at+45,110)
+    store(w,at+46,102)
+    store(w,at+47,105)
+    store(w,at+48,103)
+    store(w,at+49,117)
+    store(w,at+50,114)
+    store(w,at+51,101)
+    store(w,at+52,100)
+    store(w,at+53,32)
+    store(w,at+54,114)
+    store(w,at+55,101)
+    store(w,at+56,97)
+    store(w,at+57,100)
+    store(w,at+58,32)
+    store(w,at+59,114)
+    store(w,at+60,111)
+    store(w,at+61,111)
+    store(w,at+62,116)
+    store(w,at+63,115)
+    store(w,at+64,44)
+    store(w,at+65,32)
+    store(w,at+66,114)
+    store(w,at+67,101)
+    store(w,at+68,103)
+    store(w,at+69,117)
+    store(w,at+70,108)
+    store(w,at+71,97)
+    store(w,at+72,114)
+    store(w,at+73,32)
+    store(w,at+74,115)
+    store(w,at+75,105)
+    store(w,at+76,110)
+    store(w,at+77,103)
+    store(w,at+78,108)
+    store(w,at+79,101)
+    store(w,at+80,45)
+    store(w,at+81,108)
+    store(w,at+82,105)
+    store(w,at+83,110)
+    store(w,at+84,107)
+    store(w,at+85,32)
+    store(w,at+86,102)
+    store(w,at+87,105)
+    store(w,at+88,108)
+    store(w,at+89,101)
+    store(w,at+90,115)
+    store(w,at+91,44)
+    store(w,at+92,32)
+    store(w,at+93,115)
+    store(w,at+94,116)
+    store(w,at+95,114)
+    store(w,at+96,105)
+    store(w,at+97,99)
+    store(w,at+98,116)
+    store(w,at+99,32)
+    store(w,at+100,85)
+    store(w,at+101,84)
+    store(w,at+102,70)
+    store(w,at+103,45)
+    store(w,at+104,56)
+    store(w,at+105,32)
+    store(w,at+106,97)
+    store(w,at+107,110)
+    store(w,at+108,100)
+    store(w,at+109,32)
+    store(w,at+110,98)
+    store(w,at+111,121)
+    store(w,at+112,116)
+    store(w,at+113,101)
+    store(w,at+114,32)
+    store(w,at+115,98)
+    store(w,at+116,117)
+    store(w,at+117,100)
+    store(w,at+118,103)
+    store(w,at+119,101)
+    store(w,at+120,116)
+    store(w,at+121,115)
+    return finish(o,w,1,at,122)
+
+def multi_budget_error(o:mutbuf,w:mutbuf) -> u32:
+    if reserve(w,3,89)==0:
+        return pending_grow(o,w)
+    at=region(w,3)
+    store(w,at+0,109)
+    store(w,at+1,117)
+    store(w,at+2,108)
+    store(w,at+3,116)
+    store(w,at+4,105)
+    store(w,at+5,45)
+    store(w,at+6,102)
+    store(w,at+7,105)
+    store(w,at+8,108)
+    store(w,at+9,101)
+    store(w,at+10,32)
+    store(w,at+11,114)
+    store(w,at+12,101)
+    store(w,at+13,115)
+    store(w,at+14,112)
+    store(w,at+15,111)
+    store(w,at+16,110)
+    store(w,at+17,115)
+    store(w,at+18,101)
+    store(w,at+19,32)
+    store(w,at+20,101)
+    store(w,at+21,120)
+    store(w,at+22,99)
+    store(w,at+23,101)
+    store(w,at+24,101)
+    store(w,at+25,100)
+    store(w,at+26,115)
+    store(w,at+27,32)
+    store(w,at+28,115)
+    store(w,at+29,101)
+    store(w,at+30,114)
+    store(w,at+31,105)
+    store(w,at+32,97)
+    store(w,at+33,108)
+    store(w,at+34,105)
+    store(w,at+35,122)
+    store(w,at+36,101)
+    store(w,at+37,100)
+    store(w,at+38,32)
+    store(w,at+39,77)
+    store(w,at+40,67)
+    store(w,at+41,80)
+    store(w,at+42,32)
+    store(w,at+43,114)
+    store(w,at+44,101)
+    store(w,at+45,115)
+    store(w,at+46,117)
+    store(w,at+47,108)
+    store(w,at+48,116)
+    store(w,at+49,32)
+    store(w,at+50,98)
+    store(w,at+51,121)
+    store(w,at+52,116)
+    store(w,at+53,101)
+    store(w,at+54,32)
+    store(w,at+55,98)
+    store(w,at+56,117)
+    store(w,at+57,100)
+    store(w,at+58,103)
+    store(w,at+59,101)
+    store(w,at+60,116)
+    store(w,at+61,59)
+    store(w,at+62,32)
+    store(w,at+63,110)
+    store(w,at+64,97)
+    store(w,at+65,114)
+    store(w,at+66,114)
+    store(w,at+67,111)
+    store(w,at+68,119)
+    store(w,at+69,32)
+    store(w,at+70,112)
+    store(w,at+71,97)
+    store(w,at+72,116)
+    store(w,at+73,104)
+    store(w,at+74,115)
+    store(w,at+75,32)
+    store(w,at+76,111)
+    store(w,at+77,114)
+    store(w,at+78,32)
+    store(w,at+79,102)
+    store(w,at+80,105)
+    store(w,at+81,108)
+    store(w,at+82,101)
+    store(w,at+83,32)
+    store(w,at+84,115)
+    store(w,at+85,105)
+    store(w,at+86,122)
+    store(w,at+87,101)
+    store(w,at+88,115)
+    return finish(o,w,1,at,89)

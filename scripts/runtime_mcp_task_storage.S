@@ -36,6 +36,14 @@
 .equ PM_TRACE_C_PTR,1168
 .equ PM_TRACE_C_LEN,1176
 .equ PM_TRACE_STATE_CAP,1184
+.equ PM_READ_ENV,1208
+.equ PM_READ_HUB,1216
+.equ PN_R_ACTIVE,1952
+.equ PN_R_DESCRIPTORS,1984
+.equ PN_R_CONTINUATIONS,2112
+.equ PN_R_CONTEXT,2240
+.equ PN_R_WORKMAP,2248
+.equ PN_R_OUTMAP,2256
 .equ PN_NEXT,8
 .equ PN_SEND_NEXT,16
 .equ PN_STATE,24
@@ -466,6 +474,8 @@ pump_detach_frontend_admitted:
     mov rdi,rbp
     call pump_publication_detach
     mov rdi,rbp
+    call pump_read_detach
+    mov rdi,rbp
     call pump_fence_detach
     mov rdi,rbp
     call pump_scope_detach
@@ -525,6 +535,8 @@ pump_restore_frontend:
     mov rdi,rbp
     call pump_publication_restore
     mov rdi,rbp
+    call pump_read_restore
+    mov rdi,rbp
     call pump_fence_restore
     mov rdi,rbp
     call pump_scope_restore
@@ -581,6 +593,8 @@ pump_retire_untracked:
     call pump_extract_retire
     mov rdi,rbp
     call pump_publication_retire
+    mov rdi,rbp
+    call pump_read_retire
     lea rbx,[r12+PM_ALL]
 pump_unlink_node:
     mov rax,[rbx]
@@ -635,6 +649,8 @@ pump_scope_detach:
     or rax,[rbp+PN_S_VIEW]
     jnz public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je ps_detach_done /* Original remote reads hold no local Scope. */
     test eax,eax
     jz ps_detach_done
     call pump_waiting_context
@@ -858,6 +874,8 @@ ps_restore_absent:
     cmp qword ptr [rbp+PN_S_VIEW],0
     jne public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je ps_restore_done
     test eax,eax
     jnz public_span_fail
 ps_restore_done:
@@ -944,6 +962,8 @@ pf_detach_absent:
     cmp qword ptr [r15+232],0
     jne public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je pf_detach_done /* Original remote reads hold no write fence. */
     test eax,eax
     jnz public_span_fail
 pf_detach_done:
@@ -1079,6 +1099,8 @@ pf_restore_absent:
     or rax,[rbp+PN_F_HUB]
     jnz public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je pf_restore_done
     test eax,eax
     jnz public_span_fail
 pf_restore_done:

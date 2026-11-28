@@ -85,6 +85,9 @@ pump_drop_handler_next:
     call pump_resume_node
     jmp pump_drop_handler_next
 pump_handlers_retired:
+    call pump_read_clear_idle
+    mov qword ptr [r15+472],0
+    mov qword ptr [r15+480],0
     cmp qword ptr [r12+PM_PENDING],0
     jne public_span_fail
     mov edi,12
@@ -147,6 +150,7 @@ pump_reap_publication:
     call pump_wait
     jmp pump_reap_publication
 pump_publication_retired:
+    call pump_close_read
     xor eax,eax
     PM_RETURN
 

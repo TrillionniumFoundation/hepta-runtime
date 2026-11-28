@@ -1,0 +1,208 @@
+def query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)>=24:
+        if load(s,0)==REQUEST and load(s,8)==10:
+            return target_query(s,o,w)
+        if load(s,0)==REQUEST and load(s,8)==11:
+            return mode_query(s,o,w)
+        if load(s,0)==REQUEST and load(s,8)==12:
+            return multi_root(s,o,w)
+    return retained_target_query(s,o,w)
+
+def target_query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<64 or load(s,0)!=REQUEST or load(s,8)!=10 or load(s,16)!=length(s)-24:
+        return INVALID
+    if load(s,24)!=0 or load(s,32)!=0 or load(s,40)!=0 or load(s,56)!=0:
+        return INVALID
+    size=load(s,48)
+    if size!=length(s)-64 or valid_utf8(s,64,size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return binary_result(s,o,w,1,0,0)
+    host=binary_named_host(s,w,size)
+    if host==0:
+        return binary_result(s,o,w,2,64,size)
+    base=region(w,2)+24
+    return binary_result(s,o,w,0,base+get(w,base+host+224),get(w,base+host+232))
+
+def multi_root(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<64:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=12 or load(s,16)!=length(s)-24:
+        return INVALID
+    if load(s,24)!=0 or load(s,32)!=0 or load(s,40)!=0:
+        return INVALID
+    name_size=load(s,48)
+    path_size=load(s,56)
+    if name_size>length(s)-64:
+        return INVALID
+    if path_size!=length(s)-64-name_size:
+        return INVALID
+    if valid_utf8(s,64,name_size)==0 or valid_utf8(s,64+name_size,path_size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return binary_result(s,o,w,1,0,0)
+    host=binary_named_host(s,w,name_size)
+    if host==0:
+        return binary_result(s,o,w,2,64,name_size)
+    base=region(w,2)+24
+    if get(w,base+host+152)!=1:
+        return multi_message(o,1)
+    status=remote_path_query(s,o,w,length(s)-24)
+    if status!=32:
+        return status
+    if get(o,8)!=0:
+        return status
+    roots=host+768
+    if load(s,40)!=0:
+        roots=host+832
+    node=binary_longest_root(s,w,64+name_size,path_size,roots)
+    if node==0:
+        return multi_message(o,2)
+    return binary_result(s,o,w,0,base+get(w,base+node+32),get(w,base+node+40))
+
+
+def mode_query(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if length(s)<64 or load(s,0)!=REQUEST or load(s,8)!=11 or load(s,16)!=length(s)-24:
+        return INVALID
+    if load(s,24)!=0 or load(s,32)!=0 or load(s,40)!=0 or load(s,56)!=0:
+        return INVALID
+    size=load(s,48)
+    if size!=length(s)-64 or valid_utf8(s,64,size)==0:
+        return INVALID
+    if length(o)<32:
+        return CAPACITY
+    if get(w,24)==0:
+        return binary_result(s,o,w,1,0,0)
+    host=binary_named_host(s,w,size)
+    if host==0:
+        return binary_result(s,o,w,2,64,size)
+    if length(o)<48:
+        return growth(o,2,48)
+    base=region(w,2)+24
+    put(o,0,RESPONSE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,16)
+    put(o,32,MODE_REPLY)
+    put(o,40,get(w,base+host+152))
+    return 48
+
+def multi_message(o:mutbuf,code:u64) -> u64:
+    size=choose(code==1,55,40)
+    required=32+size
+    if length(o)<required:
+        return growth(o,2,required)
+    put(o,0,RESPONSE)
+    put(o,8,1)
+    put(o,16,0)
+    put(o,24,size)
+    if code==1:
+        multi_operator_literal(o,32)
+    else:
+        multi_root_literal(o,32)
+    return required
+
+def multi_operator_literal(o: mutbuf, at: u64) -> u64:
+    store(o, at + 0, 114)
+    store(o, at + 1, 101)
+    store(o, at + 2, 97)
+    store(o, at + 3, 100)
+    store(o, at + 4, 95)
+    store(o, at + 5, 109)
+    store(o, at + 6, 117)
+    store(o, at + 7, 108)
+    store(o, at + 8, 116)
+    store(o, at + 9, 105)
+    store(o, at + 10, 112)
+    store(o, at + 11, 108)
+    store(o, at + 12, 101)
+    store(o, at + 13, 95)
+    store(o, at + 14, 102)
+    store(o, at + 15, 105)
+    store(o, at + 16, 108)
+    store(o, at + 17, 101)
+    store(o, at + 18, 115)
+    store(o, at + 19, 32)
+    store(o, at + 20, 114)
+    store(o, at + 21, 101)
+    store(o, at + 22, 113)
+    store(o, at + 23, 117)
+    store(o, at + 24, 105)
+    store(o, at + 25, 114)
+    store(o, at + 26, 101)
+    store(o, at + 27, 115)
+    store(o, at + 28, 32)
+    store(o, at + 29, 97)
+    store(o, at + 30, 32)
+    store(o, at + 31, 99)
+    store(o, at + 32, 111)
+    store(o, at + 33, 110)
+    store(o, at + 34, 102)
+    store(o, at + 35, 105)
+    store(o, at + 36, 103)
+    store(o, at + 37, 117)
+    store(o, at + 38, 114)
+    store(o, at + 39, 101)
+    store(o, at + 40, 100)
+    store(o, at + 41, 32)
+    store(o, at + 42, 111)
+    store(o, at + 43, 112)
+    store(o, at + 44, 101)
+    store(o, at + 45, 114)
+    store(o, at + 46, 97)
+    store(o, at + 47, 116)
+    store(o, at + 48, 111)
+    store(o, at + 49, 114)
+    store(o, at + 50, 32)
+    store(o, at + 51, 104)
+    store(o, at + 52, 111)
+    store(o, at + 53, 115)
+    store(o, at + 54, 116)
+    return at + 55
+
+def multi_root_literal(o: mutbuf, at: u64) -> u64:
+    store(o, at + 0, 98)
+    store(o, at + 1, 97)
+    store(o, at + 2, 116)
+    store(o, at + 3, 99)
+    store(o, at + 4, 104)
+    store(o, at + 5, 32)
+    store(o, at + 6, 102)
+    store(o, at + 7, 105)
+    store(o, at + 8, 108)
+    store(o, at + 9, 101)
+    store(o, at + 10, 32)
+    store(o, at + 11, 111)
+    store(o, at + 12, 117)
+    store(o, at + 13, 116)
+    store(o, at + 14, 115)
+    store(o, at + 15, 105)
+    store(o, at + 16, 100)
+    store(o, at + 17, 101)
+    store(o, at + 18, 32)
+    store(o, at + 19, 99)
+    store(o, at + 20, 111)
+    store(o, at + 21, 110)
+    store(o, at + 22, 102)
+    store(o, at + 23, 105)
+    store(o, at + 24, 103)
+    store(o, at + 25, 117)
+    store(o, at + 26, 114)
+    store(o, at + 27, 101)
+    store(o, at + 28, 100)
+    store(o, at + 29, 32)
+    store(o, at + 30, 114)
+    store(o, at + 31, 101)
+    store(o, at + 32, 97)
+    store(o, at + 33, 100)
+    store(o, at + 34, 32)
+    store(o, at + 35, 114)
+    store(o, at + 36, 111)
+    store(o, at + 37, 111)
+    store(o, at + 38, 116)
+    store(o, at + 39, 115)
+    return at + 40
