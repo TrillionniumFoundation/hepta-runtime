@@ -1,0 +1,56 @@
+name: Read uploaded final SSH production library without execution
+on:
+  push:
+    branches: ['hia-ssh-final-library-read-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  uploaded:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set final read paths
+        run: |
+          printf '%s\n' "SF_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/production_uploaded" "SF_CAPTURE=$RUNNER_TEMP/ssh-production-read" "SF_EXPORT=$RUNNER_TEMP/ssh-production-read-export" "SF_DRIVER=$RUNNER_TEMP/ssh-production-read-driver" "SF_STAGE=$RUNNER_TEMP/ssh-production-read-input" "SF_ZIP=$RUNNER_TEMP/ssh-production-build.zip" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/production_uploaded
+      - name: Bind all frozen pure reader bytes
+        run: |
+          test "$(sha256sum "$SF_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c0620b96940126dd5f184658429e53369ce48cadcd73cc3445d7325326adcc8e
+          python3 -I -S -B - <<'PY'
+          import ast,os,sys
+          from pathlib import Path
+          p=Path(os.environ["SF_SOURCE"]);sys.path.insert(0,str(p/"recipe"))
+          from common import source_evidence
+          source_evidence(p)
+          for f in p.rglob("*.py"):ast.parse(f.read_bytes(),filename=str(f))
+          PY
+      - name: Fetch the original complete uploaded build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14389864062/zip" --output "$SF_ZIP"
+      - name: Independently read all build bytes without application or compiler execution
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SF_SOURCE/recipe/read.py" --source "$SF_SOURCE" --archive "$SF_ZIP" --stage "$SF_STAGE" --output "$SF_CAPTURE" > "$SF_DRIVER.stdout" 2> "$SF_DRIVER.stderr"
+          sf_status=$?
+          cat "$SF_DRIVER.stderr"
+          cat "$SF_DRIVER.stdout"
+          exit "$sf_status"
+      - name: Preserve complete independent proof and reader bytes
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SF_SOURCE/recipe/archive.py" pack --source "$SF_SOURCE" --capture "$SF_CAPTURE" --output "$SF_EXPORT" --driver-prefix "$SF_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-final-library-uploaded-read-${{ github.sha }}
+          path: ${{ env.SF_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

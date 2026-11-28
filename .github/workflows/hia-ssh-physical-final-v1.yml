@@ -1,0 +1,57 @@
+name: Independently read completed native SSH actor physical proof
+on:
+  push:
+    branches: ['hia-ssh-physical-final-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-uploaded-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set immutable completed proof paths
+        run: |
+          printf '%s\n' "SF_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/physical_uploaded" "SF_DOWNLOAD=$RUNNER_TEMP/ssh-final-download" "SF_STAGE=$RUNNER_TEMP/ssh-final-stage" "SF_CAPTURE=$RUNNER_TEMP/ssh-final-capture" "SF_EXPORT=$RUNNER_TEMP/ssh-final-export" "SF_DRIVER=$RUNNER_TEMP/ssh-final-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/physical_uploaded
+      - name: Bind frozen final reader and parse its complete source
+        run: |
+          test "$(sha256sum "$SF_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 6dbdbb84d68fd3cd6becabed6160ded5df794b777c38548690c12e0da08f3215
+          python3 -I -S -B - <<'PY'
+          import ast,os
+          from pathlib import Path
+          for p in Path(os.environ["SF_SOURCE"]).rglob("*.py"):
+              ast.parse(p.read_bytes(),filename=str(p))
+          PY
+      - name: Download all five completed physical proof archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$SF_DOWNLOAD"
+          for artifact in 14390260312 14388394911 14388984762 14390600109 14390210587; do
+            curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/$artifact/zip" -o "$SF_DOWNLOAD/$artifact.zip"
+          done
+      - name: Read every complete artifact without repeating applications or controls
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SF_SOURCE/recipe/read.py" --source "$SF_SOURCE" --downloads "$SF_DOWNLOAD" --stage "$SF_STAGE" --output "$SF_CAPTURE" > "$SF_DRIVER.stdout" 2> "$SF_DRIVER.stderr"
+          sf_status=$?
+          cat "$SF_DRIVER.stderr"
+          cat "$SF_DRIVER.stdout"
+          exit "$sf_status"
+      - name: Preserve complete independent proof and all frozen reader source
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SF_SOURCE/recipe/archive.py" pack --source "$SF_SOURCE" --capture "$SF_CAPTURE" --output "$SF_EXPORT" --driver-prefix "$SF_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-native-actor-final-physical-read-${{ github.sha }}
+          path: ${{ env.SF_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

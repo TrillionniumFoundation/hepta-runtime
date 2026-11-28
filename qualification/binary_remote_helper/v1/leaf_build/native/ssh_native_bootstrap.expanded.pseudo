@@ -1,0 +1,209 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)!=64 or load(s,0)!=3544386032303821640:
+        return 4294967295
+    size=load(s,8)
+    if size==0 or size>=4294901760:
+        return 4294967295
+    at=16
+    while at<64:
+        if load(s,at)!=0:
+            return 4294967295
+        at=at+8
+    if length(w)<4096:
+        return 4294967293
+    put(w,0,64)
+    put(w,8,0)
+    command(o,w,size)
+    needed=get(w,0)
+    if length(o)<needed:
+        return 4294967294
+    fill_range(o,0,64,0)
+    put(o,0,3544386036598788936)
+    put(o,8,size)
+    put(o,16,size>>16)
+    put(o,24,size&65535)
+    put(o,56,needed-64)
+    put(w,0,64)
+    put(w,8,1)
+    command(o,w,size)
+    return needed
+
+def command(o:mutbuf,w:mutbuf,size:u64) -> u64:
+    literal(o,w,1)
+    number(o,w,size>>16)
+    literal(o,w,2)
+    remainder=size&65535
+    if remainder!=0:
+        literal(o,w,3)
+        number(o,w,remainder)
+        literal(o,w,4)
+    literal(o,w,5)
+    number(o,w,size)
+    literal(o,w,6)
+    return 0
+
+def load(s:readbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(s,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def get(w:mutbuf,at:u64) -> u64:
+    value=0
+    index=0
+    while index<8:
+        value=value|(byte(w,at+index)<<(index*8))
+        index=index+1
+    return value
+
+def put(w:mutbuf,at:u64,value:u64) -> u64:
+    index=0
+    while index<8:
+        store(w,at+index,value>>(index*8))
+        index=index+1
+    return 0
+
+def emit(o:mutbuf,w:mutbuf,value:u64) -> u64:
+    at=get(w,0)
+    if get(w,8)!=0:
+        store(o,at,value)
+    put(w,0,at+1)
+    return 0
+
+def emit_word(o:mutbuf,w:mutbuf,value:u64) -> u64:
+    at=get(w,0)
+    if get(w,8)!=0:
+        put(o,at,value)
+    put(w,0,at+8)
+    return 0
+
+def number(o:mutbuf,w:mutbuf,value:u64) -> u64:
+    at=0
+    started=0
+    while at<10:
+        power=power10(at)
+        digit=0
+        while value>=power:
+            value=value-power
+            digit=digit+1
+        if digit!=0 or started!=0 or at==9:
+            emit(o,w,48+digit)
+            started=1
+        at=at+1
+    return 0
+
+def literal(o:mutbuf,w:mutbuf,code:u64) -> u64:
+    if code==1:
+        emit_word(o,w,3976714116837502325)
+        emit_word(o,w,7865576595294010167)
+        emit_word(o,w,7218461444988564587)
+        emit_word(o,w,7506989788792368928)
+        emit_word(o,w,7019256038351466597)
+        emit_word(o,w,6365935209750747181)
+        emit_word(o,w,2340882383900268632)
+        emit_word(o,w,3833180248307497061)
+        emit_word(o,w,2819376930568282171)
+        emit_word(o,w,8247252256456719731)
+        emit_word(o,w,3539882221867397217)
+        emit_word(o,w,8223638019222024736)
+        emit_word(o,w,7215930025502908525)
+        emit_word(o,w,8295767386173368367)
+        emit_word(o,w,7886401336146800957)
+        emit_word(o,w,2478145423952472420)
+        emit_word(o,w,3616739540430781472)
+        emit_word(o,w,2338610072325733173)
+        emit_word(o,w,4264944199573644322)
+        emit_word(o,w,7288830188965753888)
+        emit_word(o,w,2825219527824140664)
+        emit_word(o,w,4266370236353098016)
+        emit_word(o,w,3908406916914897952)
+        emit_word(o,w,8462091214851880245)
+        emit(o,w,110)
+        emit(o,w,116)
+        emit(o,w,61)
+        return 0
+    if code==2:
+        emit_word(o,w,7367158233576139040)
+        emit_word(o,w,7738151096051068021)
+        emit_word(o,w,3414894146931289888)
+        emit_word(o,w,8463496752511591016)
+        emit_word(o,w,8944260384948108659)
+        emit_word(o,w,3539957303453491324)
+        emit(o,w,50)
+        emit(o,w,53)
+        emit(o,w,59)
+        emit(o,w,32)
+        return 0
+    if code==3:
+        emit(o,w,100)
+        emit(o,w,100)
+        emit(o,w,32)
+        emit(o,w,98)
+        emit(o,w,115)
+        emit(o,w,61)
+        return 0
+    if code==4:
+        emit_word(o,w,3548120099203277600)
+        emit_word(o,w,7367158233576139040)
+        emit_word(o,w,7738151096051068021)
+        emit_word(o,w,3414894146931289888)
+        emit_word(o,w,7449354445854351976)
+        emit_word(o,w,2334111888841924925)
+        emit_word(o,w,8390045841073532771)
+        emit_word(o,w,7022364301921777010)
+        emit_word(o,w,7308901764536956276)
+        emit_word(o,w,8388368156686318624)
+        emit(o,w,32)
+        emit(o,w,49)
+        emit(o,w,50)
+        emit(o,w,53)
+        emit(o,w,59)
+        emit(o,w,32)
+        return 0
+    if code==5:
+        emit_word(o,w,2892474383466718580)
+        emit_word(o,w,2322767118147281783)
+        emit_word(o,w,2461536502201721890)
+        emit(o,w,32)
+        emit(o,w,45)
+        emit(o,w,101)
+        emit(o,w,113)
+        emit(o,w,32)
+        return 0
+    if code==6:
+        emit_word(o,w,8388368156686318624)
+        emit_word(o,w,7521891241306501408)
+        emit_word(o,w,2319406821420593005)
+        emit_word(o,w,8944186690824840226)
+        emit_word(o,w,3539957303453491324)
+        emit_word(o,w,3414894146441917746)
+        emit_word(o,w,2747248713471631976)
+        emit_word(o,w,8583925903296129056)
+        emit_word(o,w,2479271323859446113)
+        return 0
+    return 0
+
+def power10(index:u64) -> u64:
+    if index==0:
+        return 1000000000
+    if index==1:
+        return 100000000
+    if index==2:
+        return 10000000
+    if index==3:
+        return 1000000
+    if index==4:
+        return 100000
+    if index==5:
+        return 10000
+    if index==6:
+        return 1000
+    if index==7:
+        return 100
+    if index==8:
+        return 10
+    if index==9:
+        return 1
+    return 1

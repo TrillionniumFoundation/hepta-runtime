@@ -1,0 +1,91 @@
+name: Qualify frozen SSH physical evidence and full relocations without replay
+on:
+  push:
+    branches: ['hia-ssh-physical-evidence-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  physical:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: remaining
+            mode: controls
+            ordinal: 0
+            native: 14389186724
+            original: 14387814012
+            baseline: 14389785396
+          - group: probes
+            mode: relocation
+            ordinal: 1
+            native: 14387434055
+            original: 14388670406
+            baseline: 14389091103
+          - group: remaining
+            mode: relocation
+            ordinal: 1
+            native: 14389186724
+            original: 14387814012
+            baseline: 14389785396
+          - group: probes
+            mode: relocation
+            ordinal: 2
+            native: 14387434055
+            original: 14388670406
+            baseline: 14389091103
+          - group: remaining
+            mode: relocation
+            ordinal: 2
+            native: 14389186724
+            original: 14387814012
+            baseline: 14389785396
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set unique frozen physical evidence roots
+        run: |
+          printf '%s\n' "PH_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/physical" "PH_STAGE=$RUNNER_TEMP/ssh-physical-${{ matrix.group }}-${{ matrix.mode }}-${{ matrix.ordinal }}" "PH_CAPTURE=$RUNNER_TEMP/ssh-proof-${{ matrix.group }}-${{ matrix.mode }}-${{ matrix.ordinal }}" "PH_EXPORT=$RUNNER_TEMP/ssh-export" "PH_DRIVER=$RUNNER_TEMP/ssh-physical-driver" "PH_DOWNLOAD=$RUNNER_TEMP/ssh-download" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/physical
+      - name: Bind complete source and all retained readers
+        run: |
+          test "$(sha256sum "$PH_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = f15a7e0fdddca35689bccb38120b427478418246406ac7c304afdfaf1462d572
+          python3 -I -S -B - <<'PY'
+          import ast,os
+          from pathlib import Path
+          for p in Path(os.environ["PH_SOURCE"]).rglob("*.py"):
+              ast.parse(p.read_bytes(),filename=str(p))
+          PY
+      - name: Download immutable captures and prior complete independent proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir "$PH_DOWNLOAD"
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.native }}/zip" -o "$PH_DOWNLOAD/native.zip"
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.original }}/zip" -o "$PH_DOWNLOAD/original.zip"
+          curl --fail --location --connect-timeout 20 --max-time 180 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/${{ matrix.baseline }}/zip" -o "$PH_DOWNLOAD/baseline.zip"
+      - name: Run only the frozen pure physical evidence phase
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PH_SOURCE/recipe/physical.py" --source "$PH_SOURCE" --downloads "$PH_DOWNLOAD" --stage "$PH_STAGE" --output "$PH_CAPTURE" --group "${{ matrix.group }}" --mode "${{ matrix.mode }}" --ordinal "${{ matrix.ordinal }}" > "$PH_DRIVER.stdout" 2> "$PH_DRIVER.stderr"
+          ph_status=$?
+          cat "$PH_DRIVER.stderr"
+          cat "$PH_DRIVER.stdout"
+          exit "$ph_status"
+      - name: Preserve each complete physical refusal or relocated proof
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$PH_SOURCE/recipe/archive.py" pack --source "$PH_SOURCE" --capture "$PH_CAPTURE" --output "$PH_EXPORT" --driver-prefix "$PH_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-physical-${{ matrix.group }}-${{ matrix.mode }}-${{ matrix.ordinal }}-${{ github.sha }}
+          path: ${{ env.PH_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

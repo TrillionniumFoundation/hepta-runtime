@@ -1,0 +1,45 @@
+name: Author native remote binary projection and fixed SSH deployment text
+on:
+  push:
+    branches: ['hia-binary-remote-helper-author-6780-v1-20261118']
+permissions:
+  contents: read
+jobs:
+  author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set source-author paths
+        run: |
+          printf '%s\n' "RA_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/binary_remote_helper/v1/author" "RA_CAPTURE=$RUNNER_TEMP/remote-helper-author" "RA_EXPORT=$RUNNER_TEMP/remote-helper-author-export" "RA_DRIVER=$RUNNER_TEMP/remote-helper-author-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/binary_remote_helper/v1/author
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Render and roundtrip two HIA modules, zero applications
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$RA_SOURCE/authoring/freeze_driver.py" --source "$RA_SOURCE" --hepta "$GITHUB_WORKSPACE/hepta" --output "$RA_CAPTURE" --manifest-sha256 35ddb3cc4b1e8e54cf41563a73c13197aee4c4da8cea2ad2293267083be97545 > "$RA_DRIVER.stdout" 2> "$RA_DRIVER.stderr"
+          ra_status=$?
+          cat "$RA_DRIVER.stderr"
+          cat "$RA_DRIVER.stdout"
+          exit "$ra_status"
+      - name: Preserve all author source, process and output bytes
+        if: always()
+        run: |
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$RA_SOURCE/recipe/archive.py" pack --source "$RA_SOURCE" --capture "$RA_CAPTURE" --output "$RA_EXPORT" --driver-prefix "$RA_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: binary-remote-helper-author-${{ github.sha }}
+          path: ${{ env.RA_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error

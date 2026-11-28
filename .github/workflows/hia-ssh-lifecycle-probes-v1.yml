@@ -1,0 +1,104 @@
+name: Capture four frozen native SSH lifecycle probes once
+on:
+  push:
+    branches: ['hia-ssh-lifecycle-probes-6780-v1-20261118']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  capture:
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [native, original]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set owned source and capture paths
+        run: |
+          printf '%s\n' "SL_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/lifecycle_probes" "SL_CAPTURE=$RUNNER_TEMP/ssh-lifecycle-${{ matrix.role }}" "SL_STAGE=$RUNNER_TEMP/ssh-lifecycle-${{ matrix.role }}-predecessors" "SL_EXPORT=$RUNNER_TEMP/ssh-lifecycle-${{ matrix.role }}-export" "SL_DRIVER=$RUNNER_TEMP/ssh-lifecycle-${{ matrix.role }}-driver" "SL_NATIVE_ZIP=$RUNNER_TEMP/ssh-native-build.zip" "SL_ORIGINAL_ZIP=$RUNNER_TEMP/ssh-original-build.zip" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/lifecycle_probes
+      - name: Bind source and syntax without executing applications
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SL_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c48bb9cb063a99c834cd717fa28755dc75e630b5d89ceb53db66ec7a1892da79
+          python3 -I -S -B - <<'PY'
+          import ast, os
+          from pathlib import Path
+          for p in Path(os.environ["SL_SOURCE"]).rglob("*.py"):
+              ast.parse(p.read_bytes(), filename=str(p))
+          PY
+          command -v strace
+      - name: Read the two immutable zero-application build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --location --connect-timeout 20 --max-time 150 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14384283960/zip" -o "$SL_NATIVE_ZIP"
+          curl --fail --location --connect-timeout 20 --max-time 150 --retry 0 --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14383774945/zip" -o "$SL_ORIGINAL_ZIP"
+      - name: Capture each new frozen case once with a 60 second application limit
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 700s python3 -I -S -B "$SL_SOURCE/recipe/capture.py" --source "$SL_SOURCE" --native-zip "$SL_NATIVE_ZIP" --original-zip "$SL_ORIGINAL_ZIP" --output "$SL_CAPTURE" --stage "$SL_STAGE" --role "${{ matrix.role }}" > "$SL_DRIVER.stdout" 2> "$SL_DRIVER.stderr"
+          sl_status=$?
+          cat "$SL_DRIVER.stderr"
+          cat "$SL_DRIVER.stdout"
+          exit "$sl_status"
+      - name: Preserve every complete or failed capture byte without replay
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SL_SOURCE/recipe/archive.py" pack --source "$SL_SOURCE" --capture "$SL_CAPTURE" --output "$SL_EXPORT" --driver-prefix "$SL_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-lifecycle-probes-${{ matrix.role }}-${{ github.sha }}
+          path: ${{ env.SL_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+  pure-comparison:
+    needs: capture
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set independent reading paths
+        run: |
+          printf '%s\n' "SR_SOURCE=$GITHUB_WORKSPACE/candidate/qualification/ssh_direct/v1/lifecycle_probes" "SR_CAPTURE=$RUNNER_TEMP/ssh-lifecycle-pure" "SR_EXPORT=$RUNNER_TEMP/ssh-lifecycle-pure-export" "SR_DRIVER=$RUNNER_TEMP/ssh-lifecycle-pure-driver" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/ssh_direct/v1/lifecycle_probes
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ssh-lifecycle-probes-native-${{ github.sha }}
+          path: ${{ runner.temp }}/ssh-native-download
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ssh-lifecycle-probes-original-${{ github.sha }}
+          path: ${{ runner.temp }}/ssh-original-download
+      - name: Read all original results and every native buffer and kernel effect
+        run: |
+          test "$(sha256sum "$SR_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = c48bb9cb063a99c834cd717fa28755dc75e630b5d89ceb53db66ec7a1892da79
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SR_SOURCE/recipe/read_archives.py" --source "$SR_SOURCE" --native "$RUNNER_TEMP/ssh-native-download" --original "$RUNNER_TEMP/ssh-original-download" --output "$SR_CAPTURE" > "$SR_DRIVER.stdout" 2> "$SR_DRIVER.stderr"
+          sr_status=$?
+          cat "$SR_DRIVER.stderr"
+          cat "$SR_DRIVER.stdout"
+          exit "$sr_status"
+      - name: Preserve all pure input and failure or success evidence
+        if: always()
+        run: timeout --signal=TERM --kill-after=5s 180s python3 -I -S -B "$SR_SOURCE/recipe/archive.py" pack --source "$SR_SOURCE" --capture "$SR_CAPTURE" --output "$SR_EXPORT" --driver-prefix "$SR_DRIVER"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ssh-lifecycle-probes-pure-${{ github.sha }}
+          path: ${{ env.SR_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
