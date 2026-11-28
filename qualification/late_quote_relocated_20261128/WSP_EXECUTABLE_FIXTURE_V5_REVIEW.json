@@ -1,0 +1,60 @@
+{
+  "schema": "hepta.peer-executable-fixture-incremental-review.v1",
+  "status": "PASS_STATIC_WITH_SCOPE_LIMITS",
+  "reviewer": "wsp_research",
+  "reviewed_at_utc": "2026-11-28T15:33:05.540134+00:00",
+  "sources": [
+    {
+      "path": "/workspace/scratch/cd3dbf666179/runtime_trace_evidence/continuation_qualification/executable_identity_control_continuation.py",
+      "bytes": 19599,
+      "sha256": "7605d50e668c22f11c58660002819b62c496a310d76980d1202a143c1b09d915"
+    },
+    {
+      "path": "/workspace/scratch/cd3dbf666179/runtime_trace_evidence/continuation_qualification/executable_identity_control_fixture_v5.py",
+      "bytes": 20067,
+      "sha256": "979e6a17217260cd505fa6d377be65dab49969d31fcaaadd0ca0f90d6564c5dd"
+    },
+    {
+      "path": "/workspace/scratch/cd3dbf666179/runtime_trace_evidence/continuation_qualification/EXECUTABLE_FIXTURE_PROTOCOL_V5.json",
+      "bytes": 4243,
+      "sha256": "6ed514be93d3bff950c0c48f54b1c1ba825b692cef92c7bfe128c29de389ecd6"
+    },
+    {
+      "path": "/workspace/scratch/cd3dbf666179/runtime_trace_evidence/relocated_execution/EXECUTABLE_SETUP_V4_FAILED_RESULT.json",
+      "bytes": 6182,
+      "sha256": "a0022e291a05bce47f7d3dd2dcdfc2624bee3d6f1e3e53d5f37c70bb083d4087"
+    },
+    {
+      "path": "/workspace/scratch/cd3dbf666179/runtime_trace_evidence/relocated_execution/EXECUTABLE_SETUP_V4_DIAGNOSTIC.json",
+      "bytes": 6542,
+      "sha256": "1f2e3163633c2ffcbd48b9b523982e01d087a00890aaf9ed559cb6935ff945b1"
+    }
+  ],
+  "whole_source_equal_after_removing_exact_seven_line_insertion": true,
+  "unchanged_functions": [
+    "elf",
+    "primary",
+    "clocks",
+    "live",
+    "actual_exe",
+    "plan",
+    "load_plan",
+    "main"
+  ],
+  "findings": [
+    "load_plan still verifies that the research state is empty before this fixture is created; no server or native preparation is started by the insertion.",
+    "The created child is a fresh directory under the admitted owned research state. mkdir without exist_ok rejects existing paths; private_dir independently checks canonical path, directory type, euid ownership and exact 0700 mode; an empty-entry check follows.",
+    "The durable publication-fixture record precedes the first server. The fixture has no model, manifest or journal content and does not warm up a native evaluator.",
+    "The original failure diagnostic lists initialization, notification, session open and late_quote_prepare only; the prepare result explicitly reports zero forwards and no candidate or journal. The watcher constructor fails before the send thread starts. The saved failure counters reserve a crash/intent but do not establish an actual roundtrip/publication-window crash.",
+    "Primary composite source pins, all ELF and actual-running-executable checks, same-boot live-window gates, phase accounting, inverse-only recovery and all-path seven-forward bound are byte-identical to the previously reviewed control.",
+    "The protocol preserves the original setup failure and separately adds one fresh purpose/root; cumulative upper bounds include its one server, four wire messages and one pure preparation. No failure-path refund or omitted known preparation cost."
+  ],
+  "scope_limits": [
+    "Static source and saved-diagnostic review only; no native model or process executed by this review.",
+    "A future PASS requires actually catching the unchanged post-publication/pre-inverse window; missed windows remain failure without automatic retry.",
+    "Changed-executable recovery is inverse restoration only, not a newly qualified release or arbitrary-upgrade compatibility guarantee."
+  ],
+  "model_forwards": 0,
+  "training_steps": 0,
+  "native_executions": 0
+}
