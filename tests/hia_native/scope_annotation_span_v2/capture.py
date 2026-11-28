@@ -210,10 +210,17 @@ class Capture:
              request_sha256=SHA(wire), response_bytes=len(response), response_sha256=SHA(response), child_code=child_code))
         return child, response
 
-    def run(self, request, case, *, output_capacity=65536 + 64):
+    def run(self, request, case, *, output_capacity=None):
         start = self.calls + 1
+        owner_admission = None
+        if output_capacity is None:
+            output_capacity = max(65536 + 64, 64 + len(request))
+            assert output_capacity <= self.modules["scope_annotation_span"].metadata["output_capacity"]
+            owner_admission = dict(policy="complete-request-span-plus-header", input_bytes=len(request),
+                                   input_sha256=SHA(request), capacity=output_capacity)
         with ExitStack() as sessions:
-            owner = sessions.enter_context(self.session("scope_annotation_span", case, output_capacity))
+            owner = sessions.enter_context(self.session("scope_annotation_span", case, output_capacity,
+                                                        admission=owner_admission))
             children = None
             for _ in range(32):
                 code = self.invoke(owner, "scope_annotation_span", request, case)

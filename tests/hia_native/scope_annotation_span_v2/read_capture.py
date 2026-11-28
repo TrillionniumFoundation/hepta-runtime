@@ -21,11 +21,27 @@ WARNING = b"search scope annotation unavailable; existing identity retained"
 # over those same verified content-addressed bytes, including relocated copies.
 VERIFIED_CONCATENATIONS = set()
 VERIFIED_PATCHES = set()
+VERIFIED_ZERO_EXTENSIONS = set()
+FIXED_BYTE_DIGESTS = {}
 
 
 def require(value, message):
     if not value:
         raise ValueError(message)
+
+
+def fixed_byte_digest(value, size):
+    """Memoize a mathematical constant, never an unverified physical buffer."""
+    require(type(value) is int and 0 <= value <= 255 and type(size) is int and size >= 0,
+            "invalid fixed-byte span")
+    key = (value,size)
+    if key not in FIXED_BYTE_DIGESTS:
+        digest = hashlib.sha256()
+        block = bytes((value,))*min(CHUNK,size)
+        for at in range(0,size,CHUNK):
+            digest.update(block[:min(CHUNK,size-at)])
+        FIXED_BYTE_DIGESTS[key] = digest.hexdigest()
+    return FIXED_BYTE_DIGESTS[key]
 
 
 def pairs(rows):
@@ -162,6 +178,22 @@ class Buffers:
         require(len(result) == size, "complete range truncated")
         return bytes(result)
 
+    def zero_extended(self, before, after):
+        """Prove the unchanged prefix and zero extension over freshly read chunks."""
+        require(before["bytes"] <= after["bytes"], "zero extension shrank the buffer")
+        key=(before["bytes"],before["sha256"],tuple(before["chunks"]),
+             after["bytes"],after["sha256"],tuple(after["chunks"]))
+        if key in VERIFIED_ZERO_EXTENSIONS:
+            return
+        digest = hashlib.sha256()
+        for identity in before["chunks"]:
+            digest.update(self.chunk(identity))
+        for at in range(before["bytes"],after["bytes"],CHUNK):
+            digest.update(bytes(min(CHUNK,after["bytes"]-at)))
+        require(digest.hexdigest() == after["sha256"],
+                "growth changed old prefix or invented uninitialized bytes")
+        VERIFIED_ZERO_EXTENSIONS.add(key)
+
     def changed(self, before, after, patches):
         require(before["bytes"] == after["bytes"], "patch changed complete buffer extent")
         ordered = sorted(patches)
@@ -221,7 +253,6 @@ def retained_observation(buffers, call):
 
 def physical(folder, report):
     folder = Path(folder)
-    buffers = Buffers(folder)
     session_rows = jsonlines(folder/"sessions.jsonl")
     sessions = {row["session"]:row for row in session_rows}
     require(len(sessions) == len(session_rows) and list(sessions) == list(range(1,len(sessions)+1)), "session identity domain changed")
@@ -236,23 +267,36 @@ def physical(folder, report):
         require(row["error"] is None and type(row["return_code"]) is int and 0 <= row["return_code"] <= 0xffffffff, "native call did not return")
         require(row["output_guard"] == "a5"*16 and row["workspace_guard"] == "5a"*16, "actual buffer guard changed")
         require(math.isfinite(row["elapsed_seconds"]) and 0 <= row["elapsed_seconds"] <= 180, "native timing differs")
-        require(file_pin(folder/row["folder"]/"input.bin") == row["input"], "complete actual call input changed")
-        require({p.name for p in (folder/row["folder"]).iterdir()} == {"input.bin"}, "call folder has unbound file")
         for kind in ("workspace","output"):
             for phase in ("before","after"):
                 descriptor = row[kind+"_"+phase]
                 require(descriptor["bytes"] == row[kind+"_capacity"], "physical buffer capacity differs")
-                buffers.verify(descriptor)
         require(row["output_prefilled_a5"] is True, "undeclared caller output preparation")
-        digest = hashlib.sha256()
-        for at in range(0,row["output_capacity"],CHUNK):
-            digest.update(b"\xa5"*min(CHUNK,row["output_capacity"]-at))
-        require(digest.hexdigest() == row["output_before"]["sha256"], "caller output sentinel differs")
+    buffers = Buffers(folder)
     for session in session_rows:
         require(set(session) == {"session","owner","case","output_capacity","workspace_capacity","admission"},
                 "session allocation declaration differs")
         admission = session["admission"]
         if admission is None:
+            continue
+        if session["owner"] == "scope_annotation_span":
+            require(type(admission) is dict
+                    and set(admission) == {"policy","input_bytes","input_sha256","capacity"}
+                    and admission["policy"] == "complete-request-span-plus-header"
+                    and session["session"] in first_calls,
+                    "owner initial output lacks its complete request admission")
+            first = first_calls[session["session"]]
+            request = read(folder/first["folder"]/"input.bin")
+            require(first["case"] == session["case"]
+                    and type(admission["input_bytes"]) is int
+                    and admission["input_bytes"] == len(request)
+                    and admission["input_sha256"] == SHA(request)
+                    and type(admission["capacity"]) is int
+                    and admission["capacity"] == max(65600,64+len(request))
+                    and type(session["output_capacity"]) is int
+                    and session["output_capacity"] == admission["capacity"] <= 1073741824
+                    and type(session["workspace_capacity"]) is int and session["workspace_capacity"] == 0,
+                    "owner initial output differs from the complete actual request")
             continue
         require(session["owner"] == "serde_json_span" and type(admission) is dict
                 and set(admission) == {"policy","issued_call","capacity"}
@@ -274,7 +318,6 @@ def physical(folder, report):
     growth = jsonlines(folder/"growth.jsonl")
     for row in growth:
         require(row["session"] in sessions and row["kind"] in (1,2) and row["previous_address"] != row["next_address"], "growth did not relocate owned buffer")
-        buffers.verify(row["before"]);buffers.verify(row["after"])
         old,new = row["before"]["bytes"],row["after"]["bytes"]
         minimum = row["minimum"]
         require(type(minimum) is int and 0 <= old < minimum <= new, "growth did not satisfy actual minimum")
@@ -286,12 +329,8 @@ def physical(folder, report):
             expected_size = min(1207959552, 2 * minimum)
         require(row["allocation_policy"] == expected_policy and new == expected_size,
                 "physical allocation differs from the declared mechanical growth policy")
-        digest = hashlib.sha256()
-        for identity in row["before"]["chunks"]:
-            digest.update(buffers.chunk(identity))
-        for at in range(old,new,CHUNK):
-            digest.update(bytes(min(CHUNK,new-at)))
-        require(digest.hexdigest() == row["after"]["sha256"], "growth changed old prefix or invented uninitialized bytes")
+        buffers.verify(row["before"]);buffers.verify(row["after"])
+        buffers.zero_extended(row["before"],row["after"])
         require(type(row["after_call"]) is int and 1 <= row["after_call"] <= len(calls), "unbound growth call")
         previous = calls[row["after_call"]-1]
         require(previous["session"] == row["session"], "growth process custody differs")
@@ -324,8 +363,16 @@ def physical(folder, report):
             require(row["child_code"] == 64 and response[:8] == b"HRTCRS01" and len(response) == 64+WORD(response,40), "incomplete constructor wire response")
         else:
             require(row["child_code"] == len(response) and response[:8] == b"HSJERR01", "incomplete error child response")
+    for row in calls:
+        require(file_pin(folder/row["folder"]/"input.bin") == row["input"], "complete actual call input changed")
+        require({p.name for p in (folder/row["folder"]).iterdir()} == {"input.bin"}, "call folder has unbound file")
+        for kind in ("workspace","output"):
+            for phase in ("before","after"):
+                descriptor = row[kind+"_"+phase]
+                buffers.verify(descriptor)
+        require(fixed_byte_digest(165,row["output_capacity"]) == row["output_before"]["sha256"],
+                "caller output sentinel differs")
     return buffers,calls,sessions,growth,handoffs
-
 
 def lifecycle(folder, buffers, calls, sessions, growth, handoffs, *, baselines=(), refusals=()):
     """Reconstruct only transport copies/growth; never substitute HIA semantics."""

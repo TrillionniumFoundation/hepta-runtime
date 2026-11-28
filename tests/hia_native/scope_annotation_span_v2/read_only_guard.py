@@ -20,20 +20,61 @@ def read(path):
     require(stat.S_ISREG(info.st_mode) and path.resolve()==path.absolute(),'regular non-aliased read')
     return path.read_bytes()
 def snapshot(roots):
+    # Descriptor-relative traversal keeps every byte read and every metadata
+    # field while avoiding repeated pathlib resolution of each full ancestor.
     result = {}
+    def metadata(info):
+        return {"mode": info.st_mode, "inode": info.st_ino, "device": info.st_dev,
+            "bytes": info.st_size, "mtime_ns": info.st_mtime_ns, "ctime_ns": info.st_ctime_ns}
+    def record(key, info, *, parent=None, name=None):
+        require(stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode),
+                "read-only snapshot rejects special files")
+        row = metadata(info)
+        row["sha256"] = None
+        if stat.S_ISREG(info.st_mode):
+            descriptor = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent)
+            try:
+                opened = os.fstat(descriptor)
+                require(metadata(opened) == metadata(info), "snapshot file changed before open")
+                digest, count = hashlib.sha256(), 0
+                while block := os.read(descriptor, 1 << 20):
+                    digest.update(block)
+                    count += len(block)
+                require(count == info.st_size and metadata(os.fstat(descriptor)) == metadata(info),
+                        "snapshot file changed during complete read")
+                row["sha256"] = digest.hexdigest()
+            finally:
+                os.close(descriptor)
+        result[key] = row
     for number, root in enumerate(roots):
         root = Path(root).absolute()
-        for folder, dirs, names in os.walk(root, followlinks=False):
-            for path in [Path(folder)] + [Path(folder) / name for name in names + dirs]:
-                info = path.lstat()
-                require(stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode), "read-only snapshot rejects special files")
-                key = str(number) + ":" + path.relative_to(root).as_posix()
-                result[key] = {"mode": info.st_mode, "inode": info.st_ino, "device": info.st_dev,
-                    "bytes": info.st_size, "mtime_ns": info.st_mtime_ns, "ctime_ns": info.st_ctime_ns,
-                    "sha256": sha(read(path)) if stat.S_ISREG(info.st_mode) else None}
+        require(root.resolve() == root and stat.S_ISDIR(root.lstat().st_mode),
+                "read-only snapshot requires ordinary non-aliased roots")
+        root_name = str(root)
+        prefix = root_name.rstrip(os.sep) + os.sep
+        for folder, dirs, names, parent in os.fwalk(root_name, follow_symlinks=False):
+            relative = "." if folder == root_name else folder[len(prefix):]
+            require(folder == root_name or folder.startswith(prefix), "snapshot traversal escaped root")
+            key = str(number) + ":" + relative
+            record(key, os.fstat(parent))
+            for name in names + dirs:
+                require(name not in (".", "..") and os.sep not in name, "snapshot entry is not a basename")
+                suffix = name if relative == "." else relative + "/" + name
+                record(str(number) + ":" + suffix,
+                       os.stat(name, dir_fd=parent, follow_symlinks=False), parent=parent, name=name)
     return result
 
+# Python audit hooks cannot be removed. Register one dispatcher and retain
+# only guards that are currently active, instead of accumulating dead hooks.
+_ACTIVE_AUDITS = []
+_AUDIT_DISPATCH_INSTALLED = False
+
+def _dispatch_audit(event, args):
+    for handler in tuple(_ACTIVE_AUDITS):
+        handler(event, args)
+
 def guarded(operation, *, roots, foreign_path):
+    global _AUDIT_DISPATCH_INSTALLED
     roots = [Path(root).absolute() for root in roots]
     before = snapshot(roots)
     allowed = {str(root / key.split(":", 1)[1]) for index, root in enumerate(roots)
@@ -87,7 +128,9 @@ def guarded(operation, *, roots, foreign_path):
         if event.startswith("ctypes.") or event == "mmap.__new__":
             refuse("native-mapping")
 
-    sys.addaudithook(audit)
+    if not _AUDIT_DISPATCH_INSTALLED:
+        sys.addaudithook(_dispatch_audit)
+        _AUDIT_DISPATCH_INSTALLED = True
     saved = {name: getattr(os, name) for name in ("write", "writev", "pwrite", "ftruncate") if hasattr(os, name)}
 
     def refuse_descriptor(*args, **kwargs):
@@ -112,6 +155,7 @@ def guarded(operation, *, roots, foreign_path):
         ("unadmitted-file-descriptor", lambda: builtins.open(0, "rb", closefd=False)),
     ]
     try:
+        _ACTIVE_AUDITS.append(audit)
         for name in saved:
             setattr(os, name, refuse_descriptor)
         os.open = tracked_open
@@ -130,9 +174,13 @@ def guarded(operation, *, roots, foreign_path):
         require(len(denied) == prior, "reader attempted a forbidden operation")
     finally:
         active[0] = False
-        os.open = original_open
-        for name, method in saved.items():
-            setattr(os, name, method)
+        try:
+            if audit in _ACTIVE_AUDITS:
+                _ACTIVE_AUDITS.remove(audit)
+        finally:
+            os.open = original_open
+            for name, method in saved.items():
+                setattr(os, name, method)
     after = snapshot(roots)
     require(before == after, "read-only reader changed complete bytes or filesystem metadata")
     return {"schema": "hepta.runtime.scope-span-readonly.v2", "pid": os.getpid(),

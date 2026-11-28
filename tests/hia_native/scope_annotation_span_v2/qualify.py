@@ -9,6 +9,7 @@ from controls import plan, INITIAL, STATE, PENDING, CONSTRUCTOR, SECOND
 from read_capture import (SHA, PACK, WORD, CALL, GROW, PacketStream, file_pin, jsonlines,
                          lifecycle, observation, parse, physical, pin, read, require, retained_observation)
 from original_reader import original_evidence, process_evidence
+from parallel_reader import read_workers
 
 ROOT = Path(__file__).resolve().parent
 COMPILER = "bfd603dd2b40974d2083b567b4295fb3975938da8435dd636514fc197c485de0"
@@ -85,6 +86,18 @@ def native_evidence(folder, build, source_sha):
             and report["source_manifest_sha256"] == source_sha and report["build_sha256"] == SHA(read(build/"BUILD.json"))
             and report["domain_sha256"] == SHA(read(ROOT/"DOMAIN.json")), "native source/domain/build differs")
     require(report["cases"] == len(frozen["cases"]) and report["sessions"] == 4*report["cases"], "complete semantic case domain changed")
+    # Check complete stream identities before the expensive physical proof.
+    # Accepted evidence still reaches every original per-case and buffer check.
+    for name,expected_bytes,expected_sha in (
+            ("inputs.bin.gz",frozen["input_bytes"],frozen["input_sha256"]),
+            ("observed.bin.gz",report["observed_bytes"],report["observed_sha256"])):
+        file_pin(folder/name)
+        digest,count = hashlib.sha256(),0
+        with gzip.open(folder/name,"rb") as stream:
+            while block := stream.read(1<<20):
+                digest.update(block);count += len(block)
+        require(count == expected_bytes and digest.hexdigest() == expected_sha,
+                "complete native stream identity differs: "+name)
     buffers,calls,sessions,growth,handoffs = physical(folder,report)
     lifecycle(folder,buffers,calls,sessions,growth,handoffs)
     require(buffers.physical_bytes == report["physical_buffer_bytes"] and len(buffers.rows) == report["unique_buffer_chunks"], "complete physical capture size differs")
@@ -113,8 +126,10 @@ def native_evidence(folder, build, source_sha):
             require(all(c["session"] in {s["session"] for s in owned} for c in selected),
                     "actual case borrowed another case's session")
             require(all(s["workspace_capacity"] == 0 for s in owned)
-                    and by_owner["scope_annotation_span"]["output_capacity"] == 65600
-                    and by_owner["scope_annotation_span"]["admission"] is None
+                    and by_owner["scope_annotation_span"]["output_capacity"] == max(65600,64+len(request))
+                    and by_owner["scope_annotation_span"]["admission"] ==
+                        dict(policy="complete-request-span-plus-header", input_bytes=len(request),
+                             input_sha256=SHA(request), capacity=max(65600,64+len(request)))
                     and all(by_owner[name]["output_capacity"] == 64 and by_owner[name]["admission"] is None
                             for name in ("serde_error_span","text_result_constructor")),
                     "initial semantic session capacities differ")
@@ -182,10 +197,18 @@ def controls_evidence(folder, build, source_sha, semantic):
         request=buffers.span(state,WORD(head,136),WORD(head,296))
         require(call["owner"]=="text_result_constructor" and call["case"]==row["name"]
                 and row["output_capacity"]==call["output_capacity"]==capacity and call["workspace_capacity"]==0
-                and row["expected_code"]==call["return_code"]==0xfffffffe
+                and row["expected_code"]==call["return_code"]==frozen["child_expected_codes"][row["name"]]
+                == (0xfffffffe if capacity < 32 else GROW)
                 and read(folder/call["folder"]/"input.bin")==request and SHA(request)==row["request_sha256"]
-                and call["workspace_before"]==call["workspace_after"] and call["output_before"]==call["output_after"],
-                "actual constructor capacity refusal differs")
+                and call["workspace_before"]==call["workspace_after"],
+                "actual constructor short-output boundary differs")
+        if capacity < 32:
+            require(call["output_before"]==call["output_after"],"capacity refusal changed complete output")
+        else:
+            before=buffers.span(call["output_before"])
+            after=buffers.span(call["output_after"])
+            require(after==b"HGRWS002"+PACK(1,16384+len(request)-64,0)+before[32:],
+                    "constructor growth frame or untouched output tail differs")
     for kind in (1,2):
         require(any(calls[r["after_call"]-1]["owner"]=="text_result_constructor" and r["kind"]==kind for r in growth),
                 "original constructor workspace/output growth domain omitted")
@@ -247,7 +270,7 @@ def process_custody(output, source_sha):
     return dict(status="PASS",native_processes=3,native_domain_timeout_seconds=180,native_controls_timeout_seconds=180)
 
 
-def reader_controls_evidence(output, *, original=False):
+def reader_controls_evidence(output, *, original=False, baseline=None, semantic=None):
     if original:
         from original_evidence_controls import NAMES
         folder,name="original-reader-controls","original-evidence-controls"
@@ -300,6 +323,27 @@ def reader_controls_evidence(output, *, original=False):
     actual=parse(read(output/"gate-processes"/row["stdout"]["file"]))
     require(actual["status"]==status and actual["controls"]==len(NAMES) and actual["relocations"]==2
             and actual["native_processes_executed"]==0,"actual reader control summary differs")
+    if not original:
+        require(baseline is not None and semantic is not None,"parallel reader requires the full current baseline")
+        require(report["python_reader_workers"]==actual["python_reader_workers"]==2
+                and report["execution"]["pgid"]==row["pgid"]
+                and 0<=report["elapsed_seconds"]<=row["elapsed_seconds"]<180
+                and report["execution"]["finished_monotonic_ns"]-report["execution"]["started_monotonic_ns"]
+                ==round(report["elapsed_seconds"]*1e9),
+                "parallel readers escaped their actual enclosing parent")
+        require(file_pin(output/folder/"inputs/BASELINE.json")==report["baseline"]
+                and file_pin(output/folder/"worker-processes.json")==report["worker_processes"],
+                "parallel reader complete baseline or process receipt changed")
+        workers=read_workers(output/folder,report["source_manifest_sha256"],baseline,NAMES,
+                             expected_parent=report["execution"],semantic=semantic,
+                             expected_files=report["admitted_files"],
+                             expected_roots=dict(source_root=str(old_source),capture_root=str(destination),
+                                                 output_root=str(destination/folder)))
+        joined={control["name"]:control for worker in workers for control in worker["controls"]}
+        require(report["controls"]==[joined[name] for name in NAMES]
+                and report["relocations"]==[worker["relocations"][0] for worker in workers]
+                and report["post_refusal"]==[worker["post_refusal"][0] for worker in workers],
+                "parent reader report differs from complete actual worker reports")
     return dict(status="PASS",refusals=len(NAMES),relocations=2,admitted_files=len(report["admitted_files"]),
                 native_or_rust_executions=0)
 
@@ -318,7 +362,8 @@ def verify(output, *, full, require_controls=False):
         result["original"] = original_evidence(output/"original",output/"native",source_root=ROOT)
         result.update(status="COMPLETE_ORIGINAL_COMPARISON_SPAN_ANNOTATION_PASS",original_qualified=True)
     if require_controls:
-        result["native_reader_controls"]=reader_controls_evidence(output)
+        result["native_reader_controls"]=reader_controls_evidence(
+            output,baseline=dict(native=native,controls=controls,build=build),semantic=semantic)
         if full:
             result["original_reader_controls"]=reader_controls_evidence(output,original=True)
     return result
