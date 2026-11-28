@@ -1,0 +1,123 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 32:
+        return INVALID
+    if load(s, 0) != FRAME or load(s, 16) != length(s) - 32:
+        return INVALID
+    stage = load(s, 8)
+    if stage > 1:
+        return INVALID
+    if stage == 0:
+        if load(s, 24) != 0:
+            return INVALID
+        if length(s) < 48:
+            return OLD
+        if load(s, 32) != QUERY or load(s, 40) != 7:
+            return OLD
+    if length(o) < 32:
+        return RESOURCE
+    if length(s) != 72:
+        return INVALID
+    if load(s, 32) != QUERY or load(s, 40) != 7:
+        return INVALID
+    modern = load(s, 48)
+    flags = load(s, 56)
+    profile = load(s, 64)
+    if modern > 1:
+        return INVALID
+    if profile == 11:
+        if flags > 1:
+            return INVALID
+    elif profile == 136:
+        if flags > 15:
+            return INVALID
+        if flags != 0 and (flags & 1) == 0:
+            return INVALID
+    else:
+        return INVALID
+    if length(w) < TOTAL:
+        return grow(o, 1, TOTAL)
+    if stage == 0:
+        put(w, 0, 1)
+        put(w, 8, 1)
+        put(w, 72, flags)
+        put(w, 80, modern)
+        put(w, 88, 0)
+        return ACTION
+    if get(w, 72) != flags or get(w, 80) != modern:
+        return INVALID
+    phase = get(w, 0)
+    code = load(s, 24)
+    if phase == 1:
+        if get(w, 8) != 1 or code != 0:
+            return INVALID
+        put(w, REQUEST, POLICY_QUERY)
+        put(w, REQUEST + 8, 1)
+        put(w, REQUEST + 16, flags)
+        put(w, REQUEST + 24, modern)
+        put(w, REQUEST + 32, DECLARATION_BYTES)
+        put(w, REQUEST + 40, 0)
+        put(w, REQUEST + 48, 0)
+        put(w, REQUEST + 56, 0)
+        return child(w, 2, 0, DECLARATION_BYTES + 64, POLICY_WORK)
+    if get(w, 8) != 2:
+        return INVALID
+    if phase == 2:
+        if get(w, 16) != 0 or code < 64 or code > FRAME_CAP:
+            return INVALID
+        if get(w, REPLY) != POLICY_REPLY or get(w, REPLY + 8) != 0:
+            return INVALID
+        size = get(w, REPLY + 24)
+        count = get(w, REPLY + 32)
+        if get(w, REPLY + 16) != 64 or size != code - 64 or count > 136:
+            return INVALID
+        if get(w, REPLY + 40) != flags or get(w, REPLY + 48) != modern or get(w, REPLY + 56) != 0:
+            return INVALID
+        if size > FRAME_CAP - 24:
+            return INVALID
+        put(w, 88, count)
+        put(w, REQUEST, VALUE_QUERY)
+        put(w, REQUEST + 8, 1)
+        put(w, REQUEST + 16, size)
+        copy_range(w, w, REQUEST + 24, REPLY + 64, size)
+        return child(w, 3, 1, size + 24, VALUE_WORK)
+    if phase == 3:
+        if get(w, 16) != 1 or code == 0 or code > FRAME_CAP - 24:
+            return INVALID
+        put(w, REQUEST, SDK_QUERY)
+        put(w, REQUEST + 8, 4)
+        put(w, REQUEST + 16, code)
+        copy_range(w, w, REQUEST + 24, REPLY, code)
+        return child(w, 4, 2, code + 24, SDK_WORK)
+    if phase == 4:
+        if get(w, 16) != 2 or code < 64 or code > FRAME_CAP:
+            return INVALID
+        if get(w, REPLY) != SDK_REPLY or get(w, REPLY + 8) != 4:
+            return INVALID
+        if get(w, REPLY + 16) != 0 or get(w, REPLY + 24) != 64:
+            return INVALID
+        size = get(w, REPLY + 32)
+        if size != code - 64:
+            return INVALID
+        if get(w, REPLY + 40) != 0 or get(w, REPLY + 48) != 0 or get(w, REPLY + 56) != 0:
+            return INVALID
+        if length(o) - 32 < size + 11:
+            return grow(o, 2, size + 43)
+        put(o, 32, RESULT_PREFIX)
+        store(o, 40, 34)
+        store(o, 41, 58)
+        copy_range(o, w, 42, REPLY + 64, size)
+        store(o, 42 + size, 125)
+        return finish(o, size + 11)
+    return INVALID
+
+def child(w: mutbuf, phase: u64, image: u64, size: u64, workspace: u64) -> u32:
+    put(w, 0, phase)
+    put(w, 8, 2)
+    put(w, 16, image)
+    put(w, 24, REQUEST)
+    put(w, 32, size)
+    put(w, 40, REPLY)
+    put(w, 48, FRAME_CAP)
+    put(w, 56, WORK)
+    put(w, 64, workspace)
+    return ACTION
