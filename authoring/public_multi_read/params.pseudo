@@ -1,0 +1,159 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<26:
+        return INVALID
+    if load(s,0)!=REQUEST or load(s,8)!=length(s)-24 or load(s,16)!=KIND:
+        return INVALID
+    if byte(s,24)!=123 or byte(s,length(s)-1)!=125:
+        return INVALID
+    if length(o)<256:
+        return CAPACITY
+    if length(s)>MAXIMUM-65536:
+        return header(o,4,MAXIMUM,0)
+    needed=length(s)
+    if needed<512:
+        needed=512
+    needed=needed+65536
+    if length(w)<needed:
+        return header(o,2,needed,0)
+    fill_range(w,0,1024,0)
+    fill_range(w,META,512,0)
+    if skip_value(s,w,24)!=length(s):
+        return INVALID
+    status=project(s,w)
+    if status==MAXIMUM:
+        return INVALID
+    if status!=0:
+        unicode_table(w)
+        put(w,48,0)
+        put(w,112,0)
+        put(w,120,0)
+        error(s,w,o,status)
+        size=get(w,120)
+        if get(w,48)!=0 or size>MAXIMUM-256:
+            return header(o,4,MAXIMUM,0)
+        if size+256>length(o):
+            return header(o,3,size+256,0)
+        header(o,1,0,size)
+        put(w,112,1)
+        put(w,120,256)
+        error(s,w,o,status)
+        return 256
+    return success(s,w,o)
+
+def typed_field(s:readbuf,w:mutbuf,field:u64,start:u64,end:u64) -> u64:
+    first=byte(s,start)
+    kind=field_type(field)
+    if kind==3 and first==110:
+        return 0
+    put(w,88,start)
+    if kind==1:
+        put(w,96,5)
+        if first!=34:
+            return 10
+        if string_info(s,w,start)!=end:
+            return MAXIMUM
+        put(w,META+field*32,start)
+        put(w,META+field*32+8,get(w,16))
+    if kind==3:
+        put(w,96,17)
+        if (first<48 or first>57) and first!=45:
+            return 10
+        if integer(s,w,start,end)==0:
+            return 10
+        if get(w,16)!=0:
+            return 11
+        put(w,META+field*32+16,get(w,8))
+        put(w,808,get(w,808)|(1<<field))
+    if kind==7:
+        put(w,96,18)
+        if first!=91:
+            return 10
+        return array_project(s,w,start,end)
+    return 0
+
+def array_project(s:readbuf,w:mutbuf,start:u64,end:u64) -> u64:
+    at=start+1
+    count=0
+    total=0
+    while at<end-1:
+        put(w,88,at)
+        put(w,96,5)
+        if byte(s,at)!=34:
+            return 10
+        after=string_info(s,w,at)
+        if after==MAXIMUM or after>=end:
+            return MAXIMUM
+        size=get(w,16)
+        if total>MAXIMUM-8 or size>MAXIMUM-total-8:
+            return MAXIMUM
+        total=total+8+size
+        count=count+1
+        if byte(s,after)==93:
+            if after!=end-1:
+                return MAXIMUM
+            at=after
+        else:
+            if byte(s,after)!=44 or after+1>=end-1:
+                return MAXIMUM
+            at=after+1
+    if at!=end-1:
+        return MAXIMUM
+    put(w,META+64,start)
+    put(w,META+72,total)
+    put(w,META+80,count)
+    return 0
+
+def success(s:readbuf,w:mutbuf,o:mutbuf) -> u32:
+    host_size=get(w,META+40)
+    record_size=get(w,META+72)
+    count=get(w,META+80)
+    if host_size>MAXIMUM-256 or record_size>MAXIMUM-256-host_size:
+        return header(o,4,MAXIMUM,0)
+    total=256+host_size+record_size
+    if total>length(o):
+        return header(o,3,total,0)
+    header(o,0,0,0)
+    put(o,24,get(w,808)>>3)
+    put(o,32,get(w,META+112))
+    put(o,40,get(w,META+144))
+    put(o,48,count)
+    put(o,56,host_size)
+    put(o,64,record_size)
+    copy_string(s,w,o,get(w,META+32),256)
+    at=256+host_size
+    cursor=get(w,META+64)+1
+    index=0
+    while index<count:
+        after=string_info(s,w,cursor)
+        size=get(w,16)
+        put(o,at,size)
+        copy_string(s,w,o,cursor,at+8)
+        at=at+8+size
+        cursor=after+1
+        index=index+1
+    return 256
+
+def header(o:mutbuf,status:u64,needed:u64,error_size:u64) -> u32:
+    fill_range(o,0,256,0)
+    put(o,0,RESPONSE)
+    put(o,8,status)
+    put(o,16,1)
+    put(o,72,error_size)
+    put(o,80,needed)
+    return 256
+
+def field_type(field:u64) -> u64:
+    if field==1:
+        return 1
+    if field==2:
+        return 7
+    if field==3 or field==4:
+        return 3
+    return 0
+
+def required(present:u64) -> u64:
+    if (present&2)==0:
+        return 101
+    if (present&4)==0:
+        return 102
+    return 0
