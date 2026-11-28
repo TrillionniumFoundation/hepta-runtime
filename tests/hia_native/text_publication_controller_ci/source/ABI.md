@@ -74,3 +74,11 @@ borrow is released. HRCFGM01 is 32 plus its full declared result.
 All combined runtime, actual cache/session/fence comparisons, public route,
 async task lifecycle, and installed-production flags remain false in this build
 package. Only future actual combined runs can change those qualifications.
+
+## Caller revision 5: exact key path and Scope forget borrow
+
+`prepare_cache_key` supplies `HRLKKEY1` operation 1 with only the local path bytes from the admitted `HRSOLR02` result (length at +56, bytes at +96). The complete 96-byte result header is not part of the key input. The HIA key owner still performs canonicalization and fallback.
+
+Only `prepare_forget` uses local child 6, bound to fixed private descriptor 68. The capability invokes the existing session Scope owner with a 96-byte output borrow: 64 bytes of Scope envelope and the 32-byte actual cache-forget response. It restores the Scope's owning capacity before publishing the borrowed response. The original Scope and lease HIA continue to perform the operation; this capability does not synthesize a cache result or bypass a Scope. All ordinary Scope open, hints and close operations remain local child 0 / descriptor 29. Public JSON cannot select these private descriptors. No new HIA image is added by descriptor 68.
+
+The gateway-v2 failure is retained: the generic 8 MiB Scope output advertised a nested cache output larger than that cache's physical output capacity; the ordinary borrowed-span adapter rejected it. Request processing then remained pending and EOF returned 111. Revision 5 also corrects the independently identified local-key input projection. These are source fixes awaiting actual graph comparison, not a reinterpretation of the failed capture.

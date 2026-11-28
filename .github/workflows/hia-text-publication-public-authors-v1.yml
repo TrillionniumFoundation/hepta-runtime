@@ -1,0 +1,62 @@
+name: Publication route and catalog source authors
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-public-authors-6780-v1-20261117']
+    paths: ['tests/hia_native/text_publication_public_author_ci/**', '.github/workflows/hia-text-publication-public-authors-v1.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  source-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_publication_public_author_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-public-author" "TP_EXPORT=$RUNNER_TEMP/text-publication-public-author-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-public-author-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_public_author_ci/source
+      - name: Checkout exact compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Complete source preflight
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          test "$(sha256sum "$TP_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 7aece49a049f370563cb7d128a75a90553f58ab64491d6e075ecbac84906f758
+          python3 -I -S -B "$TP_SOURCE/scripts/build.py" check --source "$TP_SOURCE"
+      - name: Author exact predecessor delta and compile two HIA owners
+        run: |
+          set +e
+          python3 -I -S -B "$TP_SOURCE/scripts/build.py" build --source "$TP_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$TP_OUTPUT" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stderr"
+          if [ "$tp_status" -ne 0 ] && [ -f "$TP_OUTPUT/author.stderr" ]; then cat "$TP_OUTPUT/author.stderr"; fi
+          test "$tp_status" -ne 0 || cat "$TP_DRIVER.stdout"
+          exit "$tp_status"
+      - name: Export complete source, builds and failures
+        if: always()
+        run: |
+          python3 -I -S -B "$TP_SOURCE/scripts/archive.py" pack --source "$TP_SOURCE" --capture "$TP_OUTPUT" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete archive
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-public-author-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

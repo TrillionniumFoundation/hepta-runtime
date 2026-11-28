@@ -223,7 +223,7 @@ def main():
     caller = produce(root, a.output, hepta, "text_publication_call",
         "baseline/extract_call.hepta", "baseline/extract_call_composition.json", "aliases",
         (root / "authoring/caller.pseudo").read_text() + "\n" + literal_source(),
-        CALLER_MAGIC, [29, 9, 67, 11, 7, 30])
+        CALLER_MAGIC, [29, 9, 67, 11, 7, 30, 68])
     gateway = produce(root, a.output, hepta, "text_publication_gateway",
         "baseline/text_editor_gateway.hepta", "baseline/text_editor_gateway_composition.json", "functions",
         (root / "authoring/gateway.pseudo").read_text(), GATEWAY_MAGIC, [65, 27, 5, 6, 11, 9, 7, 66, 3])

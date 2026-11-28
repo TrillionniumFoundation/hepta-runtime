@@ -1,0 +1,42 @@
+name: Independent uploaded publisher gateway proof read
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-gateway-independent-6780-v1-20261117']
+    paths: ['qualification/text-publication-gateway-independent-v1/**', '.github/workflows/hia-text-publication-gateway-independent-v1.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact independent reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text-publication-gateway-independent-v1
+      - name: Verify frozen reader
+        run: |
+          test "$(sha256sum qualification/text-publication-gateway-independent-v1/read.py | cut -d' ' -f1)" = a258dbd245cc953aa92fed7cb00f77a2afa1e393610c6f3909416859d78b1aa9
+          python3 -I -S -B -c 'import ast,pathlib; ast.parse(pathlib.Path("qualification/text-publication-gateway-independent-v1/read.py").read_bytes())'
+      - name: Full uploaded proof and independent guarded comparisons
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I -S -B qualification/text-publication-gateway-independent-v1/read.py --output "$RUNNER_TEMP/publisher-gateway-independent"
+      - name: Preserve complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publisher-gateway-independent-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/publisher-gateway-independent/SUMMARY.json
+            ${{ runner.temp }}/publisher-gateway-independent/INDEPENDENT_READONLY.json
+            ${{ runner.temp }}/publisher-gateway-independent/archive/FILES.json
+            ${{ runner.temp }}/publisher-gateway-independent/archive/ARCHIVE.json
+            ${{ runner.temp }}/publisher-gateway-independent/archive/EMPTY_STORES.json
+          if-no-files-found: error
+          retention-days: 30

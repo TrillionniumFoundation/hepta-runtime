@@ -269,7 +269,8 @@ def after_publication(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) ->
     return prepare(s, o, w, 3)
 
 def prepare_cache_key(o: mutbuf, w: mutbuf) -> u32:
-    count = get(w, 136)
+    source = region(w, 2)
+    count = get(w, source + 56)
     if count > MAXIMUM - 64:
         return request_grow(o, w, 3, 0)
     size = 64 + count
@@ -282,7 +283,7 @@ def prepare_cache_key(o: mutbuf, w: mutbuf) -> u32:
     put(w, at, KEY_REQUEST)
     put(w, at + 8, 1)
     put(w, at + 16, count)
-    copy_range(w, w, at + 64, region(w, 2), count)
+    copy_range(w, w, at + 64, source + 96, count)
     return child(w, 5, size, 3)
 
 def after_cache_key(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
@@ -320,11 +321,11 @@ def prepare_forget(o: mutbuf, w: mutbuf) -> u32:
     put(w, at + 80, 1)
     put(w, at + 88, count)
     copy_range(w, w, at + 112, region(w, 6), count)
-    return child(w, 0, size, 3)
+    return child(w, 6, size, 3)
 
 def after_forget(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
     at = region(w, 1)
-    if get(w, 48) != 0 or code != 96 or size != 96 or get(w, at) != SCOPE_RESULT:
+    if get(w, 48) != 6 or code != 96 or size != 96 or get(w, at) != SCOPE_RESULT:
         return INVALID
     if get(w, at + 8) != get(w, 112) or get(w, at + 16) != get(w, 120):
         return INVALID

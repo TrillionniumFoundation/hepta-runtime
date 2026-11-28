@@ -1,0 +1,66 @@
+name: Publisher gateway retained six-profile pure comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-gateway-review-6780-v6-20261117']
+    paths: ['tests/hia_native/text_publication_gateway_ci/**', '.github/workflows/hia-text-publication-gateway-review-v6.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "TP_PACKAGE=$GITHUB_WORKSPACE/candidate/tests/hia_native/text_publication_gateway_ci/source" "TP_OUTPUT=$RUNNER_TEMP/text-publication-review" "TP_PROOF=$RUNNER_TEMP/text-publication-review-proof" "TP_EXPORT=$RUNNER_TEMP/text-publication-review-export" "TP_DRIVER=$RUNNER_TEMP/text-publication-review-driver" >> "$GITHUB_ENV"
+      - name: Checkout frozen pure reader source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/text_publication_gateway_ci/source
+      - name: Verify all source and unchanged original fragments
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$TP_PACKAGE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = 920a2b17cd081af6f46df61485452bf399d99d99ed3f01172b4fb3545fc7ba6a
+          python3 -I -S -B "$TP_PACKAGE/recipe/check_source.py" --source "$TP_PACKAGE"
+      - name: Full uploaded artifact and guarded complete191 comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python3 -I -S -B "$TP_PACKAGE/recipe/review_retained.py" --source "$TP_PACKAGE" --output "$TP_OUTPUT" > "$TP_DRIVER.stdout" 2> "$TP_DRIVER.stderr"
+          tp_status=$?
+          cat "$TP_DRIVER.stdout"
+          cat "$TP_DRIVER.stderr"
+          exit "$tp_status"
+      - name: Retain complete selected source and captures plus full archive proof
+        if: always()
+        run: |
+          mkdir -p "$TP_PROOF"
+          for name in READONLY.json RELOCATIONS.json; do
+            test ! -f "$TP_OUTPUT/$name" || cp -p "$TP_OUTPUT/$name" "$TP_PROOF/$name"
+          done
+          for name in REVIEW.json FILES.json ARCHIVE.json EMPTY_STORES.json; do
+            test ! -f "$TP_OUTPUT/retained/$name" || cp -p "$TP_OUTPUT/retained/$name" "$TP_PROOF/$name"
+          done
+          test ! -d "$TP_OUTPUT/retained/selected" || cp -a "$TP_OUTPUT/retained/selected" "$TP_PROOF/selected"
+          for name in physical-controls relocations; do
+            test ! -d "$TP_OUTPUT/$name" || cp -a "$TP_OUTPUT/$name" "$TP_PROOF/$name"
+          done
+          python3 -I -S -B "$TP_PACKAGE/recipe/archive.py" pack --source "$TP_PACKAGE" --capture "$TP_PROOF" --output "$TP_EXPORT" --driver-prefix "$TP_DRIVER"
+      - name: Upload complete pure read proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-gateway-review-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.TP_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
