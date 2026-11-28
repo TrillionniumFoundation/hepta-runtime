@@ -31,6 +31,7 @@ LOST_DRIVER_SHA = "283e535c10a2065e797baf44c9232db3adac26d09fa6c47c285ce855fd1cc
 SOURCE_COMMIT = "16dbc208a21e4aca99dd576fb731a877598219dd"
 SOURCE_TREE = "64fe6409be734a82d2ee5a28f7f17db12fc6208e"
 CI_RUN = 46149528261
+INPUT_INDEX_SHA = "e078644b92cb22ac39c0a1d8c14e8a01e9c572f8ccee0c15eee509e9109da5bc"
 PROFILE = "smallhcsn_late_quote_min_mark4_task_route_v1"
 BUDGET = {
     "server_starts":4, "rpc_wire_calls":50, "tool_calls":32,
@@ -74,28 +75,45 @@ def ci_check(path):
     require(all(j["status"]=="completed" and j["conclusion"]=="success" for j in jobs),"both full CI lanes must succeed before execution")
     return {"path":str(path),"sha256":digest(raw),"run_id":CI_RUN,"jobs":jobs}
 
-def input_case(index,seed,root,name):
-    source=index["cases"][seed]
-    data={}
-    pins={}
+def checked_input_index(path):
+    raw=read(path)
+    require(digest(raw)==INPUT_INDEX_SHA,"input index differs from the independently frozen protocol SHA")
+    index=parse(raw)
+    require(index["schema"]=="hepta.late-quote.recovered-inputs.v1" and set(index["cases"])==set(PARENT),"wrong recovered input index")
+    return raw,index
+
+def input_payloads(index,seed):
+    source=index["cases"][seed];data={};pins={}
     for role in ROLES:
-        pin=source[role]
-        body=read(pin["path"],1024*1024)
+        pin=source[role];body=read(pin["path"],1024*1024)
         require(digest(body)==pin["sha256"] and len(body)==pin["bytes"],"recovered input identity mismatch")
         if role=="parent": require(pin["sha256"]==PARENT[seed],"wrong original parent")
         if role in RAW: require(pin["sha256"]==RAW[role],"wrong original task input")
         data[role]=body
         pins[role]={"sha256":digest(body),"bytes":len(body),"original_path":pin["path"]}
-    dest=root/"workspace"/(name+".safetensors")
-    t.write_bytes_once(dest,data["parent"])
-    # Fixed radius admits all three published four-word programs; no tuning.
     request={"profile_json":data["late_profile"].decode("utf-8"),"raw_input_hex":data["late_input"].hex(),
        "retention_profile_json":data["retention_profile"].decode("utf-8"),
        "retention_raw_input_hex":data["retention_input"].hex(),
        "minimum_accuracy_percent":95,"maximum_update_l2_norm":1.0}
+    return data,pins,request
+
+def input_case(index,seed,root,name):
+    data,pins,request=input_payloads(index,seed)
+    dest=root/"workspace"/(name+".safetensors")
+    t.write_bytes_once(dest,data["parent"])
     return {"seed":seed,"source_path":str(dest),"source_sha256":PARENT[seed],
-       "source_bytes":len(data["parent"]),"source_reference":source["parent"],"input_pins":pins,"request":request,
-       "expected":EXPECT[seed],"scientific_role":"previously observed engineering replay; no new holdout"}
+       "source_bytes":len(data["parent"]),"source_reference":index["cases"][seed]["parent"],
+       "input_pins":pins,"request":request,"expected":EXPECT[seed],
+       "scientific_role":"previously observed engineering replay; no new holdout"}
+
+def verify_case_inputs(case,index,seed):
+    data,pins,request=input_payloads(index,seed)
+    require(case["seed"]==seed and case["input_pins"]==pins and case["request"]==request,
+            "sealed case data or request differs from the fixed input index")
+    require(case["source_reference"]==index["cases"][seed]["parent"]
+            and case["source_bytes"]==len(data["parent"])
+            and case["source_sha256"]==PARENT[seed] and case["expected"]==EXPECT[seed],
+            "sealed case parent or mechanism differs from the fixed input index")
 
 def plan(args):
     root=Path(args.root)
@@ -105,9 +123,7 @@ def plan(args):
     identity=t.package_check(Path(args.binary),Path(args.package_manifest),SOURCE_COMMIT,SOURCE_TREE)
     require(identity["ci_run_id"]==str(CI_RUN) or identity["ci_run_id"]==CI_RUN,"package run differs")
     ci=ci_check(Path(args.ci_receipt))
-    index_raw=read(args.inputs)
-    index=parse(index_raw)
-    require(index["schema"]=="hepta.late-quote.recovered-inputs.v1" and set(index["cases"])==set(PARENT),"wrong recovered input index")
+    index_raw,index=checked_input_index(Path(args.inputs))
     for name in ("workspace","state","credentials","evidence"):
         (root/name).mkdir(mode=0o700)
     for owner in ("a","b"):
@@ -132,7 +148,7 @@ def plan(args):
        "package_manifest":str(Path(args.package_manifest)),"identity":identity,"ci":ci,
        "policy_sha256":policy_sha,"cases":cases,"ports":ports,"budget":BUDGET,
        "driver_sha256":digest(read(Path(__file__).resolve())),"transport_sha256":TRANSPORT_SHA,
-       "input_index_sha256":digest(index_raw),"original_driver_unavailable_sha256":LOST_DRIVER_SHA,
+       "input_index_path":str(Path(args.inputs)),"input_index_sha256":digest(index_raw),"original_driver_unavailable_sha256":LOST_DRIVER_SHA,
        "reconstructed_after_workspace_loss":True,"automatic_retry":False,
        "scope":"source-bound finite task/graph research, conditional graph routing; no production or global NDU claim"}
     p=root/"plan.json"
@@ -366,6 +382,8 @@ def load_plan(path):
     require(digest(read(root/"policy.json",private=True))==v["policy_sha256"],"sealed policy differs")
     require(t.package_check(v["binary"],v["package_manifest"],SOURCE_COMMIT,SOURCE_TREE)==v["identity"],"qualified package differs")
     require(ci_check(Path(v["ci"]["path"]))==v["ci"],"CI receipt differs")
+    index_raw,index=checked_input_index(Path(v["input_index_path"]))
+    require(v["input_index_sha256"]==INPUT_INDEX_SHA==digest(index_raw),"sealed fixed input index identity differs")
     for name in ("workspace","state","credentials","evidence"):private_dir(root/name)
     require(not any((root/"state").iterdir()),"execution must begin with empty isolated state")
     require(len(v["ports"])==4 and len(set(v["ports"]))==4 and all(type(p) is int and 1024<=p<=65535 for p in v["ports"]),"distinct frozen loopback ports required")
@@ -376,7 +394,8 @@ def load_plan(path):
     for name,pin in v["cases"].items():
         require(Path(pin["path"])==root/"evidence"/("case-"+name+".json"),"case path escaped")
         body=read(pin["path"],private=True);require(digest(body)==pin["sha256"],"sealed case changed")
-        case=parse(body);require(case["expected"]==EXPECT[case["seed"]],"expected mechanism changed")
+        case=parse(body)
+        verify_case_inputs(case,index,name if name in PARENT else "137")
         require(Path(case["source_path"])==root/"workspace"/(name+".safetensors") and digest(read(case["source_path"],private=True))==case["source_sha256"]==PARENT[case["seed"]],"sealed source changed")
         cases[name]=case
     return raw,v,root,tokens,cases
@@ -488,3 +507,4 @@ def main():
     args=p.parse_args()
     return plan(args) if args.action=="plan" else run(args)
 if __name__=="__main__":sys.exit(main())
+

@@ -25,7 +25,7 @@ import late_quote_mcp_relocated as m
 
 t=m.t
 require,read,parse,digest=m.require,m.read,m.parse,m.digest
-MAIN_SHA="aec1e2bfed23a7ae9cc021a57cb68fb1c766a64cc7d5f70aba29f48268c54d65"
+MAIN_SHA="9763f0c078a46c7367703bb7d072003fe2136cf6e5f59656f7733e6f90ac40e9"
 SCHEMA="hepta.late-quote.whole-executable-negative-control.relocated.v1"
 MARKER=b"\nHEPTA_OWNED_EXE_IDENTITY_NEGATIVE_CONTROL_V1\n"
 BUDGET={
@@ -112,7 +112,7 @@ def plan(args):
       "hosts":{"denied":{"ssh_target":"never-connect-executable-identity-control","remote_state_dir":str(root/"no-remote"),
       "allow_execute":False,"allow_pty":False,"allow_write":False,"allow_job_network":False}}}
     policy_sha=t.write_once(root/"policy.json",policy)
-    index=parse(read(args.inputs))
+    index_raw,index=m.checked_input_index(Path(args.inputs))
     case=m.input_case(index,"137",root,"exe137")
     case_path=root/"evidence/case-exe137.json"
     case_sha=t.write_once(case_path,case)
@@ -124,6 +124,7 @@ def plan(args):
         for s in socks:s.close()
     value={"schema":SCHEMA,"root":str(root),"binary":str(Path(args.binary)),"package_manifest":str(Path(args.package_manifest)),
       "identity":identity,"ci":ci,"primary":first,"policy_sha256":policy_sha,"ports":ports,"budget":BUDGET,
+      "input_index_path":str(Path(args.inputs)),"input_index_sha256":digest(index_raw),
       "driver_sha256":digest(read(Path(__file__).resolve())),"main_driver_sha256":MAIN_SHA,
       "transport_sha256":m.TRANSPORT_SHA,"case":{"path":str(case_path),"sha256":case_sha},
       "derived_binary":{"path":str(binary),"sha256":digest(derived),"bytes":len(derived),"marker_hex":MARKER.hex(),
@@ -137,6 +138,8 @@ def load_plan(path):
     require(v["schema"]==SCHEMA and Path(path)==root/"plan.json" and v["budget"]==BUDGET,"wrong negative-control plan")
     require(v["driver_sha256"]==digest(read(Path(__file__).resolve())) and digest(read(Path(m.__file__).resolve()))==MAIN_SHA and digest(read(Path(t.__file__).resolve()))==m.TRANSPORT_SHA,"frozen source differs")
     require(t.package_check(v["binary"],v["package_manifest"],m.SOURCE_COMMIT,m.SOURCE_TREE)==v["identity"] and primary(Path(v["primary"]["path"]))==v["primary"] and m.ci_check(Path(v["ci"]["path"]))==v["ci"],"primary CI/executable evidence differs")
+    index_raw,index=m.checked_input_index(Path(v["input_index_path"]))
+    require(v["input_index_sha256"]==m.INPUT_INDEX_SHA==digest(index_raw),"negative-control fixed input index differs")
     for name in ("workspace","state","credentials","evidence","derived"):m.private_dir(root/name)
     require(not any((root/"state").iterdir()),"negative control state is not initially empty")
     require(len(v["ports"])==2 and len(set(v["ports"]))==2 and all(type(p) is int and 1024<=p<=65535 for p in v["ports"]),"distinct loopback ports required")
@@ -147,6 +150,7 @@ def load_plan(path):
     require(tokens["a"]!=tokens["b"] and all(len(x)==64 and all(c in "0123456789abcdef" for c in x) for x in tokens.values()),"private credential shape")
     case_raw=read(v["case"]["path"],private=True);require(digest(case_raw)==v["case"]["sha256"],"case differs")
     case=parse(case_raw)
+    m.verify_case_inputs(case,index,"137")
     require(Path(case["source_path"])==root/"workspace/exe137.safetensors" and digest(read(case["source_path"],private=True))==m.PARENT["137"],"case source differs")
     return raw,v,root,tokens,case
 
@@ -221,3 +225,4 @@ def main():
     q=sub.add_parser("run");q.add_argument("--plan",required=True)
     a=p.parse_args();return plan(a) if a.action=="plan" else run(a)
 if __name__=="__main__":sys.exit(main())
+
