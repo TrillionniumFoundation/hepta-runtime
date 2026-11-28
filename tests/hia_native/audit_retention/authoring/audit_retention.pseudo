@@ -1,0 +1,309 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<16 or length(s)>=CAPACITY or read64(s,0)!=REQUEST:
+        return INVALID
+    op=read64(s,8)
+    if op==1 or op==2:
+        if initial_valid(s)==0:
+            return INVALID
+        count=read64(s,16)
+        base=128+count*8
+        used=base+length(s)
+        if length(o)<128 or length(w)<used:
+            return CAPACITY
+        fill_range(w,0,128,0)
+        put(w,0,WORKSPACE)
+        put(w,8,1)
+        put(w,16,count)
+        put(w,56,count)
+        put(w,64,length(s))
+        put(w,72,base)
+        put(w,80,read64(s,32))
+        put(w,112,op)
+        index=0
+        while index<count:
+            put(w,128+index*8,index)
+            index=index+1
+        index=0
+        while index<length(s):
+            store(w,base+index,byte(s,index))
+            index=index+1
+        owners=0
+        index=0
+        while index<count:
+            if belongs(w,record_at(w,index))!=0:
+                owners=owners+1
+            index=index+1
+        put(w,48,owners)
+        return advance(o,w)
+    if op!=3 or reply_valid(s)==0:
+        return INVALID
+    if length(o)<128 or length(w)<128:
+        return CAPACITY
+    if continuation_valid(s,w)==0:
+        return INVALID
+    kind=read64(s,24)
+    status=read64(s,32)
+    if kind==1:
+        if status==2:
+            return finish(o,w,3,read64(s,40))
+        if status==1:
+            put(w,24,get(w,24)+1)
+            return advance(o,w)
+        return publish(o,w,2)
+    if kind==2:
+        if status==0:
+            index=get(w,128+get(w,24)*8)
+            if archived_matches(s,w,record_at(w,index))!=0:
+                return publish(o,w,3)
+        put(w,24,get(w,24)+1)
+        return advance(o,w)
+    if status==1:
+        return finish(o,w,3,read64(s,40))
+    index=get(w,128+get(w,24)*8)
+    if belongs(w,record_at(w,index))!=0:
+        put(w,48,get(w,48)-1)
+    index=get(w,24)
+    while index+1<get(w,16):
+        put(w,128+index*8,get(w,128+(index+1)*8))
+        index=index+1
+    put(w,16,get(w,16)-1)
+    put(w,104,get(w,104)+1)
+    put(w,24,0)
+    return advance(o,w)
+
+def initial_valid(s:readbuf) -> u64:
+    if length(s)<128 or read64(s,80)!=length(s):
+        return 0
+    count=read64(s,16)
+    pending=read64(s,24)
+    if count>((length(s)-128)>>4):
+        return 0
+    table=128+count*16
+    if pending>((length(s)-table)>>4):
+        return 0
+    at=table+pending*16
+    if read64(s,56)!=128 or read64(s,64)!=table or read64(s,40)!=at:
+        return 0
+    if read64(s,32)>1:
+        return 0
+    if read64(s,8)==1 and (pending!=0 or read64(s,32)!=1):
+        return 0
+    index=88
+    while index<128:
+        if read64(s,index)!=0:
+            return 0
+        index=index+8
+    size=read64(s,48)
+    if size>length(s)-at or utf8_valid(s,at,size)==0:
+        return 0
+    at=at+size
+    if read64(s,72)!=at:
+        return 0
+    index=0
+    while index<count:
+        size=read64(s,136+index*16)
+        if read64(s,128+index*16)!=at or size>length(s)-at:
+            return 0
+        if record_valid(s,at,size)==0:
+            return 0
+        at=at+size
+        index=index+1
+    index=0
+    while index<pending:
+        size=read64(s,table+index*16+8)
+        if read64(s,table+index*16)!=at or size>length(s)-at:
+            return 0
+        if utf8_valid(s,at,size)==0:
+            return 0
+        at=at+size
+        index=index+1
+    if at!=length(s):
+        return 0
+    return 1
+
+def record_valid(s:readbuf,start:u64,count:u64) -> u64:
+    if count<128 or read64(s,start)!=PROJECTION or read64(s,start+8)!=1:
+        return 0
+    if read64(s,start+56)!=0 or read64(s,start+112)!=0 or read64(s,start+120)!=0:
+        return 0
+    present=read64(s,start+16)
+    if present>1 or read64(s,start+40)>2:
+        return 0
+    if present==0 and read64(s,start+48)!=0:
+        return 0
+    index=0
+    at=128
+    while index<3:
+        size=read64(s,start+72+index*16)
+        if read64(s,start+64+index*16)!=at or size>count-at:
+            return 0
+        if utf8_valid(s,start+at,size)==0:
+            return 0
+        at=at+size
+        index=index+1
+    if at!=count:
+        return 0
+    return 1
+
+def reply_valid(s:readbuf) -> u64:
+    if length(s)<64 or read64(s,56)!=0 or read64(s,48)!=length(s)-64:
+        return 0
+    kind=read64(s,24)
+    status=read64(s,32)
+    error=read64(s,40)
+    if kind<1 or kind>3:
+        return 0
+    if kind==1:
+        if length(s)!=64 or status>2:
+            return 0
+        if status==2:
+            if error==0:
+                return 0
+        else:
+            if error!=0:
+                return 0
+        return 1
+    if status>1:
+        return 0
+    if status==1:
+        if error==0 or length(s)!=64:
+            return 0
+        return 1
+    if error!=0:
+        return 0
+    if kind==3:
+        if length(s)!=64:
+            return 0
+        return 1
+    return record_valid(s,64,length(s)-64)
+
+def continuation_valid(s:readbuf,w:mutbuf) -> u64:
+    if get(w,0)!=WORKSPACE or get(w,8)<1 or get(w,8)>2:
+        return 0
+    count=get(w,56)
+    if count>((length(w)-128)>>3):
+        return 0
+    base=128+count*8
+    size=get(w,64)
+    if get(w,72)!=base or size<128 or size>length(w)-base:
+        return 0
+    if get(w,16)>count or get(w,24)>=get(w,16) or get(w,48)>get(w,16):
+        return 0
+    if get(w,80)>1 or get(w,112)<1 or get(w,112)>2 or get(w,120)!=0:
+        return 0
+    if get(w,32)!=read64(s,24) or get(w,40)==0 or get(w,40)!=read64(s,16):
+        return 0
+    if get(w,88)!=0 or get(w,96)!=0 or get(w,104)!=count-get(w,16):
+        return 0
+    if get(w,base)!=REQUEST or get(w,base+8)!=get(w,112) or get(w,base+16)!=count:
+        return 0
+    index=get(w,128+get(w,24)*8)
+    if index>=count:
+        return 0
+    at=get(w,base+128+index*16)
+    size=get(w,base+136+index*16)
+    if at>get(w,64) or size<128 or size>get(w,64)-at:
+        return 0
+    return 1
+
+def advance(o:mutbuf,w:mutbuf) -> u32:
+    put(w,32,0)
+    if get(w,8)==1 and get(w,48)<128:
+        put(w,8,2)
+        put(w,24,0)
+    if get(w,8)==2 and get(w,16)<512:
+        return finish(o,w,1,0)
+    while get(w,24)<get(w,16):
+        index=get(w,128+get(w,24)*8)
+        record=record_at(w,index)
+        eligible=1
+        if get(w,8)==1 and belongs(w,record)==0:
+            eligible=0
+        if eligible!=0 and pending_member(w,record)!=0:
+            eligible=0
+        if eligible!=0:
+            return publish(o,w,1)
+        put(w,24,get(w,24)+1)
+    return finish(o,w,2,0)
+
+def record_at(w:mutbuf,index:u64) -> u64:
+    base=get(w,72)
+    return base+get(w,base+128+index*16)
+
+def belongs(w:mutbuf,record:u64) -> u64:
+    base=get(w,72)
+    return same_work(w,record+get(w,record+80),get(w,record+88),base+get(w,base+40),get(w,base+48))
+
+def pending_member(w:mutbuf,record:u64) -> u64:
+    base=get(w,72)
+    table=base+get(w,base+64)
+    index=0
+    while index<get(w,base+24):
+        if same_work(w,record+get(w,record+64),get(w,record+72),base+get(w,table+index*16),get(w,table+index*16+8))!=0:
+            return 1
+        index=index+1
+    return 0
+
+def same_work(w:mutbuf,left:u64,left_size:u64,right:u64,right_size:u64) -> u64:
+    if left_size!=right_size:
+        return 0
+    index=0
+    while index<left_size:
+        if byte(w,left+index)!=byte(w,right+index):
+            return 0
+        index=index+1
+    return 1
+
+def same_read(s:readbuf,left:u64,left_size:u64,w:mutbuf,right:u64,right_size:u64) -> u64:
+    if left_size!=right_size:
+        return 0
+    index=0
+    while index<left_size:
+        if byte(s,left+index)!=byte(w,right+index):
+            return 0
+        index=index+1
+    return 1
+
+def archived_matches(s:readbuf,w:mutbuf,record:u64) -> u64:
+    if same_read(s,64+read64(s,144),read64(s,152),w,record+get(w,record+80),get(w,record+88))==0:
+        return 0
+    if same_read(s,64+read64(s,160),read64(s,168),w,record+get(w,record+96),get(w,record+104))==0:
+        return 0
+    if read64(s,88)!=get(w,record+24) or read64(s,96)!=get(w,record+32):
+        return 0
+    if get(w,record+40)!=0 and read64(s,104)!=get(w,record+40):
+        return 0
+    if get(w,record+16)!=0:
+        if read64(s,80)!=1 or read64(s,112)!=get(w,record+48):
+            return 0
+    return 1
+
+def publish(o:mutbuf,w:mutbuf,kind:u64) -> u32:
+    put(w,32,kind)
+    put(w,40,get(w,40)+1)
+    return response(o,w,kind,get(w,128+get(w,24)*8))
+
+def finish(o:mutbuf,w:mutbuf,result:u64,error:u64) -> u32:
+    put(w,8,3)
+    put(w,32,0)
+    put(w,88,result)
+    put(w,96,error)
+    return response(o,w,4,18446744073709551615)
+
+def response(o:mutbuf,w:mutbuf,kind:u64,index:u64) -> u32:
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,16,get(w,40))
+    put(o,24,index)
+    if kind==3:
+        put(o,32,get(w,80))
+    put(o,40,get(w,88))
+    put(o,48,get(w,96))
+    put(o,56,get(w,16))
+    put(o,64,get(w,104))
+    put(o,72,get(w,48))
+    put(o,80,get(w,72))
+    put(o,88,get(w,56))
+    put(o,96,get(w,72)+get(w,64))
+    return 128

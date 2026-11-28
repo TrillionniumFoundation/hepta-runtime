@@ -1,0 +1,53 @@
+name: Independent complete audit retention archive read
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-retention-archive-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  complete-archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      ARCHIVE_SOURCE: ${{ github.workspace }}/qualification/audit_retention/archive_reader_v1
+      ARCHIVE_SHA: 780ace4b9302d1576957a1ff7043b0c74bb5e54aaf71ac939b2aac57802bb21a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/audit_retention/archive_reader_v1
+          persist-credentials: false
+      - name: Verify frozen source and static syntax
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          root=Path(os.environ['ARCHIVE_SOURCE'])
+          sys.path.insert(0,str(root))
+          import archive_reader
+          assert archive_reader.identity()==os.environ['ARCHIVE_SHA']
+          for path in root.glob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Fetch exact complete retained archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -B "$ARCHIVE_SOURCE/driver.py" fetch --work "$RUNNER_TEMP/audit-retention-archive-final" --source-manifest-sha256 "$ARCHIVE_SHA"
+      - name: Independently read every object and all physical buffers
+        run: python3 -I -B "$ARCHIVE_SOURCE/driver.py" read --work "$RUNNER_TEMP/audit-retention-archive-final" --source-manifest-sha256 "$ARCHIVE_SHA"
+      - name: Preserve complete source and inert reader proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-retention-independent-archive-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            qualification/audit_retention/archive_reader_v1
+            ${{ runner.temp }}/audit-retention-archive-final/FETCH.json
+            ${{ runner.temp }}/audit-retention-archive-final/READ.json
+            ${{ runner.temp }}/audit-retention-archive-final/fetch-processes
+            ${{ runner.temp }}/audit-retention-archive-final/read-processes
+          if-no-files-found: error
+          retention-days: 14
