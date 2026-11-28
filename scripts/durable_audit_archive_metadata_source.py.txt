@@ -1,0 +1,499 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 32 or read64(s, 0) != REQUEST or read64(s, 16) != 0 or read64(s, 24) != 0:
+        return INVALID
+    operation = read64(s, 8)
+    if operation < 1 or operation > 2:
+        return INVALID
+    if length(o) < 4384 or length(w) < 1048576:
+        return CAPACITY
+    if get(w, 232) == 0:
+        if zeros(w, 0, length(w)) == 0:
+            return INVALID
+        put(w, 232, STATE)
+        put(w, 32, length(o))
+        put(w, 40, length(w))
+        put(w, 24, operation)
+        copy_range(w, s, 1536, 0, 32)
+        fixed_names(w, operation)
+        put(w, 0, 10)
+    else:
+        if get(w, 232) != STATE or get(w, 32) != length(o) or get(w, 40) != length(w):
+            return INVALID
+        if get(w, 224) != 1 or equal_inputs(s, w, 1536) == 0 or ack_valid(w) == 0:
+            return INVALID
+        put(w, 224, 0)
+    while True:
+        phase = get(w, 0)
+        result = INVALID
+        if phase >= 10 and phase <= 25:
+            result = reading(w)
+        if phase >= 30 and phase <= 47:
+            result = legacy(w)
+        if phase >= 50 and phase <= 85:
+            result = recovery(w)
+        if phase >= 900 and phase <= 950:
+            result = finishing(o, w)
+        if result != 0:
+            return result
+        if get(w, 0) == phase:
+            return INVALID
+    return INVALID
+
+def reading(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 10:
+        return action(w, 1, 1, 2048, choose(get(w, 24) == 1, 30, 32), OPEN_FLAGS, 0, 11)
+    if phase == 11:
+        if error != 0:
+            if error == 2 and get(w, 24) == 1:
+                put(w, 0, 900)
+            else:
+                bad(w, 1, error)
+        else:
+            put(w, 80, get(w, 80) | 2)
+            return action(w, 2, 1, 512, 88, 0, 0, 12)
+    if phase == 12:
+        if error != 0:
+            bad(w, 2, error)
+        else:
+            copy_range(w, w, 640, 512, 88)
+            return action(w, 3, 0, 0, 0, 0, 0, 13)
+    if phase == 13:
+        if private_file(w, 640, value, 2, 65536) == 0:
+            bad(w, 3, 0)
+        else:
+            put(w, 72, 0)
+            put(w, 0, 20)
+    if phase == 20:
+        count = get(w, 72)
+        if count == 65537:
+            bad(w, 5, 0)
+        else:
+            return action(w, 5, 1, 4096 + count, 65537 - count, 0, 0, 21)
+    if phase == 21:
+        if error == 4:
+            put(w, 0, 20)
+        else:
+            if error != 0:
+                bad(w, 4, error)
+            else:
+                if value == 0:
+                    put(w, 64, get(w, 72))
+                    return action(w, 2, 1, 512, 88, 0, 0, 22)
+                else:
+                    put(w, 72, get(w, 72) + value)
+                    put(w, 0, 20)
+    if phase == 22:
+        if error != 0 or stamp_equal(w, 512, 640) == 0:
+            bad(w, 5, error)
+        else:
+            count = get(w, 64)
+            put(w, 73728, RECORD_REQUEST)
+            put(w, 73736, choose(get(w, 24) == 1, 3, 2))
+            put(w, 73744, count)
+            put(w, 73752, 0)
+            copy_range(w, w, 73760, 4096, count)
+            return action(w, 100, 0, 73728, 32 + count, 143360, 262272, 25)
+    if phase == 25:
+        kind = choose(get(w, 24) == 1, 3, 2)
+        if child_input(w, kind, 4096, get(w, 64)) == 0:
+            return INVALID
+        if error != 0:
+            bad(w, 6, error)
+        else:
+            checked = checked_child(w, kind, value)
+            if checked == INVALID:
+                return INVALID
+            if checked == 0:
+                bad(w, 7, 0)
+            else:
+                put(w, 112, value)
+                copy_range(w, w, 409600, 143360, value)
+                put(w, 0, 30)
+    return 0
+
+def legacy(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 30:
+        return action(w, 1, 2, 2112, 32, OPEN_FLAGS, 0, 31)
+    if phase == 31:
+        if error != 0:
+            bad(w, 8, error)
+        else:
+            put(w, 80, get(w, 80) | 4)
+            return action(w, 2, 2, 512, 88, 0, 0, 32)
+    if phase == 32:
+        if error != 0:
+            bad(w, 9, error)
+        else:
+            copy_range(w, w, 768, 512, 88)
+            return action(w, 3, 0, 0, 0, 0, 0, 33)
+    if phase == 33:
+        if private_file(w, 768, value, 1, 2048) == 0:
+            bad(w, 10, 0)
+        else:
+            put(w, 72, 0)
+            put(w, 0, 34)
+    if phase == 34:
+        count = get(w, 72)
+        if count == 2049:
+            bad(w, 12, 0)
+        else:
+            return action(w, 5, 2, 69664 + count, 2049 - count, 0, 0, 35)
+    if phase == 35:
+        if error == 4:
+            put(w, 0, 34)
+        else:
+            if error != 0:
+                bad(w, 11, error)
+            else:
+                if value == 0:
+                    count = get(w, 72)
+                    put(w, 104, count)
+                    put(w, 73728, RECORD_REQUEST)
+                    put(w, 73736, 1)
+                    put(w, 73744, count)
+                    put(w, 73752, 0)
+                    copy_range(w, w, 73760, 69664, count)
+                    return action(w, 100, 0, 73728, 32 + count, 143360, 262272, 36)
+                else:
+                    put(w, 72, get(w, 72) + value)
+                    put(w, 0, 34)
+    if phase == 36:
+        if child_input(w, 1, 69664, get(w, 104)) == 0:
+            return INVALID
+        if error != 0:
+            bad(w, 13, error)
+        else:
+            checked = checked_child(w, 1, value)
+            if checked == INVALID:
+                return INVALID
+            if checked == 0:
+                bad(w, 14, 0)
+            else:
+                copy_range(w, w, 1024, 143360, 128)
+                return action(w, 7, 2, 0, 0, 0, 0, 37)
+    if phase == 37:
+        put(w, 80, get(w, 80) & 59)
+        return action(w, 2, 0, 512, 88, 0, 0, 38)
+    if phase == 38:
+        if error != 0:
+            bad(w, 15, error)
+        else:
+            if get(w, 409632) != 12 or get(w, 409640) != get(w, 512) or get(w, 409648) != get(w, 520) or equal(w, 409640, 1064, 32) == 0:
+                bad(w, 16, 0)
+            else:
+                count = get(w, 409696)
+                present = get(w, 409672)
+                if get(w, 24) == 1 and (count > 256 or (present == 0 and count != 0)):
+                    bad(w, 16, 0)
+                else:
+                    if get(w, 24) == 2 and count != 256:
+                        bad(w, 16, 0)
+                    else:
+                        put(w, 0, 50)
+    return 0
+
+def recovery(w:mutbuf) -> u64:
+    phase = get(w, 0)
+    value = get(w, 328)
+    error = get(w, 336)
+    if phase == 50:
+        return action(w, 2, 1, 512, 88, 0, 0, 51)
+    if phase == 51:
+        if error != 0:
+            bad(w, 17, error)
+        else:
+            if get(w, 552) != 2:
+                put(w, 0, 80)
+            else:
+                copy_range(w, w, 640, 512, 88)
+                return action(w, 3, 0, 0, 0, 0, 0, 52)
+    if phase == 52:
+        if private_file(w, 640, value, 2, 65536) == 0:
+            bad(w, 18, 0)
+        else:
+            return action(w, 1, 3, 2176, 1, DIR_FLAGS, 0, 53)
+    if phase == 53:
+        if error != 0:
+            bad(w, 19, error)
+        else:
+            put(w, 80, get(w, 80) | 8)
+            return action(w, 8, 4, 0, 0, 3, 0, 54)
+    if phase == 54:
+        if error != 0:
+            bad(w, 20, error)
+        else:
+            put(w, 80, get(w, 80) | 16)
+            put(w, 0, 55)
+    if phase == 55:
+        return action(w, 9, 4, 675840, 32768, 0, 0, 56)
+    if phase == 56:
+        if error != 0:
+            bad(w, 21, error)
+        else:
+            if value == 0:
+                return action(w, 7, 4, 0, 0, 0, 0, 70)
+            put(w, 120, value)
+            put(w, 128, 0)
+            put(w, 0, 57)
+    if phase == 57:
+        at = get(w, 128)
+        total = get(w, 120)
+        if at == total:
+            put(w, 0, 55)
+        else:
+            if total - at < 20:
+                bad(w, 22, 0)
+            else:
+                start = 675840 + at
+                size = byte(w, start + 16) | (byte(w, start + 17) << 8)
+                if size < 20 or size > total - at:
+                    bad(w, 22, 0)
+                else:
+                    stop = 19
+                    while stop < size and byte(w, start + stop) != 0:
+                        stop = stop + 1
+                    if stop == size or utf8(w, start + 19, stop - 19) == 0:
+                        bad(w, 23, 0)
+                    else:
+                        put(w, 128, at + size)
+                        size = stop - 19
+                        if alias_name(w, start + 19, size, get(w, 24)) == 0:
+                            put(w, 0, 58)
+                        else:
+                            copy_range(w, w, 2304, start + 19, size)
+                            store(w, 2304 + size, 0)
+                            put(w, 136, size)
+                            return action(w, 1, 5, 2304, size, OPEN_FLAGS, 0, 60)
+    if phase == 58:
+        put(w, 0, 57)
+    if phase == 60:
+        if error != 0:
+            bad(w, 24, error)
+        else:
+            put(w, 80, get(w, 80) | 32)
+            return action(w, 2, 5, 512, 88, 0, 0, 61)
+    if phase == 61:
+        if error != 0:
+            bad(w, 25, error)
+        else:
+            if equal(w, 512, 640, 16) == 0:
+                return action(w, 7, 5, 0, 0, 0, 0, 63)
+            if get(w, 88) == 1 or get(w, 552) != 2:
+                bad(w, 26, 0)
+            else:
+                return action(w, 10, 0, 2304, get(w, 136), 0, 0, 62)
+    if phase == 62:
+        if error != 0:
+            bad(w, 27, error)
+        else:
+            put(w, 88, 1)
+            return action(w, 7, 5, 0, 0, 0, 0, 63)
+    if phase == 63:
+        put(w, 80, get(w, 80) & 31)
+        put(w, 0, 57)
+    if phase == 70:
+        put(w, 80, get(w, 80) & 47)
+        return action(w, 7, 3, 0, 0, 0, 0, 71)
+    if phase == 71:
+        put(w, 80, get(w, 80) & 55)
+        if get(w, 88) != 1:
+            bad(w, 26, 0)
+        else:
+            return action(w, 11, 0, 0, 0, 0, 0, 72)
+    if phase == 72:
+        if error != 0:
+            bad(w, 28, error)
+        else:
+            put(w, 0, 80)
+    if phase == 80:
+        return action(w, 2, 1, 512, 88, 0, 0, 81)
+    if phase == 81:
+        if error != 0:
+            bad(w, 29, error)
+        else:
+            if get(w, 552) != 1:
+                bad(w, 30, 0)
+            else:
+                stamp_save(w)
+                put(w, 144, 1)
+                put(w, 0, 900)
+    return 0
+
+def finishing(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 900:
+        slot = 5
+        while slot > 0 and (get(w, 80) & (1 << slot)) == 0:
+            slot = slot - 1
+        if slot == 0:
+            put(w, 0, 950)
+        else:
+            put(w, 152, slot)
+            return action(w, 7, slot, 0, 0, 0, 0, 901)
+    if phase == 901:
+        put(w, 80, get(w, 80) & (63 ^ (1 << get(w, 152))))
+        put(w, 0, 900)
+    if phase == 950:
+        size = 160
+        if get(w, 48) == 0 and get(w, 144) == 1:
+            size = 160 + get(w, 112)
+        if size > length(o):
+            return CAPACITY
+        fill_range(o, 0, size, 0)
+        put(o, 0, RESPONSE)
+        put(o, 8, get(w, 48))
+        put(o, 16, get(w, 56))
+        put(o, 24, get(w, 96))
+        put(o, 32, get(w, 24))
+        put(o, 40, size)
+        put(o, 48, get(w, 144))
+        put(o, 56, get(w, 88))
+        if get(w, 48) == 0 and get(w, 144) == 1:
+            copy_range(o, w, 64, 1152, 80)
+            copy_range(o, w, 160, 409600, get(w, 112))
+        put(w, 0, 999)
+        return size
+    return 0
+
+def private_file(w:mutbuf, at:u64, uid:u64, links:u64, maximum:u64) -> u64:
+    return choose((get(w, at + 16) & 61440) == 32768 and get(w, at + 24) == uid and (get(w, at + 16) & 4095) == 384 and get(w, at + 40) >= 1 and get(w, at + 40) <= links and get(w, at + 48) <= maximum, 1, 0)
+
+def stamp_equal(w:mutbuf, a:u64, b:u64) -> u64:
+    return choose(equal(w, a, b, 32) == 1 and equal(w, a + 40, b + 40, 48) == 1, 1, 0)
+
+def stamp_save(w:mutbuf) -> u64:
+    put(w, 1152, get(w, 512))
+    put(w, 1160, get(w, 520))
+    put(w, 1168, get(w, 560))
+    put(w, 1176, get(w, 528))
+    put(w, 1184, get(w, 536))
+    put(w, 1192, get(w, 552))
+    copy_range(w, w, 1200, 568, 32)
+    return 0
+
+def child_input(w:mutbuf, kind:u64, raw:u64, count:u64) -> u64:
+    return choose(get(w, 73728) == RECORD_REQUEST and get(w, 73736) == kind and get(w, 73744) == count and get(w, 73752) == 0 and equal(w, 73760, raw, count) == 1, 1, 0)
+
+def checked_child(w:mutbuf, kind:u64, size:u64) -> u64:
+    if get(w, 143360) != RECORD_RESPONSE:
+        return INVALID
+    if size == 32 and get(w, 143368) >= 1 and get(w, 143368) <= 2 and zeros(w, 143376, 16) == 1:
+        return 0
+    if size < 128 or get(w, 143368) != 0 or get(w, 143376) != kind or get(w, 143384) != size or zeros(w, 143464, 24) == 0:
+        return INVALID
+    count = get(w, 143456)
+    if count > 16384 or size != 128 + count * 16:
+        return INVALID
+    if kind == 1:
+        if size != 128 or get(w, 143392) != 0 or zeros(w, 143432, 56) == 0:
+            return INVALID
+    else:
+        if get(w, 143392) > 4294967295 or get(w, 143432) > 1:
+            return INVALID
+        if kind == 2 and get(w, 143432) != 1:
+            return INVALID
+    return 1
+
+def alias_name(w:mutbuf, at:u64, size:u64, operation:u64) -> u64:
+    prefix = choose(operation == 1, 18, 20)
+    if size != prefix + 68:
+        return 0
+    i = 0
+    while i < prefix:
+        if byte(w, at + i) != prefix_byte(operation, i):
+            return 0
+        i = i + 1
+    i = 0
+    while i < 64:
+        ch = byte(w, at + prefix + i)
+        if ch < 48 or ch > 102 or (ch > 57 and ch < 97):
+            return 0
+        i = i + 1
+    return choose(byte(w, at + size - 4) == 46 and byte(w, at + size - 3) == 116 and byte(w, at + size - 2) == 109 and byte(w, at + size - 1) == 112, 1, 0)
+
+def utf8(w:mutbuf, at:u64, size:u64) -> u64:
+    end = at + size
+    while at < end:
+        ch = byte(w, at)
+        count = 0
+        low = 128
+        high = 191
+        if ch < 128:
+            count = 1
+        else:
+            if ch >= 194 and ch <= 223:
+                count = 2
+            else:
+                if ch >= 224 and ch <= 239:
+                    count = 3
+                    if ch == 224:
+                        low = 160
+                    if ch == 237:
+                        high = 159
+                else:
+                    if ch >= 240 and ch <= 244:
+                        count = 4
+                        if ch == 240:
+                            low = 144
+                        if ch == 244:
+                            high = 143
+        if count == 0 or end - at < count:
+            return 0
+        if count > 1:
+            next = byte(w, at + 1)
+            if next < low or next > high:
+                return 0
+        i = 2
+        while i < count:
+            next = byte(w, at + i)
+            if next < 128 or next > 191:
+                return 0
+            i = i + 1
+        at = at + count
+    return 1
+
+def bad(w:mutbuf, point:u64, error:u64) -> u64:
+    put(w, 48, 1)
+    put(w, 56, error)
+    put(w, 96, point)
+    put(w, 0, 900)
+    return 0
+
+def action(w:mutbuf, kind:u64, slot:u64, span:u64, count:u64, argument:u64, capacity:u64, phase:u64) -> u64:
+    sequence = get(w, 8)
+    if sequence == MAXWORD:
+        return INVALID
+    fill_range(w, 256, 96, 0)
+    put(w, 256, ACTION)
+    put(w, 264, sequence + 1)
+    put(w, 272, kind)
+    put(w, 280, slot)
+    put(w, 288, span)
+    put(w, 296, count)
+    put(w, 304, argument)
+    put(w, 312, capacity)
+    copy_range(w, w, 384, 256, 64)
+    put(w, 8, sequence + 1)
+    put(w, 224, 1)
+    put(w, 0, phase)
+    return YIELD
+
+def ack_valid(w:mutbuf) -> u64:
+    if get(w, 256) != ACTION or equal(w, 256, 384, 64) == 0 or get(w, 320) != get(w, 8) or get(w, 344) != 0 or get(w, 336) > 4095:
+        return 0
+    value = get(w, 328)
+    error = get(w, 336)
+    kind = get(w, 272)
+    if kind == 3:
+        return choose(error == 0 and value <= 4294967295, 1, 0)
+    if kind == 5 or kind == 9:
+        return choose(error == 0 and value <= get(w, 296) or error != 0 and value == 0, 1, 0)
+    if kind == 100:
+        return choose(error == 0 and value <= get(w, 312) or error != 0 and value == 0, 1, 0)
+    return choose(value == 0, 1, 0)
