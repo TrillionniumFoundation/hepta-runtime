@@ -1,0 +1,310 @@
+{
+  "schema": "hepta.namespace-watcher.uploaded-read-checkpoint.v1",
+  "status": "WATCHER_UPLOADED_READBACK_FINAL_PASS",
+  "head": "8d6b63ab2b5290074946c940184ab74153fa1c5a",
+  "tree": "4b449d26fb34a4f36e6f5fe8a51ce916dc11aa81",
+  "source": {
+    "key": "rcUploadedManifest",
+    "git_blob": "ef8954361d9a6448214324e318615e4d5b760286",
+    "bytes": 11345,
+    "sha256": "b2b115a8ba90c65add97224e7f7a7e86c2b98efe58820bac3ce01d4c7dcc69d9"
+  },
+  "freeze": {
+    "key": "rcUploadedFreezeIndex",
+    "git_blob": "2d4e256a029549d69d26ec09ae4ae343700dd967",
+    "bytes": 12009,
+    "sha256": "83938f07eddad08b74d37dbbd64e124fd1506131662abd04c62e4a6aecdf05a8"
+  },
+  "run": 44195366747,
+  "job": 134435291330,
+  "log": {
+    "key": "rcUploadedFinalLog",
+    "git_blob": "79663370dd4d95f29c6f7b3058a79164513593df",
+    "bytes": 45726,
+    "sha256": "c2c5b0ba10945f99168931944a5c68588e26654b781fc63f6416b32d6c741dbe"
+  },
+  "artifact": {
+    "id": 14379156182,
+    "name": "namespace-watcher-uploaded-read-v1",
+    "size_in_bytes": 267760688,
+    "url": "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14379156182",
+    "archive_download_url": "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14379156182/zip",
+    "expired": false,
+    "created_at": "2026-11-17T23:02:35Z",
+    "expires_at": "2026-12-17T23:02:33Z",
+    "updated_at": "2026-11-17T23:02:35Z",
+    "digest": "sha256:012220f55b660c776b230decbcdb2f60ac5c0637d0bf9244baad293d66a3994f",
+    "workflow_run": {
+      "id": 44195366747,
+      "repository_id": 1400900949,
+      "head_repository_id": 1400900949,
+      "head_branch": "hia-namespace-watcher-uploaded-read-v1-6780-20261117",
+      "head_sha": "8d6b63ab2b5290074946c940184ab74153fa1c5a"
+    }
+  },
+  "gate": {
+    "compiler_calls": 0,
+    "completed_application_replays": 0,
+    "new_native_application_calls": 0,
+    "new_original_application_calls": 0,
+    "processes": [
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-B",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/reader/restore.py",
+          "--archive",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/inputs/capture.zip",
+          "--output",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/restored",
+          "--pins",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/reader/CAPTURE-PINS.json"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source",
+        "elapsed_seconds": 8.136848826000005,
+        "exit_code": 0,
+        "name": "restore-capture",
+        "parent_pid": 2242,
+        "pgid": 2243,
+        "pid": 2243,
+        "stderr": {
+          "bytes": 0,
+          "file": "restore-capture.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 504,
+          "file": "restore-capture.stdout",
+          "sha256": "d8c934c9619ecaaae01862db086c4c1dd982d987618abca9645cb43e78ea722d"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-B",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/scripts/extract_uploaded.py",
+          "--archive",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/inputs/uploaded.zip",
+          "--output",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/uploaded",
+          "--report",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/diagnostics/UPLOADED-RESTORE.json"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source",
+        "elapsed_seconds": 2.042056301999999,
+        "exit_code": 0,
+        "name": "restore-uploaded",
+        "parent_pid": 2242,
+        "pgid": 2248,
+        "pid": 2248,
+        "stderr": {
+          "bytes": 0,
+          "file": "restore-uploaded.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 290,
+          "file": "restore-uploaded.stdout",
+          "sha256": "604312d2ca3d9c0804f5baf8a5ca6b806f9914d336141fd0205bd49e0535788f"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-B",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/reader/run_reader.py",
+          "--bundle",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/restored/complete",
+          "--output",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/fresh-reader"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source",
+        "elapsed_seconds": 83.04481869099999,
+        "exit_code": 0,
+        "name": "complete-semantic",
+        "parent_pid": 2242,
+        "pgid": 2249,
+        "pid": 2249,
+        "stderr": {
+          "bytes": 0,
+          "file": "complete-semantic.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 249,
+          "file": "complete-semantic.stdout",
+          "sha256": "0fb047172186213fb41352639b35b4755521c468513c6379ada9ecfa968f47e0"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-B",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/reader/run_controls.py",
+          "--phase",
+          "verify",
+          "--bundle",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/restored/complete",
+          "--controls",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/uploaded/controls/evidence",
+          "--output",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/controls-read"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source",
+        "elapsed_seconds": 27.466866428000003,
+        "exit_code": 0,
+        "name": "complete-controls",
+        "parent_pid": 2242,
+        "pgid": 2264,
+        "pid": 2264,
+        "stderr": {
+          "bytes": 0,
+          "file": "complete-controls.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 186,
+          "file": "complete-controls.stdout",
+          "sha256": "8b63bc087aa87adbd0c6b5006c9a17f20985a6e6bbdb314598be677e239fbc6e"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-I",
+          "-B",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source/scripts/join_uploaded.py",
+          "--bundle",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/restored/complete",
+          "--uploaded",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/uploaded",
+          "--fresh",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/fresh-reader",
+          "--controls-read",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/controls-read",
+          "--archive",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/inputs/uploaded.zip",
+          "--capture-zip",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/inputs/capture.zip",
+          "--output",
+          "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/diagnostics/UPLOADED-GUARDED.json"
+        ],
+        "completed": true,
+        "cwd": "/home/runner/work/_temp/namespace-watcher-uploaded-read-v1/source",
+        "elapsed_seconds": 7.510763197000017,
+        "exit_code": 0,
+        "name": "complete-uploaded",
+        "parent_pid": 2242,
+        "pgid": 2273,
+        "pid": 2273,
+        "stderr": {
+          "bytes": 0,
+          "file": "complete-uploaded.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdin": null,
+        "stdout": {
+          "bytes": 393,
+          "file": "complete-uploaded.stdout",
+          "sha256": "e41f016a0b41fc0e1398c9377eff273f143650ea41cc3eb11bdf94c852316b80"
+        },
+        "timed_out": false,
+        "timeout_seconds": 180
+      }
+    ],
+    "source": {
+      "bytes": 11345,
+      "sha256": "b2b115a8ba90c65add97224e7f7a7e86c2b98efe58820bac3ce01d4c7dcc69d9"
+    },
+    "status": "WATCHER_UPLOADED_READBACK_FINAL_PASS",
+    "upload_guard": {
+      "bytes": 6322780,
+      "sha256": "889da6a2a6a38d808b3f9c22b9c12c1676b16704055fa4e145adfcb27922c790"
+    },
+    "whole_pure_reader_deadline_seconds": 180
+  },
+  "read_summaries": [
+    {
+      "all_bytes_and_modes": true,
+      "all_git_source_members": true,
+      "logical_bytes": 1520420410,
+      "logical_files": 3200,
+      "native_executions": 0,
+      "rust_executions": 0,
+      "status": "FULL_UPLOADED_WATCHER_AUTHOR_FAILURE_READ_PASS",
+      "tar": {
+        "bytes": 189691238,
+        "sha256": "44448c943710310782aa1b66355714b28e3b4686c6ac7d766b11ab50b6c5f177"
+      },
+      "unique_objects": 2763,
+      "zip": {
+        "bytes": 189692186,
+        "sha256": "0f170a66da597836589eddaca28b85e068a77b15bd83a90775311d312003a7e1"
+      }
+    },
+    {
+      "all_file_bytes_and_modes": true,
+      "application_executions": 0,
+      "bytes": 429842670,
+      "files": 1491,
+      "status": "COMPLETE_UPLOADED_WATCHER_READER_RESTORE_PASS",
+      "zip": {
+        "bytes": 63050104,
+        "sha256": "6cfed94c627cf0bbfdcd986db46e006733da3e18ba06762003f7e1db7cec43c3"
+      }
+    },
+    {
+      "cases": 58,
+      "complete_buffer_bytes": 8346437172,
+      "elapsed_seconds": 82.55638073399999,
+      "files": 3763,
+      "guard_probes": 12,
+      "operations": 984,
+      "reader_native_or_rust_executions": 0,
+      "status": "COMPLETE_WATCHER_SEMANTIC_READ_PASS"
+    },
+    {
+      "elapsed_seconds": 27.38946070100002,
+      "files": 5354,
+      "guards": 12,
+      "physical_refusals": 16,
+      "status": "COMPLETE_PHYSICAL_CONTROLS_READ_PASS",
+      "whole_group_admissions": 2
+    },
+    {
+      "application_processes": 39,
+      "cases": 58,
+      "complete_buffer_bytes": 8346437172,
+      "completed_application_replays": 0,
+      "elapsed_seconds": 7.376529352999995,
+      "files": 5452,
+      "guard_probes": 12,
+      "operations": 984,
+      "physical_refusals": 16,
+      "retained_physical_guard_probes": 216,
+      "status": "COMPLETE_UPLOADED_WATCHER_SEMANTIC_AND_CONTROLS_PASS",
+      "whole_group_admissions": 2
+    }
+  ],
+  "new_application_executions": 0
+}

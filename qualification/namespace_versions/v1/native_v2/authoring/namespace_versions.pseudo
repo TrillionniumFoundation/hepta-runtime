@@ -1,0 +1,512 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<8:
+        return INVALID
+    if read64(s,0)==REQUEST:
+        if request_valid(s)==0:
+            return INVALID
+        if length(o)<192 or length(w)<8192:
+            return CAPACITY
+        if get(w,0)==STATE:
+            if shape(w)==0 or get(w,8)!=0 or read64(s,16)<=get(w,16):
+                return INVALID
+        fill_range(w,0,8192,0)
+        put(w,0,STATE)
+        put(w,8,1)
+        put(w,16,read64(s,16))
+        put(w,24,read64(s,8))
+        put(w,32,read64(s,24))
+        put(w,64,read64(s,32))
+        put(w,72,read64(s,40))
+        copy_read(s,96,w,2048,length(s)-96)
+        return issue(o,w,1,0,0,0,0,1)
+    if read64(s,0)!=ACK:
+        return INVALID
+    if length(o)<192 or length(w)<8192:
+        return CAPACITY
+    if ack_valid(s,w)==0:
+        return INVALID
+    op=get(w,48)
+    put(w,48,0)
+    if op==1:
+        return locked(s,o,w)
+    if op==2:
+        put(w,88,0)
+        if get(w,40)==30:
+            return issue(o,w,6,get(w,64),0,0,0,31)
+        return finish(o,w)
+    if op==3 or op==4:
+        return child_result(s,o,w)
+    if op==5:
+        put(w,528,0)
+        put(w,552,0)
+        if get(w,224)==2:
+            put(w,136,5)
+        return unlock(o,w,29)
+    if op==6:
+        return fingerprint_result(s,o,w)
+    if op==7:
+        return allocate_serial(o,w,read64(s,48))
+    if op==8:
+        if read64(s,56)==0:
+            return allocate_serial(o,w,read64(s,48))
+        put(w,536,HIGH|get(w,208))
+        return create_watcher(o,w,get(w,72),1,10)
+    return INVALID
+
+def request_valid(s:readbuf) -> u64:
+    if length(s)<96 or read64(s,16)==0 or read64(s,48)!=0 or read64(s,56)!=0 or read64(s,64)!=0 or read64(s,72)!=0 or read64(s,88)!=0:
+        return 0
+    if read64(s,80)!=length(s)-96:
+        return 0
+    cmd=read64(s,8)
+    if cmd<1 or cmd>6:
+        return 0
+    kind=1
+    if cmd==2:
+        kind=2
+    if cmd>=3 and cmd<=5:
+        kind=3
+    if read64(s,24)!=kind:
+        return 0
+    if cmd==1 or cmd==2 or cmd==6:
+        if length(s)!=96 or read64(s,32)>2147483647 or read64(s,40)!=0:
+            return 0
+        return 1
+    if read64(s,32)!=0:
+        return 0
+    if cmd!=3:
+        if length(s)!=96 or read64(s,40)!=0:
+            return 0
+        return 1
+    count=read64(s,40)
+    if count>258:
+        if length(s)!=96:
+            return 0
+        return 1
+    if length(s)!=96+count*16:
+        return 0
+    index=0
+    while index<count:
+        if read64(s,96+index*16)>2147483647 or read64(s,104+index*16)==0:
+            return 0
+        index=index+1
+    return 1
+
+def shape(w:mutbuf) -> u64:
+    if get(w,0)!=STATE or get(w,8)>1 or get(w,16)==0 or get(w,24)<1 or get(w,24)>6:
+        return 0
+    if get(w,32)<1 or get(w,32)>3 or get(w,56)>=18446744073709551614 or get(w,64)>2147483647 or get(w,80)>258 or get(w,88)>1:
+        return 0
+    if get(w,136)>5 or get(w,144)>2 or get(w,128)>1 or get(w,224)>2:
+        return 0
+    if get(w,144)==0 and get(w,152)!=0:
+        return 0
+    if get(w,144)==1 and get(w,152)>4095:
+        return 0
+    if get(w,144)==2 and (get(w,152)==0 or get(w,152)>11):
+        return 0
+    at=96
+    while at<128:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    at=232
+    while at<512:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    at=576
+    while at<2048:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    at=6176
+    while at<8192:
+        if get(w,at)!=0:
+            return 0
+        at=at+8
+    if get(w,8)==0:
+        if get(w,40)!=0 or get(w,48)!=0 or get(w,88)!=0:
+            return 0
+        return 1
+    if get(w,48)==0 or phase_op(get(w,40))!=get(w,48) or get(w,56)==0:
+        return 0
+    if get(w,48)!=1 and get(w,48)!=6 and get(w,88)!=1:
+        return 0
+    if get(w,48)==6 and get(w,88)!=0:
+        return 0
+    if get(w,48)!=1:
+        if global_valid(w)==0:
+            return 0
+    return 1
+
+def phase_op(phase:u64) -> u64:
+    if phase==1:
+        return 1
+    if phase==29 or phase==30:
+        return 2
+    if phase==3 or phase==10:
+        return 3
+    if phase==4 or phase==11 or phase==12 or phase==15:
+        return 4
+    if phase==20:
+        return 5
+    if phase==31:
+        return 6
+    if phase==8:
+        return 7
+    if phase==9:
+        return 8
+    return 0
+
+def global_valid(w:mutbuf) -> u64:
+    if get(w,512)==0:
+        at=520
+        while at<576:
+            if get(w,at)!=0:
+                return 0
+            at=at+8
+        return 1
+    if get(w,512)!=GLOBAL or get(w,520)!=get(w,32) or get(w,544)>1 or get(w,552)>1 or get(w,560)!=0 or get(w,568)!=0:
+        return 0
+    if get(w,32)!=3:
+        if get(w,536)!=0 or get(w,544)!=0 or get(w,552)!=1:
+            return 0
+    else:
+        if get(w,552)==1 and (get(w,528)==0 or get(w,536)<HIGH):
+            return 0
+        if get(w,536)!=0 and get(w,536)<HIGH:
+            return 0
+    return 1
+
+def ack_valid(s:readbuf,w:mutbuf) -> u64:
+    if shape(w)==0 or get(w,8)!=1 or length(s)<96 or read64(s,8)!=get(w,16) or read64(s,16)!=get(w,56) or read64(s,24)!=get(w,48):
+        return 0
+    if read64(s,64)!=length(s)-96 or read64(s,72)!=length(s) or read64(s,80)!=0 or read64(s,88)!=0 or read64(s,40)!=0:
+        return 0
+    op=get(w,48)
+    if op==1:
+        if length(s)!=160 or read64(s,32)>1 or read64(s,48)!=0 or read64(s,56)!=0:
+            return 0
+        return global_input_valid(s,w)
+    if read64(s,32)!=0:
+        return 0
+    if op==2:
+        if length(s)!=96 or read64(s,48)!=0 or read64(s,56)!=0:
+            return 0
+        return 1
+    if op==3 or op==4 or op==5:
+        return child_valid(s,w)
+    if op==6:
+        return fingerprint_valid(s)
+    if length(s)!=96:
+        return 0
+    if op==7:
+        if read64(s,56)!=0:
+            return 0
+        return 1
+    if op==8:
+        if read64(s,56)>1:
+            return 0
+        if read64(s,56)==1 and read64(s,48)!=get(w,208):
+            return 0
+        if read64(s,56)==0 and read64(s,48)==get(w,208):
+            return 0
+        return 1
+    return 0
+
+def global_input_valid(s:readbuf,w:mutbuf) -> u64:
+    if read64(s,96)==0:
+        if get(w,24)==4 or get(w,24)==5:
+            return 0
+        at=104
+        while at<160:
+            if read64(s,at)!=0:
+                return 0
+            at=at+8
+        return 1
+    if read64(s,96)!=GLOBAL or read64(s,104)!=get(w,32) or read64(s,128)>1 or read64(s,136)>1 or read64(s,144)!=0 or read64(s,152)!=0:
+        return 0
+    if get(w,32)!=3:
+        if read64(s,120)!=0 or read64(s,128)!=0 or read64(s,136)!=1:
+            return 0
+    else:
+        if read64(s,136)==1 and (read64(s,112)==0 or read64(s,120)<HIGH):
+            return 0
+        if read64(s,120)!=0 and read64(s,120)<HIGH:
+            return 0
+        if get(w,24)==3:
+            if read64(s,112)!=0 or read64(s,136)!=0 or read64(s,32)!=0:
+                return 0
+        else:
+            if read64(s,136)!=1:
+                return 0
+    return 1
+
+def child_valid(s:readbuf,w:mutbuf) -> u64:
+    if length(s)!=65760 or read64(s,96)!=WATCH_RESPONSE or read64(s,104)>1 or read64(s,112)==0 or read64(s,112)!=read64(s,56):
+        return 0
+    if read64(s,128)!=get(w,216) or read64(s,216)!=0 or read64(s,136)!=0 or read64(s,144)!=0 or read64(s,152)!=0 or read64(s,160)!=0:
+        return 0
+    kind=read64(s,104)
+    family=read64(s,168)
+    code=read64(s,176)
+    if kind==0:
+        if family!=0 or code!=0:
+            return 0
+    else:
+        if family<1 or family>2 or code==0 or (family==1 and code>4095) or (family==2 and code>8) or read64(s,184)!=0 or read64(s,192)!=0:
+            return 0
+    if get(w,216)!=2 or kind==1:
+        if read64(s,184)!=0 or read64(s,192)!=0:
+            return 0
+    else:
+        if read64(s,184)==0 or read64(s,192)<read64(s,184) or read64(s,192)>read64(s,200):
+            return 0
+    if read64(s,200)>=HIGH or read64(s,208)>258:
+        return 0
+    if read64(s,224)!=WATCH_STATE or read64(s,240)!=0 or read64(s,248)!=read64(s,112) or read64(s,304)!=read64(s,200) or read64(s,312)!=read64(s,208):
+        return 0
+    if get(w,48)==3:
+        if kind==1:
+            if read64(s,48)!=0 or read64(s,232)!=0:
+                return 0
+        else:
+            if read64(s,48)==0 or read64(s,232)!=1:
+                return 0
+    else:
+        if read64(s,48)!=get(w,528):
+            return 0
+        if get(w,48)==5:
+            if kind!=0 or read64(s,232)!=0 or read64(s,208)!=0:
+                return 0
+        else:
+            if read64(s,232)!=1:
+                return 0
+    index=0
+    while index<read64(s,208):
+        at=1248+index*64
+        if read64(s,at+48)>1 or read64(s,at+56)!=0:
+            return 0
+        index=index+1
+    return 1
+
+def fingerprint_valid(s:readbuf) -> u64:
+    if length(s)!=224 or read64(s,48)!=0 or read64(s,56)!=0 or read64(s,96)!=FINGERPRINT_RESPONSE or read64(s,104)>1 or read64(s,112)==0 or read64(s,120)==0 or read64(s,128)!=1:
+        return 0
+    at=136
+    while at<176:
+        if read64(s,at)!=0:
+            return 0
+        at=at+8
+    if read64(s,104)==0:
+        if read64(s,176)!=0 or read64(s,184)!=0:
+            return 0
+    else:
+        if read64(s,176)!=1 or read64(s,184)>4095:
+            return 0
+        at=192
+        while at<224:
+            if read64(s,at)!=0:
+                return 0
+            at=at+8
+    return 1
+
+def locked(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    copy_read(s,96,w,512,64)
+    if global_valid(w)==0:
+        return INVALID
+    put(w,88,1)
+    put(w,128,read64(s,32))
+    cmd=get(w,24)
+    if read64(s,32)==1 and cmd!=5:
+        if cmd==1:
+            return unlock(o,w,30)
+        code=9
+        if cmd==2:
+            code=10
+        if cmd==3 or cmd==4:
+            code=11
+        failure(w,2,code)
+        return unlock(o,w,29)
+    if get(w,512)==0:
+        put(w,512,GLOBAL)
+        put(w,520,get(w,32))
+        if get(w,32)!=3:
+            put(w,552,1)
+    if cmd==3:
+        if get(w,528)!=0 or get(w,552)!=0:
+            return INVALID
+        if get(w,72)==0 or get(w,72)>258:
+            return unlock(o,w,29)
+        return issue(o,w,7,0,0,0,0,8)
+    if cmd==4 or cmd==5:
+        if get(w,552)!=1:
+            return INVALID
+        if cmd==5:
+            put(w,224,2)
+            return drop_watcher(o,w)
+        if get(w,544)==1:
+            return unlock(o,w,29)
+        return watcher(o,w,3,0,0,15)
+    if get(w,528)==0:
+        content=0
+        if cmd==2:
+            content=1
+        return create_watcher(o,w,128,content,3)
+    return watcher(o,w,2,get(w,64),0,4)
+
+def allocate_serial(o:mutbuf,w:mutbuf,value:u64) -> u64:
+    if value>=9223372036854775807:
+        return unlock(o,w,29)
+    put(w,208,value)
+    return issue(o,w,8,value,value+1,0,0,9)
+
+def create_watcher(o:mutbuf,w:mutbuf,limit:u64,content:u64,phase:u64) -> u64:
+    put(w,216,1)
+    return issue(o,w,3,limit,content,0,0,phase)
+
+def watcher(o:mutbuf,w:mutbuf,cmd:u64,fd:u64,pin:u64,phase:u64) -> u64:
+    put(w,216,cmd)
+    return issue(o,w,4,get(w,528),cmd,fd,pin,phase)
+
+def drop_watcher(o:mutbuf,w:mutbuf) -> u64:
+    put(w,216,4)
+    return issue(o,w,5,get(w,528),0,0,0,20)
+
+def child_result(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,40)
+    error=read64(s,104)
+    if phase==3:
+        if error==1:
+            if get(w,24)==1:
+                return unlock(o,w,30)
+            if get(w,24)==6:
+                failure(w,read64(s,168),read64(s,176))
+            return unlock(o,w,29)
+        put(w,528,read64(s,48))
+        return watcher(o,w,2,get(w,64),0,4)
+    if phase==4:
+        if error==1:
+            if get(w,24)==1:
+                return unlock(o,w,30)
+            if get(w,24)==6:
+                failure(w,read64(s,168),read64(s,176))
+        else:
+            put(w,136,1)
+            put(w,160,read64(s,184))
+            put(w,168,read64(s,192))
+        return unlock(o,w,29)
+    if phase==10:
+        if error==1:
+            return unlock(o,w,29)
+        put(w,528,read64(s,48))
+        return set_member(o,w)
+    if phase==11:
+        if error==1:
+            put(w,224,1)
+            return drop_watcher(o,w)
+        put(w,80,get(w,80)+1)
+        return set_member(o,w)
+    if phase==12:
+        if error==1 or read64(s,208)!=get(w,72) or any_dead(s)==1:
+            put(w,224,1)
+            return drop_watcher(o,w)
+        put(w,552,1)
+        put(w,136,4)
+        put(w,160,get(w,536))
+        return unlock(o,w,29)
+    if phase==15:
+        if error==1 or any_dead(s)==1:
+            put(w,544,1)
+        else:
+            put(w,136,1)
+            put(w,160,get(w,536))
+            put(w,168,read64(s,200))
+        return unlock(o,w,29)
+    return INVALID
+
+def set_member(o:mutbuf,w:mutbuf) -> u64:
+    index=get(w,80)
+    if index==get(w,72):
+        return watcher(o,w,3,0,0,12)
+    at=2048+index*16
+    return watcher(o,w,2,get(w,at),get(w,at+8),11)
+
+def any_dead(s:readbuf) -> u64:
+    index=0
+    while index<read64(s,208):
+        if read64(s,1248+index*64+48)==1:
+            return 1
+        index=index+1
+    return 0
+
+def fingerprint_result(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    if read64(s,104)==1:
+        failure(w,read64(s,176),read64(s,184))
+    else:
+        put(w,136,2)
+        copy_read(s,192,w,176,32)
+    return finish(o,w)
+
+def unlock(o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    result=issue(o,w,2,0,0,0,0,phase)
+    copy_to_output(w,512,o,128,64)
+    put(o,80,64)
+    put(o,88,192)
+    return 192
+
+def issue(o:mutbuf,w:mutbuf,op:u64,a:u64,b:u64,c:u64,d:u64,phase:u64) -> u64:
+    put(w,56,get(w,56)+1)
+    put(w,40,phase)
+    put(w,48,op)
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,6)
+    put(o,16,get(w,16))
+    put(o,24,get(w,24))
+    put(o,32,get(w,56))
+    put(o,40,op)
+    put(o,48,a)
+    put(o,56,b)
+    put(o,64,c)
+    put(o,72,d)
+    put(o,88,128)
+    return 128
+
+def failure(w:mutbuf,family:u64,code:u64) -> u64:
+    put(w,136,3)
+    put(w,144,family)
+    put(w,152,code)
+    return 0
+
+def finish(o:mutbuf,w:mutbuf) -> u64:
+    fill_range(o,0,128,0)
+    put(o,0,RESPONSE)
+    put(o,8,get(w,136))
+    put(o,16,get(w,16))
+    put(o,24,get(w,24))
+    put(o,32,get(w,56))
+    put(o,40,get(w,144))
+    put(o,48,get(w,152))
+    put(o,56,get(w,160))
+    put(o,64,get(w,168))
+    copy_to_output(w,176,o,80,32)
+    put(w,8,0)
+    put(w,40,0)
+    put(w,48,0)
+    return 128
+
+def copy_read(s:readbuf,at:u64,w:mutbuf,to:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(w,to+index,byte(s,at+index))
+        index=index+1
+    return 0
+
+def copy_to_output(w:mutbuf,at:u64,o:mutbuf,to:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        store(o,to+index,byte(w,at+index))
+        index=index+1
+    return 0

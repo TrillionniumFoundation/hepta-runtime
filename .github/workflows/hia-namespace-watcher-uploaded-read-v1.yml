@@ -1,0 +1,80 @@
+name: Independently read all uploaded Watcher semantic and physical evidence
+on:
+  push:
+    branches: [hia-namespace-watcher-uploaded-read-v1-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Admit every frozen independent source byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          WATCHER_READ_ROOT="$RUNNER_TEMP/namespace-watcher-uploaded-read-v1"
+          printf 'WATCHER_READ_ROOT=%s\n' "$WATCHER_READ_ROOT" >> "$GITHUB_ENV"
+          mkdir "$WATCHER_READ_ROOT"
+          cp -a qualification/namespace_watcher/v1/uploaded "$WATCHER_READ_ROOT/source"
+          mkdir "$WATCHER_READ_ROOT/inputs"
+          python3 -I -B - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"namespace-watcher-uploaded-read-v1/source"
+          raw=(root/"SOURCE_MANIFEST.json").read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=="b2b115a8ba90c65add97224e7f7a7e86c2b98efe58820bac3ce01d4c7dcc69d9"
+          m=json.loads(raw)
+          actual={p.relative_to(root).as_posix()for p in root.rglob("*")if p.is_file()}
+          assert actual=={r["path"]for r in m["files"]}|{"SOURCE_MANIFEST.json"}
+          for row in m["files"]:
+              p=root/row["path"];b=p.read_bytes()
+              assert len(b)==row["bytes"]and hashlib.sha256(b).hexdigest()==row["sha256"]
+              assert hashlib.sha1(b"blob "+str(len(b)).encode()+b"\0"+b).hexdigest()==row["git_blob"]
+              if p.suffix==".py":compile(b,str(p),"exec")
+          PY
+      - name: Download exactly the completed immutable evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14366409313/zip > "$WATCHER_READ_ROOT/inputs/capture.zip"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14374313289/zip > "$WATCHER_READ_ROOT/inputs/uploaded.zip"
+      - name: Read every captured byte and every physical control without replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B "$WATCHER_READ_ROOT/source/scripts/gate.py" --work "$WATCHER_READ_ROOT"
+      - name: Preserve original restoration receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$WATCHER_READ_ROOT/diagnostics"
+          if test -f "$WATCHER_READ_ROOT/restored/RESTORE.json"; then cp "$WATCHER_READ_ROOT/restored/RESTORE.json" "$WATCHER_READ_ROOT/diagnostics/CAPTURE-RESTORE.json"; fi
+          if test -f "$WATCHER_READ_ROOT/restored/artifact-manifest.json"; then cp "$WATCHER_READ_ROOT/restored/artifact-manifest.json" "$WATCHER_READ_ROOT/diagnostics/CAPTURE-MANIFEST.json"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: namespace-watcher-uploaded-read-v1
+          path: |
+            ${{ env.WATCHER_READ_ROOT }}/source
+            ${{ env.WATCHER_READ_ROOT }}/inputs
+            ${{ env.WATCHER_READ_ROOT }}/diagnostics
+            ${{ env.WATCHER_READ_ROOT }}/processes
+            ${{ env.WATCHER_READ_ROOT }}/fresh-reader
+            ${{ env.WATCHER_READ_ROOT }}/controls-read
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

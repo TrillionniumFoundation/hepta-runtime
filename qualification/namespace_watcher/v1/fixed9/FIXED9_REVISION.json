@@ -1,0 +1,32 @@
+{
+  "schema": "hepta.namespace-watcher.fd-floor-revision.v1",
+  "status": "NEW_SOURCE_ONLY_CANDIDATE",
+  "source_original_commit": "d3d75c30719db966b004756f610007a7c723729e",
+  "actual_divergence": {
+    "key": "rcVersionsActualRecoveryV3Failure",
+    "git_blob": "939e130642f8e4674cc51575ce5a5027360ad33f",
+    "bytes": 17349,
+    "sha256": "8df0a0bb54fd7b55c94f22fdda34e8b1f1029194b3595da7b3061171c51f3d41"
+  },
+  "prior_template": {
+    "bytes": 32103,
+    "git_blob": "1d2bf7ae7b5eb2315b5a0585e312c8d3e8680312",
+    "mode": "100644",
+    "sha256": "b76ebbb3978b377b186bed0a624630f675ca8bfaca0f971ab669527ad21a23cc"
+  },
+  "corrected_template": {
+    "key": "rcWatcherFixed9Template",
+    "git_blob": "d060e4aa1ab3e9202a9fd6b49742cd23dfd34857",
+    "bytes": 32151,
+    "sha256": "5f1dbe7e354283f47fd2bd438ff80a59db31baf9964dd6ee6780a9b21aee973b"
+  },
+  "exact_single_before": "    mov esi,1030 /* F_DUPFD_CLOEXEC */\n    xor edx,edx",
+  "exact_single_after": "    mov esi,1030 /* F_DUPFD_CLOEXEC */\n    mov edx,3 /* exact Rust File::try_clone descriptor floor */",
+  "original_fcntl_minimum": 3,
+  "previous_fcntl_minimum": 0,
+  "all_owner_hia_bytes_unchanged": true,
+  "prior_watcher_qualification_invalid_for_this_gap": true,
+  "new_native_application_calls": 0,
+  "new_original_application_calls": 0,
+  "application_replays": 0
+}
