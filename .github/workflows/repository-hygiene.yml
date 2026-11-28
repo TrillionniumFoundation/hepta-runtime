@@ -8,6 +8,9 @@ on:
       - 'docs/qualification/**'
       - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
+      - 'scripts/*verify_hia_consolidation.py'
+      - 'docs/audits/rust-main-20261115/**'
+      - 'native/runtime_mcp_sources.json'
       - 'deploy/dc_replacement_gate.py'
       - 'tests/**'
       - 'deploy/chatgpt_mcp_bridge.py'
@@ -24,6 +27,9 @@ on:
       - 'docs/qualification/**'
       - 'docs/rea-native/compatibility/**'
       - 'scripts/*verify_rust_consolidation.py'
+      - 'scripts/*verify_hia_consolidation.py'
+      - 'docs/audits/rust-main-20261115/**'
+      - 'native/runtime_mcp_sources.json'
       - 'deploy/dc_replacement_gate.py'
       - 'tests/**'
       - 'deploy/chatgpt_mcp_bridge.py'
@@ -58,11 +64,12 @@ jobs:
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Verify complete historical source custody
+      - name: Verify original archives and HIA integration source custody
         run: |
           set -euo pipefail
           python3 -B -m unittest discover -s scripts -p 'test_verify_rust_consolidation.py' -v
-          python3 -B scripts/verify_rust_consolidation.py | tee "$RUNNER_TEMP/archive-custody.json"
+          python3 -I -B -m unittest discover -s scripts -p 'test_verify_hia_consolidation.py' -v
+          python3 -I -B scripts/verify_hia_consolidation.py | tee "$RUNNER_TEMP/archive-custody.json"
       - name: Both bridge entry points and standalone deployment
         run: |
           set -euo pipefail
