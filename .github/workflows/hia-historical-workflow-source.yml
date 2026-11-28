@@ -1,0 +1,81 @@
+name: Exact historical workflow source binding
+on:
+  push:
+    branches: ['hia-historical58-workflow-qualify-6780-20261117']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      SOURCE_SHA: bb715ac21f6735233fb5fc17d4d16595bdfdba7070477f12401faec20329d63e
+    steps:
+      - name: Checkout frozen qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: qualification
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/historical58_workflow_binding_v1/source
+      - name: Checkout exact previous installed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: baseline
+          ref: c5cbd4d26f2b5ce074b78d77359d903a434139f1
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests
+            .github
+            authoring
+            vendor
+            runtime_support
+      - name: Checkout exact four-file candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: 737dde9434ea5adef0e4819d00e76d4ddb9f1bf0
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests
+            .github
+            authoring
+            vendor
+            runtime_support
+      - name: Exercise actual source admissions and narrow refusal controls
+        run: |
+          python3 -I -B qualification/qualification/historical58_workflow_binding_v1/source/run_ci.py qualify \
+            --base "$GITHUB_WORKSPACE/baseline" --candidate "$GITHUB_WORKSPACE/candidate" \
+            --work "$RUNNER_TEMP/historical-workflow-work" \
+            --archive "$RUNNER_TEMP/historical-workflow-bundle/complete.tar.gz" \
+            --source-manifest-sha256 "$SOURCE_SHA"
+      - name: Export every source byte and process stream
+        if: always()
+        run: |
+          python3 -I -B qualification/qualification/historical58_workflow_binding_v1/source/run_ci.py export \
+            --work "$RUNNER_TEMP/historical-workflow-work" \
+            --archive "$RUNNER_TEMP/historical-workflow-bundle/complete.tar.gz" \
+            --source-manifest-sha256 "$SOURCE_SHA"
+      - name: Read every archived byte and mode under inert guard
+        run: |
+          python3 -I -B qualification/qualification/historical58_workflow_binding_v1/source/run_ci.py read \
+            --work "$RUNNER_TEMP/historical-workflow-work" \
+            --archive "$RUNNER_TEMP/historical-workflow-bundle/complete.tar.gz" \
+            --source-manifest-sha256 "$SOURCE_SHA"
+      - name: Retain complete success or failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: historical-workflow-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/historical-workflow-bundle
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
