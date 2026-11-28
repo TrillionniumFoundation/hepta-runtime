@@ -1,0 +1,81 @@
+{
+  "status": "PASS_SCOPED_PRE_ACTIVATION_SOURCE_REVIEW",
+  "blocking_findings": [],
+  "files": {
+    "candidate/recovery/prepare_external_cache.py": {
+      "sha256": "c7981ba8b4dce9a474e97b335fbd148fda236588a881c1a197c461e7e5f9f413",
+      "bytes": 6863
+    },
+    "candidate/recovery/stage_release.py": {
+      "sha256": "65c470c194e2150a82060dc6d775c589d4eba8c659e666666b4f966334c3fc9e",
+      "bytes": 7382
+    }
+  },
+  "independent_literal_and_ast_checks": [
+    "old source hash kaggle_jobs.py",
+    "old source hash kaggle_create_only.py",
+    "old source hash kaggle_transport.py",
+    "old source hash hepta_kaggle.py",
+    "old source hash tool_contract.py",
+    "candidate source hash kaggle_jobs.py",
+    "candidate source hash kaggle_create_only.py",
+    "candidate source hash kaggle_transport.py",
+    "candidate source hash hepta_kaggle.py",
+    "candidate source hash tool_contract.py",
+    "original launcher hash",
+    "only one batch release constant changes; all launcher function/class ASTs equal",
+    "original observed mastery request_id",
+    "original observed mastery kernel_id",
+    "original observed mastery notebook_version",
+    "original observed mastery input_digest",
+    "original observed mastery notebook_ref",
+    "original observed mastery submission_state",
+    "original observed mastery remote_state"
+  ],
+  "findings": [
+    {
+      "id": "external_cache_fixed_original_inputs",
+      "result": "PASS_STATIC",
+      "basis": "prepare script binds exact existing ACKed mastery request/kernel/version/source digest, fixed previous manifest/archive/summary byte SHA and lengths; checks 2336 manifest payloads/6635423 bytes and total7002550 under8388608 before writing external cache."
+    },
+    {
+      "id": "content_reconstruction",
+      "result": "PASS_STATIC",
+      "basis": "archive member names are not trusted to identify provider paths. Every declared path is reconstructed only from equal byte-length/SHA content, then rehashed. Full exact declaration coverage required. Original manifest is only provenance and importing adapter fetches fresh manifest independently."
+    },
+    {
+      "id": "no_record_rewrite",
+      "result": "PASS_STATIC",
+      "basis": "prepare reads original request.json before/after and requires unchanged SHA, creates an external0700 cache only, and rechecks all three original inputs after writes; no adapter/router state mutation or provider invocation."
+    },
+    {
+      "id": "staging_then_activation",
+      "result": "PASS_STATIC",
+      "basis": "stage checks all old/new code hashes and original launcher/entry hash, creates new release and launcher without replacing old files, verifies actual staged CLI help, and requires live entry unchanged before emitting PREPARED_NOT_ACTIVATED."
+    },
+    {
+      "id": "account_routing",
+      "result": "PASS_STATIC",
+      "basis": "only batch release string changes in original launcher; credential isolation/account guards/state-dir override denial and session/interactive routing functions remain identical."
+    },
+    {
+      "id": "activation_cas",
+      "result": "REQUIRES_PLANNED_LIVE_STEP",
+      "basis": "script deliberately does not perform activation. Root must use binary_write expected_version against freshly observed original entry whose SHA is OLD_ENTRY_SHA, then read back exact proposed SHA. This is an unexecuted next step, not failed code."
+    },
+    {
+      "id": "rollback_scope",
+      "result": "PASS_DECLARED_LIMIT",
+      "basis": "rollback restores only original entry bytes when live entry matches proposed hash. Imported cache receipt remains honestly local-cache provenance; old adapter cannot reinterpret it as old HTTP receipt. New release/evidence must remain; rollback is not rollback of completed import."
+    },
+    {
+      "id": "assert_runtime",
+      "result": "EXECUTION_CONTRACT",
+      "basis": "preparation guards use Python assert. Execute with isolated normal Python (-I -B; no -O) so PYTHONOPTIMIZE cannot disable them. Stage already uses -I -B for its child CLI help. This is a command contract, not a request to change candidate."
+    }
+  ],
+  "remote_calls": 0,
+  "candidate_source_edits": 0,
+  "production_state_edits": 0,
+  "actual_activation_or_collection_claim": false
+}

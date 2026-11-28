@@ -104,6 +104,75 @@ def hash_file(path: Path, *, max_bytes=None):
     return {"bytes": size, "sha256": h.hexdigest()}
 
 
+@contextlib.contextmanager
+def open_recovered_cache(root, forbidden_root):
+    """Pin untrusted input directories; cache content is never terminal evidence."""
+    if root is None:
+        yield None
+        return
+    path = Path(root)
+    if not path.is_absolute() or ".." in path.parts or path == Path("/"):
+        raise AdapterError("INVALID_CACHE_ROOT", "Recovered cache root must be an absolute directory.")
+    if path == forbidden_root or forbidden_root in path.parents:
+        raise AdapterError("INVALID_CACHE_ROOT", "External recovered input must not be adapter-owned state.")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:]:
+            nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd); fd = nxt
+        info = os.fstat(fd)
+        if info.st_uid != os.getuid() or info.st_mode & 0o022:
+            raise AdapterError("UNSAFE_CACHE_ROOT", "Recovered cache root owner/write permissions are unsafe.")
+    except OSError:
+        os.close(fd)
+        raise AdapterError("UNSAFE_CACHE_ROOT", "Recovered cache root is unavailable or contains a symlink.") from None
+    except BaseException:
+        os.close(fd)
+        raise
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def copy_recovered_payload(root_fd, name, destination, expected, max_bytes):
+    """Copy exact declared bytes through pinned non-symlink descriptors."""
+    parts = safe_name(name).split("/")
+    parent_fd, source_fd = os.dup(root_fd), None
+    try:
+        for part in parts[:-1]:
+            nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+            os.close(parent_fd); parent_fd = nxt
+        source_fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+        before = os.fstat(source_fd)
+        if not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid() or before.st_nlink != 1:
+            raise AdapterError("UNSAFE_CACHE_PAYLOAD", "Recovered payload must be a regular, single-link owned file.")
+        if before.st_size != expected["bytes"] or before.st_size > max_bytes:
+            raise AdapterError("CACHE_PAYLOAD_SIZE", "Recovered payload size differs from the fixed-version manifest or budget.")
+        hashed, total = hashlib.sha256(), 0
+        fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as out:
+            while True:
+                chunk = os.read(source_fd, min(1024 * 1024, expected["bytes"] - total + 1))
+                if not chunk: break
+                total += len(chunk)
+                if total > expected["bytes"] or total > max_bytes:
+                    raise AdapterError("CACHE_PAYLOAD_SIZE", "Recovered payload grew beyond its declared size.")
+                hashed.update(chunk); out.write(chunk)
+            out.flush(); os.fsync(out.fileno())
+        after = os.fstat(source_fd)
+        identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns, x.st_ctime_ns)
+        actual = {"bytes": total, "sha256": hashed.hexdigest()}
+        if identity(before) != identity(after) or actual != expected:
+            raise AdapterError("CACHE_PAYLOAD_CHANGED_OR_HASH", "Recovered payload changed or differs from the fixed-version manifest.")
+        return actual
+    except OSError:
+        raise AdapterError("UNSAFE_CACHE_PAYLOAD", "Recovered payload is missing, unsafe or unavailable.") from None
+    finally:
+        if source_fd is not None: os.close(source_fd)
+        os.close(parent_fd)
+
+
 def read_source(path: Path, kernel_type: str):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     try:
@@ -697,27 +766,84 @@ class KaggleAdapter:
             total += checked["bytes"]
         if total != receipt.get("total_bytes"):
             raise AdapterError("ARTIFACT_RECEIPT_INVALID", "Published artifact byte total does not match.")
+        cache_policy = receipt.get("verification_policy") == "fresh-manifest-and-recovered-cache-v1"
+        if cache_policy and (not manifest_name or receipt.get("remote_manifest_name") != manifest_name):
+            raise AdapterError("CACHE_MANIFEST_REQUIRED", "Recovered-cache receipts require the same explicit manifest verification policy.")
         if manifest_name:
             self._verify_manifest(folder, files, record["request_id"], manifest_name)
-            for item in files: self._require_http_length(item, item)
-            receipt.update(remote_manifest_verified=True, remote_manifest_name=manifest_name, verification_policy="manifest-and-http-v1")
+            if cache_policy:
+                proof = receipt.get("recovered_cache", {})
+                manifest_item = next(item for item in files if item["path"] == manifest_name)
+                if (proof.get("schema") != "hepta-kaggle-cache-import-v1" or
+                        proof.get("input_digest") != record["input_digest"] or
+                        proof.get("kernel_id") != record.get("kernel_id") or
+                        proof.get("notebook_version") != record["notebook_version"] or
+                        proof.get("manifest_sha256") != manifest_item["sha256"] or
+                        proof.get("payload_files") != len(files)-1 or
+                        proof.get("terminal_observation") != "original_fixed_version_COMPLETE" or
+                        proof.get("cloud_mutation_performed") is not False or
+                        manifest_item.get("retrieval") != "fresh_http_manifest"):
+                    raise AdapterError("CACHE_RECEIPT_IDENTITY", "Recovered-cache receipt binding is damaged.")
+                self._require_http_length(manifest_item, manifest_item)
+                for item in files:
+                    if item["path"] != manifest_name and (item.get("retrieval") != "verified_local_cache" or
+                            item.get("cache_manifest_sha256") != manifest_item["sha256"] or
+                            item.get("http_content_length") is not None or item.get("http_content_length_verified") is not False):
+                        raise AdapterError("CACHE_RECEIPT_PROVENANCE", "Recovered bytes must not be represented as fresh HTTP payload downloads.")
+            else:
+                for item in files: self._require_http_length(item, item)
+                receipt.update(remote_manifest_verified=True, remote_manifest_name=manifest_name, verification_policy="manifest-and-http-v1")
         if recovered or record.get("artifacts") != receipt:
             atomic_json(folder / ".hepta-download-receipt.json", receipt)
             record["artifacts"] = receipt
             self.ledger.event(record, "artifacts_recovered" if recovered else "artifact_manifest_verified", receipt)
         return {**receipt, "reused": True, "recovered_local_publish": recovered}
 
-    def artifacts(self, request_id, *, max_bytes=1024 ** 3, manifest_name=None):
+    def _artifact_catalog(self, record, manifest_name, max_bytes):
+        sizes, items = {}, {}
+        for page in self._pages(record, "files"):
+            for item in page.get("files") or []:
+                name = safe_name(item.get("name"))
+                if name == ".hepta-download-receipt.json":
+                    raise AdapterError("RESERVED_OUTPUT_NAME", "Provider output conflicts with the adapter's reserved receipt filename.")
+                if name in sizes: raise AdapterError("DUPLICATE_OUTPUT", "Provider lists the same output more than once.")
+                raw_size = item.get("size", 0)
+                size = int(raw_size) if isinstance(raw_size, (str, int)) and str(raw_size).isdigit() else None
+                if size is None: raise AdapterError("INVALID_OUTPUT_SIZE", "Provider returned an invalid file size.")
+                sizes[name] = size
+        if not manifest_name and sum(sizes.values()) > max_bytes: raise AdapterError("ARTIFACT_BUDGET", "Provider output exceeds the download budget.")
+        for page in self._pages(record, "output"):
+            for item in page.get("files") or []:
+                name = safe_name(attr(item, "fileName", "file_name"))
+                if name in items: raise AdapterError("DUPLICATE_OUTPUT", "Provider lists the same output URL more than once.")
+                url = item.get("url")
+                if not isinstance(url, str): raise AdapterError("INVALID_OUTPUT_URL", "Provider omitted an output URL.")
+                items[name] = url
+        if set(sizes) != set(items): raise AdapterError("OUTPUT_LIST_MISMATCH", "Provider size and URL listings do not name the same fixed-version outputs.")
+        if manifest_name and manifest_name not in items: raise AdapterError("REMOTE_MANIFEST_MISSING", "Execution did not produce the required hash manifest.")
+        return sizes, items, []
+
+    def artifacts(self, request_id, *, max_bytes=1024 ** 3, manifest_name=None, cache_root=None, cache_manifest_sha256=None):
         if type(max_bytes) is not int or not 1 <= max_bytes <= 64 * 1024 ** 3: raise AdapterError("INVALID_ARTIFACT_BUDGET", "Download budget must be an integer from 1 byte..64 GiB.")
         if manifest_name: safe_name(manifest_name)
-        with self.ledger.locked(request_id):
+        if cache_root is not None:
+            if not manifest_name or not isinstance(cache_manifest_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", cache_manifest_sha256):
+                raise AdapterError("CACHE_MANIFEST_REQUIRED", "Recovered-cache import requires an execution manifest and its prior exact SHA-256.")
+        elif cache_manifest_sha256 is not None:
+            raise AdapterError("CACHE_ROOT_REQUIRED", "A cache manifest pin without an external cache root is invalid.")
+        with self.ledger.locked(request_id), open_recovered_cache(cache_root, self.ledger.root) as cache_fd:
             record = self.ledger.load(request_id); self._account_for(record)
             self.ref_params(record)
+            if cache_fd is not None and (record.get("submission_state") != "ACCEPTED" or positive_int(record.get("kernel_id")) is None):
+                raise AdapterError("CACHE_ORIGINAL_EXECUTION_UNBOUND", "Recovered input cannot establish an original accepted kernel/version identity.")
             if record["submission_state"] == "ACCEPTED_WITH_INVALID_INPUTS":
                 raise AdapterError("INVALID_REMOTE_INPUTS", "Kaggle reported invalid input sources; outputs cannot pass request acceptance.")
             existing = record.get("artifacts")
             folder = self.ledger.directory(request_id) / "artifacts" / ("v" + str(record["notebook_version"]))
             if existing:
+                if cache_manifest_sha256 is not None and not any(item.get("path") == manifest_name and
+                        item.get("sha256") == cache_manifest_sha256 for item in existing.get("files", [])):
+                    raise AdapterError("CACHE_MANIFEST_PIN_MISMATCH", "Retained manifest differs from the requested prior exact pin.")
                 return self._reuse_artifacts(record, folder, dict(existing), manifest_name, max_bytes=max_bytes)
             if folder.exists() or folder.is_symlink():
                 if folder.is_symlink() or folder.parent.is_symlink():
@@ -725,6 +851,9 @@ class KaggleAdapter:
                 try: receipt = json.loads(private_read(folder / ".hepta-download-receipt.json", 16 * 1024 * 1024))
                 except (FileNotFoundError, json.JSONDecodeError):
                     raise AdapterError("ARTIFACT_DESTINATION_EXISTS", "Unrecorded artifact directory has no valid publication receipt.") from None
+                if cache_manifest_sha256 is not None and not any(item.get("path") == manifest_name and
+                        item.get("sha256") == cache_manifest_sha256 for item in receipt.get("files", [])):
+                    raise AdapterError("CACHE_MANIFEST_PIN_MISMATCH", "Recovered publication manifest differs from the requested prior exact pin.")
                 return self._reuse_artifacts(record, folder, receipt, manifest_name, max_bytes=max_bytes, recovered=True)
             self._status(record)
             if record["remote_state"] != "COMPLETE":
@@ -732,30 +861,10 @@ class KaggleAdapter:
             identity = self.transport.call("get", self.ref_params(record))
             self._check_source_identity(record, identity)
             self.ledger.event(record, "artifact_source_verified", {"response_sha256": digest(identity)})
-            sizes, items = {}, {}
-            for page in self._pages(record, "files"):
-                for item in page.get("files") or []:
-                    name = safe_name(item.get("name"))
-                    if name == ".hepta-download-receipt.json":
-                        raise AdapterError("RESERVED_OUTPUT_NAME", "Provider output conflicts with the adapter's reserved receipt filename.")
-                    if name in sizes: raise AdapterError("DUPLICATE_OUTPUT", "Provider lists the same output more than once.")
-                    raw_size = item.get("size", 0)
-                    size = int(raw_size) if isinstance(raw_size, (str, int)) and str(raw_size).isdigit() else None
-                    if size is None: raise AdapterError("INVALID_OUTPUT_SIZE", "Provider returned an invalid file size.")
-                    sizes[name] = size
-            if not manifest_name and sum(sizes.values()) > max_bytes: raise AdapterError("ARTIFACT_BUDGET", "Provider output exceeds the download budget.")
-            for page in self._pages(record, "output"):
-                for item in page.get("files") or []:
-                    name = safe_name(attr(item, "fileName", "file_name"))
-                    if name in items: raise AdapterError("DUPLICATE_OUTPUT", "Provider lists the same output URL more than once.")
-                    url = item.get("url")
-                    if not isinstance(url, str): raise AdapterError("INVALID_OUTPUT_URL", "Provider omitted an output URL.")
-                    items[name] = url
-            if set(sizes) != set(items): raise AdapterError("OUTPUT_LIST_MISMATCH", "Provider size and URL listings do not name the same fixed-version outputs.")
-            if manifest_name and manifest_name not in items: raise AdapterError("REMOTE_MANIFEST_MISSING", "Execution did not produce the required hash manifest.")
+            sizes, items, listing_warning = self._artifact_catalog(record, manifest_name, max_bytes)
             reqdir = self.ledger.directory(request_id)
             stage = Path(tempfile.mkdtemp(prefix=".download-", dir=reqdir))
-            files, total, warnings, declared = [], 0, [], None
+            files, total, warnings, declared = [], 0, listing_warning, None
             try:
                 ordered = ([manifest_name] + sorted(set(items) - {manifest_name})) if manifest_name else sorted(items)
                 for name in ordered:
@@ -763,13 +872,19 @@ class KaggleAdapter:
                     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                     expected_size = None if name == manifest_name else declared[name]["bytes"] if manifest_name else sizes[name]
                     budget = min(max_bytes - total, MAX_SOURCE) if name == manifest_name else max_bytes - total
-                    info = self.transport.download(items[name], target, expected_size=expected_size, max_bytes=budget,
-                                                   require_content_length=bool(manifest_name))
-                    # Independently hash the descriptor after download; a transport receipt alone is not verification.
+                    from_cache = cache_fd is not None and name != manifest_name
+                    if from_cache:
+                        info = copy_recovered_payload(cache_fd, name, target, declared[name], budget)
+                    else:
+                        info = self.transport.download(items[name], target, expected_size=expected_size, max_bytes=budget,
+                                                       require_content_length=bool(manifest_name))
+                    # Independently hash retained bytes. Caller cache/transport reports alone never suffice.
                     actual = hash_file(target)
                     if {"bytes": info.get("bytes"), "sha256": info.get("sha256")} != actual:
-                        raise AdapterError("DOWNLOAD_HASH_MISMATCH", "Downloaded bytes do not match the transport receipt.")
-                    if manifest_name: self._require_http_length(info, actual)
+                        raise AdapterError("DOWNLOAD_HASH_MISMATCH", "Retained bytes do not match the copy/download receipt.")
+                    if manifest_name and not from_cache: self._require_http_length(info, actual)
+                    if cache_fd is not None and name == manifest_name and actual["sha256"] != cache_manifest_sha256:
+                        raise AdapterError("CACHE_MANIFEST_PIN_MISMATCH", "Fresh original-version manifest differs from the prior exact manifest pin.")
                     if expected_size is not None and actual["bytes"] != expected_size:
                         raise AdapterError("ARTIFACT_LENGTH", "Actual bytes do not match the required file size.")
                     if manifest_name and name != manifest_name and actual != declared[name]:
@@ -778,11 +893,14 @@ class KaggleAdapter:
                     item_receipt = {"path": name, **actual, "provider_list_size": sizes[name], "provider_size_matches": provider_matches,
                                     "http_content_length": info.get("http_content_length"),
                                     "http_content_length_verified": info.get("http_content_length_verified", False)}
+                    if cache_fd is not None:
+                        item_receipt.update(retrieval="verified_local_cache" if from_cache else "fresh_http_manifest",
+                                            cache_manifest_sha256=cache_manifest_sha256 if from_cache else None)
                     files.append(item_receipt); total += actual["bytes"]
                     if not provider_matches:
                         if not manifest_name: raise AdapterError("ARTIFACT_LENGTH", "Actual bytes do not match the provider file-list size.")
                         warnings.append({"code": "PROVIDER_SIZE_CONFLICT", "path": name, "provider_list_size": sizes[name],
-                                         "http_content_length": info["http_content_length"], "actual_bytes": actual["bytes"],
+                                         "http_content_length": info.get("http_content_length"), "actual_bytes": actual["bytes"],
                                          "verification_authority": "http_length_and_local_hash" if name == manifest_name else "execution_manifest_size_and_sha256"})
                     if name == manifest_name:
                         declared = self._manifest_entries(stage, request_id, manifest_name)
@@ -805,6 +923,13 @@ class KaggleAdapter:
                            "remote_manifest_verified": verified, "remote_manifest_name": manifest_name, "files_manifest_sha256": digest(files),
                            "verification_policy": "manifest-and-http-v1" if manifest_name else "provider-size-strict-v1",
                            "provider_sizes_all_match": not warnings, "warnings": warnings}
+                if cache_fd is not None:
+                    receipt["verification_policy"] = "fresh-manifest-and-recovered-cache-v1"
+                    receipt["recovered_cache"] = {"schema": "hepta-kaggle-cache-import-v1",
+                        "input_digest": record["input_digest"], "kernel_id": record["kernel_id"],
+                        "notebook_version": record["notebook_version"], "manifest_sha256": cache_manifest_sha256,
+                        "source_identity_response_sha256": digest(identity), "payload_files": len(files)-1,
+                        "terminal_observation": "original_fixed_version_COMPLETE", "cloud_mutation_performed": False}
                 atomic_json(stage / ".hepta-download-receipt.json", receipt)
                 os.rename(stage, destination)
                 dfd = os.open(publish_parent, os.O_RDONLY | os.O_DIRECTORY)

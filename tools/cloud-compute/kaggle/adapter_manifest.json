@@ -1,7 +1,7 @@
 {
   "schema": "hepta-compute-adapter-v1",
   "provider": "kaggle",
-  "adapter_version": "0.1.8",
+  "adapter_version": "0.1.13-integrity-cache-import",
   "entrypoint": "hepta_kaggle.py",
   "protocol": "json-stdout",
   "stdin_command": "call",
@@ -263,7 +263,7 @@
     {
       "name": "kaggle_artifacts",
       "command": "artifacts",
-      "description": "Download fixed-version output files. With a manifest, require its payload sizes/SHA-256 and verified HTTP lengths, recording provider-size conflicts; without one, require provider-size matches.",
+      "description": "Download fixed-version outputs. Optional recovered-cache import requires a fresh authenticated original-version manifest, prior manifest SHA-256, complete declared payload hashes and original accepted identity; cache bytes are not remote acknowledgements or fresh HTTP downloads.",
       "mutates_cloud": false,
       "cloud_verified": false,
       "input_schema": {
@@ -279,6 +279,12 @@
             "maximum": 68719476736
           },
           "manifest_name": {
+            "type": "string"
+          },
+          "cache_root": {
+            "type": "string"
+          },
+          "cache_manifest_sha256": {
             "type": "string"
           }
         },

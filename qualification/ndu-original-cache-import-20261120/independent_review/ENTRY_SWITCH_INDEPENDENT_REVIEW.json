@@ -1,0 +1,1763 @@
+{
+  "schema": "independent-entry-switch-model-review-v1",
+  "status": "PASS_SCOPED_STATIC_AND_LOCAL_MODEL_REVIEW",
+  "blocking_findings": [],
+  "source_sha256": "e86acaf8ee5cebbdb06ddc7bb8ab420575ec0d69651859a8675de5c7754a7b76",
+  "reviewer_sha256": "e93362e611c0b2aac78a53aa501a20f4f3933e98e6585ef0e604daeed0ad61e3",
+  "meaningful_cases_passed": 24,
+  "model_scope": "Independent in-memory simulation of documented official file-info, pinned-read, and atomic expected-version write interfaces. Executes the exact candidate controller against fake tools only. Does not verify remote availability or replace a real activation receipt.",
+  "module_dependency_scope": "Five staged local modules cover all internal imports. kagglesdk dynamic imports and existing venv behavior reside in unchanged transport; no new SDK dependency introduced.",
+  "author_tests_used_as_independent_evidence": false,
+  "remote_calls": 0,
+  "production_mutations": 0,
+  "candidate_source_edits": 0,
+  "python_preparation_contract": "/usr/bin/python3.12 -I -B; no -O; runtime owner confirmed fixed argv before freeze",
+  "actual_activation_or_collection_claim": false,
+  "body_wall_seconds": 0.071002481,
+  "body_cpu_seconds": 0.09504,
+  "cases": [
+    {
+      "name": "wrong_scope_rejected_before_tools",
+      "result": "PASS",
+      "call_count": 0,
+      "write_attempts": 0,
+      "simulated_mutations": 0
+    },
+    {
+      "name": "missing_commit_rejected_before_tools",
+      "result": "PASS",
+      "call_count": 0,
+      "write_attempts": 0,
+      "simulated_mutations": 0
+    },
+    {
+      "name": "invalid_mode_rejected_before_tools",
+      "result": "PASS",
+      "call_count": 0,
+      "write_attempts": 0,
+      "simulated_mutations": 0
+    },
+    {
+      "name": "activate_exact_original",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "ENTRY_ACTIVATED_ONLY",
+      "observed_error": null,
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 20,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "activate_text_result_envelope",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "ENTRY_ACTIVATED_ONLY",
+      "observed_error": null,
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 20,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "wrong_old_dependency",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "DEPLOYMENT_PREFLIGHT_FAILED: EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 15,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        }
+      ]
+    },
+    {
+      "name": "wrong_new_dependency",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "DEPLOYMENT_PREFLIGHT_FAILED: EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 15,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        }
+      ]
+    },
+    {
+      "name": "original_router_changed",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "DEPLOYMENT_PREFLIGHT_FAILED: EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 15,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        }
+      ]
+    },
+    {
+      "name": "entry_wrong_hash",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/bin/hepta-kaggle-account",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 18,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "entry_wrong_permissions",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "ENTRY_METADATA_CHANGED",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 18,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "entry_wrong_owner",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/bin/hepta-kaggle-account",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 18,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "entry_multiple_hardlinks",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/bin/hepta-kaggle-account",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 18,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "retained_wrong_hash",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 16,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        }
+      ]
+    },
+    {
+      "name": "retained_version_changed",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "RETAINED_SWITCH_BYTES_CHANGED",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 17,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        }
+      ]
+    },
+    {
+      "name": "retained_incomplete_read",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "RETAINED_SWITCH_BYTES_CHANGED",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 17,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        }
+      ]
+    },
+    {
+      "name": "retained_chunk_digest_mismatch",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "RETAINED_SWITCH_BYTES_CHANGED",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 17,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        }
+      ]
+    },
+    {
+      "name": "concurrent_version_cas_rejected_no_retry",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "RECONCILE_EXACT_ENTRY_DO_NOT_RETRY",
+      "observed_error": "HEPTA_API_ERROR",
+      "write_attempts": 1,
+      "simulated_mutations": 0,
+      "call_count": 19,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        }
+      ]
+    },
+    {
+      "name": "write_rejected_no_retry",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "RECONCILE_EXACT_ENTRY_DO_NOT_RETRY",
+      "observed_error": "HEPTA_API_ERROR",
+      "write_attempts": 1,
+      "simulated_mutations": 0,
+      "call_count": 19,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        }
+      ]
+    },
+    {
+      "name": "ambiguous_write_result_reconcile_no_retry",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "RECONCILE_EXACT_ENTRY_DO_NOT_RETRY",
+      "observed_error": "HEPTA_API_ERROR",
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 19,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        }
+      ]
+    },
+    {
+      "name": "post_write_wrong_hash_reconcile_no_retry",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "RECONCILE_EXACT_ENTRY_DO_NOT_RETRY",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/bin/hepta-kaggle-account",
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 20,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "post_write_metadata_changed_reconcile_no_retry",
+      "result": "PASS",
+      "mode": "activate",
+      "observed_state": "RECONCILE_EXACT_ENTRY_DO_NOT_RETRY",
+      "observed_error": "ENTRY_METADATA_VERIFICATION_FAILED",
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 20,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.13-cache-import-c2c548b7/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-cache-import-c2c548b7/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/proposed_account_entry.bin",
+          "expected_version": "fixture-version-17"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "rollback_exact_proposed",
+      "result": "PASS",
+      "mode": "rollback",
+      "observed_state": "ORIGINAL_ENTRY_RESTORED_ONLY",
+      "observed_error": null,
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 14,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin",
+          "expected_version": "fixture-version-16"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "rollback_does_not_require_new_release",
+      "result": "PASS",
+      "mode": "rollback",
+      "observed_state": "ORIGINAL_ENTRY_RESTORED_ONLY",
+      "observed_error": null,
+      "write_attempts": 1,
+      "simulated_mutations": 1,
+      "call_count": 14,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin",
+          "expected_version": "fixture-version-16"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        },
+        {
+          "method": "binary_write",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account",
+          "expected_version": "fixture-version-18"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    },
+    {
+      "name": "rollback_refuses_unrelated_current_entry",
+      "result": "PASS",
+      "mode": "rollback",
+      "observed_state": "NO_MUTATION",
+      "observed_error": "EXACT_DEPLOYMENT_IDENTITY_CHANGED: /home/qian-qi/.local/bin/hepta-kaggle-account",
+      "write_attempts": 0,
+      "simulated_mutations": 0,
+      "call_count": 12,
+      "trace": [
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_jobs.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_create_only.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/kaggle_transport.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/hepta_kaggle.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/releases/batch-0.1.12-gpuimage-4920/tool_contract.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/share/hepta-kaggle/multiaccount-v7-gpuimage-4920/account_launcher.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-compute"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/bootstrap_fixed.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.hepta-kaggle-adoption-releases/v5-batch-4920/hepta_compute_base.py"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin"
+        },
+        {
+          "method": "binary_read",
+          "path": "/home/qian-qi/ndu-work/ndu-runtime-close-20261120-c2c548b7/original_account_entry.bin",
+          "expected_version": "fixture-version-16"
+        },
+        {
+          "method": "file_info",
+          "path": "/home/qian-qi/.local/bin/hepta-kaggle-account"
+        }
+      ]
+    }
+  ]
+}
