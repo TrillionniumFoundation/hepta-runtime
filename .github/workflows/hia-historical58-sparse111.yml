@@ -1,0 +1,70 @@
+name: Historical58 exact installed111 sparse source closure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-historical58-sparse111-qualification-6780-20261117']
+    paths: ['qualification/historical58_sparse111_v1/**', '.github/workflows/hia-historical58-sparse111.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths in the first step
+        run: |
+          printf '%s\n' "SF_SOURCE=$GITHUB_WORKSPACE/proof/qualification/historical58_sparse111_v1/source" "SF_RUN=$RUNNER_TEMP/historical58-sparse111" "SF_EXPORT=$RUNNER_TEMP/historical58-sparse111-export" "SF_DRIVER=$RUNNER_TEMP/historical58-sparse111-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source-only proof
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: proof
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            qualification/historical58_sparse111_v1/source
+      - name: Checkout candidate with its exact parent for local sparse checkouts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: c5cbd4d26f2b5ce074b78d77359d903a434139f1
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check all proof source bytes without native execution
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/proof" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$SF_SOURCE/MANIFEST.json" | cut -d' ' -f1)" = 6bad80123817cf94d0f6e505d1ff1ad589499dd17fd4c77ae80d5aba0ebfb6ca
+          python3 -I -S -B - <<'PY'
+          import os,json,hashlib,ast
+          from pathlib import Path
+          root=Path(os.environ['SF_SOURCE']); rows=json.loads((root/'MANIFEST.json').read_bytes())['files']
+          assert {p.name for p in root.iterdir()}=={r['path'] for r in rows}|{'MANIFEST.json'}
+          for row in rows:
+              path=root/row['path']; raw=path.read_bytes()
+              assert len(raw)==row['bytes'] and hashlib.sha256(raw).hexdigest()==row['sha256']
+              assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==row['git_blob']
+              if path.suffix=='.py':ast.parse(raw,filename=str(path))
+          print({'source_only_files':len(rows)})
+          PY
+      - name: Actual sparse layout materialization and unchanged strict rejection controls
+        run: |
+          python3 -I -S -B "$SF_SOURCE/qualify.py" run --repository "$GITHUB_WORKSPACE/candidate" --output "$SF_RUN" > "$SF_DRIVER.stdout" 2> "$SF_DRIVER.stderr"
+      - name: Guarded complete source evidence read
+        run: |
+          python3 -I -S -B "$SF_SOURCE/qualify.py" read --output "$SF_RUN" > "$SF_RUN-readonly.json" 2> "$SF_RUN-readonly.stderr"
+      - name: Export every success or failure source byte
+        if: always()
+        run: |
+          python3 -I -S -B "$SF_SOURCE/archive.py" pack --source "$SF_SOURCE" --capture "$SF_RUN" --output "$SF_EXPORT" --driver-prefix "$SF_DRIVER"
+          if test -f "$SF_RUN-readonly.stderr"; then cp "$SF_RUN-readonly.stderr" "$SF_EXPORT/readonly.stderr"; fi
+      - name: Upload complete source-only evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: historical58-sparse111-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.SF_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
