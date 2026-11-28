@@ -15,6 +15,9 @@ on:
       native-sha256:
         required: true
         type: string
+      native-archive-sha256:
+        required: true
+        type: string
     outputs:
       sha256:
         description: Exact successful original shard seal
@@ -86,7 +89,18 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: hia-native-complete-${{ inputs.runtime-sha }}-${{ inputs.invocation }}
-          path: ${{ runner.temp }}/hia-runtime-native/
+          path: ${{ runner.temp }}/hia-native-transport/
+
+      - name: Restore every admitted evidence member and verify its original identity
+        run: |
+          python3 -I -B runtime/scripts/hia_native_evidence_transport.py unpack \
+            --source "$RUNNER_TEMP/hia-native-transport/evidence.tar.gz" \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --runtime-sha "${{ inputs.runtime-sha }}" \
+            --invocation "${{ inputs.invocation }}" \
+            --native-sha256 "${{ inputs.native-sha256 }}" \
+            --archive-sha256 "${{ inputs.native-archive-sha256 }}" \
+            --report "$RUNNER_TEMP/hia-native-transport/restored.json"
 
       - name: Execute every complete original recipe in this group
         id: shard
