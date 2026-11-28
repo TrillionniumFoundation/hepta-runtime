@@ -9,7 +9,9 @@ original bytes, ELF headers, entry point and PT_LOAD segments unchanged. Kill
 an original-executable same-SHA graph-only attempt after candidate publication.
 Within its ORIGINAL live same-boot 60-second window, recover with the changed
 whole-executable SHA. Only the original function inverse may occur; no new
-phase charge or model forward is allowed. This has its own <=5-forward budget.
+phase charge or model forward is allowed. The all-path budget is <=7 forwards;
+a successfully captured pre-inverse window consumes at most5. A missed window
+is FAIL without retry, and its possible two original Restored forwards count.
 """
 import argparse
 import json
@@ -31,7 +33,7 @@ MARKER=b"\nHEPTA_OWNED_EXE_IDENTITY_NEGATIVE_CONTROL_V1\n"
 BUDGET={
  "server_starts":2,"rpc_wire_calls":12,"tool_calls":5,"roundtrip_wire_calls":1,
  "roundtrip_new_intents":1,"recover_wire_calls":2,"crash_attempts":1,
- "complete_and_partial_forward_upper_bound":5,"pure_compiler_upper_bound":2,
+ "complete_and_partial_forward_upper_bound":7,"pure_compiler_upper_bound":2,
  "training_steps":0,"wall_seconds":180,"server_cpu_seconds":60,
  "server_address_space_bytes":2*1024**3,"server_tokio_worker_threads":2,"automatic_retry":False,
 }
@@ -211,7 +213,10 @@ def run(args):
         result={"schema":SCHEMA+".result","status":status,"failure":failure,"cleanup_errors":cleanup,
           "plan_sha256":digest(raw),"identity":v["identity"],"derived_binary":v["derived_binary"],"primary":v["primary"],
           "evidence":evidence,"counts":rec.counts,"budget":BUDGET,"wall_seconds":time.monotonic()-rec.started,
-          "full_and_partial_forward_source_upper_bound":5,"actual_interrupted_work_exact_count_claimed":False,
+          "full_and_partial_forward_source_upper_bound":7,
+          "successful_captured_window_forward_upper_bound":5 if status=="PASS" else None,
+          "missed_window_possible_original_restored_forwards_included":True,
+          "actual_interrupted_work_exact_count_claimed":False,
           "training_steps":0,"optimizer_steps":0,"new_executable_qualified":False,"arbitrary_upgrade_compatibility_claimed":False,
           "production_deployment":False,"automatic_retry":False}
         pin=rec.record("RESULT.json",result)

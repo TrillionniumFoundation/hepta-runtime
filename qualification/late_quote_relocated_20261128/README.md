@@ -14,6 +14,12 @@ Planning performs zero model work. Execution uses fresh private directories, gen
 
 A PASS is a narrow engineering replay of already observed batches. It requires conditional graph routing with the same selected weight bytes; unconditional graph retention is a separate expected rejection. No production route, trading service, training job, shared incumbent, or global NDU claim is activated.
 
-The later whole-executable identity negative control, if run, has its own separately frozen budget of at most five complete or partial forwards. It is not silently added to the main budget.
+The authoritative protocols are RELOCATED_MAIN_PROTOCOL_V3.json and RELOCATED_EXECUTABLE_PROTOCOL_V3.json. V1 and V2 remain unexecuted review history. The main code SHA remains 9763f0c078a46c7367703bb7d072003fe2136cf6e5f59656f7733e6f90ac40e9 and its 29-forward bound is unchanged.
+
+The separately reviewed whole-executable negative control has an all-path worst-case budget of seven complete or partial forwards. A successfully captured post-publication/pre-inverse window proves at most five; recovery must add zero. If the watcher misses the window, the original transaction may already have run its two Restored forwards. Those are counted, the attempt fails, and there is no automatic retry. This correction was made before any native execution.
 
 Do not publish generated credential files, signed download transfers, or raw account metadata. Preserve full failure chains and actual returned receipts. This branch does not contain those secrets.
+
+The scratch executor subsequently became available again. Original driver, original parity expectations/checker, and the three prior CLI result records were rehashed to their previous seals. The new relocated protocol remains selected. The unchanged original checker is used through an explicitly documented zero-model format projection which copies every native phase observation unchanged and records the complete raw MCP result digest.
+
+Both main and negative-control plan/run hard-bind the recovered input index SHA e078644b92cb22ac39c0a1d8c14e8a01e9c572f8ccee0c15eee509e9109da5bc, and execution rereads each case's exact profiles/raw inputs/checkpoint reference/request against that index.
