@@ -25,6 +25,10 @@ class HistoricalSourceCustodyTests(unittest.TestCase):
     def setUpClass(cls):
         cls.reference, cls.required = materialize.reference_authority(ROOT)
         cls.profile = json.loads((ROOT / materialize.PREFIX / "PROFILE.json").read_bytes())
+        authority = cls.reference["native_inventory_authority"]
+        cls.native_inventory_raw = materialize.current_native_inventory_predecessor(
+            ROOT, (ROOT / authority["path"]).read_bytes(),
+            {key: authority[key] for key in ("bytes", "sha256", "git_blob")})
         cls.authorities = [materialize.REFERENCE_PROFILE.as_posix()] + [
             cls.reference[field]["path"] for field in
             ("inventory_authority", "workdir_authority", "native_inventory_authority")
@@ -60,6 +64,8 @@ class HistoricalSourceCustodyTests(unittest.TestCase):
                 names.add(name)
         for name in names:
             self.copy_file(root, name)
+        # These original controls retain their exact preintegration source domain.
+        (root / self.reference["native_inventory_authority"]["path"]).write_bytes(self.native_inventory_raw)
         return root
 
     def original_root(self, include_native=False):
@@ -74,8 +80,8 @@ class HistoricalSourceCustodyTests(unittest.TestCase):
             self.copy_file(root, name, source)
         if include_native:
             authority = self.reference["native_inventory_authority"]["path"]
-            self.copy_file(root, authority)
-            rows = json.loads((ROOT / authority).read_bytes())["native_components"]
+            self.copy_file(root, authority).write_bytes(self.native_inventory_raw)
+            rows = json.loads((root / authority).read_bytes())["native_components"]
             for row in rows:
                 name = row["source"]
                 source = ROOT / materialize.PREFIX / "source" / name if name in self.profile["restore"] else ROOT / name
