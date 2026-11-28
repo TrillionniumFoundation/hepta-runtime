@@ -1,0 +1,1 @@
+Original execution scope and limitations are recorded in qualification.json and native/process_owner_components_abi.md. All archives are data-only original evidence; no original failure is promoted to a product pass.

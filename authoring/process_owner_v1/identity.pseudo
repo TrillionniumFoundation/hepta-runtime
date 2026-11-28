@@ -1,0 +1,193 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 688 or load(s, 0) != REQUEST or load(s, 8) != 1:
+        return INVALID
+    size = load(s, 16)
+    if size != length(s) - 48 or load(s, 24) != 0 or load(s, 32) != 0 or load(s, 40) != 0:
+        return INVALID
+    if length(o) < 64:
+        return CAPACITY
+    if size > (MAXIMUM - 133120) // 8:
+        return INVALID
+    needed = 133120 + 8 * size
+    if length(w) < needed:
+        return header(o, 2, needed, 0)
+    fill_range(w, 0, 16384, 0)
+    put(w, 1040, size)
+    if checked_typed(s, w, 3, size) == False:
+        return INVALID
+    put(w, 2000, 0)
+    put(w, 2008, 131072 + 2 * size)
+    literal(w, 1)
+    if compound(s, w, 3, False) == False:
+        return INVALID
+    literal(w, 2)
+    optional_number(w, 10)
+    literal(w, 3)
+    optional_string(s, w, 4)
+    literal(w, 4)
+    if compound(s, w, 5, True) == False:
+        return INVALID
+    literal(w, 5)
+    quoted(s, w, 0, field(w, 2), field_size(w, 2))
+    literal(w, 6)
+    quoted(s, w, 0, field(w, 1), field_size(w, 1))
+    literal(w, 7)
+    optional_number(w, 11)
+    literal(w, 8)
+    optional_number(w, 9)
+    literal(w, 9)
+    optional_string(s, w, 6)
+    literal(w, 10)
+    optional_number(w, 7)
+    emit(w, 125)
+    count = get(w, 2000)
+    if count > length(o) - 64 or length(o) - 64 - count < 64:
+        return header(o, 3, 128 + count, count)
+    digest(w, count)
+    header(o, 0, 0, count)
+    put(o, 24, 64)
+    put(o, 32, (get(w, 1024) << 32) | get(w, 1032))
+    i = 0
+    while i < 32:
+        value = (get(w, 1024 + (i // 4) * 8) >> (24 - (i % 4) * 8)) & 255
+        fill_range(o, 64 + i * 2, 1, hex_byte(value >> 4))
+        fill_range(o, 65 + i * 2, 1, hex_byte(value & 15))
+        i = i + 1
+    copy_range(o, w, 128, get(w, 2008), count)
+    return 64
+
+def header(o: mutbuf, status: u64, needed: u64, size: u64) -> u32:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, size)
+    put(o, 40, needed)
+    return 64
+
+def emit(w: mutbuf, value: u64) -> u64:
+    at = get(w, 2000)
+    fill_range(w, get(w, 2008) + at, 1, value)
+    put(w, 2000, at + 1)
+    return at + 1
+
+def literal(w: mutbuf, index: u64) -> u64:
+    layout = literal_layout(index)
+    size = layout & 65535
+    i = 0
+    while i < size:
+        value = data_word((layout >> 16) + i // 8)
+        emit(w, (value >> ((i % 8) * 8)) & 255)
+        i = i + 1
+    return 0
+
+def hex_byte(value: u64) -> u64:
+    return choose(value < 10, 48 + value, 87 + value)
+
+def quoted(s: readbuf, w: mutbuf, domain: u64, at: u64, size: u64) -> u64:
+    emit(w, 34)
+    i = 0
+    while i < size:
+        value = vbyte(s, w, domain, at + i)
+        if value == 34 or value == 92:
+            emit(w, 92)
+            emit(w, value)
+        else:
+            if value < 32:
+                emit(w, 92)
+                if value == 8 or value == 9 or value == 10 or value == 12 or value == 13:
+                    escaped = choose(value == 8, 98, choose(value == 9, 116, choose(value == 10, 110, choose(value == 12, 102, 114))))
+                    emit(w, escaped)
+                else:
+                    emit(w, 117)
+                    emit(w, 48)
+                    emit(w, 48)
+                    emit(w, hex_byte(value >> 4))
+                    emit(w, hex_byte(value & 15))
+            else:
+                emit(w, value)
+        i = i + 1
+    emit(w, 34)
+    return 0
+
+def optional_string(s: readbuf, w: mutbuf, index: u64) -> u64:
+    if present(w, index):
+        return quoted(s, w, 0, field(w, index), field_size(w, index))
+    return literal(w, 11)
+
+def optional_number(w: mutbuf, index: u64) -> u64:
+    if present(w, index) == False:
+        return literal(w, 11)
+    value = field_value(w, index)
+    count = 0
+    while value >= 10:
+        fill_range(w, 30000 + count, 1, 48 + value % 10)
+        count = count + 1
+        value = value // 10
+    fill_range(w, 30000 + count, 1, 48 + value)
+    count = count + 1
+    while count > 0:
+        count = count - 1
+        emit(w, byte(w, 30000 + count))
+    return 0
+
+def ordered(w: mutbuf, previous: u64, current: u64, n: u64, m: u64) -> bool:
+    i = 0
+    bound = choose(n < m, n, m)
+    while i < bound:
+        a = byte(w, previous + i)
+        b = byte(w, current + i)
+        if a != b:
+            return a < b
+        i = i + 1
+    return n < m
+
+def compound(s: readbuf, w: mutbuf, index: u64, mapping: bool) -> bool:
+    emit(w, choose(mapping, 123, 91))
+    at = field(w, index) + 1
+    count = field_value(w, index)
+    prior = 131072 + get(w, 1040)
+    previous_size = 0
+    i = 0
+    while i < count:
+        if i != 0:
+            emit(w, 44)
+        if mapping:
+            next = string_info(s, w, at)
+            size = decode(s, w, at, 131072)
+            if i != 0 and ordered(w, prior, 131072, previous_size, size) == False:
+                return False
+            quoted(s, w, 1, 131072, size)
+            copy_range(w, w, prior, 131072, size)
+            previous_size = size
+            emit(w, 58)
+            at = next + 1
+        next = string_info(s, w, at)
+        size = decode(s, w, at, 131072)
+        quoted(s, w, 1, 131072, size)
+        at = next + 1
+        i = i + 1
+    emit(w, choose(mapping, 125, 93))
+    return True
+
+def digest(w: mutbuf, size: u64) -> u64:
+    sha_init(w)
+    data = get(w, 2008)
+    at = 0
+    while size - at >= 64:
+        copy_range(w, w, 1112, data + at, 64)
+        sha_block(w)
+        at = at + 64
+    tail = size - at
+    fill_range(w, 1112, 64, 0)
+    copy_range(w, w, 1112, data + at, tail)
+    fill_range(w, 1112 + tail, 1, 128)
+    if tail >= 56:
+        sha_block(w)
+        fill_range(w, 1112, 64, 0)
+    bits = size * 8
+    i = 0
+    while i < 8:
+        fill_range(w, 1175 - i, 1, (bits >> (i * 8)) & 255)
+        i = i + 1
+    sha_block(w)
+    return 0
