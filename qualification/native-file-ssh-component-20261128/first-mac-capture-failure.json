@@ -1,0 +1,74 @@
+{
+  "error": "Traceback (most recent call last):\n  File \"/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/seal_file_ssh_evidence_v1.py\", line 29, in <module>\n    run('mac-cas',['/opt/homebrew/bin/python3.14','-B',str(collector),'--config',str(Q/'mac-config.json'),'--output',str(Q/'mac-pack')],180)\n    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/seal_file_ssh_evidence_v1.py\", line 23, in run\n    assert rc==0,(label,rc,(Q/(label+'.stderr')).read_text()[-5000:])\n           ^^^^^\nAssertionError: ('mac-cas', 1, 'Traceback (most recent call last):\\n  File \"/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/collect_file_ssh_evidence_v1.py\", line 30, in <module>\\n    capture(p)\\n    ~~~~~~~^^^\\n  File \"/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/collect_file_ssh_evidence_v1.py\", line 16, in capture\\n    s=p.lstat();common={\\'mode\\':stat.S_IMODE(s.st_mode),\\'identity\\':stat_id(s),\\'xattrs\\':attrs(p)}\\n                                                                                      ~~~~~^^^\\n  File \"/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/collect_file_ssh_evidence_v1.py\", line 10, in attrs\\n    try: names=os.listxattr(p,follow_symlinks=False)\\n               ^^^^^^^^^^^^\\nAttributeError: module \\'os\\' has no attribute \\'listxattr\\'\\n')\n",
+  "passed": false,
+  "seconds": 6.406494499882683,
+  "state": "FAIL",
+  "steps": [
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "desktop",
+        "/usr/bin/python3 -c 'from pathlib import Path;Path('\"'\"'/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1'\"'\"').mkdir(mode=0o700)'"
+      ],
+      "label": "prepare-desktop",
+      "returncode": 0,
+      "seconds": 0.4794300841167569
+    },
+    {
+      "command": [
+        "/usr/bin/scp",
+        "-q",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/collect_file_ssh_evidence_v1.py",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/file-ssh-component-evidence-v1/desktop-config.json",
+        "desktop:/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1/"
+      ],
+      "label": "transfer-collector",
+      "returncode": 0,
+      "seconds": 0.43644862505607307
+    },
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "desktop",
+        "/usr/bin/python3 -B /home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1/collect_file_ssh_evidence_v1.py --config /home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1/desktop-config.json --output /home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1/pack"
+      ],
+      "label": "desktop-cas",
+      "returncode": 0,
+      "seconds": 4.753867416875437
+    },
+    {
+      "command": [
+        "/usr/bin/scp",
+        "-q",
+        "-r",
+        "desktop:/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/file-ssh-component-evidence-v1/pack",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/file-ssh-component-evidence-v1/desktop-pack"
+      ],
+      "label": "desktop-cas-readback",
+      "returncode": 0,
+      "seconds": 0.6094402498565614
+    },
+    {
+      "command": [
+        "/opt/homebrew/bin/python3.14",
+        "-B",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/collect_file_ssh_evidence_v1.py",
+        "--config",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/file-ssh-component-evidence-v1/mac-config.json",
+        "--output",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/file-ssh-component-evidence-v1/mac-pack"
+      ],
+      "label": "mac-cas",
+      "returncode": 1,
+      "seconds": 0.041696042055264115
+    }
+  ]
+}

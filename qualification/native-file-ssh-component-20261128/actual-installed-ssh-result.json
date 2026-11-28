@@ -1,0 +1,117 @@
+{
+  "passed": true,
+  "public_default_route_complete": false,
+  "records": [
+    {
+      "full_original_dictionary_equal": true,
+      "full_original_sorted_json_equal": true,
+      "name": "info",
+      "remote_entry_sha256": "704910b80385a0b1e4308890390484067463bedcfd13d774bd1c71dfeb0a58aa",
+      "stdin_sha256": "788ca2b51b2af2a1e71a8d1cee3cd4d6e93fb4aa2ec4eb03884b9f7c3f48fcb2",
+      "stdout_sha256": "6acf0bffd04845493c47a1a724447544246fe40109200be4519d56723c3307c1"
+    },
+    {
+      "full_original_dictionary_equal": true,
+      "full_original_sorted_json_equal": true,
+      "name": "read",
+      "remote_entry_sha256": "704910b80385a0b1e4308890390484067463bedcfd13d774bd1c71dfeb0a58aa",
+      "stdin_sha256": "c53dbe69834717ff1db3e5034bad7c5f8163141e8c948283a9bb9d8c39cff2b2",
+      "stdout_sha256": "5fceb4970e547aaa453f168928aea600756ed720d808b10447b8ca5bcb32a793"
+    }
+  ],
+  "scope": "actual installed config op9/op10/op12, HIA parameter/plan/gateway/SSH-plan, fixed real SSH to self-pinned remote HIA ELF, complete original info/read observations; QA orchestration remains external",
+  "seconds": 11.621620249934494,
+  "source_parent": "ddc1a3dafe369beff1c3eb16bfc6f1b5cf2b284b",
+  "steps": [
+    {
+      "command": [
+        "/usr/bin/scp",
+        "-q",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/installed-file-actual-ssh-v1/qualify_installed_file_ssh_plan_v1.py",
+        "desktop:/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/"
+      ],
+      "label": "transfer",
+      "returncode": 0,
+      "seconds": 0.4060459169559181
+    },
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "desktop",
+        "/usr/bin/python3 -B /home/qian-qi/hia-runtime-filebytes-20261128-2ac5/qualify_installed_file_ssh_plan_v1.py"
+      ],
+      "label": "installed-native-plan",
+      "returncode": 0,
+      "seconds": 2.07557037496008
+    },
+    {
+      "command": [
+        "/usr/bin/scp",
+        "-q",
+        "-r",
+        "desktop:/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/public-file3-installed-ssh-v1",
+        "/Users/qianqi/work/hia-runtime-final-integration-20261128-2ac5/installed-file-actual-ssh-v1/plan-capture"
+      ],
+      "label": "readback",
+      "returncode": 0,
+      "seconds": 0.5645427079871297
+    },
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=8",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ForwardAgent=no",
+        "desktop",
+        "'/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/remote-file-entry-build-v2/hia-file-entry' --pin '704910b80385a0b1e4308890390484067463bedcfd13d774bd1c71dfeb0a58aa' --local-read-profile '/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/public-file3-installed-ssh-v1/root '\"'\"'\u96ea'"
+      ],
+      "label": "actual-ssh-info",
+      "returncode": 0,
+      "seconds": 3.9328086669556797
+    },
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=8",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ForwardAgent=no",
+        "desktop",
+        "'/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/remote-file-entry-build-v2/hia-file-entry' --pin '704910b80385a0b1e4308890390484067463bedcfd13d774bd1c71dfeb0a58aa' --local-read-profile '/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/public-file3-installed-ssh-v1/root '\"'\"'\u96ea'"
+      ],
+      "label": "actual-ssh-read",
+      "returncode": 0,
+      "seconds": 4.077356208115816
+    },
+    {
+      "command": [
+        "/usr/bin/ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "desktop",
+        "/usr/bin/python3 -B -c 'from pathlib import Path;import hashlib,json,stat;r=json.loads(Path('\"'\"'/home/qian-qi/hia-runtime-filebytes-20261128-2ac5/public-file3-installed-ssh-v1/result.json'\"'\"').read_bytes());assert r['\"'\"'passed'\"'\"'];rows=r['\"'\"'captures'\"'\"'];[(lambda p,v: (None if (len(p.read_bytes())==v['\"'\"'bytes'\"'\"'] and hashlib.sha256(p.read_bytes()).hexdigest()==v['\"'\"'sha256'\"'\"'] and stat.S_IMODE(p.stat().st_mode)==v['\"'\"'mode'\"'\"']) else (_ for _ in ()).throw(AssertionError(str(p)))))(Path(k),v) for k,v in rows.items()];print(json.dumps({'\"'\"'captured_inputs_unchanged'\"'\"':len(rows)}))'"
+      ],
+      "label": "terminal-source-readback",
+      "returncode": 0,
+      "seconds": 0.5631733748596162
+    }
+  ],
+  "whole_runtime_qualified": false
+}

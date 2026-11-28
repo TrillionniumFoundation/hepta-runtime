@@ -1,0 +1,394 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 128:
+        return CAPACITY
+    if frame(s) == False:
+        return INVALID
+    typed = load(s, 32)
+    if typed > LIMIT - 48:
+        return grow(o, 3, 0)
+    if length(w) < 48 + typed:
+        return grow(o, 1, 48 + typed)
+    fill_range(w, 0, 48, 0)
+    copy_range(w, s, 48, 80, typed)
+    if valid_typed(w, typed) == 0 or load(s, 96) != load(s, 8):
+        return INVALID
+    host = 80 + typed
+    plan = host + load(s, 40)
+    files = plan + load(s, 48)
+    root = files + load(s, 56)
+    name_size = load(s, 168)
+    if valid_host(s, host, load(s, 40), 336, name_size) == False:
+        return INVALID
+    if valid_plan(s, plan, load(s, 48)) == False:
+        return INVALID
+    if valid_files(s, files, load(s, 56), 336, name_size) == False:
+        return INVALID
+    if valid_root(s, root, load(s, 64)) == False:
+        return INVALID
+    if load(s, files + 56) == 0:
+        return missing(s, o, 336, name_size)
+    payload = host + 32
+    target = payload + 128 + name_size
+    target_size = load(s, payload + 32)
+    row = files + 96 + name_size
+    path = row + 24
+    path_size = load(s, row + 8)
+    digest = path + path_size
+    root_size = load(s, 64) - 32
+    command_size = quote_size(s, path, path_size) + 7 + 66 + 22 + quote_size(s, root + 32, root_size)
+    input_size = mcp_request(s, o, 0, False)
+    if load(s, 24) == 1:
+        if command_size > 65536 or input_size > 65536 - command_size:
+            return pool_error(s, o)
+    required = 128 + fixed_extent() + 16 + target_size + command_size + input_size
+    if required >= LIMIT:
+        return grow(o, 3, 0)
+    if length(o) < required:
+        return grow(o, 2, required)
+    fill_range(o, 0, 128, 0)
+    put(o, 0, RESULT)
+    put(o, 16, load(s, 8))
+    put(o, 24, load(s, 16))
+    put(o, 32, load(s, 24))
+    put(o, 40, 30000)
+    put(o, 48, 8388608)
+    put(o, 56, 8388608)
+    put(o, 64, 12)
+    put(o, 72, input_size)
+    put(o, 80, required - 128)
+    put(o, 96, 1)
+    at = fixed_argv(o, 128)
+    put(o, at, target_size)
+    copy_range(o, s, at + 8, target, target_size)
+    at = at + 8 + target_size
+    put(o, at, command_size)
+    at = quote(s, o, at + 8, path, path_size)
+    at = pin_flag(o, at)
+    at = quote(s, o, at, digest, 64)
+    at = root_flag(o, at)
+    at = quote(s, o, at, root + 32, root_size)
+    at = mcp_request(s, o, at, True)
+    if at != required:
+        return INVALID
+    return required
+
+def frame(s: readbuf) -> bool:
+    if length(s) < 80 or load(s, 0) != REQUEST:
+        return False
+    if load(s, 8) < 1 or load(s, 8) > 2 or load(s, 16) == 0 or load(s, 24) > 1:
+        return False
+    if load(s, 72) != 0:
+        return False
+    at = 80
+    field = 32
+    while field < 72:
+        size = load(s, field)
+        if size > length(s) - at:
+            return False
+        at = at + size
+        field = field + 8
+    if at != length(s):
+        return False
+    if load(s, 32) < 256 or load(s, 40) < 160 or load(s, 48) < 64 or load(s, 56) < 96 or load(s, 64) < 33:
+        return False
+    return True
+
+def common(s: readbuf, at: u64, size: u64) -> bool:
+    if size < 32 or load(s, at) != CONFIG or load(s, at + 8) != 0 or load(s, at + 16) != 0:
+        return False
+    if load(s, at + 24) != size - 32:
+        return False
+    return True
+
+def same(s: readbuf, left: u64, right: u64, size: u64) -> bool:
+    i = 0
+    while i < size:
+        if byte(s, left + i) != byte(s, right + i):
+            return False
+        i = i + 1
+    return True
+
+def valid_host(s: readbuf, at: u64, size: u64, name: u64, name_size: u64) -> bool:
+    if common(s, at, size) == False:
+        return False
+    begin = at + 32
+    end = at + size
+    if load(s, begin) != HOST or load(s, begin + 8) != 1 or load(s, begin + 16) != 1:
+        return False
+    if load(s, begin + 24) != name_size or load(s, begin + 48) != 0 or load(s, begin + 56) != 1 or load(s, begin + 64) > 31:
+        return False
+    cursor = begin + 128
+    field = 24
+    while field <= 40:
+        size_now = load(s, begin + field)
+        if size_now > end - cursor or utf8(s, cursor, size_now) == 0:
+            return False
+        if field == 24:
+            if same(s, cursor, name, size_now) == False:
+                return False
+        if field == 32:
+            if size_now == 0 or byte(s, cursor) == 45:
+                return False
+            i = 0
+            while i < size_now:
+                value = byte(s, cursor + i)
+                if value == 0 or value == 10 or value == 13:
+                    return False
+                i = i + 1
+        cursor = cursor + size_now
+        field = field + 8
+    field = 72
+    while field <= 120:
+        count = load(s, begin + field)
+        if count > (end - cursor) // 8:
+            return False
+        i = 0
+        while i < count:
+            if end - cursor < 8:
+                return False
+            size_now = load(s, cursor)
+            cursor = cursor + 8
+            if size_now > end - cursor or utf8(s, cursor, size_now) == 0:
+                return False
+            cursor = cursor + size_now
+            i = i + 1
+        field = field + 8
+    return cursor == end
+
+def valid_plan(s: readbuf, at: u64, size: u64) -> bool:
+    if load(s, at) != PLAN or load(s, at + 8) != 3 or load(s, at + 16) != load(s, 8):
+        return False
+    if load(s, at + 24) != 0 or load(s, at + 32) != load(s, 8) or load(s, at + 40) != 0:
+        return False
+    if load(s, at + 48) != load(s, 24) or load(s, at + 56) != size - 64:
+        return False
+    return utf8(s, at + 64, size - 64) != 0
+
+def valid_files(s: readbuf, at: u64, size: u64, name: u64, name_size: u64) -> bool:
+    if common(s, at, size) == False:
+        return False
+    begin = at + 32
+    end = at + size
+    if load(s, begin) != FILES or load(s, begin + 8) != 1 or load(s, begin + 16) != 1:
+        return False
+    present = load(s, begin + 24)
+    if present > 1 or load(s, begin + 32) != name_size or load(s, begin + 40) != present:
+        return False
+    if load(s, begin + 48) != 0 or load(s, begin + 56) != 0:
+        return False
+    cursor = begin + 64
+    if name_size > end - cursor or same(s, cursor, name, name_size) == False:
+        return False
+    cursor = cursor + name_size
+    if present == 0:
+        return cursor == end
+    if end - cursor < 24 or load(s, cursor) != 1:
+        return False
+    path_size = load(s, cursor + 8)
+    if path_size == 0 or path_size > 4096 or load(s, cursor + 16) != 64:
+        return False
+    cursor = cursor + 24
+    if path_size > end - cursor or end - cursor - path_size != 64:
+        return False
+    if installed_path(s, cursor, path_size) == False:
+        return False
+    cursor = cursor + path_size
+    i = 0
+    while i < 64:
+        b = byte(s, cursor + i)
+        if (b < 48 or b > 57) and (b < 97 or b > 102):
+            return False
+        i = i + 1
+    return True
+
+def installed_path(s: readbuf, at: u64, size: u64) -> bool:
+    if size < 15 or byte(s, at) != 47 or utf8(s, at, size) == 0:
+        return False
+    start = 1
+    i = 1
+    while i <= size:
+        if i == size or byte(s, at + i) == 47:
+            count = i - start
+            if count == 0:
+                return False
+            if count == 1 and byte(s, at + start) == 46:
+                return False
+            if count == 2 and byte(s, at + start) == 46 and byte(s, at + start + 1) == 46:
+                return False
+            if i == size:
+                if count != 14:
+                    return False
+                return basename(s, at + start)
+            start = i + 1
+        else:
+            value = byte(s, at + i)
+            if value < 32 or value == 127:
+                return False
+            if value == 194 and i + 1 < size:
+                following = byte(s, at + i + 1)
+                if following >= 128 and following <= 159:
+                    return False
+        i = i + 1
+    return False
+
+def quote_size(s: readbuf, at: u64, size: u64) -> u64:
+    count = size + 2
+    i = 0
+    while i < size:
+        if byte(s, at + i) == 39:
+            count = count + 4
+        i = i + 1
+    return count
+
+def quote(s: readbuf, o: mutbuf, out: u64, at: u64, size: u64) -> u64:
+    store(o, out, 39)
+    out = out + 1
+    i = 0
+    while i < size:
+        b = byte(s, at + i)
+        if b == 39:
+            store(o, out, 39)
+            store(o, out + 1, 34)
+            store(o, out + 2, 39)
+            store(o, out + 3, 34)
+            store(o, out + 4, 39)
+            out = out + 5
+        else:
+            store(o, out, b)
+            out = out + 1
+        i = i + 1
+    store(o, out, 39)
+    return out + 1
+
+def grow(o: mutbuf, kind: u64, size: u64) -> u32:
+    put(o, 0, GROW_TAG)
+    put(o, 8, kind)
+    put(o, 16, size)
+    put(o, 24, 0)
+    return GROW
+
+def missing(s: readbuf, o: mutbuf, name: u64, size: u64) -> u32:
+    required = 128 + missing_prefix_size() + size + 1
+    if required > length(o):
+        return grow(o, 2, required)
+    error_header(s, o, required - 128)
+    at = missing_prefix(o, 128)
+    copy_range(o, s, at, name, size)
+    store(o, at + size, 96)
+    return required
+
+def pool_error(s: readbuf, o: mutbuf) -> u32:
+    required = 128 + pool_error_size()
+    if required > length(o):
+        return grow(o, 2, required)
+    error_header(s, o, required - 128)
+    pool_error_text(o, 128)
+    return required
+
+def error_header(s: readbuf, o: mutbuf, size: u64) -> u64:
+    fill_range(o, 0, 128, 0)
+    put(o, 0, RESULT)
+    put(o, 8, 1)
+    put(o, 16, load(s, 8))
+    put(o, 24, load(s, 16))
+    put(o, 32, load(s, 24))
+    put(o, 80, size)
+    put(o, 88, size)
+    put(o, 96, 1)
+    return 0
+
+def valid_root(s: readbuf, at: u64, size: u64) -> bool:
+    if common(s, at, size) == False or size <= 32 or utf8(s, at + 32, size - 32) == 0:
+        return False
+    if byte(s, at + 32) != 47:
+        return False
+    i = 32
+    while i < size:
+        if byte(s, at + i) == 0:
+            return False
+        i = i + 1
+    return True
+
+def json_text(s: readbuf, o: mutbuf, at: u64, source: u64, size: u64, write: bool) -> u64:
+    if write:
+        store(o, at, 34)
+    at = at + 1
+    i = 0
+    while i < size:
+        value = byte(s, source + i)
+        if value == 34 or value == 92:
+            if write:
+                store(o, at, 92)
+                store(o, at + 1, value)
+            at = at + 2
+        elif value < 32:
+            escaped = 0
+            if value == 8:
+                escaped = 98
+            elif value == 9:
+                escaped = 116
+            elif value == 10:
+                escaped = 110
+            elif value == 12:
+                escaped = 102
+            elif value == 13:
+                escaped = 114
+            if escaped != 0:
+                if write:
+                    store(o, at, 92)
+                    store(o, at + 1, escaped)
+                at = at + 2
+            else:
+                if write:
+                    store(o, at, 92)
+                    store(o, at + 1, 117)
+                    store(o, at + 2, 48)
+                    store(o, at + 3, 48)
+                    store(o, at + 4, choose(value >> 4 < 10, (value >> 4) + 48, (value >> 4) + 87))
+                    store(o, at + 5, choose((value & 15) < 10, (value & 15) + 48, (value & 15) + 87))
+                at = at + 6
+        else:
+            if write:
+                store(o, at, value)
+            at = at + 1
+        i = i + 1
+    if write:
+        store(o, at, 34)
+    return at + 1
+
+def decimal(o: mutbuf, at: u64, value: u64, write: bool) -> u64:
+    power = 1
+    while value // power >= 10:
+        power = power * 10
+    while power != 0:
+        if write:
+            store(o, at, 48 + (value // power) % 10)
+        at = at + 1
+        power = power // 10
+    return at
+
+def nullable_number(s: readbuf, o: mutbuf, at: u64, field: u64, mask: u64, write: bool) -> u64:
+    if load(s, 112) & mask == 0:
+        return mcp_null(o, at, write)
+    return decimal(o, at, load(s, 80 + field), write)
+
+def mcp_request(s: readbuf, o: mutbuf, at: u64, write: bool) -> u64:
+    if load(s, 8) == 1:
+        at = mcp_info(o, at, write)
+    else:
+        at = mcp_read(o, at, write)
+    host = load(s, 168)
+    path = load(s, 176)
+    at = json_text(s, o, at, 336 + host, path, write)
+    if load(s, 8) == 2:
+        at = mcp_offset(o, at, write)
+        at = nullable_number(s, o, at, 48, 512, write)
+        at = mcp_limit(o, at, write)
+        at = nullable_number(s, o, at, 56, 1024, write)
+        at = mcp_expected(o, at, write)
+        if load(s, 112) & 16 == 0:
+            at = mcp_null(o, at, write)
+        else:
+            start = 336 + host + path + load(s, 184)
+            at = json_text(s, o, at, start, load(s, 192), write)
+    return mcp_end(o, at, write)

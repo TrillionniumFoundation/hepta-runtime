@@ -1,0 +1,133 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) != 128 or length(w) != 65536:
+        return 0
+    phase = get(w, 8192)
+    result = get(w, 8200)
+    if phase == 0:
+        if command(w) == False or image(s) == False:
+            return 0
+        sha_constants(w)
+        i = 0
+        while i < 8:
+            put(w, 1024 + 8 * i, sha_initial(i))
+            i = i + 1
+        put(w, 1088, 0)
+        put(w, 1096, 0)
+        sha_update(s, w, 0, length(s))
+        sha_finish(w)
+        i = 0
+        while i < 32:
+            word = get(w, 1024 + 8 * (i // 4))
+            value = (word >> (8 * (3 - i % 4))) & 255
+            if byte(w, 8512 + 2 * i) != hex_digit(value >> 4) or byte(w, 8513 + 2 * i) != hex_digit(value & 15):
+                return 0
+            i = i + 1
+        footer = length(s) - 64
+        put(w, 8208, load(s, footer + 32))
+        put(w, 8216, load(s, footer + 40))
+        put(w, 8224, 0)
+        child_name(w, 24576)
+        child_flag(w, 24608)
+        store(w, 24640, 0)
+        put(w, 24704, 24576)
+        put(w, 24712, 24608)
+        put(w, 24720, 16384)
+        put(w, 24728, 18446744073709551615)
+        put(w, 24736, 0)
+        return call(o, w, 1, 319, 24576, 3, 0, 0, 0, 0, 3)
+    if phase == 1:
+        if result < 3 or result > 2147483647:
+            return fail(o, w, 74)
+        put(w, 8232, result)
+        return write_child(o, w)
+    if phase == 2:
+        if result == 18446744073709551612:
+            return write_child(o, w)
+        remain = get(w, 8216) - get(w, 8224)
+        if result == 0 or result > remain:
+            return fail(o, w, 74)
+        put(w, 8224, get(w, 8224) + result)
+        if get(w, 8224) != get(w, 8216):
+            return write_child(o, w)
+        return call(o, w, 3, 72, get(w, 8232), 1033, 15, 0, 0, 0, 0)
+    if phase == 3:
+        if result != 0:
+            return fail(o, w, 74)
+        return call(o, w, 4, 72, get(w, 8232), 1034, 0, 0, 0, 0, 0)
+    if phase == 4:
+        if result != 15:
+            return fail(o, w, 74)
+        put(w, 8192, 5)
+        put(o, 0, 24704)
+        put(o, 8, 4)
+        put(o, 16, 24832)
+        return 2
+    if phase == 5:
+        if result != 0:
+            return fail(o, w, 74)
+        return call(o, w, 6, 322, get(w, 8232), 24640, 24832, 24736, 4096, 0, 252)
+    if phase == 6:
+        return fail(o, w, 74)
+    return 0
+
+def write_child(o: mutbuf, w: mutbuf) -> u32:
+    remain = get(w, 8216) - get(w, 8224)
+    return call(o, w, 2, 1, get(w, 8232), get(w, 8208) + get(w, 8224), choose(remain < 65536, remain, 65536), 0, 0, 0, 4)
+
+def call(o: mutbuf, w: mutbuf, phase: u64, number: u64, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, pointers: u64) -> u32:
+    put(w, 8192, phase)
+    fill_range(o, 0, 128, 0)
+    put(o, 0, number)
+    put(o, 8, a)
+    put(o, 16, b)
+    put(o, 24, c)
+    put(o, 32, d)
+    put(o, 40, e)
+    put(o, 48, f)
+    put(o, 56, pointers)
+    return 1
+
+def fail(o: mutbuf, w: mutbuf, code: u64) -> u32:
+    return call(o, w, 99, 60, code, 0, 0, 0, 0, 0, 0)
+
+def command(w: mutbuf) -> bool:
+    if get(w, 8288) != 5 or get(w, 8304) != 5 or get(w, 8312) != 64 or get(w, 8320) != 20:
+        return False
+    if pin_option(w, 8448) == False or root_option(w, 8576) == False:
+        return False
+    size = get(w, 8328)
+    if size == 0 or size > 4095 or byte(w, 16384) != 47 or byte(w, 16384 + size) != 0:
+        return False
+    i = 0
+    while i < 64:
+        value = byte(w, 8512 + i)
+        if (value < 48 or value > 57) and (value < 97 or value > 102):
+            return False
+        i = i + 1
+    return True
+
+def image(s: readbuf) -> bool:
+    size = length(s)
+    if size < 240 or size > 8388608:
+        return False
+    if load(s, 0) != 282584257676671:
+        return False
+    if load(s, 96) != size or load(s, 104) != size:
+        return False
+    at = size - 64
+    if load(s, at) != FOOTER or load(s, at + 8) != 1 or load(s, at + 48) != size or load(s, at + 56) != 0:
+        return False
+    policy = load(s, at + 16)
+    policy_size = load(s, at + 24)
+    child = load(s, at + 32)
+    child_size = load(s, at + 40)
+    if policy < 176 or policy > at or policy_size == 0 or policy_size > 1048576 or policy_size > at - policy:
+        return False
+    if child != policy + policy_size or child_size < 176 or child_size > at - child or child + child_size != at:
+        return False
+    if load(s, child) != 282584257676671:
+        return False
+    return True
+
+def hex_digit(value: u64) -> u64:
+    return choose(value < 10, value + 48, value + 87)

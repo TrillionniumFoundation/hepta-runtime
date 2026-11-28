@@ -1,0 +1,80 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if length(s) < 64 or load(s, 0) != REQUEST:
+        return INVALID
+    kind = load(s, 8)
+    if kind < 1 or kind > 2 or load(s, 16) == 0 or load(s, 56) != 0:
+        return INVALID
+    host = load(s, 32)
+    stdout = load(s, 40)
+    stderr = load(s, 48)
+    if stdout > 8388608 or stderr > 8388608:
+        return INVALID
+    if host > length(s) - 64:
+        return INVALID
+    begin = 64 + host
+    if stdout > length(s) - begin:
+        return INVALID
+    end = begin + stdout
+    if stderr != length(s) - end:
+        return INVALID
+    if load(s, 24) != 0:
+        required = 64 + host + stdout + stderr
+        if length(o) < required:
+            return grow(o, 2, required)
+        header(s, o, 2, host, stdout, stderr)
+        copy_range(o, s, 64, 64, host + stdout + stderr)
+        return required
+    if length(w) < 32:
+        return grow(o, 1, 32)
+    at = initialized(s, begin, end)
+    if at == 0:
+        return INVALID
+    at = result_prefix(s, at, end)
+    if at == 0 or at >= end or byte(s, at) != 34:
+        return INVALID
+    finish = string_info(s, w, at)
+    if finish == MAXIMUM or finish > end:
+        return INVALID
+    size = get(w, 16)
+    if size > stdout:
+        return INVALID
+    classification = 0
+    after = success_suffix(s, finish, end)
+    if after != end:
+        after = error_suffix(s, finish, end)
+        if after != end:
+            return INVALID
+        classification = 1
+    required = 64 + host + size + stderr
+    if required >= LIMIT:
+        return grow(o, 3, 0)
+    if length(o) < required:
+        return grow(o, 2, required)
+    header(s, o, classification, host, size, stderr)
+    copy_range(o, s, 64, 64, host)
+    written = copy_string(s, w, o, at, 64 + host)
+    if written != 64 + host + size:
+        return INVALID
+    copy_range(o, s, written, end, stderr)
+    return required
+
+def header(s: readbuf, o: mutbuf, classification: u64, host: u64, payload: u64, stderr: u64) -> u64:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESULT)
+    put(o, 8, classification)
+    put(o, 16, load(s, 8))
+    put(o, 24, load(s, 16))
+    put(o, 32, host)
+    put(o, 40, payload)
+    put(o, 48, stderr)
+    put(o, 56, load(s, 24))
+    return 0
+
+def grow(o: mutbuf, kind: u64, size: u64) -> u32:
+    put(o, 0, GROW_TAG)
+    put(o, 8, kind)
+    put(o, 16, size)
+    put(o, 24, 0)
+    return GROW

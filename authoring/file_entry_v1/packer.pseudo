@@ -1,0 +1,46 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(s) < 65 or load(s, 0) != MAGIC:
+        return 0
+    policy = load(s, 8)
+    child = load(s, 16)
+    if policy == 0 or policy > 1048576 or policy > length(s) - 64 or child != length(s) - 64 - policy or child < 176:
+        return 0
+    field = 24
+    while field < 64:
+        if load(s, field) != 0:
+            return 0
+        field = field + 8
+    if load(s, 64 + policy) != 282584257676671:
+        return 0
+    if child > 8388608 - TEMPLATE_BYTES - policy - 64:
+        return 0
+    total = TEMPLATE_BYTES + policy + child + 64
+    if length(o) < total:
+        return 0
+    at = 0
+    while at < TEMPLATE_BYTES:
+        value = template_word(at // 8)
+        index = 0
+        while index < 8 and at + index < TEMPLATE_BYTES:
+            store(o, at + index, (value >> (8 * index)) & 255)
+            index = index + 1
+        at = at + 8
+    put(o, 96, total)
+    put(o, 104, total)
+    put(o, SIZE_HOLE, total)
+    jump = TEMPLATE_BYTES - CALL_HOLE - 4
+    index = 0
+    while index < 4:
+        store(o, CALL_HOLE + index, (jump >> (8 * index)) & 255)
+        index = index + 1
+    copy_range(o, s, TEMPLATE_BYTES, 64, policy + child)
+    at = total - 64
+    put(o, at, FOOTER)
+    put(o, at + 8, 1)
+    put(o, at + 16, TEMPLATE_BYTES)
+    put(o, at + 24, policy)
+    put(o, at + 32, TEMPLATE_BYTES + policy)
+    put(o, at + 40, child)
+    put(o, at + 48, total)
+    put(o, at + 56, 0)
+    return total
