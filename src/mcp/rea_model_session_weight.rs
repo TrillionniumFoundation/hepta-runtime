@@ -19,6 +19,8 @@ use crate::mcp::{
 	weight_tensor::ExactElementEdit,
 };
 
+#[path = "rea_model_session_late_quote.rs"]
+pub(in crate::mcp) mod late_quote;
 #[path = "rea_model_session_smallhcsn.rs"]
 pub(in crate::mcp) mod smallhcsn;
 #[path = "rea_model_session_weight_transaction.rs"]
@@ -89,6 +91,7 @@ pub struct SessionWeightParams {
 pub enum SessionWeightRequest {
 	F32(SessionWeightParams),
 	SmallHcsn(smallhcsn::Params),
+	LateQuote(late_quote::Params),
 }
 
 struct Lease {
@@ -271,6 +274,10 @@ pub(in crate::mcp) async fn run(
 			deadline,
 			smallhcsn::run(params, owner.owner(), owner.authenticated(), owner_admission),
 		).await.context("SmallHCSN response deadline exceeded; the admitted original owner task may still finish; recover only its prepared journal identity")?,
+		SessionWeightRequest::LateQuote(params) => tokio::time::timeout_at(
+			deadline,
+			late_quote::run(params, owner.owner(), owner.authenticated(), owner_admission),
+		).await.context("late-quote response deadline exceeded; the admitted original owner retains graph and weight compensation; recover only its prepared journal and plan identity")?,
 	}
 }
 

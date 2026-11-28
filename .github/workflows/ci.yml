@@ -27,6 +27,7 @@ on:
       - 'experiment/**'
       - 'dot/**'
       - 'codex/**'
+      - 'research/**'
   workflow_dispatch:
 
 permissions:
@@ -109,10 +110,20 @@ jobs:
           rg --version
 
       - name: Test in isolated processes
+        # The all-module DWARF test harness exceeds the research executable
+        # identity byte cap. Omit symbols, retaining assertions and every test;
+        # the exact executable is still hashed through the same 512 MiB gate.
+        env:
+          CARGO_PROFILE_TEST_DEBUG: '0'
         run: |
           umask 022
           cargo nextest run --locked --all-targets --all-features \
             --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Native SmallHCSN semantic program qualification
+        run: |
+          cargo test --locked --release --manifest-path qualification/weight_trace_runtime_20261128/Cargo.toml
+          cargo clippy --locked --all-targets --manifest-path qualification/weight_trace_runtime_20261128/Cargo.toml -- -D warnings
 
       - name: Descriptor-relative file safety
         run: /usr/bin/python3 tests/file_capabilities.py
@@ -166,6 +177,8 @@ jobs:
           /usr/bin/python3 -B tests/runtime_http_probe_tests.py
 
       - name: Test without remote filesystem in isolated processes
+        env:
+          CARGO_PROFILE_TEST_DEBUG: '0'
         run: |
           umask 022
           cargo nextest run --locked --all-targets --no-default-features \
@@ -390,12 +403,23 @@ jobs:
           rg --version
 
       - name: Test in isolated processes
+        # Keep the same bounded exact-executable identity check as the release.
+        # Debug/overflow assertions remain enabled; only DWARF symbols are omitted.
+        env:
+          CARGO_PROFILE_TEST_DEBUG: '0'
         run: |
           umask 022
           cargo nextest run --locked --all-targets --all-features \
             --test-threads 1 --retries 0 --no-fail-fast
 
+      - name: Native SmallHCSN semantic program qualification
+        run: |
+          cargo test --locked --release --manifest-path qualification/weight_trace_runtime_20261128/Cargo.toml
+          cargo clippy --locked --all-targets --manifest-path qualification/weight_trace_runtime_20261128/Cargo.toml -- -D warnings
+
       - name: Test without remote filesystem in isolated processes
+        env:
+          CARGO_PROFILE_TEST_DEBUG: '0'
         run: |
           umask 022
           cargo nextest run --locked --all-targets --no-default-features \

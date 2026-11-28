@@ -141,6 +141,16 @@ impl Population {
 		op: &Operators,
 		diagnostics: &mut [f64; 6],
 	) -> Result<[f32; 5]> {
+		self.flow_observed(next_boundary, mark, op, diagnostics, None)
+	}
+	pub fn flow_observed(
+		&mut self,
+		next_boundary: f64,
+		mark: f64,
+		op: &Operators,
+		diagnostics: &mut [f64; 6],
+		signed_rate_affine: Option<&mut [f64; 2]>,
+	) -> Result<[f32; 5]> {
 		let shift = (next_boundary - self.boundary) / H;
 		let mut written = [self.p, self.q];
 		let mut jump = [0.0; 2];
@@ -160,6 +170,22 @@ impl Population {
 			channel[6] += *jumped;
 		}
 		let probability = written[0];
+		if let Some(affine) = signed_rate_affine {
+			let mut offset = jump[1];
+			let mut slope = 0.0;
+			for i in 0..10 {
+				let event = op.propagate.a[i * 12 + 10];
+				offset += if i < 6 {
+					0.5 * written[1][i]
+				} else {
+					written[1][i]
+				} * event;
+				if i < 6 {
+					slope += 0.5 * probability[i] * event;
+				}
+			}
+			*affine = [offset / DT, slope / DT];
+		}
 		for (value, mass) in written[1][..6].iter_mut().zip(&probability[..6]) {
 			*value = 0.5 * *value + 0.5 * mark * mass;
 		}
