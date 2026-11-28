@@ -1,0 +1,53 @@
+{
+  "schema": "hepta.whole-executable-control-composite-gate-protocol.v4",
+  "status": "SEALED_BEFORE_SINGLE_CONTROL_ATTEMPT",
+  "native_source_commit": "16dbc208a21e4aca99dd576fb731a877598219dd",
+  "native_binary_sha256": "4ed713398c4ac37b7890b682c7b6eb32c5bb3e0c5e86b76543bee1eb7e580324",
+  "source": {
+    "file": "executable_identity_control_continuation.py",
+    "sha256": "7605d50e668c22f11c58660002819b62c496a310d76980d1202a143c1b09d915",
+    "unchanged_core_predecessor_sha256": "4ed5c275262dc679d33a28d3abb7e5c96f9b8b44ec4eb481e11cb90693004445",
+    "only_change": "The primary-result gate now verifies the explicitly composite continuation, original failed result/plan/refusal bytes and actual continuation source; all other original functions and BUDGET source are unchanged."
+  },
+  "preconditions": {
+    "composite_status": "PASS",
+    "composite_sha256": "cf905b442a149b3c000697d5cf4c3e854a78f695031c82d8055b304474517824",
+    "continuation_source_sha256": "a2212ee79bff7f4ea611ac9984f700dd3afc1868b51d73eff6690272b9fdb9bc",
+    "original_failure_sha256": "4cbf5fc0c624f944c53caf2cf12ffd0398d20f6df4e046f210d1b81404ca7713",
+    "original_failure_stays_failed": true,
+    "original_cli_checker_status": "PASS",
+    "cli_mcp_parity_receipt_sha256": "595dabf561726c375be46e6dcf14b2fc43634b1cd8e969dafa24f7dfd6baf001",
+    "distinct_function_input_pairs": 14,
+    "complete_observations": 27,
+    "parity_new_forwards": 0,
+    "root_gate_review_sha256": "8c68ec9964dc56ac52503a70d49d5078568975cf7a32c9045bf7492f4c4046d2"
+  },
+  "budget": {
+    "all_path_complete_and_partial_forward_upper_bound": 7,
+    "successful_captured_window_upper_bound": 5,
+    "new_forwards_on_recovery": 0,
+    "pure_preparations": 2,
+    "servers": 2,
+    "roundtrip_new_intents": 1,
+    "roundtrip_wire_calls": 1,
+    "recover_wire_calls": 2,
+    "crash_attempts": 1,
+    "tool_calls": 5,
+    "rpc_cap": 12,
+    "expected_rpc_calls": 9,
+    "wall_seconds": 180,
+    "per_server_cpu_seconds": 60,
+    "per_server_address_space_bytes": 2147483648,
+    "training_steps": 0,
+    "automatic_retry": false
+  },
+  "requirements": [
+    "Only append the frozen nonloaded marker to an owned copy; original prefix, ELF entry/header/program-header and every PT_LOAD remain identical; whole executable SHA differs.",
+    "One original-executable seed137 graph-only same-checkpoint attempt; observe postpublication/preinverse and absent Restored charge/result; actual owned SIGKILL.",
+    "After source deletion, recover with observed /proc/PID/exe matching the modified whole executable.",
+    "Require same boot and positive original dual-clock window before/after recovery, with explicit20/15-second admission margins.",
+    "Restore the complete original function while refusing new model work with the exact source/executable drift error; Parent/Candidate/Restored phase file presence and SHA unchanged, no refund/replay.",
+    "Second recovery produces no new effects. Missing capture window fails once, including possible originally completed Restored forwards in the all-path7 budget."
+  ],
+  "claims": "This qualifies conservative whole-executable identity refusal and exact inverse, not a new qualified executable, arbitrary upgrade compatibility, production activation or new scientific holdout."
+}

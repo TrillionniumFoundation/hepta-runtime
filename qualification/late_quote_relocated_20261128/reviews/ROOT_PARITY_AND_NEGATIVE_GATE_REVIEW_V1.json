@@ -1,0 +1,24 @@
+{
+  "schema": "hepta.root-parity-and-control-gate-review.v1",
+  "status": "PASS_CONDITIONAL_ON_ACTUAL_COMPOSITE_AND_OLD_CLI_PARITY",
+  "reviewed_at_utc": "2026-11-28T15:15:14.380045+00:00",
+  "projection_sha256": "5f8bdf911b8b876fbe5a0c49af1079f5a23468f381d0332a248d33e6966a4ed7",
+  "new_control_sha256": "7605d50e668c22f11c58660002819b62c496a310d76980d1202a143c1b09d915",
+  "old_control_sha256": "4ed5c275262dc679d33a28d3abb7e5c96f9b8b44ec4eb481e11cb90693004445",
+  "only_preexisting_function_changed": [
+    "primary"
+  ],
+  "control_budget_source_byte_identical": true,
+  "control_budget_source": "BUDGET={\n \"server_starts\":2,\"rpc_wire_calls\":12,\"tool_calls\":5,\"roundtrip_wire_calls\":1,\n \"roundtrip_new_intents\":1,\"recover_wire_calls\":2,\"crash_attempts\":1,\n \"complete_and_partial_forward_upper_bound\":7,\"pure_compiler_upper_bound\":2,\n \"training_steps\":0,\"wall_seconds\":180,\"server_cpu_seconds\":60,\n \"server_address_space_bytes\":2*1024**3,\"server_tokio_worker_threads\":2,\"automatic_retry\":False,\n}",
+  "findings": [
+    "Read complete 4317-byte format adapter. It requires exact original failed result SHA, exact continuation source, cumulative counts and native identity; original three case objects must equal their immutable failure-receipt counterparts. It copies native phase objects unchanged for the unmodified original CLI checker.",
+    "Adapter explicitly marks composite continuation and original main attempt not passed. It cannot relabel the original failure.",
+    "Read complete negative-control primary gate diff. Exact failed plan/result/response files must remain on disk and hash-match; composite source/identities/scope/counts/partial-cost flags are checked.",
+    "AST source-segment comparison independently verifies every preexisting function/class except primary() is byte-identical, with unchanged negative-control BUDGET. No executable mutation, publication-stop timing, inverse-only recovery path or count semantics were changed."
+  ],
+  "authorization": "Once exactly sealed continuation PASS and unchanged old CLI parity PASS are verified, execute the revised negative control once under its existing all-path <=7 / successful STOP <=5 / changed-executable recovery 0 new forwards bounds. No additional user permission required.",
+  "model_forwards_by_review": 0,
+  "native_servers_started_by_review": 0,
+  "scope": "Static and identity review, not evidence the negative control has executed or passed.",
+  "review_helper_note": "First static helper used ast.literal_eval on a budget containing multiplication and stopped before writing a review; direct AST source-segment equality then succeeded. Neither helper executed experiment code."
+}

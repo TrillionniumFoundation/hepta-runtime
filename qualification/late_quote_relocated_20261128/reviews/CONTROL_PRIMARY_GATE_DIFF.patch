@@ -1,0 +1,60 @@
+--- sealed_relocated_control_4ed5.py
++++ continuation_control_candidate.py
+@@ -28,6 +28,13 @@
+ t=m.t
+ require,read,parse,digest=m.require,m.read,m.parse,m.digest
+ MAIN_SHA="9763f0c078a46c7367703bb7d072003fe2136cf6e5f59656f7733e6f90ac40e9"
++CONTINUATION_SHA="a2212ee79bff7f4ea611ac9984f700dd3afc1868b51d73eff6690272b9fdb9bc"
++COMPOSITE_SCHEMA="hepta.late-quote.http-continuation-qualification.v1.result"
++PRIOR_RESULT_SHA="4cbf5fc0c624f944c53caf2cf12ffd0398d20f6df4e046f210d1b81404ca7713"
++PRIOR_PLAN_SHA="3e145469d1da17d9f92a2d95183d8a1119a12719de2eb1d5a22ee9d38fb65fc8"
++PRIOR_RESPONSE_SHA="b6549b634395e5c5bdf085d8b4cb7f9b464920665268081ff36d4914a87c0bc0"
++COMPOSITE_COUNTS={"server_starts":4,"rpc_wire_calls":35,"tool_calls":27,
++ "roundtrip_wire_calls":10,"roundtrip_new_intents":4,"recover_wire_calls":6,"crash_attempts":1}
+ SCHEMA="hepta.late-quote.whole-executable-negative-control.relocated.v1"
+ MARKER=b"\nHEPTA_OWNED_EXE_IDENTITY_NEGATIVE_CONTROL_V1\n"
+ BUDGET={
+@@ -60,10 +67,39 @@
+ 
+ def primary(path):
+     raw=read(path,8*1024*1024,private=True);v=parse(raw)
+-    require(v["schema"]==m.SCHEMA+".result" and v["status"]=="PASS","primary actual native qualification must already PASS")
+-    require(v["identity"]["source_commit"]==m.SOURCE_COMMIT and v["identity"]["source_tree"]==m.SOURCE_TREE and v["reconstructed_driver_sha256"]==MAIN_SHA,"primary exact identities differ")
+-    require(v["optimizer_steps"]==0 and v["forward_source_control_flow_upper_bound"]==29,"primary scope differs")
+-    return {"path":str(path),"sha256":digest(raw),"identity":v["identity"]}
++    require(path.name=="CONTINUATION_RESULT_V1.json" and v["schema"]==COMPOSITE_SCHEMA
++      and v["status"]=="PASS" and v["failure"] is None and v["cleanup_errors"]==[],
++      "source-bound composite native qualification must already PASS")
++    continuation=Path(__file__).resolve().with_name("late_quote_mcp_continuation.py")
++    require(digest(read(continuation))==CONTINUATION_SHA==v["continuation_driver_sha256"],
++      "actual reviewed continuation source differs")
++    require(v["identity"]["source_commit"]==m.SOURCE_COMMIT and v["identity"]["source_tree"]==m.SOURCE_TREE
++      and v["original_main_driver_sha256"]==MAIN_SHA,"composite exact native/original source identity differs")
++    require(v["original_failed_main_result_sha256"]==PRIOR_RESULT_SHA
++      and v["original_main_plan_sha256"]==PRIOR_PLAN_SHA
++      and v["original_refusal_response_sha256"]==PRIOR_RESPONSE_SHA,"composite historical identities differ")
++    require(digest(read(path.parent/"RESULT.json",4*1024*1024,private=True))==PRIOR_RESULT_SHA
++      and digest(read(path.parent.parent/"plan.json",private=True))==PRIOR_PLAN_SHA
++      and digest(read(path.parent/"a-first-main-019-response.json",private=True))==PRIOR_RESPONSE_SHA,
++      "actual original failure/plan/refusal bytes were not preserved")
++    require(v["original_failure_preserved"] is True and v["original_negative_effect_snapshot_available"] is False
++      and v["new_schema_refusal_verified"] is True,"composite refusal evidence scope differs")
++    require(isinstance(v["receipts"],dict) and set(v["receipts"])=={"47","83","137","crash137"},
++      "composite native receipt set differs")
++    require(isinstance(v["counts"],dict) and set(v["counts"])==set(COMPOSITE_COUNTS)
++      and all(type(v["counts"][key]) is int and v["counts"][key]==value
++              for key,value in COMPOSITE_COUNTS.items()),"composite cumulative counts differ")
++    expected={"forward_source_control_flow_upper_bound":29,"pure_compiler_source_control_flow_upper_bound":8,
++      "continuation_new_forward_upper_bound":7,"continuation_new_compiler_upper_bound":2,
++      "prior_complete_forward_results":22,"optimizer_steps":0,"training_steps":0}
++    require(all(type(v[key]) is int and v[key]==value for key,value in expected.items()),"composite scope differs")
++    require(v["actual_total_forward_calls_claimed_exact"] is False
++      and v["interrupted_partial_work_accounted_by_original_phase_ledgers"] is True
++      and v["automatic_retry"] is False and v["production_deployment"] is False,
++      "composite partial-work or execution-scope claim differs")
++    return {"path":str(path),"sha256":digest(raw),"identity":v["identity"],
++      "continuation_source_sha256":CONTINUATION_SHA,"original_failed_main_result_sha256":PRIOR_RESULT_SHA,
++      "original_main_plan_sha256":PRIOR_PLAN_SHA,"original_refusal_response_sha256":PRIOR_RESPONSE_SHA}
+ 
+ def clocks(window):
+     boot=Path("/proc/sys/kernel/random/boot_id").read_text().strip()
