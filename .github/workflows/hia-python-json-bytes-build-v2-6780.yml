@@ -1,0 +1,56 @@
+name: Build HIA Python JSON bytes decoder without applications
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-python-json-bytes-build-6780-v2-20261118]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PYJSON_SOURCE: ${{ github.workspace }}/runtime/qualification/python_json_bytes/v2/native_build
+      PYJSON_MANIFEST: 5bc119f30de529a68e3340748a46c209eac48ae410e8745f5513d768ea6c550a
+    steps:
+      - name: Checkout frozen source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/python_json_bytes/v2/native_build
+          persist-credentials: false
+      - name: Checkout exact compiler source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify exact source heads
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+      - name: Compile one HIA decoder and read every build byte
+        run: |
+          python3 -I -B "$PYJSON_SOURCE/scripts/gate.py" build \
+            --work "$RUNNER_TEMP/python-json-bytes-build" --hepta "$GITHUB_WORKSPACE/compiler" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Preserve all build output and failure evidence
+        if: always()
+        run: |
+          python3 -I -B "$PYJSON_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/python-json-bytes-build" --output "$RUNNER_TEMP/python-json-bytes-export" \
+            --source-manifest-sha256 "$PYJSON_MANIFEST"
+      - name: Upload complete build
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-json-bytes-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/python-json-bytes-export
+          if-no-files-found: error
+          retention-days: 14

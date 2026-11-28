@@ -1,0 +1,395 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s) < 64 or load(s,0) != REQUEST:
+        return 4294967295
+    command = load(s,8)
+    count = load(s,16)
+    extra = load(s,24)
+    parse_budget = load(s,32)
+    dump_budget = load(s,40)
+    if command < 1 or command > 6 or count > 8388608 or extra > 8388608 or count+extra > 8388608 or load(s,48) != 0:
+        return 4294967295
+    if parse_budget == 0 or parse_budget > 2000 or dump_budget == 0 or dump_budget > 2000:
+        return 4294967295
+    if load(s,56) != (count+extra)*4 or length(s) != 64+(count+extra)*4:
+        return 4294967295
+    if (command == 1 or command == 3) and extra != 0:
+        return 4294967295
+    i = 0
+    while i < count+extra:
+        cp = character(s,i)
+        if cp > 1114111:
+            return 4294967295
+        if (command == 2 or command == 6) and i >= count and (cp > 127 or extra > 96):
+            return 4294967295
+        i = i+1
+    if length(w) < 16448+40*(count+extra):
+        return 4294967293
+    put(w,NEXT,16384)
+    put(w,HEAP,length(w)&18446744073709551608)
+    put(w,ERR,0)
+    put(w,DUMP_BUDGET,dump_budget)
+    root = parse(s,w,0,count,parse_budget)
+    if root == 0:
+        return report_error(s,o,w)
+    if command == 2 or command == 6:
+        root = lookup(s,w,root,count,extra,command == 6)
+        if get(w,ERR) != 0:
+            return report_error(s,o,w)
+    if command == 4 or command == 5:
+        other = parse(s,w,count,extra,parse_budget)
+        if other == 0:
+            return report_error(s,o,w)
+        if command == 5:
+            equal = equal_values(s,w,root,other)
+            if get(w,ERR) != 0:
+                return 4294967295
+            if length(o) < 64:
+                return 4294967294
+            header(o,2,2,choose(equal,1,0),0,0,0,0)
+            return 64
+        if get(w,root) != 7:
+            put(w,ERR,15)
+            put(w,DETAIL,get(w,root))
+            return report_error(s,o,w)
+        if get(w,other) != 7:
+            return 4294967295
+        merge_update(w,root,other)
+    if command == 3 or command == 4:
+        amount = serialize(s,o,w,root,False)
+        if get(w,ERR) != 0:
+            return report_error(s,o,w)
+        if length(o) < 64+amount:
+            return 4294967294
+        header(o,1,get(w,root),scalar_truth(s,w,root),0,amount,2,amount)
+        if serialize(s,o,w,root,True) != amount:
+            return 4294967295
+        return 64+amount
+    return value_result(s,o,w,root)
+
+def parse(s:readbuf,w:mutbuf,begin:u64,count:u64,budget:u64) -> u64:
+    put(w,BASE,begin)
+    put(w,END,begin+count)
+    put(w,CURSOR,space(s,begin,begin+count))
+    root = value(s,w,0,budget)
+    if root == 0:
+        return 0
+    parent = 0
+    depth = 0
+    if get(w,root) >= 6:
+        parent = root
+        depth = 1
+    while parent != 0:
+        at = space(s,get(w,CURSOR),get(w,END))
+        put(w,CURSOR,at)
+        tag = get(w,parent)
+        phase = get(w,parent+40)&255
+        key = 0
+        closed = False
+        if tag == 6:
+            if (phase == 0 or phase == 2) and at < get(w,END) and character(s,at) == 93:
+                closed = True
+            elif phase == 2:
+                if at == get(w,END) or character(s,at) != 44:
+                    return error(w,4,at)
+                at = space(s,at+1,get(w,END))
+                put(w,CURSOR,at)
+                put(w,parent+40,(get(w,parent+40)&18446744073709551360)|1)
+        else:
+            if (phase == 0 or phase == 4) and at < get(w,END) and character(s,at) == 125:
+                closed = True
+            else:
+                if phase == 4:
+                    if at == get(w,END) or character(s,at) != 44:
+                        return error(w,4,at)
+                    at = space(s,at+1,get(w,END))
+                    put(w,CURSOR,at)
+                if at == get(w,END) or character(s,at) != 34:
+                    return error(w,2,at)
+                key = string(s,w)
+                if key == 0:
+                    return 0
+                at = space(s,get(w,CURSOR),get(w,END))
+                if at == get(w,END) or character(s,at) != 58:
+                    return error(w,3,at)
+                put(w,CURSOR,space(s,at+1,get(w,END)))
+        if closed:
+            put(w,parent+56,(get(w,parent+56)&4294967295)|((at+1)<<32))
+            put(w,CURSOR,at+1)
+            if tag == 7:
+                sort_object(w,parent)
+            parent = get(w,parent+8)
+            depth = depth-1
+        else:
+            child = value(s,w,depth,budget)
+            if child == 0:
+                return 0
+            put(w,child+8,parent)
+            put(w,child+32,key)
+            if get(w,parent+24) == 0:
+                put(w,parent+24,child)
+            else:
+                put(w,(get(w,parent+40)>>8)+16,child)
+            put(w,parent+48,get(w,parent+48)+1)
+            if tag == 6:
+                put(w,parent+40,(child<<8)|2)
+            else:
+                put(w,parent+40,(child<<8)|4)
+            if get(w,child) >= 6:
+                parent = child
+                depth = depth+1
+    at = space(s,get(w,CURSOR),get(w,END))
+    if at != get(w,END):
+        return error(w,9,at)
+    return root
+
+def value(s:readbuf,w:mutbuf,depth:u64,budget:u64) -> u64:
+    at = get(w,CURSOR)
+    end = get(w,END)
+    if at >= end:
+        return error(w,1,at)
+    cp = character(s,at)
+    if cp == 34:
+        return string(s,w)
+    if cp == 91 or cp == 123:
+        if depth >= budget:
+            return error(w,choose(cp == 91,11,12),at)
+        node = allocate(w)
+        put(w,node,choose(cp == 91,6,7))
+        put(w,node+56,at)
+        put(w,CURSOR,at+1)
+        return node
+    if cp == 110 and matches(s,at,end,1819047278,4):
+        return scalar(w,0,at,at+4,0)
+    if cp == 102 and matches(s,at,end,435728179558,5):
+        return scalar(w,1,at,at+5,0)
+    if cp == 116 and matches(s,at,end,1702195828,4):
+        return scalar(w,2,at,at+4,1)
+    if cp == 78 and matches(s,at,end,5136718,3):
+        return scalar(w,4,at,at+3,9221120237041090560)
+    if cp == 73 and matches(s,at,end,8751735898823355977,8):
+        return scalar(w,4,at,at+8,9218868437227405312)
+    if cp == 45 and at+1 < end and character(s,at+1) == 73 and matches(s,at+1,end,8751735898823355977,8):
+        return scalar(w,4,at,at+9,18442240474082181120)
+    return number(s,w)
+
+def scalar(w:mutbuf,tag:u64,begin:u64,end:u64,bits:u64) -> u64:
+    node = allocate(w)
+    put(w,node,tag)
+    put(w,node+40,bits)
+    put(w,node+56,begin|(end<<32))
+    put(w,CURSOR,end)
+    return node
+
+def allocate(w:mutbuf) -> u64:
+    at = get(w,NEXT)
+    put(w,NEXT,at+64)
+    fill_range(w,at,64,0)
+    return at
+
+def number(s:readbuf,w:mutbuf) -> u64:
+    start = get(w,CURSOR)
+    end = get(w,END)
+    at = start
+    if character(s,at) == 45:
+        at = at+1
+    if at >= end:
+        return error(w,1,start)
+    digits = at
+    cp = character(s,at)
+    if cp == 48:
+        at = at+1
+    elif cp >= 49 and cp <= 57:
+        at = at+1
+        while at < end and is_digit(character(s,at)):
+            at = at+1
+    else:
+        return error(w,1,start)
+    integer_end = at
+    floating = False
+    if at+1 < end and character(s,at) == 46 and is_digit(character(s,at+1)):
+        floating = True
+        at = at+2
+        while at < end and is_digit(character(s,at)):
+            at = at+1
+    if at < end and (character(s,at) == 101 or character(s,at) == 69):
+        exponent_start = at
+        next = at+1
+        if next < end and (character(s,next) == 43 or character(s,next) == 45):
+            next = next+1
+        if next < end and is_digit(character(s,next)):
+            floating = True
+            at = next+1
+            while at < end and is_digit(character(s,at)):
+                at = at+1
+    if floating:
+        text = get(w,HEAP)-(at-start)
+        i = start
+        while i < at:
+            store(w,text+i-start,character(s,i))
+            i = i+1
+        status = convert(w,text,at-start)
+        if status == 4294967292:
+            bits = 9218868437227405312
+            if character(s,start) == 45:
+                bits = bits|9223372036854775808
+        elif status == 8:
+            bits = get(w,8192)
+        else:
+            return error(w,16,start)
+        return scalar(w,4,start,at,bits)
+    if integer_end-digits > 4300:
+        put(w,DETAIL,integer_end-digits)
+        return error(w,10,start)
+    node = scalar(w,3,start,at,0)
+    put(w,node+40,digits)
+    put(w,node+48,integer_end-digits)
+    return node
+
+def string(s:readbuf,w:mutbuf) -> u64:
+    start = get(w,CURSOR)
+    at = start+1
+    end = get(w,END)
+    top = get(w,HEAP)
+    count = 0
+    finished = False
+    while at < end and finished == False:
+        cp = character(s,at)
+        if cp == 34:
+            finished = True
+            at = at+1
+        else:
+            if cp < 32:
+                return error(w,6,at)
+            if cp == 92:
+                escape = at
+                at = at+1
+                if at >= end:
+                    return error(w,5,start)
+                cp = character(s,at)
+                if cp == 117:
+                    unicode_at = at
+                    if at+5 >= end:
+                        return error(w,8,at)
+                    cp = hex4(s,w,at+1,at)
+                    if get(w,ERR) != 0:
+                        return 0
+                    at = at+5
+                    if cp >= 55296 and cp <= 56319 and at+6 < end and character(s,at) == 92 and character(s,at+1) == 117:
+                        low = hex4(s,w,at+2,at+1)
+                        if get(w,ERR) != 0:
+                            return 0
+                        if low >= 56320 and low <= 57343:
+                            cp = 65536+((cp-55296)<<10)+low-56320
+                            at = at+6
+                else:
+                    if cp == 34 or cp == 92 or cp == 47:
+                        cp = cp
+                    elif cp == 98:
+                        cp = 8
+                    elif cp == 102:
+                        cp = 12
+                    elif cp == 110:
+                        cp = 10
+                    elif cp == 114:
+                        cp = 13
+                    elif cp == 116:
+                        cp = 9
+                    else:
+                        return error(w,7,escape)
+                    at = at+1
+            else:
+                at = at+1
+            count = count+1
+            put32(w,top-count*4,cp)
+    if finished == False:
+        return error(w,5,start)
+    bottom = top-count*4
+    put(w,HEAP,bottom)
+    i = 0
+    while i < count>>1:
+        a = get32(w,bottom+i*4)
+        b = get32(w,top-(i+1)*4)
+        put32(w,bottom+i*4,b)
+        put32(w,top-(i+1)*4,a)
+        i = i+1
+    node = scalar(w,5,start,at,bottom)
+    put(w,node+48,count)
+    return node
+
+def hex4(s:readbuf,w:mutbuf,at:u64,position:u64) -> u64:
+    value = 0
+    i = 0
+    while i < 4:
+        cp = character(s,at+i)
+        if cp >= 48 and cp <= 57:
+            digit = cp-48
+        elif cp >= 65 and cp <= 70:
+            digit = cp-55
+        elif cp >= 97 and cp <= 102:
+            digit = cp-87
+        else:
+            return error(w,8,position)
+        value = (value<<4)|digit
+        i = i+1
+    return value
+
+def matches(s:readbuf,at:u64,end:u64,literal:u64,size:u64) -> bool:
+    if at+size > end:
+        return False
+    i = 0
+    while i < size:
+        if character(s,at+i) != ((literal>>(i*8))&255):
+            return False
+        i = i+1
+    return True
+
+def is_digit(cp:u64) -> bool:
+    return cp >= 48 and cp <= 57
+
+def space(s:readbuf,at:u64,end:u64) -> u64:
+    going = True
+    while at < end and going:
+        cp = character(s,at)
+        if cp == 32 or cp == 9 or cp == 10 or cp == 13:
+            at = at+1
+        else:
+            going = False
+    return at
+
+def error(w:mutbuf,code:u64,position:u64) -> u64:
+    put(w,ERR,code)
+    put(w,POSITION,position)
+    return 0
+
+def character(s:readbuf,index:u64) -> u64:
+    at = 64+index*4
+    return byte(s,at)|(byte(s,at+1)<<8)|(byte(s,at+2)<<16)|(byte(s,at+3)<<24)
+
+def get32(w:mutbuf,at:u64) -> u64:
+    return byte(w,at)|(byte(w,at+1)<<8)|(byte(w,at+2)<<16)|(byte(w,at+3)<<24)
+
+def put32(w:mutbuf,at:u64,value:u64) -> u64:
+    store(w,at,value&255)
+    store(w,at+1,(value>>8)&255)
+    store(w,at+2,(value>>16)&255)
+    store(w,at+3,(value>>24)&255)
+    return 0
+
+def load(s:readbuf,at:u64) -> u64:
+    value = 0
+    i = 0
+    while i < 8:
+        value = value|(byte(s,at+i)<<(i*8))
+        i = i+1
+    return value
+
+def header(o:mutbuf,kind:u64,tag:u64,truth_value:u64,bits:u64,count:u64,encoding:u64,size:u64) -> u64:
+    put(o,0,RESPONSE)
+    put(o,8,kind)
+    put(o,16,tag)
+    put(o,24,truth_value)
+    put(o,32,bits)
+    put(o,40,count)
+    put(o,48,encoding)
+    put(o,56,size)
+    return 0

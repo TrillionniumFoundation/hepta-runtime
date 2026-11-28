@@ -1,0 +1,7 @@
+# Exact dual-filename error data
+
+The new HOSER001 kind-3 envelope carries a nonzero errno 1..4095, the existing canonical 1..14 wire error class, first-name byte length at40, filename-kind3 at48, full combined payload length at56, and UTF-8 name1 followed immediately by UTF-8 name2 at64. Sequence16 is opaque data. Each filename is independently UTF-8 validated; empty strings are valid. Total input must be below the inherited LIMIT. The envelope never grants descriptor or path authority and never performs an OS operation.
+
+For the Linux CPython3.12.3 target, the complete diagnostic is the actual class name, colon-space, errno/message, colon-space, repr(name1), space-arrow-space, and repr(name2). Each repr independently chooses quotes and uses the unchanged complete Unicode15 platform table. The original 30 HIA functions are retained byte-exact as IR after relocating only the old entry f0 to f30. HBRDS001 and HMDSR001 retain their complete original contracts. Neither old envelope accepts filename-kind3.
+
+Return and capacity rules remain unchanged: no newline; full produced length, INVALID0xffffffff, CAPACITY0xfffffffe; invalid input and insufficient workspace leave all arenas unchanged; short output may only install the same immutable data pool; all unused tails remain intact. Workspace remains12288 bytes. This source-only package does not claim compiled execution or semantic qualification.

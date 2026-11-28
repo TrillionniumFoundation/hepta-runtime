@@ -1,0 +1,833 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=WRITE_REQUEST or load(s,88)!=length(s)-96:
+        return INVALID
+    command=load(s,8)
+    if command!=1 and command!=2:
+        return INVALID
+    if length(o)<64:
+        return CAPACITY
+    if command==1:
+        if valid_write_start(s)==0:
+            return INVALID
+        needed=write_required(load(s,40),load(s,48),load(s,56))
+        if needed>=LIMIT:
+            return INVALID
+        if length(w)<needed:
+            return write_short(o,4,needed)
+        if get(w,0)==WRITE_WORK:
+            if get(w,8)!=0 and get(w,8)!=99:
+                return INVALID
+        fill_range(w,0,8192,0)
+        put(w,0,WRITE_WORK)
+        put(w,8,1)
+        put(w,56,load(s,32))
+        put(w,64,load(s,40))
+        put(w,72,load(s,48))
+        put(w,80,load(s,56))
+        put(w,88,load(s,64))
+        put(w,96,MAXIMUM)
+        put(w,104,MAXIMUM)
+        put(w,112,MAXIMUM)
+        put(w,120,MAXIMUM)
+        put(w,184,get(w,64)+2048)
+        put(w,192,needed)
+        put(w,200,NAME+get(w,64)+1)
+        put(w,208,PRIOR+get(w,72))
+        put(w,216,BASE64+get(w,80)+24)
+        put(w,224,DECODED+get(w,80)+64)
+        put(w,312,ERROR+get(w,184))
+        put(w,320,get(w,64)+get(w,72)+get(w,80)+192)
+        put(w,232,CHILD+get(w,320))
+        put(w,304,write_reply_capacity(get(w,64),get(w,80)))
+        copy_in(s,w,96,NAME,get(w,64))
+        store(w,NAME+get(w,64),0)
+        copy_in(s,w,96+get(w,64),PRIOR,get(w,72))
+        copy_in(s,w,96+get(w,64)+get(w,72),BASE64+24,get(w,80))
+    else:
+        if length(w)<8192 or get(w,0)!=WRITE_WORK:
+            return INVALID
+        if length(w)<get(w,192):
+            return write_short(o,4,get(w,192))
+        if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+            return INVALID
+        if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+            return INVALID
+        if length(s)-96>get(w,304):
+            return INVALID
+        if negative(load(s,24))!=0:
+            if length(s)!=96 or load(s,24)<MAXIMUM-4094:
+                return INVALID
+        sequence=load(s,16)
+        if get(w,24)!=0:
+            if sequence!=get(w,24):
+                return INVALID
+            copy_in(s,w,96,WRITE_REPLY,length(s)-96)
+            put(w,32,sequence)
+            put(w,40,load(s,24))
+            put(w,48,length(s)-96)
+            put(w,24,0)
+        else:
+            if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                return INVALID
+            at=0
+            while at<get(w,48):
+                if byte(s,96+at)!=byte(w,WRITE_REPLY+at):
+                    return INVALID
+                at=at+1
+    status=NEXT
+    while status==NEXT:
+        phase=get(w,8)
+        if phase>=100 and phase<120:
+            status=regular_flow(o,w)
+        else:
+            if phase>=210 and phase<220:
+                status=expected_flow(o,w)
+            else:
+                if phase>=90 and phase<=99:
+                    status=write_finish(o,w)
+                else:
+                    if phase<40:
+                        status=lock_flow(o,w)
+                    else:
+                        status=write_flow(o,w)
+    return status
+
+def valid_write_start(s:readbuf) -> u64:
+    if load(s,16)!=0 or load(s,24)!=1 or load(s,32)>2147483647:
+        return 0
+    if load(s,64)>1 or load(s,72)!=0 or load(s,80)!=0:
+        return 0
+    name=load(s,40)
+    prior=load(s,48)
+    data=load(s,56)
+    left=length(s)-96
+    if name>left:
+        return 0
+    left=left-name
+    if prior>left or data!=left-prior:
+        return 0
+    if load(s,64)==0 and prior!=0:
+        return 0
+    if utf8(s,96,name)==0 or utf8(s,96+name,prior)==0 or utf8(s,96+name+prior,data)==0:
+        return 0
+    at=0
+    while at<name:
+        if byte(s,96+at)==47:
+            return 0
+        at=at+1
+    return 1
+
+def write_reply_capacity(name:u64,data:u64) -> u64:
+    needed=name+data+1024
+    if needed<2097152:
+        needed=2097152
+    return needed
+
+def write_required(name:u64,prior:u64,data:u64) -> u64:
+    return 8192+name+1+prior+data+24+data+64+name+2048+name+prior+data+192+write_reply_capacity(name,data)
+
+def write_short(o:mutbuf,kind:u64,size:u64) -> u32:
+    fill_range(o,0,64,0)
+    put(o,0,WRITE_RESPONSE)
+    put(o,8,kind)
+    put(o,32,size)
+    return 64
+
+def write_request(w:mutbuf,o:mutbuf,phase:u64,kind:u64,op:u64,a:u64,b:u64,c:u64,at:u64,size:u64) -> u64:
+    if size>length(w) or at>length(w)-size:
+        return INVALID
+    if length(o)<64+size:
+        return write_short(o,5,64+size)
+    sequence=get(w,16)+1
+    if sequence==0:
+        return INVALID
+    fill_range(o,0,64,0)
+    put(o,0,WRITE_RESPONSE)
+    put(o,8,kind)
+    put(o,16,sequence)
+    put(o,24,op)
+    put(o,32,a)
+    put(o,40,b)
+    put(o,48,c)
+    put(o,56,size)
+    copy_out(w,o,at,64,size)
+    put(w,16,sequence)
+    put(w,24,sequence)
+    put(w,8,phase)
+    return 64
+
+def error_class(number:u64) -> u64:
+    if number==1 or number==13:
+        return 2
+    if number==2:
+        return 4
+    if number==20:
+        return 5
+    if number==21:
+        return 6
+    if number==17:
+        return 7
+    if number==4:
+        return 8
+    if number==11 or number==114 or number==115:
+        return 9
+    if number==32 or number==108:
+        return 10
+    if number==110:
+        return 11
+    if number==104:
+        return 12
+    if number==103:
+        return 13
+    if number==111:
+        return 14
+    return 3
+
+def error_header(w:mutbuf,tag:u64,klass:u64,number:u64,literal:u64,named:u64,size:u64) -> u64:
+    fill_range(w,ERROR,64,0)
+    put(w,ERROR,tag)
+    put(w,ERROR+8,3)
+    put(w,ERROR+16,get(w,16))
+    put(w,ERROR+24,klass)
+    put(w,ERROR+32,number)
+    put(w,ERROR+40,literal)
+    put(w,ERROR+48,named)
+    put(w,ERROR+56,size)
+    put(w,176,64+size)
+    return 0
+
+def write_literal(w:mutbuf,code:u64) -> u64:
+    at=ERROR+64
+    end=at
+    klass=1
+    if code==1:
+        end=literal_embedded(w,at)
+    if code==2:
+        end=literal_regular(w,at)
+    if code==3:
+        end=literal_destination(w,at)
+    if code==4:
+        end=literal_too_large(w,at)
+    if code==5:
+        end=literal_no_progress(w,at)
+        klass=3
+    if end==at:
+        return INVALID
+    error_header(w,RESPONSE,klass,0,end-at,0,end-at)
+    put(w,8,90)
+    return NEXT
+
+def write_os_error(w:mutbuf,number:u64,named:u64) -> u64:
+    if number==0 or number>4095 or named>4:
+        return INVALID
+    size=0
+    if named==1:
+        size=get(w,64)
+        copy_within(w,ERROR+64,NAME,size)
+    if named==2:
+        size=36
+        copy_within(w,ERROR+64,LOCK_NAME,size)
+    if named==3:
+        size=45
+        copy_within(w,ERROR+64,TEMP_NAME,size)
+    if named==4:
+        put(w,ERROR+64,get(w,112))
+        error_header(w,META_RESPONSE,error_class(number),number,0,2,8)
+    else:
+        kind=0
+        if named!=0:
+            kind=1
+        error_header(w,RESPONSE,error_class(number),number,0,kind,size)
+    put(w,8,90)
+    return NEXT
+
+def child_error(w:mutbuf,at:u64,size:u64) -> u64:
+    if size<64 or size>get(w,184):
+        return INVALID
+    tag=get(w,at)
+    if tag!=RESPONSE and tag!=META_RESPONSE and tag!=PATH_ERROR:
+        return INVALID
+    if get(w,at+8)!=3 or get(w,at+56)!=size-64:
+        return INVALID
+    copy_within(w,ERROR,at,size)
+    put(w,176,size)
+    put(w,8,90)
+    return NEXT
+
+def copy_within(w:mutbuf,dst:u64,src:u64,size:u64) -> u64:
+    if dst>src and dst<src+size:
+        at=size
+        while at!=0:
+            at=at-1
+            store(w,dst+at,byte(w,src+at))
+    else:
+        at=0
+        while size-at>=8:
+            put(w,dst+at,get(w,src+at))
+            at=at+8
+        while at<size:
+            store(w,dst+at,byte(w,src+at))
+            at=at+1
+    return size
+
+def append_unsigned(w:mutbuf,at:u64,n:u64) -> u64:
+    return decimal(w,at,n)
+
+def is_absent(w:mutbuf) -> u64:
+    if get(w,72)!=6:
+        return 0
+    if byte(w,PRIOR)!=97 or byte(w,PRIOR+1)!=98 or byte(w,PRIOR+2)!=115:
+        return 0
+    if byte(w,PRIOR+3)!=101 or byte(w,PRIOR+4)!=110 or byte(w,PRIOR+5)!=116:
+        return 0
+    return 1
+
+def regular_start(w:mutbuf,role:u64,next:u64) -> u64:
+    if get(w,96)!=MAXIMUM or role<1 or role>3:
+        return INVALID
+    put(w,128,role)
+    put(w,136,next)
+    if role==1:
+        put(w,240,NAME)
+        put(w,248,get(w,64))
+        put(w,256,1)
+    else:
+        if role==2:
+            put(w,240,LOCK_NAME)
+            put(w,248,36)
+            put(w,256,6)
+        else:
+            put(w,240,TEMP_NAME)
+            put(w,248,45)
+            put(w,256,7)
+    put(w,8,100)
+    return NEXT
+
+def regular_failure(w:mutbuf) -> u64:
+    if get(w,128)==1 and get(w,176)>=64:
+        if get(w,ERROR)==RESPONSE and get(w,ERROR+32)==2:
+            put(w,176,0)
+            put(w,160,0)
+            put(w,8,214)
+            return NEXT
+    put(w,8,90)
+    return NEXT
+
+def regular_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==100:
+        at=0
+        while at<get(w,248):
+            if byte(w,get(w,240)+at)==0:
+                write_literal(w,1)
+                return regular_failure(w)
+            at=at+1
+        put(w,8,102)
+        return NEXT
+    if phase==102:
+        return write_request(w,o,103,1,get(w,256),get(w,56),0,0,get(w,240),get(w,248)+1)
+    if phase==103:
+        if result==MAXIMUM-3:
+            put(w,8,102)
+            return NEXT
+        if negative(result)!=0:
+            write_os_error(w,0-result,get(w,128))
+            return regular_failure(w)
+        if result>2147483647 or get(w,48)!=0:
+            return INVALID
+        put(w,96,result)
+        put(w,8,104)
+        return NEXT
+    if phase==104:
+        return write_request(w,o,105,1,2,get(w,96),0,0,0,0)
+    if phase==105:
+        if result==MAXIMUM-3:
+            put(w,8,104)
+            return NEXT
+        if negative(result)!=0:
+            put(w,144,0-result)
+            put(w,8,108)
+            return NEXT
+        if result!=0 or get(w,48)!=144:
+            return INVALID
+        copy_within(w,WRITE_STAT,WRITE_REPLY,144)
+        if (u32_at(w,WRITE_STAT+24)&61440)!=32768:
+            write_literal(w,2)
+            put(w,8,112)
+            return NEXT
+        if get(w,128)!=1:
+            put(w,8,106)
+        else:
+            put(w,8,110)
+        return NEXT
+    if phase==106:
+        return write_request(w,o,107,1,5,0,0,0,0,0)
+    if phase==107:
+        if get(w,48)!=0 or result>4294967295:
+            return INVALID
+        if u32_at(w,WRITE_STAT+28)!=result or get(w,WRITE_STAT+16)!=1 or (u32_at(w,WRITE_STAT+24)&63)!=0:
+            write_literal(w,2)
+            put(w,8,112)
+        else:
+            put(w,8,110)
+        return NEXT
+    if phase==108:
+        return write_request(w,o,109,1,4,get(w,96),0,0,0,0)
+    if phase==109:
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,96,MAXIMUM)
+        write_os_error(w,get(w,144),0)
+        return regular_failure(w)
+    if phase==110:
+        role=get(w,128)
+        if role==1:
+            if get(w,104)!=MAXIMUM:
+                return INVALID
+            put(w,104,get(w,96))
+        else:
+            if role==2:
+                if get(w,112)!=MAXIMUM:
+                    return INVALID
+                put(w,112,get(w,96))
+            else:
+                if role!=3 or get(w,120)!=MAXIMUM:
+                    return INVALID
+                put(w,120,get(w,96))
+        put(w,96,MAXIMUM)
+        put(w,8,get(w,136))
+        return NEXT
+    if phase==112:
+        return write_request(w,o,113,1,3,get(w,96),0,0,0,0)
+    if phase==113:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,96,MAXIMUM)
+        if negative(result)!=0:
+            write_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return INVALID
+        return regular_failure(w)
+    return INVALID
+
+def expected_start(w:mutbuf,next:u64) -> u64:
+    if get(w,104)!=MAXIMUM or get(w,176)!=0:
+        return INVALID
+    put(w,160,0)
+    put(w,152,next)
+    return regular_start(w,1,210)
+
+def stat_packet(w:mutbuf) -> u64:
+    put(w,CHILD,STAT_TAG)
+    put(w,CHILD+8,1)
+    put(w,CHILD+16,get(w,WRITE_STAT))
+    put(w,CHILD+24,get(w,WRITE_STAT+8))
+    put(w,CHILD+32,get(w,WRITE_STAT+48))
+    put(w,CHILD+40,get(w,WRITE_STAT+88))
+    put(w,CHILD+48,get(w,WRITE_STAT+96))
+    put(w,CHILD+56,get(w,WRITE_STAT+104))
+    put(w,CHILD+64,get(w,WRITE_STAT+112))
+    return 0
+
+def expected_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==210:
+        return write_request(w,o,211,1,2,get(w,104),0,0,0,0)
+    if phase==211:
+        if result==MAXIMUM-3:
+            put(w,8,210)
+            return NEXT
+        if negative(result)!=0:
+            write_os_error(w,0-result,0)
+        else:
+            if result!=0 or get(w,48)!=144:
+                return INVALID
+            copy_within(w,WRITE_STAT,WRITE_REPLY,144)
+            put(w,160,1)
+        put(w,8,212)
+        return NEXT
+    if phase==212:
+        return write_request(w,o,213,1,3,get(w,104),0,0,0,0)
+    if phase==213:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,104,MAXIMUM)
+        if negative(result)!=0:
+            write_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return INVALID
+        if get(w,176)!=0:
+            if get(w,ERROR)==RESPONSE and get(w,ERROR+32)==2:
+                put(w,176,0)
+                put(w,160,0)
+            else:
+                put(w,8,90)
+                return NEXT
+        put(w,8,214)
+        return NEXT
+    if phase==214:
+        if get(w,88)==0:
+            return write_literal(w,3)
+        if get(w,160)==0:
+            if is_absent(w)==0:
+                return write_literal(w,3)
+            put(w,8,get(w,152))
+            return NEXT
+        put(w,8,216)
+        return NEXT
+    if phase==216:
+        stat_packet(w)
+        return write_request(w,o,217,2,1,0,0,0,CHILD,72)
+    if phase==217:
+        if result==0 or result>122 or result!=get(w,48):
+            return INVALID
+        if result!=get(w,72) or equal(w,WRITE_REPLY,PRIOR,result)==0:
+            return write_literal(w,3)
+        put(w,8,get(w,152))
+        return NEXT
+    return INVALID
+
+def lower_hex(w:mutbuf,at:u64,size:u64) -> u64:
+    index=0
+    while index<size:
+        value=byte(w,at+index)
+        if value<48 or value>57:
+            if value<97 or value>102:
+                return 0
+        index=index+1
+    return 1
+
+def lock_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==1:
+        put(w,CHILD,CODEC_TAG)
+        put(w,CHILD+8,2)
+        put(w,CHILD+16,0)
+        copy_within(w,CHILD+24,NAME,get(w,64))
+        return write_request(w,o,2,2,2,0,0,0,CHILD,24+get(w,64))
+    if phase==2:
+        if result!=64 or get(w,48)!=64 or lower_hex(w,WRITE_REPLY,64)==0:
+            return INVALID
+        lock_prefix(w,LOCK_NAME)
+        copy_within(w,LOCK_NAME+12,WRITE_REPLY,24)
+        store(w,LOCK_NAME+36,0)
+        put(w,8,3)
+        return NEXT
+    if phase==3:
+        return regular_start(w,2,20)
+    if phase==20:
+        return write_request(w,o,21,1,2,get(w,112),0,0,0,0)
+    if phase==21:
+        if negative(result)!=0:
+            if result==MAXIMUM-8:
+                write_os_error(w,9,0)
+                put(w,8,32)
+                return NEXT
+        else:
+            if result!=0 or get(w,48)!=144:
+                return INVALID
+            if (u32_at(w,WRITE_REPLY+24)&61440)==16384:
+                write_os_error(w,21,4)
+                put(w,8,32)
+                return NEXT
+        put(w,8,22)
+        return NEXT
+    if phase==22:
+        return write_request(w,o,23,1,8,get(w,112),2,0,0,0)
+    if phase==23:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            if result!=MAXIMUM-28:
+                write_os_error(w,0-result,0)
+                put(w,8,32)
+                return NEXT
+            put(w,296,0)
+        else:
+            put(w,296,1)
+        put(w,8,24)
+        return NEXT
+    if phase==24:
+        return write_request(w,o,25,1,9,get(w,112),0,0,0,0)
+    if phase==25:
+        if get(w,48)>64:
+            return INVALID
+        put(w,8,26)
+        return NEXT
+    if phase==26:
+        return write_request(w,o,27,1,8,get(w,112),1,0,0,0)
+    if phase==27:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,8,28)
+        return NEXT
+    if phase==28:
+        if get(w,296)!=0:
+            return write_request(w,o,29,1,8,get(w,112),1,0,0,0)
+        put(w,8,30)
+        return NEXT
+    if phase==29:
+        if get(w,48)!=0:
+            return INVALID
+        if negative(result)!=0:
+            return write_os_error(w,0-result,0)
+        put(w,8,30)
+        return NEXT
+    if phase==30:
+        return write_request(w,o,31,1,10,get(w,112),0,0,0,0)
+    if phase==31:
+        if result==MAXIMUM-3:
+            put(w,8,30)
+            return NEXT
+        if negative(result)!=0:
+            return write_os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        return expected_start(w,40)
+    if phase==32:
+        return write_request(w,o,33,1,4,get(w,112),0,0,0,0)
+    if phase==33:
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,112,MAXIMUM)
+        put(w,8,90)
+        return NEXT
+    return INVALID
+
+def complete_child(w:mutbuf,tag:u64) -> u64:
+    size=get(w,48)
+    if size<64 or get(w,40)!=size:
+        return 0
+    if get(w,WRITE_REPLY)!=tag or get(w,WRITE_REPLY+56)!=size-64:
+        return 0
+    kind=get(w,WRITE_REPLY+8)
+    if kind==3:
+        return 1
+    if kind!=0:
+        return 0
+    if get(w,WRITE_REPLY+24)!=0 or get(w,WRITE_REPLY+32)!=0:
+        return 0
+    if get(w,WRITE_REPLY+40)!=0 or get(w,WRITE_REPLY+48)!=0:
+        return 0
+    return 1
+
+def write_flow(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==40:
+        put(w,BASE64,CODEC_TAG)
+        put(w,BASE64+8,4)
+        put(w,BASE64+16,0)
+        return write_request(w,o,41,2,3,0,0,0,BASE64,24+get(w,80))
+    if phase==41:
+        if complete_child(w,RESPONSE)==0:
+            return INVALID
+        if get(w,WRITE_REPLY+8)==3:
+            return child_error(w,WRITE_REPLY,get(w,48))
+        size=get(w,WRITE_REPLY+56)
+        if size>1048576:
+            return write_literal(w,4)
+        if size>get(w,80):
+            return INVALID
+        copy_within(w,DECODED,WRITE_REPLY+64,size)
+        put(w,272,size)
+        put(w,168,0)
+        put(w,8,42)
+        return NEXT
+    if phase==42:
+        fill_range(w,CHILD,96,0)
+        put(w,CHILD,ENT_REQUEST)
+        put(w,CHILD+8,1)
+        put(w,CHILD+24,2)
+        return write_request(w,o,43,2,4,0,0,0,CHILD,96)
+    if phase==43:
+        if complete_child(w,ENT_RESPONSE)==0:
+            return INVALID
+        if get(w,WRITE_REPLY+8)==3:
+            return child_error(w,WRITE_REPLY+64,get(w,48)-64)
+        if get(w,WRITE_REPLY+56)!=32 or lower_hex(w,WRITE_REPLY+64,32)==0:
+            return INVALID
+        write_prefix(w,TEMP_NAME)
+        copy_within(w,TEMP_NAME+13,WRITE_REPLY+64,32)
+        store(w,TEMP_NAME+45,0)
+        put(w,264,1)
+        put(w,8,44)
+        return NEXT
+    if phase==44:
+        return regular_start(w,3,50)
+    if phase==50:
+        done=get(w,168)
+        size=get(w,272)
+        if done>size:
+            return INVALID
+        if done==size:
+            put(w,8,54)
+            return NEXT
+        return write_request(w,o,51,1,11,get(w,120),size-done,0,DECODED+done,size-done)
+    if phase==51:
+        if get(w,48)!=0:
+            return INVALID
+        if result==MAXIMUM-3:
+            put(w,8,50)
+            return NEXT
+        if negative(result)!=0:
+            return write_os_error(w,0-result,0)
+        if result==0:
+            return write_literal(w,5)
+        if result>get(w,272)-get(w,168):
+            return INVALID
+        put(w,168,get(w,168)+result)
+        put(w,8,50)
+        return NEXT
+    if phase==54:
+        return write_request(w,o,55,1,12,get(w,120),0,0,0,0)
+    if phase==55:
+        if result==MAXIMUM-3:
+            put(w,8,54)
+            return NEXT
+        if negative(result)!=0:
+            return write_os_error(w,0-result,0)
+        if result!=0 or get(w,48)!=0:
+            return INVALID
+        put(w,8,56)
+        return NEXT
+    if phase==56:
+        return write_request(w,o,57,1,3,get(w,120),0,0,0,0)
+    if phase==57:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,120,MAXIMUM)
+        if negative(result)!=0:
+            return write_os_error(w,0-result,0)
+        if result!=0:
+            return INVALID
+        put(w,8,60)
+        return NEXT
+    if phase==60:
+        fill_range(w,CHILD,96,0)
+        put(w,CHILD,PUB_REQUEST)
+        put(w,CHILD+8,1)
+        put(w,CHILD+24,1)
+        put(w,CHILD+40,get(w,64))
+        put(w,CHILD+48,45)
+        put(w,CHILD+56,get(w,72))
+        put(w,CHILD+64,get(w,88))
+        put(w,CHILD+88,get(w,64)+45+get(w,72))
+        copy_within(w,CHILD+96,NAME,get(w,64))
+        copy_within(w,CHILD+96+get(w,64),TEMP_NAME,45)
+        copy_within(w,CHILD+141+get(w,64),PRIOR,get(w,72))
+        return write_request(w,o,61,2,5,get(w,56),0,0,CHILD,141+get(w,64)+get(w,72))
+    if phase==61:
+        if complete_child(w,PUB_RESPONSE)==0:
+            return INVALID
+        if get(w,WRITE_REPLY+8)==3:
+            return child_error(w,WRITE_REPLY+64,get(w,48)-64)
+        if get(w,48)!=64:
+            return INVALID
+        put(w,8,62)
+        return NEXT
+    if phase==62:
+        fill_range(w,CHILD,96,0)
+        put(w,CHILD,FP_REQUEST)
+        put(w,CHILD+8,1)
+        put(w,CHILD+24,2)
+        put(w,CHILD+40,get(w,64))
+        put(w,CHILD+88,get(w,64))
+        copy_within(w,CHILD+96,NAME,get(w,64))
+        return write_request(w,o,63,2,6,get(w,56),0,0,CHILD,96+get(w,64))
+    if phase==63:
+        if complete_child(w,RESPONSE)==0:
+            return INVALID
+        if get(w,WRITE_REPLY+8)==3:
+            return child_error(w,WRITE_REPLY,get(w,48))
+        size=get(w,WRITE_REPLY+56)
+        if size<2 or size>512:
+            return INVALID
+        if byte(w,WRITE_REPLY+64)!=123 or byte(w,WRITE_REPLY+63+size)!=125:
+            return INVALID
+        at=result_prefix(w,RESULT)
+        at=append_unsigned(w,at,get(w,272))
+        store(w,at,44)
+        at=at+1
+        copy_within(w,at,WRITE_REPLY+65,size-1)
+        put(w,288,at+size-1-RESULT)
+        put(w,8,90)
+        return NEXT
+    return INVALID
+
+def write_finish(o:mutbuf,w:mutbuf) -> u64:
+    phase=get(w,8)
+    result=get(w,40)
+    if phase==90:
+        if get(w,96)!=MAXIMUM or get(w,104)!=MAXIMUM:
+            return INVALID
+        if get(w,120)!=MAXIMUM:
+            return write_request(w,o,91,1,3,get(w,120),0,0,0,0)
+        if get(w,264)!=0:
+            return write_request(w,o,92,1,13,get(w,56),0,0,TEMP_NAME,46)
+        if get(w,112)!=MAXIMUM:
+            return write_request(w,o,93,1,3,get(w,112),0,0,0,0)
+        put(w,8,99)
+        return NEXT
+    if phase==91:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,120,MAXIMUM)
+        if negative(result)!=0:
+            write_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,8,90)
+        return NEXT
+    if phase==92:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,264,0)
+        if negative(result)!=0:
+            if result!=MAXIMUM-1:
+                write_os_error(w,0-result,3)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,8,90)
+        return NEXT
+    if phase==93:
+        if get(w,48)!=0:
+            return INVALID
+        put(w,112,MAXIMUM)
+        if negative(result)!=0:
+            write_os_error(w,0-result,0)
+        else:
+            if result!=0:
+                return INVALID
+        put(w,8,90)
+        return NEXT
+    if phase==99:
+        kind=0
+        at=RESULT
+        size=get(w,288)
+        if get(w,176)!=0:
+            kind=3
+            at=ERROR
+            size=get(w,176)
+        else:
+            if size==0:
+                return INVALID
+        if length(o)<64+size:
+            return write_short(o,5,64+size)
+        fill_range(o,0,64,0)
+        put(o,0,WRITE_RESPONSE)
+        put(o,8,kind)
+        put(o,16,get(w,16))
+        put(o,56,size)
+        copy_out(w,o,at,64,size)
+        return 64
+    return INVALID

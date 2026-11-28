@@ -1,0 +1,84 @@
+name: Reread complete locked-write uploads without application replay
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-write-uploaded-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: '1'
+  WRITE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_write_body/v1/independent_uploaded
+  WRITE_MANIFEST: 646ccdbe1b7f3df5d4630a140adaa4c14e5ea716bcf310aaa94db64cfb05800a
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen pure reader and complete original source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_write_body/v1/independent_uploaded
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Compile source AST and import pure readers only
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/driver.py" source \
+            --work "$RUNNER_TEMP/write-independent-source" --group 0 \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Preserve source-only outcome
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-write-independent-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/write-independent-source
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+  read:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact immutable reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_write_body/v1/independent_uploaded
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Restore and reread complete original captures without executions
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/driver.py" run \
+            --work "$RUNNER_TEMP/write-independent-${{ matrix.group }}" \
+            --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Preserve complete original ZIP and all new reader evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/write-independent-${{ matrix.group }}" \
+            --output "$RUNNER_TEMP/write-independent-export-${{ matrix.group }}" \
+            --group "${{ matrix.group }}" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Upload complete independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-write-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/write-independent-export-${{ matrix.group }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -1,0 +1,49 @@
+name: Read locked-write build and qualify passive kernel observer
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-binary-write-trace-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  observer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      WRITE_SOURCE: ${{ github.workspace }}/runtime/qualification/binary_write_body/v1/trace_preflight
+      WRITE_MANIFEST: ee4878e4a28b3deccf20774453c45ba03a25d78cb6b13dd93d5a4c37d0d2fe1d
+    steps:
+      - name: Checkout frozen observer and complete retained build source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/binary_write_body/v1/trace_preflight
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Reread complete build and run only the four frozen kernel probes
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/gate.py" run \
+            --work "$RUNNER_TEMP/binary-write-trace-preflight" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Preserve all complete or failed preflight evidence
+        if: always()
+        run: |
+          python3 -I -S -B "$WRITE_SOURCE/scripts/gate.py" export \
+            --work "$RUNNER_TEMP/binary-write-trace-preflight" \
+            --output "$RUNNER_TEMP/binary-write-trace-preflight-export" \
+            --source-manifest-sha256 "$WRITE_MANIFEST"
+      - name: Upload complete observer and build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: binary-write-trace-preflight-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/binary-write-trace-preflight-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
