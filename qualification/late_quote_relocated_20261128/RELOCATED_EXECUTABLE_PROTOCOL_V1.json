@@ -1,0 +1,44 @@
+{
+  "schema": "hepta.late-quote.relocated-executable-negative-protocol.v1",
+  "status": "FROZEN_FOR_INDEPENDENT_REVIEW_NOT_EXECUTED",
+  "primary_required": "Relocated actual MCP main qualification must PASS at source16dbc before this plan is admitted.",
+  "driver": {
+    "path": "code/executable_identity_control_relocated.py",
+    "sha256": "8f22d12a343ef56fe7f34056ee8671e19ec17a48c80d0c4d958d8b9257eb5b36",
+    "bytes": 15970
+  },
+  "main_driver_sha256": "aec1e2bfed23a7ae9cc021a57cb68fb1c766a64cc7d5f70aba29f48268c54d65",
+  "transport_sha256": "8c2eb9a1405a2c4606a03800ada15de12bc8df70ea82a312b6b3a31e45d50391",
+  "original_source_commit": "16dbc208a21e4aca99dd576fb731a877598219dd",
+  "original_source_tree": "64fe6409be734a82d2ee5a28f7f17db12fc6208e",
+  "ci_run_id": 46149528261,
+  "budget": {
+    "servers": 2,
+    "rpc_cap": 12,
+    "actual_expected_rpc_on_pass": 9,
+    "tools": 5,
+    "unique_attempts": 1,
+    "roundtrip_wire_calls": 1,
+    "recover_wire_calls": 2,
+    "hard_kills": 1,
+    "full_and_partial_forward_source_upper_bound": 5,
+    "pure_preflights_upper_bound": 2,
+    "model_fit_steps": 0,
+    "wall_seconds": 180,
+    "cpu_seconds_per_server": 60,
+    "address_space_bytes_per_server": 2147483648,
+    "tokio_threads": 2,
+    "automatic_retry": false
+  },
+  "intervention": "Append marker to new owned executable copy outside every PT_LOAD extent. Preserve every original byte, ELF header, program headers, entry point, all loaded segment SHA256. Keep qualified original binary immutable.",
+  "observed_gate": "Same kernel boot, original 60-second wall and CLOCK_BOOTTIME windows remain live before and after first recovery; Restored charge/result absent; current /proc/<owned_pid>/exe wholeSHA differs while loaded code identity stays equal.",
+  "required_result": "Exact graph+weight inverse verified. Specific saved source or executable differs error at original_window_restored_forward. Zero new forward, zero new phase charge, original six phase-file presence/hash unchanged. Second recover changes no model effects.",
+  "qualifiers": [
+    "Derived copy is an unqualified negative-control executable, not a new qualified release.",
+    "This isolates full executable identity policy; it does not prove arbitrary code upgrade compatibility.",
+    "Interrupted Parent/Candidate work may be partial;<=5 is a source bound,not a claim of exact observed calls.",
+    "Zero optimizer/training/model-selection;seed137 graph-only candidate uses previously observed task batch."
+  ],
+  "costs": "Include prepare RPC wall, interrupted roundtrip wall, and both pure preparation costs from preflight+saved original intent.",
+  "cleanup": "Only owned process groups, best effort across all started servers;always record failure and cleanup errors."
+}
