@@ -1,0 +1,111 @@
+name: Native engine ownership layout boundaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-engine-layout-qualify-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  engine-layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      LAYOUT_SOURCE: ${{ github.workspace }}/runtime/qualification/runtime_engine_layout/v1/source
+      LAYOUT_SOURCE_SHA: 783a1c70b3db5a01e2f0437dc6eba63d72af5bcf8f19cebb3f8efa109590a903
+    steps:
+      - name: Checkout frozen engine and evidence readers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/runtime_engine_layout/v1/source
+          persist-credentials: false
+      - name: Checkout exact HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify source and complete frozen input domain before execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          root=Path(os.environ['LAYOUT_SOURCE']);sys.path.insert(0,str(root))
+          from common import source
+          assert source()==os.environ['LAYOUT_SOURCE_SHA']
+          domain=json.loads((root/'DOMAIN.json').read_bytes())
+          cases=json.loads((root/'CASES.json').read_bytes())['cases']
+          assert len(cases)==domain['cases']==57
+          assert sum(len(case['actions']) for case in cases)==domain['planned_actions']==1182
+          assert domain['planned_driver_native_calls']==1122
+          for path in root.rglob('*.py'):compile(path.read_bytes(),str(path),'exec')
+          PY
+      - name: Install compiler and assembler build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 git binutils build-essential
+      - name: Execute frozen native storage boundaries and pure readers
+        run: |
+          ulimit -c 0
+          python3 -I -B "$LAYOUT_SOURCE/run_gate.py" --hepta "$GITHUB_WORKSPACE/compiler" --output "$RUNNER_TEMP/engine-layout-output" --source-manifest-sha256 "$LAYOUT_SOURCE_SHA"
+      - name: Retain exact failure diagnostics without replay
+        if: failure()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ['RUNNER_TEMP'])/'engine-layout-output'
+          for path in [root/'GATE.json',*sorted(root.rglob('*.stderr'))]:
+              if path.is_file():
+                  raw=path.read_bytes()
+                  if raw:print(json.dumps(dict(file=str(path.relative_to(root)),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),complete_utf8=raw.decode('utf-8',errors='replace')),sort_keys=True))
+          PY
+      - name: Export and fully reread complete success or failure bytes
+        if: always()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          root=Path(os.environ['LAYOUT_SOURCE']);sys.path.insert(0,str(root))
+          from process import Recorder
+          temp=Path(os.environ['RUNNER_TEMP']);capture=temp/'engine-layout-output';capture.mkdir(exist_ok=True)
+          rec=Recorder(root,temp/'engine-layout-export-processes')
+          raw,row=rec.run('complete-export',[sys.executable,'-I','-B',root/'export.py','--capture',capture,'--archive',temp/'engine-layout.tar.gz'],timeout=180)
+          print(raw.decode(),end='')
+          PY
+      - name: Independently restore and admit the complete archive
+        if: success()
+        run: |
+          python3 -I -B - <<'PY'
+          from pathlib import Path
+          import os,sys
+          root=Path(os.environ['LAYOUT_SOURCE']);sys.path.insert(0,str(root))
+          from process import Recorder
+          temp=Path(os.environ['RUNNER_TEMP']);rec=Recorder(root,temp/'engine-layout-archive-processes')
+          raw,row=rec.run('complete-archive-read',[sys.executable,'-I','-B',root/'archive_read.py',
+              '--archive',temp/'engine-layout.tar.gz','--output',temp/'engine-layout-archive-read',
+              '--source-manifest-sha256',os.environ['LAYOUT_SOURCE_SHA']],timeout=180)
+          print(raw.decode(),end='')
+          PY
+      - name: Preserve complete original bytes and all reader proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: engine-layout-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/engine-layout.tar.gz
+            ${{ runner.temp }}/engine-layout.tar.gz.json
+            ${{ runner.temp }}/engine-layout-export-processes
+            ${{ runner.temp }}/engine-layout-archive-processes
+            ${{ runner.temp }}/engine-layout-archive-read/ARCHIVE_READ.json
+            ${{ runner.temp }}/engine-layout-archive-read/admission.json
+            ${{ runner.temp }}/engine-layout-archive-read/processes
+          if-no-files-found: error
+          retention-days: 14
