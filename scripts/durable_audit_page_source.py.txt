@@ -1,0 +1,252 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 192 or read64(s, 0) != REQUEST:
+        return INVALID
+    operation = read64(s, 8)
+    count = read64(s, 16)
+    limit = read64(s, 24)
+    after = read64(s, 32)
+    if operation != 1 and operation != 2:
+        return INVALID
+    if (length(s) - 192) % 256 != 0 or count != (length(s) - 192) // 256:
+        return INVALID
+    if count > choose(operation == 1, 512, 33):
+        return INVALID
+    if length(w) < 16384 or length(o) < 32:
+        return CAPACITY
+    if after > 1 or valid_id(s, 64) == 0:
+        return error(o, 1)
+    if limit < 1 or limit > 32:
+        return error(o, 1)
+    if after == 1:
+        if operation != 1 or valid_id(s, 128) == 0:
+            return error(o, 1)
+    else:
+        if zeros(s, 128, 64) == 0:
+            return INVALID
+    if operation == 1:
+        if read64(s, 40) != 0 or read64(s, 48) != 0 or read64(s, 56) != 0:
+            return INVALID
+    else:
+        if read64(s, 40) < count or count > limit + 1:
+            return INVALID
+        if read64(s, 48) >= read64(s, 56):
+            return error(o, 4)
+    fill_range(w, 0, 8192, 0)
+    selected = 0
+    i = 0
+    while i < count:
+        at = 192 + i * 256
+        if valid_row(s, at) == 0:
+            return INVALID
+        j = 0
+        while j < i:
+            if equal(s, 192 + j * 256, at, 64) == 1:
+                return INVALID
+            j = j + 1
+        own = equal(s, at + 64, 64, 64)
+        if operation == 2:
+            if own == 0:
+                return INVALID
+            if i > 0 and row_less(s, at - 256, at) == 0:
+                return INVALID
+        if own == 1:
+            position = selected
+            while position > 0 and row_less(s, at, get(w, 1024 + (position - 1) * 8)) == 1:
+                put(w, 1024 + position * 8, get(w, 1024 + (position - 1) * 8))
+                position = position - 1
+            put(w, 1024 + position * 8, at)
+            selected = selected + 1
+        i = i + 1
+    begin = 0
+    if after == 1:
+        found = 0
+        i = 0
+        while i < selected:
+            if equal(s, get(w, 1024 + i * 8), 128, 64) == 1:
+                found = 1
+                begin = i + 1
+            i = i + 1
+        if found == 0:
+            return error(o, 2)
+    emitted = choose(selected - begin < limit, selected - begin, limit)
+    put(w, 16, operation)
+    put(w, 24, selected)
+    put(w, 32, begin)
+    put(w, 40, emitted)
+    put(w, 48, choose(begin + emitted < selected, 1, 0))
+    put(w, 64, 0)
+    put(w, 0, 32)
+    status = render(s, o, w)
+    if status != 0:
+        return error(o, status)
+    size = get(w, 0)
+    if size - 32 > 65536 or (size - 32) * 2 + 512 > 65536:
+        return error(o, 5)
+    if length(o) < size:
+        return CAPACITY
+    fill_range(o, 0, 32, 0)
+    put(o, 0, RESPONSE)
+    put(o, 16, size - 32)
+    put(o, 24, size)
+    put(w, 64, 1)
+    put(w, 0, 32)
+    render(s, o, w)
+    return size
+
+def error(o:mutbuf, status:u64) -> u64:
+    fill_range(o, 0, 32, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    return 32
+
+def equal(s:readbuf, a:u64, b:u64, size:u64) -> u64:
+    i = 0
+    while i < size:
+        if byte(s, a + i) != byte(s, b + i):
+            return 0
+        i = i + 1
+    return 1
+
+def zeros(s:readbuf, at:u64, size:u64) -> u64:
+    i = 0
+    while i < size:
+        if byte(s, at + i) != 0:
+            return 0
+        i = i + 1
+    return 1
+
+def valid_id(s:readbuf, at:u64) -> u64:
+    i = 0
+    while i < 64:
+        ch = byte(s, at + i)
+        if (ch < 48 or ch > 57) and (ch < 97 or ch > 102):
+            return 0
+        i = i + 1
+    return 1
+
+def valid_row(s:readbuf, at:u64) -> u64:
+    if valid_id(s, at) == 0 or valid_id(s, at + 64) == 0:
+        return 0
+    size = read64(s, at + 192)
+    if size == 0 or size > 64:
+        return 0
+    i = 0
+    while i < size:
+        ch = byte(s, at + 128 + i)
+        if (ch < 97 or ch > 122) and ch != 95:
+            return 0
+        i = i + 1
+    if zeros(s, at + 128 + size, 64 - size) == 0:
+        return 0
+    if read64(s, at + 200) > 2 or read64(s, at + 224) > 1 or read64(s, at + 240) > 1 or read64(s, at + 248) != 0:
+        return 0
+    if read64(s, at + 224) == 0 and read64(s, at + 232) != 0:
+        return 0
+    return 1
+
+def row_less(s:readbuf, a:u64, b:u64) -> u64:
+    ah = read64(s, a + 216)
+    bh = read64(s, b + 216)
+    if ah != bh:
+        return choose(ah < bh, 1, 0)
+    al = read64(s, a + 208)
+    bl = read64(s, b + 208)
+    if al != bl:
+        return choose(al < bl, 1, 0)
+    i = 0
+    while i < 64:
+        ac = byte(s, a + i)
+        bc = byte(s, b + i)
+        if ac != bc:
+            return choose(ac < bc, 1, 0)
+        i = i + 1
+    return 0
+
+def emit(o:mutbuf, w:mutbuf, value:u64) -> u64:
+    at = get(w, 0)
+    if get(w, 64) == 1:
+        store(o, at, value)
+    put(w, 0, at + 1)
+    return 0
+
+def emit_word(o:mutbuf, w:mutbuf, value:u64) -> u64:
+    at = get(w, 0)
+    if get(w, 64) == 1:
+        put(o, at, value)
+    put(w, 0, at + 8)
+    return 0
+
+def quoted(s:readbuf, o:mutbuf, w:mutbuf, start:u64, size:u64) -> u64:
+    emit(o, w, 34)
+    at = get(w, 0)
+    if get(w, 64) == 1:
+        copy_range(o, s, at, start, size)
+    put(w, 0, at + size)
+    emit(o, w, 34)
+    return 0
+
+def number(o:mutbuf, w:mutbuf, value:u64) -> u64:
+    if value == 0:
+        emit(o, w, 48)
+        return 0
+    at = 0
+    while value != 0:
+        store(w, 8192 + at, 48 + value % 10)
+        value = value // 10
+        at = at + 1
+    while at > 0:
+        at = at - 1
+        emit(o, w, byte(w, 8192 + at))
+    return 0
+
+def row(s:readbuf, o:mutbuf, w:mutbuf, at:u64) -> u64:
+    if read64(s, at + 216) != 0:
+        return 3
+    literal(o, w, 11)
+    number(o, w, read64(s, at + 208))
+    literal(o, w, 12)
+    if read64(s, at + 224) == 1:
+        number(o, w, read64(s, at + 232))
+    else:
+        literal(o, w, 20)
+    literal(o, w, 13)
+    quoted(s, o, w, at, 64)
+    literal(o, w, 14)
+    state = read64(s, at + 200)
+    if state == 0:
+        if read64(s, at + 240) == 1:
+            literal(o, w, 22)
+        else:
+            literal(o, w, 21)
+    else:
+        literal(o, w, 22 + state)
+    literal(o, w, 15)
+    quoted(s, o, w, at + 128, read64(s, at + 192))
+    emit(o, w, 125)
+    return 0
+
+def render(s:readbuf, o:mutbuf, w:mutbuf) -> u64:
+    operation = get(w, 16)
+    literal(o, w, choose(operation == 1, 1, 2))
+    count = get(w, 40)
+    begin = get(w, 32)
+    if get(w, 48) == 1:
+        quoted(s, o, w, get(w, 1024 + (begin + count - 1) * 8), 64)
+    else:
+        literal(o, w, 20)
+    literal(o, w, 3)
+    i = 0
+    while i < count:
+        if i > 0:
+            emit(o, w, 44)
+        status = row(s, o, w, get(w, 1024 + (begin + i) * 8))
+        if status != 0:
+            return status
+        i = i + 1
+    if operation == 1:
+        literal(o, w, 4)
+    else:
+        literal(o, w, 5)
+        number(o, w, read64(s, 40))
+        emit(o, w, 125)
+    return 0

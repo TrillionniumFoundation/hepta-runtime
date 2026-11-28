@@ -1,0 +1,204 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 64 or read64(s, 0) != REQUEST:
+        return INVALID
+    operation = read64(s, 8)
+    now = read64(s, 16)
+    has_deadline = read64(s, 24)
+    deadline = read64(s, 32)
+    ticket = read64(s, 40)
+    flags = read64(s, 48)
+    if operation > 10 or has_deadline > 1 or flags > 15 or read64(s, 56) != 0:
+        return INVALID
+    if has_deadline == 0 and deadline != 0:
+        return INVALID
+    if length(o) < 64:
+        return CAPACITY
+    if operation == 10:
+        return reply(o, choose(has_deadline == 1 and now >= deadline, 4, 0), 0, 0, 0)
+    if length(w) < 128:
+        return reply(o, 7, 0, 128, 0)
+    if operation == 0:
+        if zeros(w, 0, length(w)) == 0 or now != 0 or has_deadline != 0 or ticket != 0 or flags != 0:
+            return INVALID
+        put(w, 0, STATE)
+        return reply(o, 0, 0, 0, 0)
+    if valid_state(w) == 0:
+        return INVALID
+    count = get(w, 48)
+    if operation == 1 or operation == 2:
+        if ticket != 0 or operation == 2 and has_deadline == 0:
+            return INVALID
+        if has_deadline == 1 and now >= deadline:
+            return reply(o, 4, 0, 0, 0)
+        if flags % 2 == 1 or get(w, 40) == 1 or operation == 2 and flags // 2 % 2 == 1:
+            return reply(o, 5, 0, 0, 0)
+        next_ticket = get(w, 8)
+        if next_ticket == MAXWORD:
+            return reply(o, 5, 0, 0, 0)
+        need = 128 + (count + 1) * 64
+        if length(w) < need:
+            return reply(o, 7, 0, need, 0)
+        at = 128 + count * 64
+        fill_range(w, at, 64, 0)
+        put(w, at, next_ticket)
+        put(w, at + 8, operation)
+        put(w, at + 16, 1)
+        put(w, at + 24, has_deadline)
+        put(w, at + 32, deadline)
+        put(w, 48, count + 1)
+        put(w, 8, next_ticket + 1)
+        return reply(o, 1, next_ticket, 0, 0)
+    index = find(w, ticket)
+    if index == MAXWORD:
+        return INVALID
+    at = 128 + index * 64
+    access = get(w, at + 8)
+    phase = get(w, at + 16)
+    if has_deadline != get(w, at + 24) or deadline != get(w, at + 32):
+        return INVALID
+    expired = has_deadline == 1 and now >= deadline
+    if operation == 3:
+        if phase != 1:
+            return INVALID
+        if expired:
+            remove(w, index)
+            return reply(o, 4, ticket, 0, 1)
+        if flags % 2 == 1 or get(w, 40) == 1 or access == 2 and flags // 2 % 2 == 1:
+            remove(w, index)
+            return reply(o, 5, ticket, 0, 1)
+        front = 0
+        while front < count and get(w, 128 + front * 64 + 16) != 1:
+            front = front + 1
+        if get(w, 16) == 1 or front != index or access == 1 and get(w, 32) != 0:
+            return reply(o, 1, ticket, 0, 0)
+        put(w, at + 16, 2)
+        if access == 1:
+            put(w, 16, 1)
+            put(w, 24, ticket)
+        else:
+            put(w, 32, get(w, 32) + 1)
+        return reply(o, 2, ticket, 0, choose(access == 2, 1, 0))
+    if operation == 4:
+        if phase != 2:
+            return INVALID
+        if expired:
+            return reply(o, 4, ticket, 0, 0)
+        if access == 1:
+            put(w, at + 16, 4)
+            return reply(o, 8, ticket, 0, 0)
+        put(w, at + 16, 3)
+        return reply(o, 3, ticket, 0, 0)
+    if operation == 5:
+        if access != 1 or phase != 4:
+            return INVALID
+        if flags // 2 % 2 == 1 or flags // 4 % 2 == 1:
+            return reply(o, 5, ticket, 0, 0)
+        if expired:
+            return reply(o, 4, ticket, 0, 0)
+        put(w, at + 16, 3)
+        return reply(o, 3, ticket, 0, 0)
+    if operation == 6:
+        if access != 1 or phase == 1:
+            return INVALID
+        put(w, 16, 0)
+        put(w, 24, 0)
+        remove(w, index)
+        return reply(o, 0, ticket, 0, 1)
+    if operation == 7:
+        if access != 2 or phase != 3:
+            return INVALID
+        status = 0
+        if flags % 2 == 1 or get(w, 40) == 1 or flags // 2 % 2 == 1:
+            status = 5
+        else:
+            if expired:
+                status = 4
+        put(w, 32, get(w, 32) - 1)
+        remove(w, index)
+        return reply(o, status, ticket, 0, 1)
+    if operation == 8:
+        if access != 2 or phase != 2 and phase != 3:
+            return INVALID
+        if flags // 8 % 2 == 1:
+            put(w, 40, 1)
+        put(w, 32, get(w, 32) - 1)
+        remove(w, index)
+        return reply(o, 0, ticket, 0, 1)
+    if operation == 9:
+        if phase != 1 or flags % 2 != 1:
+            return INVALID
+        remove(w, index)
+        return reply(o, 5, ticket, 0, 1)
+    return INVALID
+
+def reply(o:mutbuf, status:u64, ticket:u64, needed:u64, notify:u64) -> u64:
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, ticket)
+    put(o, 24, needed)
+    put(o, 32, notify)
+    return 64
+
+def zeros(w:mutbuf, at:u64, size:u64) -> u64:
+    i = 0
+    while i < size:
+        if byte(w, at + i) != 0:
+            return 0
+        i = i + 1
+    return 1
+
+def find(w:mutbuf, ticket:u64) -> u64:
+    index = 0
+    while index < get(w, 48):
+        if get(w, 128 + index * 64) == ticket:
+            return index
+        index = index + 1
+    return MAXWORD
+
+def remove(w:mutbuf, index:u64) -> u64:
+    count = get(w, 48)
+    at = 128 + index * 64
+    copy_range(w, w, at, at + 64, (count - index - 1) * 64)
+    fill_range(w, 128 + (count - 1) * 64, 64, 0)
+    put(w, 48, count - 1)
+    return 0
+
+def valid_state(w:mutbuf) -> u64:
+    if get(w, 0) != STATE or get(w, 16) > 1 or get(w, 40) > 1 or zeros(w, 56, 72) == 0:
+        return 0
+    count = get(w, 48)
+    if count > (length(w) - 128) // 64:
+        return 0
+    writers = 0
+    readers = 0
+    i = 0
+    prior = 0
+    while i < count:
+        at = 128 + i * 64
+        ticket = get(w, at)
+        access = get(w, at + 8)
+        phase = get(w, at + 16)
+        deadline = get(w, at + 24)
+        if ticket >= get(w, 8) or i > 0 and ticket <= prior:
+            return 0
+        prior = ticket
+        if access != 1 and access != 2 or phase < 1 or phase > 4 or deadline > 1:
+            return 0
+        if access == 2 and (phase == 4 or deadline != 1):
+            return 0
+        if deadline == 0 and get(w, at + 32) != 0 or zeros(w, at + 40, 24) == 0:
+            return 0
+        if phase != 1:
+            if access == 1:
+                writers = writers + 1
+                if get(w, 24) != ticket:
+                    return 0
+            else:
+                readers = readers + 1
+        i = i + 1
+    if writers != get(w, 16) or readers != get(w, 32) or writers != 0 and readers != 0:
+        return 0
+    if writers == 0 and get(w, 24) != 0:
+        return 0
+    return 1
