@@ -1,0 +1,99 @@
+{
+  "schema": "hepta.changed-executable-independent-static-review.v1",
+  "verdict": "STATIC_PASS_WITH_EXECUTION_PRECONDITIONS",
+  "reviewed_revision": "V3",
+  "control": {
+    "path": "runtime_trace_evidence/relocated_qualification/executable_identity_control_relocated.py",
+    "bytes": 16653,
+    "sha256": "4ed5c275262dc679d33a28d3abb7e5c96f9b8b44ec4eb481e11cb90693004445"
+  },
+  "prior_v2": {
+    "commit": "a135fd43044271b27a994b6b8684714df402ee18",
+    "sha256": "7380645c36f8b4b0e1725d3365ae0af5a0eac05d7ac777e93ad56df76999ccc5",
+    "executed_by_reviewer": false
+  },
+  "main_driver_sha256": "9763f0c078a46c7367703bb7d072003fe2136cf6e5f59656f7733e6f90ac40e9",
+  "transport_sha256": "8c2eb9a1405a2c4606a03800ada15de12bc8df70ea82a312b6b3a31e45d50391",
+  "native_source": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "commit": "16dbc208a21e4aca99dd576fb731a877598219dd",
+    "tree": "64fe6409be734a82d2ee5a28f7f17db12fc6208e",
+    "files": [
+      {
+        "path": "src/mcp/weight_artifact_late_quote_evaluation.rs",
+        "git_blob": "54f36f6a3aa4262b866ce58c556ad2b8b515e16b",
+        "sha256": "0174e4c3a0dcd06494af1991e801e44abe7c3fa37bfe106b16df2f0277e1ffc7"
+      },
+      {
+        "path": "src/mcp/weight_artifact_late_quote_execution.rs",
+        "git_blob": "7377bc1a4ebb388ad9c7da0e23765721a8630ef8",
+        "sha256": "2be9799b06a336d7420b1193cb7791b5aaa37f0f6259d9307abfc04935b10309"
+      }
+    ],
+    "working_files_equal_pinned_git_bytes": true
+  },
+  "resolved_finding": {
+    "id": "WSP-NEG-BUDGET-01",
+    "original_problem": "V2 claimed an all-path upper bound of five forwards, but a missed inotify/SIGSTOP window can allow the two original Restored forwards before failure.",
+    "derivation": "For seed137 KEEP, Parent has three jobs, Candidate has two, Restored has two. Whole original roundtrip is at most seven. A successfully frozen post-publication/pre-inverse window admits at most the first five.",
+    "authorized_resolution": "Before any control execution, V3 declares all-path upper bound seven and separately reports successful-captured-window upper bound five. Failure retains possible original Restored work and permits no retry.",
+    "v2_to_v3_exact_diff_verified": true,
+    "native_production_source_changed": false
+  },
+  "checked": [
+    {
+      "topic": "fixed identity and prerequisites",
+      "finding": "Plan/run bind control, main, transport, exact native source tree and package, both CI lanes, a previously PASS primary result and the independently fixed input-index SHA. Every case is rederived from that index."
+    },
+    {
+      "topic": "append-only ELF",
+      "finding": "Derived bytes equal original bytes plus one fixed trailing marker. Entry point, ELF header, program-header table and every PT_LOAD payload hash are unchanged. Both actually running /proc/PID/exe files are fully hashed. The derived executable is explicitly not newly qualified."
+    },
+    {
+      "topic": "same source and unique refusal",
+      "finding": "At pinned native source, evaluator/source/whole-executable identity checks precede jobs, phase charging and worker spawn. Preserving the original executable prefix and loaded segments preserves the embedded evaluator/transaction sources, while the whole executable SHA changes. First recovery must report exactly the identity refusal, no alternate error."
+    },
+    {
+      "topic": "same boot and original window",
+      "finding": "Before changed process start, before first recovery and after its return, checks compare the saved Linux boot ID, CLOCK_BOOTTIME and original wall deadline. The original attempt is not renewed. First recovery PASS therefore cannot be attributed merely to an expired window."
+    },
+    {
+      "topic": "original workspace source absent",
+      "finding": "Only the isolated copied workspace parent is unlinked after the stopped crash. Recovery must report that it did not open the original source path, and the path must remain absent."
+    },
+    {
+      "topic": "complete inverse",
+      "finding": "The inverse is read back against all original checkpoint bytes and the complete parent graph, route, initial-state/evaluator function capsule. A distinct restoration artifact is required even though the KEEP parent and candidate weight SHA are equal."
+    },
+    {
+      "topic": "charges and replay",
+      "finding": "All phase charge/result file presence and content hashes remain equal across changed-executable recovery; the saved intent is unchanged. A second recovery must preserve the full effect inventory and phase records. No new phase refund, compiler call, selection or forward is credited."
+    },
+    {
+      "topic": "cost accounting",
+      "finding": "Original preparation plus roundtrip may invoke two pure compilers. New changed-executable recovery forwards and compilers are zero; this is distinct from the original crash attempt's all-path seven-call upper bound. Actual interrupted work is explicitly not claimed exact."
+    },
+    {
+      "topic": "owned-process lifecycle",
+      "finding": "Processes use new sessions, loopback authenticated MCP, private credentials and resource ceilings. Stop/KILL is restricted to owned process groups; a missed publication window is terminal failure without automatic retry."
+    }
+  ],
+  "execution_preconditions": [
+    "Both full CI lanes must actually be successful and the exact primary qualification must PASS before this separate negative control is planned/run.",
+    "Use the reviewed V3 control/source hashes and a newly reviewed plan; never execute the old V2 five-call declaration.",
+    "Keep actual terminal status, elapsed time, partial-work uncertainty and cleanup receipts; static PASS is not evidence of runtime PASS."
+  ],
+  "limitations": [
+    "Zero Runtime processes, model forwards, compilers or fits were executed by this reviewer.",
+    "The proof is source-control-flow plus fixed-byte identity review for this one graph-only seed137 control, not evidence that arbitrary upgraded executables are compatible.",
+    "Post-hook/ledger records do not reveal the exact amount of an interrupted forward; the conservative all-path bound remains necessary.",
+    "The 180-second recorder budget is checked at operations and completion; failure cleanup has bounded additional waits and must retain its observed elapsed time rather than being described as an independent hard process deadline.",
+    "The ELF check establishes preserved declared load image bytes, not absence of all self-inspection behavior; whole-file self-identity is intentionally different."
+  ],
+  "counts": {
+    "runtime_processes_started": 0,
+    "model_forwards": 0,
+    "training_steps": 0,
+    "backward_calls": 0
+  }
+}
