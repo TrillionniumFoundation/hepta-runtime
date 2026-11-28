@@ -1,0 +1,49 @@
+name: Author exact HIA audit JSON source
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-json-author-6780-20261117]
+permissions:
+  contents: read
+jobs:
+  author:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          persist-credentials: false
+          sparse-checkout: tests/hia_native/audit_json
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          path: compiler
+          persist-credentials: false
+      - name: Verify identities and author source without semantic execution
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C compiler rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C compiler rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          source=Path('runtime/tests/hia_native/audit_json').resolve()
+          sys.path.insert(0,str(source))
+          from process import Recorder
+          recorder=Recorder(source,Path(os.environ['RUNNER_TEMP'])/'audit-json-author-processes')
+          raw,row=recorder.run('source-author',[sys.executable,'-I','-B',source/'authoring/author_json.py',
+              '--root',source,'--hepta',Path('compiler').resolve()],timeout=60)
+          print(raw.decode(),end='')
+          PY
+      - name: Preserve complete source and authoring process
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-json-author-${{ github.sha }}
+          path: |
+            runtime/tests/hia_native/audit_json
+            ${{ runner.temp }}/audit-json-author-processes
+          if-no-files-found: error
+          retention-days: 14
