@@ -1,0 +1,47 @@
+name: Independently read complete uploaded native binary diagnostic evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-structured-error-uploaded-read-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/structured_error/v1/archive_reader
+      BINARY_MANIFEST: b688ed5011f20683b584782e14be9fb153867bbeb56826b366b3f037853594a4
+    steps:
+      - name: Checkout frozen independent uploaded reader
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/structured_error/v1/archive_reader
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Independently read all uploaded bytes without application execution
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" run \
+            --work "$RUNNER_TEMP/structured-error-uploaded" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete evidence including any failed capture
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/driver.py" export \
+            --work "$RUNNER_TEMP/structured-error-uploaded" --output "$RUNNER_TEMP/structured-error-uploaded-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: structured-error-uploaded-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/structured-error-uploaded-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

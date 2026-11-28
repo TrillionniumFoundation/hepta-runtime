@@ -1,0 +1,7 @@
+# Installed binary root continuation
+
+The original run remains FAIL. Ten original and native groups already completed; their complete captures, the failed capacity fixture and all original source/build bytes are retained unchanged in the original archive. The failed capacity process wrote no native entry record. This continuation changes exactly one ctypes argument conversion from bytearray to bytes, runs only the previously unstarted fourteen capacity controls against the retained HIA image and the actual installed owner snapshot, then performs the complete original/native comparison and physical reader controls.
+
+No compiler or Rust process is executed. The 135 original queries and twelve private wire controls are not replayed. All fourteen capacity inputs and original readers were frozen before the original run. The pure reader changes only the capacity process argv binding and adds validation of the exact continuation source and retained failure. The original capture and original source remain separately immutable; a complete copy receives the declared continuation files. All process limits remain 60 seconds for ordinary processes and 180 seconds for pure readers.
+
+The complete output is archived including the downloaded original ZIP, every original file, the continued complete capture, every physical mutant and relocation, and complete read-only before/after proofs. This remains private installed root policy; no public binary route, remote body, audit, full SDK or asynchronous qualification is implied.

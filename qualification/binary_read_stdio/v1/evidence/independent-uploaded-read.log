@@ -1,0 +1,253 @@
+Current runner version: '2.338.2'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20261103.629
+Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+Build Date: 2026-11-03T17:26:59Z
+Worker ID: {5f3d3102-a6a1-45ec-b017-058ab39c0670}
+Region: centralus
+Cloud: Azure
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.5
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20261111.370.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.370/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.370
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Actions: read
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Cache mode: write
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: qualify
+##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+with:
+  path: runtime
+  ref: 790157c213d5a782028d8daa98a94aab573aa5f2
+  sparse-checkout: qualification/binary_read_stdio/v1/archive_reader
+  persist-credentials: false
+  repository: TrillionniumFoundation/hepta-runtime
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: 1
+  GH_TOKEN: ***
+  BINARY_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader
+  BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
+##[endgroup]
+Syncing repository: TrillionniumFoundation/hepta-runtime
+##[group]Getting Git version info
+Working directory is '/home/runner/work/hepta-runtime/hepta-runtime/runtime'
+[command]/usr/bin/git version
+git version 2.56.1
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/9fbc9ecc-630e-4154-9d73-6ec0789f5591' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+##[group]Determining repository object format
+##[endgroup]
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/hepta-runtime/hepta-runtime/runtime
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/
+[command]/usr/bin/git remote add origin https://github.com/TrillionniumFoundation/hepta-runtime
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path /home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git.path /github/runner_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/runtime/.git/worktrees/*.path /github/runner_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin 790157c213d5a782028d8daa98a94aab573aa5f2
+From https://github.com/TrillionniumFoundation/hepta-runtime
+ * branch            790157c213d5a782028d8daa98a94aab573aa5f2 -> FETCH_HEAD
+[command]/usr/bin/git rev-parse --verify --quiet 790157c213d5a782028d8daa98a94aab573aa5f2^{object}
+790157c213d5a782028d8daa98a94aab573aa5f2
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+##[group]Setting up sparse checkout
+[command]/usr/bin/git sparse-checkout set qualification/binary_read_stdio/v1/archive_reader
+##[endgroup]
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force 790157c213d5a782028d8daa98a94aab573aa5f2
+Note: switching to '790157c213d5a782028d8daa98a94aab573aa5f2'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 790157c test(hia): preserve passed stdio read and fix proof export source layout
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+790157c213d5a782028d8daa98a94aab573aa5f2
+##[group]Removing auth
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+includeif.gitdir:/github/workspace/runtime/.git.path
+includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path
+/home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-0e7f0c11\-d665\-4fc1\-adc9\-554d30ace314\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path
+/home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/hepta-runtime/hepta-runtime/runtime/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-0e7f0c11\-d665\-4fc1\-adc9\-554d30ace314\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git.path
+/github/runner_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git.path \/github\/runner_temp\/git\-credentials\-0e7f0c11\-d665\-4fc1\-adc9\-554d30ace314\.config
+[command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path
+/github/runner_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config
+[command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/runtime/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-0e7f0c11\-d665\-4fc1\-adc9\-554d30ace314\.config
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Removing credentials config '/home/runner/work/_temp/git-credentials-0e7f0c11-d665-4fc1-adc9-554d30ace314.config'
+##[endgroup]
+##[group]Run test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+[36;1mtest "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: 1
+  GH_TOKEN: ***
+  BINARY_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader
+  BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
+##[endgroup]
+##[group]Run python3 -I -S -B "$BINARY_SOURCE/driver.py" run \
+[36;1mpython3 -I -S -B "$BINARY_SOURCE/driver.py" run \[0m
+[36;1m  --work "$RUNNER_TEMP/binary-read-stdio-uploaded" --source-manifest-sha256 "$BINARY_MANIFEST"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: 1
+  GH_TOKEN: ***
+  BINARY_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader
+  BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
+##[endgroup]
+{"application_hia_executions":0,"archive":{"all_logical_files_and_directories_restored":true,"all_objects_fully_read":true,"directories":2969,"logical_bytes":3937766284,"logical_files":42947,"native_or_rust_executions":0,"original_status":"PASS","status":"PASS","tar":{"bytes":151931293,"sha256":"2dcdf8743b89fcf0a8dc6bbce950d1f228dd3d8bfbe772dadf7b322bf989b74c"},"unique_bytes":336955970,"unique_objects":1899,"zip":{"bytes":151935692,"sha256":"30997cdd5709288c8376f7d030c6a3f1270bc5bfc5637ebd55ec9a50f3195511"},"zip_members":{"EXPORT.json":{"bytes":1425,"sha256":"6c51ec1424e26f89d5e1a1e29d2af56ae0474281faad81308468f7427194f39d"},"evidence.tar.gz":{"bytes":151931293,"sha256":"2dcdf8743b89fcf0a8dc6bbce950d1f228dd3d8bfbe772dadf7b322bf989b74c"},"evidence.tar.gz.json":{"bytes":526,"sha256":"3d80ad15521139e04aa243df7eccf39194c8be9473ccd610dc966a82a6e39c2b"},"processes/complete-export.stderr":{"bytes":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"processes/complete-export.stdout":{"bytes":526,"sha256":"3d80ad15521139e04aa243df7eccf39194c8be9473ccd610dc966a82a6e39c2b"},"processes/processes.json":{"bytes":1080,"sha256":"2e445188ae3513c53d633097badf738ec5fa7bbc9c00b7612efd9fc456f4b6be"}}},"binding":{"artifact":{"bytes":151935692,"id":14331784980,"sha256":"30997cdd5709288c8376f7d030c6a3f1270bc5bfc5637ebd55ec9a50f3195511"},"commit":"2be1949082dce736e8ecd532036680406d3a30f8","job_id":134076226186,"manifest_sha256":"602d428e51366253c6964456e128df11ba5ae6d2d256b470e2e3427d4eb9998e","run_id":44094004280,"schema":"hepta.runtime.binary-read-stdio.uploaded-read-binding.v1","tar":{"all_logical_files_and_directories_bound":true,"all_object_bytes_and_modes_reread":true,"archive":"evidence.tar.gz","bytes":151931293,"directories":2969,"gate_status":"PASS","logical_bytes":3937766284,"logical_files":42947,"mode":420,"no_new_application_execution_during_export":true,"schema":"hepta.runtime.binary-read-stdio-retained-recovery.complete-archive-read.v1","sha256":"2dcdf8743b89fcf0a8dc6bbce950d1f228dd3d8bfbe772dadf7b322bf989b74c","unique_bytes":336955970,"unique_objects":1899,"whole_runtime_replaced":false},"tree":"27b571ed04e9781d690f8e626390770033312ba8"},"prior_export_failure":{"application_hia_executions":0,"binding":{"application_executions":0,"artifact":{"bytes":1850,"id":14332818638,"sha256":"3629b4d57842621569f1a5eff6043ef49aefab627a93270cee878b9af6cb508b"},"commit":"dd0e367f4c2b1d6d3825d2fb7ac99c1973f030df","fix":"Only correct that immutable import path; preserve and fully restore the previous export subprocess streams.","job":134080058795,"read":{"complete_files":42947,"guard_probes":11,"logical_bytes":3937766284,"seconds":30.231694409,"unchanged_entries":47911},"run":44095107698,"schema":"hepta.runtime.binary-read-stdio.uploaded-proof-export-failure.v1","source_defect":"Exporter searched qualified/scripts for common.py, but the frozen recovery package stores it at qualified/qualified/scripts.","stages":{"export":"FAIL","fetch":"PASS","read":"PASS","restore":"PASS"},"whole_run_status":"FAIL"},"members":{"processes/complete-export.stderr":{"bytes":278,"sha256":"9d88e8345af1233f2ea4537d4038331df7148f62c513baf9d615146a686cedd5"},"processes/complete-export.stdout":{"bytes":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"processes/processes.json":{"bytes":1098,"sha256":"34d642704246dc9b492996f440c70caf1c50b1cc5edfa70ffc769688a0f742b1"}},"rust_executions":0,"status":"PRESERVED_EXPORT_FAILURE_READ_PASS","stderr":"Traceback (most recent call last):\n  File \"/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader/export.py\", line 17, in <module>\n    from common import canonical,decode,pin,require\nModuleNotFoundError: No module named 'common'\n","zip":{"bytes":1850,"sha256":"3629b4d57842621569f1a5eff6043ef49aefab627a93270cee878b9af6cb508b"}},"processes":[{"argv":["/usr/bin/python3","-I","-S","-B","/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader/archive_reader.py","prior","--work","/home/runner/work/_temp/binary-read-stdio-uploaded","--source-manifest-sha256","f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2"],"completed":true,"cwd":"/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader","elapsed_seconds":0.6462854589999978,"exit_code":0,"name":"prior","parent_pid":2224,"pgid":2225,"pid":2225,"stderr":{"bytes":0,"file":"prior.stderr","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"stdin":null,"stdout":{"bytes":1677,"file":"prior.stdout","sha256":"1209f9cc61c00423f4b2a057d8c7734651f1325d4a529f47038cd9d76c544a69"},"timed_out":false,"timeout_seconds":60},{"argv":["/usr/bin/python3","-I","-S","-B","/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader/archive_reader.py","fetch","--work","/home/runner/work/_temp/binary-read-stdio-uploaded","--source-manifest-sha256","f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2"],"completed":true,"cwd":"/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader","elapsed_seconds":3.3428335750000002,"exit_code":0,"name":"fetch","parent_pid":2224,"pgid":2226,"pid":2226,"stderr":{"bytes":0,"file":"fetch.stderr","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"stdin":null,"stdout":{"bytes":150,"file":"fetch.stdout","sha256":"6da1620755910a8dd20e960bda19fd1164ecc474bf1669d6c2e93b462e35729c"},"timed_out":false,"timeout_seconds":60},{"argv":["/usr/bin/python3","-I","-S","-B","/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader/archive_reader.py","restore","--work","/home/runner/work/_temp/binary-read-stdio-uploaded","--source-manifest-sha256","f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2"],"completed":true,"cwd":"/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader","elapsed_seconds":7.510692098,"exit_code":0,"name":"restore","parent_pid":2224,"pgid":2229,"pid":2229,"stderr":{"bytes":0,"file":"restore.stderr","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"stdin":null,"stdout":{"bytes":1186,"file":"restore.stdout","sha256":"5f7a98ffdc46241c3c6c52cbce4925ce5b3e56c607dc22b27bee4e7060f99428"},"timed_out":false,"timeout_seconds":180},{"argv":["/usr/bin/python3","-I","-S","-B","/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader/archive_reader.py","read","--work","/home/runner/work/_temp/binary-read-stdio-uploaded","--source-manifest-sha256","f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2"],"completed":true,"cwd":"/home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader","elapsed_seconds":35.008733124,"exit_code":0,"name":"read","parent_pid":2224,"pgid":2235,"pid":2235,"stderr":{"bytes":0,"file":"read.stderr","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"stdin":null,"stdout":{"bytes":3310,"file":"read.stdout","sha256":"3f3cf91a69c6a5bc225de759c94068b535c2ef9c8765621f7be1d449d9493d6f"},"timed_out":false,"timeout_seconds":180}],"read":{"application_hia_executions":0,"evidence":{"application_hia_executions":0,"binding":{"artifact":{"bytes":151935692,"id":14331784980,"sha256":"30997cdd5709288c8376f7d030c6a3f1270bc5bfc5637ebd55ec9a50f3195511"},"commit":"2be1949082dce736e8ecd532036680406d3a30f8","job_id":134076226186,"manifest_sha256":"602d428e51366253c6964456e128df11ba5ae6d2d256b470e2e3427d4eb9998e","run_id":44094004280,"schema":"hepta.runtime.binary-read-stdio.uploaded-read-binding.v1","tar":{"all_logical_files_and_directories_bound":true,"all_object_bytes_and_modes_reread":true,"archive":"evidence.tar.gz","bytes":151931293,"directories":2969,"gate_status":"PASS","logical_bytes":3937766284,"logical_files":42947,"mode":420,"no_new_application_execution_during_export":true,"schema":"hepta.runtime.binary-read-stdio-retained-recovery.complete-archive-read.v1","sha256":"2dcdf8743b89fcf0a8dc6bbce950d1f228dd3d8bfbe772dadf7b322bf989b74c","unique_bytes":336955970,"unique_objects":1899,"whole_runtime_replaced":false},"tree":"27b571ed04e9781d690f8e626390770033312ba8"},"complete_directories":2969,"complete_files":42947,"helper_processes":155,"logical_bytes":3937766284,"observed_cases":48,"original_capture_status":"FAIL","original_cases":48,"physical_controls":{"controls":[{"admitted":false,"changed_files":1,"name":"case-count","rejected":true},{"admitted":false,"changed_files":1,"name":"module-image","rejected":true},{"admitted":false,"changed_files":1,"name":"source-byte","rejected":true},{"admitted":false,"changed_files":3,"name":"original-diagnostic","rejected":true},{"admitted":false,"changed_files":3,"name":"actual-stdin","rejected":true},{"admitted":false,"changed_files":3,"name":"body-output-tail","rejected":true},{"admitted":false,"changed_files":3,"name":"formatter-output-tail","rejected":true},{"admitted":false,"changed_files":3,"name":"formatter-work-tail","rejected":true},{"admitted":true,"changed_files":0,"name":"relocated-one","rejected":false},{"admitted":true,"changed_files":0,"name":"relocated-two","rejected":false}],"full_variant_bytes_modes_directories_checked":true,"honest_full_stream_reseals":5,"status":"PHYSICAL_READER_CONTROLS_PASS"},"private_controls":11,"production_cases":48,"pure_recovery_status":"PASS","rust_executions":0,"saved_guard_probes":132,"saved_guard_proofs":12,"source":{"files":48,"manifest":{"bytes":12367,"sha256":"4c05326e8891207b2232ef50a38974db4258dae2480d2ba5152a38181d5d4a0f"},"scope":{"actual_complete_process_streams":true,"actual_hia_read_body_and_error_renderer":true,"async_lifecycle":false,"configured_path_authority":false,"host_runtime_libc_required":false,"host_runtime_python_required":false,"native_syscall_callable":true,"observation_pool":false,"private_linux_binary_read_stdio":true,"public_routes":false,"ssh_transport":false,"whole_runtime_replaced":false},"target":"d3d75c30719db966b004756f610007a7c723729e"},"statistics":{"body_calls":989,"body_full_buffer_bytes":1569163901,"child_calls":68,"error_pairs":27,"formatter_calls":41,"formatter_capacity_retries":14,"formatter_full_buffer_bytes":3811067,"raw_os_effects":804,"success_pairs":21},"status":"COMPLETE_BINARY_READ_STDIO_UPLOADED_READ_PASS","whole_runtime_replaced":false},"guard_probes":11,"rust_executions":0,"status":"COMPLETE_BINARY_READ_STDIO_UPLOADED_READ_PASS","unchanged_entries":47912},"rust_executions":0,"source_manifest":"f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2","stage":"complete","status":"PASS"}
+##[group]Run python3 -I -S -B "$BINARY_SOURCE/driver.py" export \
+[36;1mpython3 -I -S -B "$BINARY_SOURCE/driver.py" export \[0m
+[36;1m  --work "$RUNNER_TEMP/binary-read-stdio-uploaded" --output "$RUNNER_TEMP/binary-read-stdio-uploaded-export" \[0m
+[36;1m  --source-manifest-sha256 "$BINARY_MANIFEST"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: 1
+  GH_TOKEN: ***
+  BINARY_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader
+  BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
+##[endgroup]
+{"all_logical_files_and_directories_bound": true, "all_object_bytes_and_modes_reread": true, "archive": "evidence.tar.gz", "bytes": 6701256, "directories": 17, "gate_status": "PASS", "logical_bytes": 34597856, "logical_files": 85, "mode": 420, "no_new_application_execution_during_export": true, "schema": "hepta.runtime.binary-read-stdio-uploaded-read.complete-archive-read.v1", "sha256": "9cd9a119b816f98ad65a38dbc9b2b21ddc4558905535a4a74dec68f8cbeade1d", "unique_bytes": 34568333, "unique_objects": 76, "whole_runtime_replaced": false}
+##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+with:
+  name: binary-read-stdio-uploaded-790157c213d5a782028d8daa98a94aab573aa5f2-1
+  path: /home/runner/work/_temp/binary-read-stdio-uploaded-export
+  if-no-files-found: error
+  retention-days: 30
+  compression-level: 0
+  overwrite: false
+  include-hidden-files: false
+env:
+  LC_ALL: C.UTF-8
+  PYTHONDONTWRITEBYTECODE: 1
+  GH_TOKEN: ***
+  BINARY_SOURCE: /home/runner/work/hepta-runtime/hepta-runtime/runtime/qualification/binary_read_stdio/v1/archive_reader
+  BINARY_MANIFEST: f7b424eefed763549022d22c99396c426931b93eab5db4e123095fde0e0dc3f2
+##[endgroup]
+(node:2244) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+With the provided path, there will be 6 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:2244) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 6705645
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is d396f7b62313c0ca9e896efc17e076be767c6326009811e24eb0e2e4b1541ecb
+Finalizing artifact upload
+Artifact binary-read-stdio-uploaded-790157c213d5a782028d8daa98a94aab573aa5f2-1.zip successfully finalized. Artifact ID 14334395869
+Artifact binary-read-stdio-uploaded-790157c213d5a782028d8daa98a94aab573aa5f2-1 has been successfully uploaded! Final size is 6705645 bytes. Artifact ID is 14334395869
+Artifact download URL: https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/44095970194/artifacts/14334395869
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.56.1
+Temporarily overriding HOME='/home/runner/work/_temp/06f34ba0-3ff0-4cda-9189-60db8d95f228' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/hepta-runtime/hepta-runtime/runtime
+Removing SSH command configuration
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Removing HTTP extra header
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Removing includeIf entries pointing to credentials config files
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,265 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def dispatch(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)>=8:
+        if load(s,0)==METADATA_RESPONSE:
+            return metadata_entry(s,o,w)
+    return legacy_entry(s,o,w)
+
+def metadata_entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<64 or length(s)>=LIMIT:
+        return INVALID
+    if load(s,0)!=METADATA_RESPONSE or load(s,8)!=3 or load(s,56)!=length(s)-64:
+        return INVALID
+    kind=load(s,24)
+    number=load(s,32)
+    count=load(s,40)
+    named=load(s,48)
+    size=length(s)-64
+    if kind<1 or kind>14 or number>4095 or (named!=0 and named!=2):
+        return INVALID
+    if number==0:
+        if named!=0 or count!=size:
+            return INVALID
+    else:
+        if count!=0:
+            return INVALID
+        if named==0 and size!=0:
+            return INVALID
+        if named==2 and size!=8:
+            return INVALID
+        if kind!=errno_class(number):
+            return INVALID
+    if named==0:
+        if utf8(s,64,size)==0:
+            return INVALID
+    if length(w)<WORK_SIZE:
+        return CAPACITY
+    install_data(w)
+    if named==2:
+        if number==11 or number==114 or number==115:
+            if load(s,64)>9223372036854775807:
+                return metadata_index_error(o)
+            named=0
+    if number!=0:
+        kind=rendered_errno_class(number)
+    class_word=get(w,(kind-1)*8)
+    class_at=class_word&4294967295
+    class_size=class_word>>32
+    needed=class_size+2
+    message_at=0
+    message_size=0
+    if number==0:
+        needed=needed+size
+    else:
+        if number<ERRNO_COUNT:
+            descriptor=get(w,ERRNO_TABLE+number*8)
+            message_at=descriptor&4294967295
+            message_size=descriptor>>32
+        if message_size==0:
+            message_size=UNKNOWN_SIZE+digits(number)
+        needed=needed+9+digits(number)+message_size
+        if named!=0:
+            needed=needed+2+wide_digits(load(s,64))
+    if needed>=LIMIT:
+        return INVALID
+    if length(o)<needed:
+        return CAPACITY
+    at=copy_out(w,o,class_at,0,class_size)
+    store(o,at,58)
+    store(o,at+1,32)
+    at=at+2
+    if number==0:
+        copy_in(s,o,64,at,size)
+        return at+size
+    copy_out(w,o,ERR_PREFIX,at,7)
+    at=decimal(o,at+7,number)
+    store(o,at,93)
+    store(o,at+1,32)
+    at=at+2
+    if message_at==0:
+        copy_out(w,o,UNKNOWN_AT,at,UNKNOWN_SIZE)
+        at=decimal(o,at+UNKNOWN_SIZE,number)
+    else:
+        copy_out(w,o,message_at,at,message_size)
+        at=at+message_size
+    if named!=0:
+        store(o,at,58)
+        store(o,at+1,32)
+        at=wide_decimal(o,at+2,load(s,64))
+    return at
+
+def wide_digits(number:u64) -> u64:
+    if number<10:
+        return 1
+    if number<100:
+        return 2
+    if number<1000:
+        return 3
+    if number<10000:
+        return 4
+    if number<100000:
+        return 5
+    if number<1000000:
+        return 6
+    if number<10000000:
+        return 7
+    if number<100000000:
+        return 8
+    if number<1000000000:
+        return 9
+    if number<10000000000:
+        return 10
+    if number<100000000000:
+        return 11
+    if number<1000000000000:
+        return 12
+    if number<10000000000000:
+        return 13
+    if number<100000000000000:
+        return 14
+    if number<1000000000000000:
+        return 15
+    if number<10000000000000000:
+        return 16
+    if number<100000000000000000:
+        return 17
+    if number<1000000000000000000:
+        return 18
+    if number<10000000000000000000:
+        return 19
+    return 20
+
+def wide_decimal(o:mutbuf,at:u64,number:u64) -> u64:
+    scale=10000000000000000000
+    started=0
+    while scale!=0:
+        digit=0
+        while number>=scale:
+            number=number-scale
+            digit=digit+1
+        if digit!=0 or started!=0 or scale==1:
+            store(o,at,digit+48)
+            at=at+1
+            started=1
+        if scale==10000000000000000000:
+            scale=1000000000000000000
+        else:
+            if scale==1000000000000000000:
+                scale=100000000000000000
+            else:
+                if scale==100000000000000000:
+                    scale=10000000000000000
+                else:
+                    if scale==10000000000000000:
+                        scale=1000000000000000
+                    else:
+                        if scale==1000000000000000:
+                            scale=100000000000000
+                        else:
+                            if scale==100000000000000:
+                                scale=10000000000000
+                            else:
+                                if scale==10000000000000:
+                                    scale=1000000000000
+                                else:
+                                    if scale==1000000000000:
+                                        scale=100000000000
+                                    else:
+                                        if scale==100000000000:
+                                            scale=10000000000
+                                        else:
+                                            if scale==10000000000:
+                                                scale=1000000000
+                                            else:
+                                                if scale==1000000000:
+                                                    scale=100000000
+                                                else:
+                                                    if scale==100000000:
+                                                        scale=10000000
+                                                    else:
+                                                        if scale==10000000:
+                                                            scale=1000000
+                                                        else:
+                                                            if scale==1000000:
+                                                                scale=100000
+                                                            else:
+                                                                if scale==100000:
+                                                                    scale=10000
+                                                                else:
+                                                                    if scale==10000:
+                                                                        scale=1000
+                                                                    else:
+                                                                        if scale==1000:
+                                                                            scale=100
+                                                                        else:
+                                                                            if scale==100:
+                                                                                scale=10
+                                                                            else:
+                                                                                if scale==10:
+                                                                                    scale=1
+                                                                                else:
+                                                                                    scale=0
+    return at
+
+def metadata_index_error(o:mutbuf) -> u32:
+    if length(o)<56:
+        return CAPACITY
+    store(o,0,86)
+    store(o,1,97)
+    store(o,2,108)
+    store(o,3,117)
+    store(o,4,101)
+    store(o,5,69)
+    store(o,6,114)
+    store(o,7,114)
+    store(o,8,111)
+    store(o,9,114)
+    store(o,10,58)
+    store(o,11,32)
+    store(o,12,99)
+    store(o,13,97)
+    store(o,14,110)
+    store(o,15,110)
+    store(o,16,111)
+    store(o,17,116)
+    store(o,18,32)
+    store(o,19,102)
+    store(o,20,105)
+    store(o,21,116)
+    store(o,22,32)
+    store(o,23,39)
+    store(o,24,105)
+    store(o,25,110)
+    store(o,26,116)
+    store(o,27,39)
+    store(o,28,32)
+    store(o,29,105)
+    store(o,30,110)
+    store(o,31,116)
+    store(o,32,111)
+    store(o,33,32)
+    store(o,34,97)
+    store(o,35,110)
+    store(o,36,32)
+    store(o,37,105)
+    store(o,38,110)
+    store(o,39,100)
+    store(o,40,101)
+    store(o,41,120)
+    store(o,42,45)
+    store(o,43,115)
+    store(o,44,105)
+    store(o,45,122)
+    store(o,46,101)
+    store(o,47,100)
+    store(o,48,32)
+    store(o,49,105)
+    store(o,50,110)
+    store(o,51,116)
+    store(o,52,101)
+    store(o,53,103)
+    store(o,54,101)
+    store(o,55,114)
+    return 56

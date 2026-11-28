@@ -1,0 +1,47 @@
+name: Qualify actual held parent directory lifetime
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-parent-directory-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      BINARY_SOURCE: ${{ github.workspace }}/runtime/qualification/parent_directory/v1/source
+      BINARY_MANIFEST: d9b8bc74cab839ec64d10ca0953fb15ce686ba1284b77f6e9849b9dcd5e5c6ac
+    steps:
+      - name: Checkout frozen actual filesystem qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/parent_directory/v1/source
+          persist-credentials: false
+      - name: Verify exact source head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run original and native held-parent mutation domain
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" run \
+            --work "$RUNNER_TEMP/parent-directory" --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Retain complete evidence including any failed capture
+        if: always()
+        run: |
+          python3 -I -S -B "$BINARY_SOURCE/scripts/driver.py" export \
+            --work "$RUNNER_TEMP/parent-directory" --output "$RUNNER_TEMP/parent-directory-export" \
+            --source-manifest-sha256 "$BINARY_MANIFEST"
+      - name: Upload all captured bytes and process receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: parent-directory-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/parent-directory-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

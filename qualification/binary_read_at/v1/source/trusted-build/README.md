@@ -1,0 +1,1 @@
+This source-only successor adds descriptor-relative fingerprint/private-read ownership for metadata inspection and publication. It preserves the exact qualified 63-function binary reader, without replacing the established immutable filesystem qualification. No application or Rust execution is performed by source authoring.

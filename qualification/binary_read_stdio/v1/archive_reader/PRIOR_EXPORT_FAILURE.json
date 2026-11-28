@@ -1,0 +1,28 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.uploaded-proof-export-failure.v1",
+  "commit": "dd0e367f4c2b1d6d3825d2fb7ac99c1973f030df",
+  "run": 44095107698,
+  "job": 134080058795,
+  "whole_run_status": "FAIL",
+  "stages": {
+    "fetch": "PASS",
+    "restore": "PASS",
+    "read": "PASS",
+    "export": "FAIL"
+  },
+  "read": {
+    "complete_files": 42947,
+    "logical_bytes": 3937766284,
+    "guard_probes": 11,
+    "unchanged_entries": 47911,
+    "seconds": 30.231694409
+  },
+  "artifact": {
+    "id": 14332818638,
+    "bytes": 1850,
+    "sha256": "3629b4d57842621569f1a5eff6043ef49aefab627a93270cee878b9af6cb508b"
+  },
+  "source_defect": "Exporter searched qualified/scripts for common.py, but the frozen recovery package stores it at qualified/qualified/scripts.",
+  "fix": "Only correct that immutable import path; preserve and fully restore the previous export subprocess streams.",
+  "application_executions": 0
+}

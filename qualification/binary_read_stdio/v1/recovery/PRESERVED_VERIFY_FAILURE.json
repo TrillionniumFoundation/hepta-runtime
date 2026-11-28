@@ -1,0 +1,29 @@
+{
+  "schema": "hepta.runtime.binary-read-stdio.verify-reader-failure.v1",
+  "commit": "54c897fe24b4a953d1a255754d991753524bfff3",
+  "run": 44093392485,
+  "job": 134074122442,
+  "status": "FAIL",
+  "stage": "verify",
+  "preceding_steps": {
+    "fetch": "PASS",
+    "restore": "PASS",
+    "read": "PASS",
+    "controls": "PASS"
+  },
+  "reason": "Final verify successfully re-read retained application comparisons and all physical controls, then the guard correctly denied the undeclared saved proof/READONLY.json input.",
+  "fix": "Declare the existing proof directory as immutable verification input, including complete before/after byte and metadata snapshots. It is not writable; all 11 execution/mutation guards remain active.",
+  "artifact": {
+    "id": 14333690172,
+    "bytes": 146143897,
+    "sha256": "898d665da8e82d9a30d6cb34b478c4f14f75b6fabbfaec42222bede9c3e39d12"
+  },
+  "tar": {
+    "bytes": 146139500,
+    "sha256": "b1078d559dd32ebe4105f6f69a16487ec977db693811009795bfd69dda61256d",
+    "logical_files": 42945,
+    "logical_bytes": 3907777998
+  },
+  "application_executions": 0,
+  "all_native_sources_and_elves_unchanged": true
+}

@@ -1,0 +1,11 @@
+# Native HIA publish-at qualification
+
+This is an input-only actual comparison of the exact original publish(), expected(), current(), regular(), version(), and metadata helpers against the five-image native HIA publish_at callable. Production sources are the full byte-verified trusted-build/ package and the complete upstream build archive pinned by BUILD_REUSE.json. No application is executed during source admission or build admission.
+
+The frozen domain contains 78 inputs, 79 calls per implementation in separate owned processes, 68 observed inputs and 10 null-observer inputs. Each invocation borrows a real held directory descriptor. Concrete current-version inputs come only from the actual initial fixture stat and are retained in the complete invocation bytes. There are 20 real filesystem mutation actors per implementation and 7 actual regular-first-fstat kernel EIO orphans across 6 inputs, including two live contexts and descriptor zero.
+
+The reader consumes every captured byte, original call result, HIA input/output/workspace before and after each call, child image boundary, actual OS hook, process stream, and descriptor inventory. It compares publication results, exact error class/errno/filename/filename2 and formatter, ordered effects, file contents/attributes, inode relationships, and timestamp change relationships. Absolute fixture paths and independent filesystem inode numbers are normalized only by declared owned-object relations; raw values remain retained. The observer ACK is exactly eight zero bytes and has no result authority.
+
+Successful publication returns no payload. Source metadata preservation, destination and source version races, source and temporary refusals, directory rename with a held parent, link/rename races, partial link publication followed by unlink failure, and the final directory fsync are part of the fixed domain. This private leaf does not establish the outer write/upload locking and cleanup wrappers, SSH, full SDK behavior, or all public routes.
+
+All 31 input groups retain their own complete captures even on failure. Unknown executions are never replayed. The pure reader has eight physical refusal controls and two complete relocated rereads. Retained failures and source-author failures remain explicit until the final package preserves them losslessly.

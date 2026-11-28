@@ -1,0 +1,114 @@
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(s)<96 or length(s)>=4294901760:
+        return 4294967295
+    if load(s,0)!=3544386032337309768 or load(s,88)!=length(s)-96:
+        return 4294967295
+    command=load(s,8)
+    if command!=1 and command!=2 and command!=3:
+        return 4294967295
+    if length(o)<64:
+        return 4294967294
+    if command==1:
+        if valid_start(s)==0:
+            return 4294967295
+        if load(s,24)!=1 or load(s,48)!=0 or load(s,56)!=0 or load(s,64)!=0 or load(s,72)!=0:
+            return 4294967295
+        needed=required(load(s,32),load(s,40),0,1,0)
+        if needed>=4294901760:
+            return 4294967295
+        if length(w)<needed:
+            return short_header(o,4,needed)
+        if get(w,0)==3544386058107109960:
+            if get(w,8)!=99 and get(w,8)!=0:
+                return 4294967295
+        fill_range(w,0,4096,0)
+        layout(w,load(s,32),load(s,40),0,1,0)
+        put(w,0,3544386058107109960)
+        put(w,8,1)
+        put(w,56,1)
+        put(w,64,load(s,32))
+        put(w,72,load(s,40))
+        put(w,88,18446744073709551615)
+        put(w,96,18446744073709551615)
+        put(w,112,18446744073709551615)
+        put(w,424,3544386032337309768)
+        copy_in(s,w,96,4096,get(w,64))
+        copy_in(s,w,96+get(w,64),get(w,304),get(w,72))
+    else:
+        if command==3:
+            if length(s)!=96 or length(w)<4096:
+                return 4294967295
+            if get(w,0)!=3544386058107109960 or get(w,424)!=3544386032337309768 or get(w,432)!=1:
+                return 4294967295
+            if get(w,8)!=20 or get(w,24)!=0 or load(s,16)!=get(w,16):
+                return 4294967295
+            if load(s,24)!=0 or load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+                return 4294967295
+            if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+                return 4294967295
+            if length(w)<get(w,384):
+                return short_header(o,4,get(w,384))
+            put(w,432,0)
+            put(w,8,90)
+        else:
+            if length(w)<4096 or get(w,0)!=3544386058107109960 or get(w,424)!=3544386032337309768 or get(w,432)!=0:
+                return 4294967295
+            if length(w)<get(w,384):
+                return short_header(o,4,get(w,384))
+            if load(s,32)!=0 or load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+                return 4294967295
+            if load(s,64)!=0 or load(s,72)!=0 or load(s,80)!=0:
+                return 4294967295
+            if length(s)-96>get(w,416):
+                return 4294967295
+            sequence=load(s,16)
+            if get(w,24)!=0:
+                if sequence!=get(w,24):
+                    return 4294967295
+                copy_in(s,w,96,get(w,392),length(s)-96)
+                put(w,32,sequence)
+                put(w,40,load(s,24))
+                put(w,48,length(s)-96)
+                put(w,24,0)
+            else:
+                if sequence!=get(w,32) or load(s,24)!=get(w,40) or length(s)-96!=get(w,48):
+                    return 4294967295
+                at=0
+                while at<get(w,48):
+                    if byte(s,96+at)!=byte(w,get(w,392)+at):
+                        return 4294967295
+                    at=at+1
+    status=4294967293
+    while status==4294967293:
+        phase=get(w,8)
+        if phase<20:
+            status=walk(o,w)
+        else:
+            if phase==20:
+                status=parent_loan(o,w)
+            else:
+                if phase>=90:
+                    status=finish(o,w)
+                else:
+                    return 4294967295
+    return status
+
+def parent_loan(o:mutbuf,w:mutbuf) -> u64:
+    if get(w,432)!=0 or get(w,88)>2147483647 or get(w,96)!=18446744073709551615 or get(w,112)!=18446744073709551615:
+        return 4294967295
+    size=get(w,144)
+    if length(o)<64+size:
+        return short_header(o,5,64+size)
+    fill_range(o,0,64,0)
+    put(o,0,3544386040927240776)
+    put(o,8,6)
+    put(o,16,get(w,16))
+    put(o,24,get(w,88))
+    put(o,32,size)
+    put(o,56,size)
+    copy_out(w,o,get(w,328)+get(w,136),64,size)
+    put(w,432,1)
+    return 64

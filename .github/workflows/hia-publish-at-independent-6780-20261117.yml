@@ -1,0 +1,54 @@
+name: Independently read complete publication qualification uploads
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-publish-at-independent-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [absent-a, absent-b, descriptor-a, descriptor-b, destination-refusals, held-parent, link-races, metadata-a, metadata-b, metadata-races-a, metadata-races-b, metadata-races-c, metadata-refusals, observer-off-a, observer-off-b, observer-off-c, orphan-current, orphan-second, orphan-source, orphan-temp, partial-publication, rename-races-a, rename-races-b, second-check, temp-order, temp-refusals-a, temp-refusals-b, version-races-a, version-races-b, versions-a, versions-b]
+    env:
+      LC_ALL: C.UTF-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH_SOURCE: ${{ github.workspace }}/runtime/qualification/publish_at/v1/independent_uploaded
+      PUBLISH_MANIFEST: 07a3acdd2e07b54920b491e0bf8a19d0d5022339e62712b0a828e9642db3dab9
+      PUBLISH_GROUP: ${{ matrix.group }}
+    steps:
+      - name: Checkout exact frozen independent reader and complete source bindings
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          sparse-checkout: qualification/publish_at/v1/independent_uploaded
+          persist-credentials: false
+      - name: Verify exact reader head
+        run: test "$(git -C runtime rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Download and fully read this original uploaded qualification
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/driver.py" run \
+            --work "$RUNNER_TEMP/publish-independent" --group "$PUBLISH_GROUP" \
+            --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Retain independent process proof including failures
+        if: always()
+        run: |
+          python3 -I -S -B "$PUBLISH_SOURCE/driver.py" export \
+            --work "$RUNNER_TEMP/publish-independent" --group "$PUBLISH_GROUP" \
+            --output "$RUNNER_TEMP/publish-independent-export" --source-manifest-sha256 "$PUBLISH_MANIFEST"
+      - name: Upload full independent proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publish-independent-${{ matrix.group }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publish-independent-export
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
