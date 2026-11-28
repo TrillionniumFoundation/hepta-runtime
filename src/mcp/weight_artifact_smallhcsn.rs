@@ -12,8 +12,7 @@ use crate::mcp::{
 };
 use anyhow::ensure;
 
-#[path = "weight_artifact_smallhcsn_clock.rs"]
-mod clock;
+use super::model_clock as clock;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "weight_artifact_smallhcsn_compile_tests.rs"]
 mod compile_tests;

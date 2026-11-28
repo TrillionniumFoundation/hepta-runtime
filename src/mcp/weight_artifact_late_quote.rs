@@ -13,8 +13,7 @@ use crate::mcp::{
 };
 use anyhow::ensure;
 
-#[path = "weight_artifact_smallhcsn_clock.rs"]
-mod clock;
+use super::model_clock as clock;
 #[path = "weight_artifact_late_quote_compile.rs"]
 mod compiler;
 #[path = "weight_artifact_late_quote_evaluation.rs"]

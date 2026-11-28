@@ -15,6 +15,8 @@ pub mod f16_research;
 pub mod f32_recovery;
 #[path = "weight_artifact_late_quote.rs"]
 pub(in crate::mcp) mod late_quote;
+#[path = "weight_artifact_smallhcsn_clock.rs"]
+mod model_clock;
 #[path = "weight_artifact_smallhcsn.rs"]
 pub(in crate::mcp) mod smallhcsn;
 use std::collections::BTreeSet;
