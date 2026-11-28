@@ -1,0 +1,50 @@
+name: Inspect retained audit record I/O source failure
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-audit-record-io-inspect-6780-20261117]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Read exact failed artifact without semantic execution
+        run: |
+          python3 -I -B - <<'PY'
+          import hashlib,io,json,os,subprocess,zipfile
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'audit-record-io-failure';root.mkdir()
+          result=subprocess.run(['gh','api','repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14304603409/zip'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=60,check=False)
+          (root/'download.stderr').write_bytes(result.stderr)
+          assert result.returncode==0, result.stderr.decode(errors='replace')
+          raw=result.stdout
+          assert len(raw)==83349 and hashlib.sha256(raw).hexdigest()=='fbaf520237af1e847aeb9665f9f7f4f8f1cb440a3759898e46ed5e438e6662ae'
+          (root/'original-failed.zip').write_bytes(raw)
+          rows=[]
+          with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+              seen=set()
+              for item in archive.infolist():
+                  assert item.filename not in seen;seen.add(item.filename)
+                  content=archive.read(item)
+                  row=dict(name=item.filename,bytes=len(content),sha256=hashlib.sha256(content).hexdigest())
+                  rows.append(row)
+                  if item.filename.endswith(('source-author.stderr','processes.json')):
+                      row['complete_utf8']=content.decode()
+                      print(json.dumps(row,sort_keys=True))
+          report=dict(status='RETAINED_FAILED_ARTIFACT_COMPLETELY_READ',artifact=14304603409,zip_sha256=hashlib.sha256(raw).hexdigest(),members=rows,native_or_rust_executions=0)
+          (root/'index.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(dict(status=report['status'],members=len(rows),native_or_rust_executions=0),sort_keys=True))
+          PY
+      - name: Preserve complete failed artifact and exact read index
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: audit-record-io-author-failure-readback
+          path: ${{ runner.temp }}/audit-record-io-failure
+          if-no-files-found: error
+          retention-days: 14
