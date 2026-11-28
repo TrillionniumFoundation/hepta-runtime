@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_local_service as shared
 ROOT=shared.ROOT
+REFERENCE=shared.REFERENCE
 COUNTS={'elf_requests':0,'original_batch_comparisons':0,'expected_domain_refusals':0,'expected_parameter_refusals':0,'original_budget_boundary_pairs':0,'original_failure_comparisons':0}
 ORIGINAL_MULTI_SHA='6f83b3e1031642e9981310916181858941dec51bb1696a79087beeb60a6e3eb5'
 REDACTED='multi-file read could not complete; verify configured read roots, regular single-link files, strict UTF-8 and byte budgets'
@@ -19,14 +20,14 @@ class MultiServiceTests(unittest.TestCase):
   assert cls.metadata['profile'][0]['call_mask']==126 and cls.metadata['profile'][5]['call_mask']==30
   assert cls.metadata['profile'][3]['workspace_capacity']==8<<20
   assert cls.metadata['profile'][3]['flags']==3 and cls.metadata['profile'][3]['call_mask']==4
-  raw=(ROOT/'src/mcp/runtime/multi_read_host.py').read_bytes();assert hashlib.sha256(raw).hexdigest()==ORIGINAL_MULTI_SHA
-  namespace=dict(vars(shared.NativeServiceTests.original));namespace.update(__name__='hia_original_multi_service',__file__=str(ROOT/'src/mcp/runtime/multi_read_host.py'))
-  exec(compile(raw,str(ROOT/'src/mcp/runtime/multi_read_host.py'),'exec'),namespace)
+  raw=(REFERENCE/'src/mcp/runtime/multi_read_host.py').read_bytes();assert hashlib.sha256(raw).hexdigest()==ORIGINAL_MULTI_SHA
+  namespace=dict(vars(shared.NativeServiceTests.original));namespace.update(__name__='hia_original_multi_service',__file__=str(REFERENCE/'src/mcp/runtime/multi_read_host.py'))
+  exec(compile(raw,str(REFERENCE/'src/mcp/runtime/multi_read_host.py'),'exec'),namespace)
   cls.original=staticmethod(namespace['multi_read']);cls.wire_size=staticmethod(namespace['_wire_size'])
  @classmethod
  def tearDownClass(cls):
-  assert hashlib.sha256((ROOT/'src/mcp/runtime/multi_read_host.py').read_bytes()).hexdigest()==ORIGINAL_MULTI_SHA
-  assert hashlib.sha256((ROOT/'src/mcp/runtime/binary_file.py').read_bytes()).hexdigest()==shared.ORIGINAL_SHA
+  assert hashlib.sha256((REFERENCE/'src/mcp/runtime/multi_read_host.py').read_bytes()).hexdigest()==ORIGINAL_MULTI_SHA
+  assert hashlib.sha256((REFERENCE/'src/mcp/runtime/binary_file.py').read_bytes()).hexdigest()==shared.ORIGINAL_SHA
  def call(self,service,args,identity='batch 雪"\n',raw=False):
   result=service.tool('read_multiple_files',args,identity=identity,raw=raw);COUNTS['elf_requests']+=1;return result
  def compare(self,service,root,args):

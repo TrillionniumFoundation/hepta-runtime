@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes,hashlib,importlib.util,json,os,random,select,struct,subprocess,sys,tempfile,time,unittest
 from pathlib import Path
 ROOT=Path(os.environ.get('HIA_RUNTIME_REPO',Path(__file__).resolve().parents[2]))
+REFERENCE=Path(os.environ.get('HIA_RUNTIME_REFERENCE',ROOT))
 sys.path.insert(0,str(ROOT/'scripts'))
 COUNTS={'elf_requests':0,'original_read_comparisons':0,'protocol_errors':0,'domain_errors':0,'native_controller_calls':0}
 ORIGINAL_SHA='c15e8900b0ab867b221ff08d5a10401c8b656c87676f57b478b9a21219f7fe12'
@@ -67,7 +68,7 @@ class NativeServiceTests(unittest.TestCase):
   cls.controller_manifest=cls.manifest.parent/cls.metadata['members'][0]['manifest']
   source=Path(os.environ.get('HIA_SERVICE_SOURCE',ROOT/'native/local_service.hepta'))
   assert hashlib.sha256(source.read_bytes()).hexdigest()==cls.metadata['members'][0]['source_sha256']
-  original=ROOT/'src/mcp/runtime/binary_file.py';assert hashlib.sha256(original.read_bytes()).hexdigest()==ORIGINAL_SHA
+  original=REFERENCE/'src/mcp/runtime/binary_file.py';assert hashlib.sha256(original.read_bytes()).hexdigest()==ORIGINAL_SHA
   spec=importlib.util.spec_from_file_location('hia_local_service_original_read',original)
   cls.original=importlib.util.module_from_spec(spec);spec.loader.exec_module(cls.original)
  def test_source_composition(self):
@@ -89,7 +90,7 @@ class NativeServiceTests(unittest.TestCase):
    self.assertEqual(current,before[item['original_function']])
    self.assertEqual(hashlib.sha256(json.dumps(current,sort_keys=True,separators=(',',':')).encode()).hexdigest(),item['function_sha256'])
   for name,identity in proof['original_sources'].items():
-   raw=(ROOT/name).read_bytes();self.assertEqual(hashlib.sha256(raw).hexdigest(),identity['sha256'])
+   raw=(REFERENCE/name).read_bytes();self.assertEqual(hashlib.sha256(raw).hexdigest(),identity['sha256'])
    self.assertEqual(hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest(),identity['blob'])
  def test_protocol_and_host_list(self):
   with tempfile.TemporaryDirectory() as directory,Session(self.executable,directory) as service:
