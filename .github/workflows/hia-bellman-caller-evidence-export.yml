@@ -1,0 +1,71 @@
+name: Export complete Bellman caller evidence
+on:
+  push:
+    branches: [hia-bellman-caller-evidence-export-6780-20261116]
+    paths: ['.github/workflows/hia-bellman-caller-evidence-export.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download the exact existing complete artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bellman-call-qualified-e1c8db3d2ea1c301c7fda22926afe3203d5f68b9-1
+          run-id: 43840015689
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/original-artifact
+      - name: Verify and split complete bytes without semantic execution
+        run: |
+          python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os,shutil
+          base=Path(os.environ['RUNNER_TEMP']);source=base/'original-artifact'
+          archive=source/'caller.tar.gz';declared=json.loads((source/'archive.json').read_bytes())
+          assert declared['git_head']=='e1c8db3d2ea1c301c7fda22926afe3203d5f68b9' and declared['run_id']=='43840015689' and declared['attempt']=='1'
+          assert declared['bytes']==archive.stat().st_size==717152264
+          with archive.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
+          assert digest==declared['sha256']=='fdf934267b16e9ad8b3cf970428563b251521afe8dd2836bce0a14606b80c6ac'
+          destination=base/'complete-parts';destination.mkdir();parts=[];offset=0
+          with archive.open('rb') as stream:
+              for index in range(3):
+                  raw=stream.read(256<<20);assert raw
+                  folder=destination/str(index);folder.mkdir();(folder/'part.bin').write_bytes(raw)
+                  parts.append(dict(index=index,offset=offset,bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()));offset+=len(raw)
+              assert stream.read(1)==b'' and offset==archive.stat().st_size
+          record=dict(schema='hepta.complete-artifact-byte-parts.v1',original_run=43840015689,original_artifact=14213485637,
+              original_head='e1c8db3d2ea1c301c7fda22926afe3203d5f68b9',complete_archive=declared,parts=parts,
+              semantic_executions=0,source_or_evidence_modified=False)
+          for row in parts:
+              folder=destination/str(row['index']);(folder/'parts.json').write_text(json.dumps(record,sort_keys=True,indent=2)+'\n')
+              shutil.copyfile(source/'archive.json',folder/'original-archive.json')
+          print(json.dumps(record,sort_keys=True))
+          PY
+      - name: Retain exact first byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bellman-caller-v6-complete-part-0
+          path: ${{ runner.temp }}/complete-parts/0/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain exact second byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bellman-caller-v6-complete-part-1
+          path: ${{ runner.temp }}/complete-parts/1/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain exact final byte range
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bellman-caller-v6-complete-part-2
+          path: ${{ runner.temp }}/complete-parts/2/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
