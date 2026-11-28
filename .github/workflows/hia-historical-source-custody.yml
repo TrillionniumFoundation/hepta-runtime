@@ -1,0 +1,47 @@
+name: Historical source custody
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hia-historical-source-custody.yml'
+      - 'tests/hia_native/historical_public58/**'
+      - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'native/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  push:
+    paths:
+      - '.github/workflows/hia-historical-source-custody.yml'
+      - 'tests/hia_native/historical_public58/**'
+      - 'tests/hia_native/test_historical_public_source_custody.py'
+      - 'native/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+permissions:
+  contents: read
+
+jobs:
+  original-source-custody:
+    name: Complete historical source reference controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests
+            .github
+            authoring
+            vendor
+            runtime_support
+      - name: Check fixed authorities, independent roots and terminal drift
+        run: python3 -I -B tests/hia_native/test_historical_public_source_custody.py -v
