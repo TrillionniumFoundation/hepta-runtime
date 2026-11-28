@@ -37,6 +37,12 @@ public_span_start:
     mov [r15 + 480], rdx
     lea rdx, [r12 + PM_READ_HUB]
     mov [r15 + 472], rdx /* Borrow the process-owned singleton cell. */
+    lea rdi, [r12 + PM_JOBS_AUDIT_HUB]
+    mov [r15 + 488], rdi
+    mov rsi, [r15 + 32]
+    call runtime_jobs_audit_bind
+    test rax, rax
+    jnz public_span_fail
     mov rax, [r12 + 224]
     mov [r15 + 400], rax
     mov rdi, [r12 + 232]
@@ -400,7 +406,7 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 656 /* 73 fixed slots; existing routes and binary owners69..72. */
+    .zero 664 /* 83 fixed slots; shared I/O and process-owned audit82. */
 
 /* G2 selects the actual final SDK initialization outcome. This fixed boundary
  * writes its admitted stderr span and retains its exit across config teardown. */

@@ -11,11 +11,11 @@
 .global runtime_grow_owned
 .global runtime_grow_suspended
 .global runtime_grow_target
-.equ RG_SLOTS, 82
+.equ RG_SLOTS, 83
 .equ RG_ENGINE, 16384
 .equ RG_TABLE, 8192
-.equ RG_WORK_HIGH, 13440
-.equ RG_OUTPUT_HIGH, 13448
+.equ RG_WORK_HIGH, 13504
+.equ RG_OUTPUT_HIGH, 13512
 .equ RG_HIGH_BYTES, 8
 .equ RG_INVALID, 0xffffffff
 .equ RG_RESOURCE, 0xfffffffc
@@ -120,6 +120,7 @@ runtime_grow_destroy_fs_admitted:
     /* The process-owned Bellman port must be detached before freeing an engine. */
     mov rax, [r15 + 440]
     or rax, [r15 + 448]
+    or rax, [r15 + 488] /* The process audit cell must be detached. */
     jnz runtime_grow_destroy_invalid
     xor ebp, ebp
 runtime_grow_destroy_admit:
@@ -281,6 +282,8 @@ runtime_grow_entry:
     jne runtime_grow_bad_early
     cmp qword ptr [r12 + 8], 0
     jne runtime_grow_bad_early
+    cmp ebp, 82
+    je runtime_grow_jobs_audit_dispatch
     cmp ebp, 74
     je runtime_grow_read_body_dispatch
     cmp ebp, 80
@@ -1938,6 +1941,10 @@ runtime_grow_extract_chain_bad:
     mov eax, RG_INVALID
     ret
 
+runtime_grow_jobs_audit_dispatch:
+    call runtime_jobs_audit_owned
+    jmp runtime_grow_done
+
 runtime_grow_read_body_dispatch:
     call runtime_read_public_owned
     jmp runtime_grow_done
@@ -2210,7 +2217,7 @@ runtime_grow_target:
     je runtime_grow_target_fence
     jmp runtime_grow_target_invalid
 runtime_grow_target_read_gateway:
-    cmp rsi, 10
+    cmp rsi, 12
     ja runtime_grow_target_invalid
     lea rdx, [rip + runtime_grow_read_gateway_targets]
     jmp runtime_grow_target_byte
@@ -2463,9 +2470,9 @@ runtime_grow_action_magics:
     .quad 0, 0 /* 69 binary typed params and 70 pure plan: no child action. */
     .quad 0, 0 /* 71 FileInfoParams and 72 BinaryReadParams: closed HIA leaves. */
     .ascii "HRDWGA01" /* 73 owned read gateway */
-    .zero 64 /* 74..81 fixed read dependencies; no caller-selected code. */
+    .zero 72 /* 74..82 fixed I/O and audit dependencies; no caller-selected code. */
 runtime_grow_read_gateway_targets:
-    .byte 71, 72, 70, 11, 74, 77, 10, 81, 75, 76, 46
+    .byte 71, 72, 70, 11, 74, 77, 10, 81, 75, 76, 46, 82, 69
 runtime_grow_publication_gateway_targets:
     .byte 65, 27, 5, 6, 11, 9, 7, 66, 3
 runtime_grow_publication_caller_targets:

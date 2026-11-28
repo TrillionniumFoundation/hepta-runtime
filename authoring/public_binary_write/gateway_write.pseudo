@@ -1,0 +1,142 @@
+def after_params(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=256 or size<256 or get(w,at)!=PARAMS_RESULT or get(w,at+16)!=3:
+        return INVALID
+    status=get(w,at+8)
+    if status==1:
+        if get(w,at+72)!=size-256:
+            return INVALID
+        return finish(o,w,2,at+256,size-256)
+    if status!=0:
+        return INVALID
+    if reserve(w,2,size)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,2),region(w,1),size)
+    put(w,232,size)
+    put(w,408,0)
+    return prepare(s,o,w,2)
+
+def after_fence(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64,ending:bool) -> u32:
+    if ending:
+        return after_json_diagnostic(s,o,w,code,size)
+    at=region(w,1)
+    if code!=size or size<64 or get(w,at)!=PLAN_RESULT or get(w,at+16)!=3 or get(w,at+56)!=size-64:
+        return INVALID
+    if get(w,at+8)==1:
+        return finish(o,w,1,at+64,size-64)
+    if get(w,at+8)!=2 or get(w,at+24)!=2 or get(w,at+32)!=9 or get(w,at+40)!=1 or get(w,at+48)!=0:
+        return INVALID
+    if reserve(w,3,size-64)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,3),region(w,1)+64,size-64)
+    put(w,200,size-64)
+    return prepare(s,o,w,3)
+
+def after_current(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=size or size<64 or get(w,at)!=PLAN_RESULT or get(w,at+16)!=3 or get(w,at+56)!=size-64:
+        return INVALID
+    if get(w,at+8)==1:
+        return finish(o,w,1,at+64,size-64)
+    if get(w,at+8)!=3 or get(w,at+32)!=3 or get(w,at+40)!=1 or get(w,at+48)!=0:
+        return INVALID
+    if reserve(w,5,size-64)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,5),region(w,1)+64,size-64)
+    put(w,208,size-64)
+    return prepare(s,o,w,5)
+
+def after_config(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    at=region(w,1)
+    if code!=size or size<32 or get(w,at)!=MESSAGE or get(w,at+16)!=0 or get(w,at+24)!=size-32:
+        return INVALID
+    if get(w,at+8)==1:
+        return finish(o,w,1,at+32,size-32)
+    if get(w,at+8)!=0:
+        return INVALID
+    stage=get(w,408)
+    if stage==0:
+        if reserve(w,3,size)==0:
+            return pending_grow(o,w)
+        copy_range(w,w,region(w,3),region(w,1),size)
+        put(w,200,size)
+        put(w,408,1)
+        return prepare(s,o,w,5)
+    if stage==1:
+        if size!=32:
+            return INVALID
+        put(w,408,2)
+        return prepare(s,o,w,5)
+    if stage!=2:
+        return INVALID
+    if reserve(w,6,size-32)==0:
+        return pending_grow(o,w)
+    copy_range(w,w,region(w,6),region(w,1)+32,size-32)
+    put(w,240,size-32)
+    return prepare(s,o,w,6)
+
+def prepare_typed_write(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    size=get(w,72)
+    if size>MAXIMUM-24:
+        return request_grow(o,w,3,0)
+    if reserve(w,0,size+24)==0:
+        return pending_grow(o,w)
+    at=region(w,0)
+    put(w,at,PARAMS_REQUEST)
+    put(w,at+8,size)
+    put(w,at+16,3)
+    copy_range(w,s,at+24,48,size)
+    return child(w,12,size+24,phase)
+
+def prepare_write_access(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u32:
+    stage=get(w,408)
+    if stage==0:
+        if reserve(w,0,24)==0:
+            return pending_grow(o,w)
+        at=region(w,0)
+        put(w,at,CONFIG_REQUEST)
+        put(w,at+8,6)
+        put(w,at+16,0)
+        return child(w,3,24,phase)
+    host=get(w,region(w,2)+88)
+    if stage==1:
+        if get(w,200)<32:
+            return INVALID
+        root=get(w,200)-32
+        path=get(w,region(w,2)+96)
+        if root>MAXIMUM-69 or host>MAXIMUM-69-root or path>MAXIMUM-69-root-host:
+            return request_grow(o,w,3,0)
+        size=69+root+host+path
+        if reserve(w,0,size)==0:
+            return pending_grow(o,w)
+        at=region(w,0)
+        clear_words(w,at,64)
+        put(w,at,AUDIT_REQUEST)
+        put(w,at+8,1)
+        put(w,at+16,root)
+        put(w,at+24,host)
+        put(w,at+32,path)
+        put(w,at+40,5)
+        copy_range(w,w,at+64,region(w,3)+32,root)
+        copy_range(w,w,at+64+root,region(w,2)+256,host+path)
+        end=at+64+root+host+path
+        store(w,end,119)
+        store(w,end+1,114)
+        store(w,end+2,105)
+        store(w,end+3,116)
+        store(w,end+4,101)
+        return child(w,11,size,phase)
+    if stage!=2:
+        return INVALID
+    if host>MAXIMUM-64:
+        return request_grow(o,w,3,0)
+    if reserve(w,0,host+64)==0:
+        return pending_grow(o,w)
+    at=region(w,0)
+    clear_words(w,at,64)
+    put(w,at,CONFIG_REQUEST)
+    put(w,at+8,10)
+    put(w,at+16,host+40)
+    put(w,at+48,host)
+    copy_range(w,w,at+64,region(w,2)+256,host)
+    return child(w,3,host+64,phase)

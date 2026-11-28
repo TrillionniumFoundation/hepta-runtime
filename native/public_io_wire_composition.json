@@ -1,0 +1,113 @@
+{
+  "aliases": {
+    "clear": "f9",
+    "command_frame_size": "f6",
+    "contains_nul": "f5",
+    "emit_command": "f7",
+    "emit_multi_packet": "f13",
+    "emit_packet": "f8",
+    "emit_write_packet": "f24",
+    "entry": "f0",
+    "get": "f15",
+    "grow": "f17",
+    "literal_argument": "f11",
+    "literal_size": "f10",
+    "load": "f14",
+    "put": "f16",
+    "utf8": "f23",
+    "valid_bootstrap": "f3",
+    "valid_environment": "f4",
+    "valid_multi": "f12",
+    "valid_outer": "f1",
+    "valid_request": "f2",
+    "valid_typed": "f22"
+  },
+  "assembly": {
+    "baseline": {
+      "bytes": 14829,
+      "sha256": "4b21c0c839227e4eca9b8cdd54078259005d68c8478b106363ec9ab95cc5872f"
+    },
+    "only_edit": [
+      "    cmp rax,3\n    ja .Lrsh_start_invalid\n    lea rdi,[rbx+64]",
+      "    cmp rax,4\n    ja .Lrsh_start_invalid\n    lea rdi,[rbx+64]"
+    ],
+    "source": {
+      "bytes": 14829,
+      "sha256": "d9ab656d9141754bdd5d50c988b3862691073e2fcb1b0e22846c1b6e8e10873d"
+    },
+    "whole_original_inverse": true
+  },
+  "baseline": {
+    "bytes": 90837,
+    "sha256": "0f2ae0b6e5df9c81366a52f19f6087b848ddcd2cf4c78b13b886406339d69d5a"
+  },
+  "blocks": 336,
+  "fixed_helper_kind": 4,
+  "functions": 25,
+  "generated_functions": [
+    "f0",
+    "f1",
+    "f2",
+    "f8",
+    "f24"
+  ],
+  "operations": 1871,
+  "original_command_environment_and_deadline_unchanged": true,
+  "original_pseudo": {
+    "bytes": 12513,
+    "sha256": "0817c6f9239e7047ff963236341e01689d4fff2fe142b64568cce0e462e46b41"
+  },
+  "original_read_kinds": [
+    1,
+    2,
+    3
+  ],
+  "pseudo_edits": [
+    [
+      "kind < 1 or kind > 3",
+      "kind < 1 or kind > 4"
+    ],
+    [
+      "load(s,144)!=choose(load(s,8)==3,1,load(s,8))",
+      "load(s,144)!=choose(load(s,8)==4,3,choose(load(s,8)==3,1,load(s,8)))"
+    ],
+    [
+      "    packet_size=96+load(s,88)+load(s,224)+load(s,240)\n",
+      "    packet_size=96+load(s,88)+load(s,224)+load(s,240)\n    if load(s,8)==4:\n        packet_size=packet_size+load(s,232)\n"
+    ],
+    [
+      "    if kind==3:\n        return emit_multi_packet(s,o,at,size)\n",
+      "    if kind==3:\n        return emit_multi_packet(s,o,at,size)\n    if kind==4:\n        return emit_write_packet(s,o,at,size)\n"
+    ]
+  ],
+  "public_route_qualified": false,
+  "retained_exact_functions": {
+    "f10": "4c39fb7094d5c90deaafef71e302b637089a21e38d99fb978e2905000f2e9352",
+    "f11": "3d88cf46231555f10eb94273ba580cfa4ec5ae565b21f78aca692cc05829f54b",
+    "f12": "f41ec97d7d05710368acc447b3724b96f5f0cd9b1d972bbd7078802c1dd4f1a5",
+    "f13": "a5f99fb97255938dca85244cb80e0d65dca1a37127a26a3e02bf8a1b28d75ad0",
+    "f14": "d761090ba6af7c88f7516cc943c14d9d2317fb70ded50b6a1b4e3904afaefabb",
+    "f15": "54d5c542fea2ddc6ce9bc43ad142cdd8b8ee56e0b0bf717ee528e7674fe6e3e4",
+    "f16": "f880b46e808ca02652a801ce76cbedaa94ac5058e96f5136d0c478f1453453fe",
+    "f17": "c0c5cbf97f12ac1d13fa76b11899e68b01c68e33e7853057181222c9daf4e8cf",
+    "f18": "a424def480961562a38c43d2713da8c1df158aa3f19156193f5513c1e018e231",
+    "f19": "7e0be3b6d1da39970ec1d68811c76ac57fde4c2b4717f3d25182c76415775fe5",
+    "f20": "feaab3853bebcf5b1f21f384116c1511bd8db80573c3027c200b4d4c0b16e8fb",
+    "f21": "9049d9c081d69eb6a4f2a14eba35082ed49efeddac6d6dff9e05213e90f60302",
+    "f22": "af5c05022796461a7bb2a974e91992f4b6ea6e1b302c04f441ff3ce95fca5e93",
+    "f23": "92d278a8cc7f7f0de4579bf5ecb60ee8091c9c11e3b843c47f022d4da3309d54",
+    "f3": "ecbf37a586d984f60775794f14988fbfbc16ef8a6dd2f9c0a21ed3e6e354e95a",
+    "f4": "270e5b4c8bd9b67be9d8f9ff4f51c87a6029d77fc1d7b034c6ebed172546dc46",
+    "f5": "7c7e61a12bfa1f26653005d3d1f7ae6e5ed3cef66f9dd469a7749926e825e469",
+    "f6": "7077031bb48a6a0f51734ec107dd55c495e5040af881dbcb340df14bbcd34894",
+    "f7": "c7cd3a7e8d07a7faae53ce972031ec49540fad50b3075b96830cffe080f4ce10",
+    "f9": "71f5071150ca2024e8064459bdf3f551c5e8e98a8a9a9cd7cac3b1c4279fa865"
+  },
+  "schema": "hepta.runtime.public-binary-write.wire-author.v1",
+  "source": {
+    "bytes": 94539,
+    "sha256": "be5284584d1ead55df2f089ce9a6d6e5cc2b3ff50cb6d16178090f217c16d226"
+  },
+  "whole_original_wire_inverse": true,
+  "write_packet": "HBPWQ001"
+}

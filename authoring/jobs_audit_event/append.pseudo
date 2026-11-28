@@ -1,0 +1,625 @@
+def append_entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(w) < 8192 or length(o) < 32:
+        return SHORT
+    if read64(w,0) == 0:
+        if append_admitted(s) == 0:
+            return INVALID
+        put(w,0,OWNER)
+    if read64(w,0) != OWNER:
+        return FAULT
+    result = AGAIN
+    while result == AGAIN:
+        phase = read64(w,8)
+        if phase != 0:
+            if read64(w,ACTION+64) != read64(w,16):
+                return FAULT
+        if phase < 30:
+            result = begin_step(s,o,w,phase)
+        else:
+            if phase < 50:
+                result = binding_step(s,o,w,phase)
+            else:
+                if phase < 70:
+                    result = validate_step(s,o,w,phase)
+                else:
+                    if phase < 100:
+                        result = append_step(s,o,w,phase)
+                    else:
+                        if phase < 500:
+                            result = FAULT
+                        else:
+                            result = cleanup_step(s,o,w,phase)
+    return result
+
+def append_admitted(s:readbuf) -> u64:
+    if length(s)<64 or read64(s,0)!=APPEND_REQUEST or read64(s,8)!=1:
+        return 0
+    if read64(s,48)!=0 or read64(s,56)!=0:
+        return 0
+    a=read64(s,16)
+    b=read64(s,24)
+    c=read64(s,32)
+    n=length(s)-64
+    if a==0 or a>n:
+        return 0
+    n=n-a
+    if b>n:
+        return 0
+    n=n-b
+    if c>n or n-c!=5 or read64(s,40)!=5:
+        return 0
+    if byte(s,64)!=47 or utf8(s,64,a)==0 or utf8(s,64+a,b)==0 or utf8(s,64+a+b,c)==0:
+        return 0
+    i=0
+    while i<a:
+        if byte(s,64+i)==0:
+            return 0
+        i=i+1
+    at=64+a+b+c
+    if byte(s,at)!=119 or byte(s,at+1)!=114 or byte(s,at+2)!=105 or byte(s,at+3)!=116 or byte(s,at+4)!=101:
+        return 0
+    return 1
+
+def begin_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase==0:
+        if append_admitted(s)==0:
+            return INVALID
+        return begin_request(s,o,w)
+    if phase==1:
+        if io_error(w)!=0:
+            return FAULT
+        sec=read64(w,TIME)
+        nano=read64(w,TIME+8)
+        if nano>=1000000000:
+            return FAULT
+        stamp=0
+        if sec<9223372036854775808:
+            if sec>18446744073709551:
+                return FAULT
+            stamp=sec*1000+nano//1000000
+            if stamp<sec*1000:
+                return FAULT
+        build_event(s,w,stamp)
+        copy_range(w,w,path_region(w,7),path_region(w,1),read64(w,80)+1)
+        put(w,624,read64(w,80))
+        return effect(w,10,2,path_region(w,7),read64(w,624),511,0,0)
+    if phase==10:
+        err=io_error(w)
+        if err==0:
+            return mkdir_advance(w)
+        if err==17:
+            return effect(w,11,3,path_region(w,7),read64(w,624),STAT,0,0)
+        if err==2:
+            end=parent_extent(w,path_region(w,1),read64(w,624))
+            if end==read64(w,624) or end==0:
+                return fail(w,0,err)
+            put(w,624,end)
+            copy_range(w,w,path_region(w,7),path_region(w,1),end)
+            store(w,path_region(w,7)+end,0)
+            return effect(w,10,2,path_region(w,7),end,511,0,0)
+        return fail(w,0,err)
+    if phase==11:
+        if io_error(w)!=0 or (read64(w,STAT+24)&61440)!=16384:
+            return fail(w,0,17)
+        return mkdir_advance(w)
+    if phase==20:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        put(w,184,io_result(w))
+        return effect(w,21,5,io_result(w),STAT,0,0,0)
+    if phase==21:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        put(w,560,read64(w,STAT))
+        put(w,568,read64(w,STAT+8))
+        put(w,576,read64(w,STAT+24)&4294967295)
+        put(w,584,read64(w,STAT+16))
+        put(w,592,read64(w,STAT+24)>>32)
+        if (read64(w,576)&61440)!=32768:
+            return fail(w,1,0)
+        return effect(w,22,6,0,0,0,0,0)
+    if phase==22:
+        if io_error(w)!=0:
+            return FAULT
+        if read64(w,584)!=1 or read64(w,592)!=io_result(w):
+            return fail(w,2,0)
+        if (read64(w,576)&63)!=0:
+            return effect(w,23,7,read64(w,184),384,0,0,0)
+        return choose_binding(w)
+    if phase==23:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        return effect(w,24,5,read64(w,184),STAT,0,0,0)
+    if phase==24:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        if (read64(w,STAT+24)&63)!=0:
+            return fail(w,3,0)
+        return choose_binding(w)
+    return FAULT
+
+def begin_request(s:readbuf,o:mutbuf,w:mutbuf) -> u64:
+    n=read64(s,16)
+    same=0
+    if read64(w,64)!=0 and n==read64(w,88):
+        same=same_bytes(s,64,w,path_region(w,2),n)
+    if same==0 and read64(w,136)!=0:
+        put(w,240,0)
+        put(w,248,0)
+        put(w,128,0)
+        put(w,8,500)
+        return AGAIN
+    cap=read64(w,64)
+    if same==0:
+        cap=4096
+        while cap<n+128:
+            if cap>4611686018427387903:
+                return SHORT
+            cap=cap*2
+    host=read64(s,24)
+    subject=read64(s,32)
+    payload=FIXED_BYTES+20+escape_size(s,64+n,host)+escape_size(s,64+n+host,subject)
+    if cap>1152921504606838783 or payload>18446744073709543423-8*cap-65536:
+        return SHORT
+    needed=8192+8*cap+65536+payload
+    if length(w)<needed:
+        put(w,208,needed)
+        return GROW_WORK
+    put(w,64,cap)
+    put(w,120,8192+8*cap+65536)
+    put(w,992,same)
+    if same==0:
+        copy_range(w,s,path_region(w,2),64,n)
+        store(w,path_region(w,2)+n,0)
+        put(w,88,n)
+        tail=n
+        if byte(s,64+n-1)==47:
+            tail=n-1
+        copy_range(w,s,path_region(w,0),64,tail)
+        end=literal_file(w,path_region(w,0)+tail)
+        put(w,72,end-path_region(w,0))
+        store(w,end,0)
+        copy_range(w,s,path_region(w,1),64,tail)
+        end=literal_audit(w,path_region(w,1)+tail)
+        put(w,80,end-path_region(w,1))
+        store(w,end,0)
+    put(w,224,0)
+    put(w,232,0)
+    put(w,600,0)
+    return effect(w,1,1,TIME,16,0,0,0)
+
+def build_event(s:readbuf,w:mutbuf,stamp:u64) -> u64:
+    base=read64(w,120)
+    at=literal_action(w,base)
+    at=decimal(w,at,stamp,0)
+    at=literal_host(w,at)
+    start=64+read64(s,16)
+    at=escaped(s,w,start,read64(s,24),at)
+    at=literal_outcome(w,at)
+    at=escaped(s,w,start+read64(s,24),read64(s,32),at)
+    store(w,at,34)
+    store(w,at+1,125)
+    store(w,at+2,10)
+    put(w,112,at+3-base)
+    return at+3
+
+def mkdir_advance(w:mutbuf) -> u64:
+    at=read64(w,624)
+    end=read64(w,80)
+    if at==end:
+        return effect(w,20,4,path_region(w,0),read64(w,72),658497,384,0)
+    base=path_region(w,1)
+    while at<end and byte(w,base+at)==47:
+        at=at+1
+    while at<end and byte(w,base+at)!=47:
+        at=at+1
+    put(w,624,at)
+    copy_range(w,w,path_region(w,7),base,at)
+    store(w,path_region(w,7)+at,0)
+    return effect(w,10,2,path_region(w,7),at,511,0,0)
+
+def choose_binding(w:mutbuf) -> u64:
+    warm=read64(w,128)
+    if read64(w,992)==0:
+        warm=0
+    i=0
+    while i<3:
+        if read64(w,STAMP+i*96+48)!=1:
+            warm=0
+        i=i+1
+    put(w,128,0)
+    if warm!=0:
+        put(w,192,1)
+        return effect(w,50,5,read64(w,136),STAT,0,0,0)
+    return cold_binding(w)
+
+def namespace_begin(w:mutbuf,handle:u64,next:u64) -> u64:
+    put(w,952,next)
+    put(w,960,handle)
+    fill_range(w,TOKEN,48,0)
+    return effect(w,100,21,0,0,0,0,0)
+
+def cold_binding(w:mutbuf) -> u64:
+    put(w,192,0)
+    put(w,240,30)
+    put(w,248,0)
+    put(w,8,500)
+    return AGAIN
+
+def binding_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase==30:
+        put(w,136,read64(w,184))
+        put(w,184,0)
+        return canonical_effect(w,31,path_region(w,0),read64(w,72))
+    if phase==31:
+        result=canonical_result(w)
+        if result!=AGAIN:
+            return result
+        n=read64(w,96)
+        copy_range(w,w,path_region(w,3),path_region(w,6)+32,n)
+        store(w,path_region(w,3)+n,0)
+        end=parent_extent(w,path_region(w,3),n)
+        if end==0:
+            return fail(w,4,0)
+        copy_range(w,w,path_region(w,4),path_region(w,3),end)
+        store(w,path_region(w,4)+end,0)
+        put(w,104,end)
+        put(w,608,0)
+        return open_binding_directory(w)
+    if phase==32:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        i=read64(w,608)
+        put(w,144+8*i,io_result(w))
+        i=i+1
+        put(w,608,i)
+        if i<3:
+            return open_binding_directory(w)
+        put(w,608,0)
+        return effect(w,33,5,read64(w,144),STAT,0,0,0)
+    if phase==33:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        if (read64(w,STAT+24)&61440)!=16384:
+            return fail(w,5,0)
+        stamp_metadata(w,STAMP+read64(w,608)*96)
+        return namespace_begin(w,read64(w,144+read64(w,608)*8),34)
+    if phase==34:
+        i=read64(w,608)
+        copy_range(w,w,STAMP+i*96+48,TOKEN,48)
+        i=i+1
+        put(w,608,i)
+        if i<3:
+            return effect(w,33,5,read64(w,144+i*8),STAT,0,0,0)
+        put(w,192,0)
+        return effect(w,50,5,read64(w,136),STAT,0,0,0)
+    return FAULT
+
+def open_binding_directory(w:mutbuf) -> u64:
+    i=read64(w,608)
+    region=1
+    size=read64(w,80)
+    if i==1:
+        region=2
+        size=read64(w,88)
+    if i==2:
+        region=4
+        size=read64(w,104)
+    return effect(w,32,4,path_region(w,region),size,589824,0,0)
+
+def canonical_effect(w:mutbuf,next:u64,at:u64,n:u64) -> u64:
+    base=path_region(w,5)
+    put(w,base,CANON_REQUEST)
+    put(w,base+8,1)
+    put(w,base+16,n)
+    put(w,base+24,0)
+    put(w,base+32,0)
+    put(w,base+40,0)
+    put(w,base+48,0)
+    put(w,base+56,0)
+    copy_range(w,w,base+64,at,n)
+    return effect(w,next,16,base,64+n,path_region(w,6),read64(w,64),0)
+
+def canonical_result(w:mutbuf) -> u64:
+    if io_error(w)!=0:
+        return fail_or_cold(w,0,io_error(w))
+    size=io_result(w)
+    if size>read64(w,64):
+        return resize_paths(w,size+32)
+    base=path_region(w,6)
+    if size<32 or read64(w,base)!=CANON_RESPONSE or read64(w,base+16)!=size-32:
+        return FAULT
+    status=read64(w,base+8)
+    if status==1:
+        return fail_or_cold(w,0,read64(w,base+24))
+    if status!=0 or read64(w,base+24)!=0:
+        return FAULT
+    put(w,96,size-32)
+    return AGAIN
+
+def validate_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase==50:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        if read64(w,STAT)!=read64(w,560) or read64(w,STAT+8)!=read64(w,568):
+            return fail_or_cold(w,6,0)
+        return effect(w,51,3,path_region(w,0),read64(w,72),STAT,0,0)
+    if phase==51:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        if read64(w,STAT)!=read64(w,560) or read64(w,STAT+8)!=read64(w,568):
+            return fail_or_cold(w,6,0)
+        put(w,1000,read64(w,96))
+        return canonical_effect(w,52,path_region(w,0),read64(w,72))
+    if phase==52:
+        result=canonical_result(w)
+        if result!=AGAIN:
+            return result
+        n=read64(w,96)
+        if n!=read64(w,1000) or same_bytes(w,path_region(w,3),w,path_region(w,6)+32,n)==0:
+            return fail_or_cold(w,6,0)
+        return effect(w,53,3,path_region(w,3),n,STAT,0,0)
+    if phase==53:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        if read64(w,STAT)!=read64(w,560) or read64(w,STAT+8)!=read64(w,568):
+            return fail_or_cold(w,6,0)
+        put(w,608,0)
+        return validate_named_directory(w)
+    if phase==54:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        at=STAMP+read64(w,608)*96
+        if read64(w,STAT)!=read64(w,at) or read64(w,STAT+8)!=read64(w,at+8):
+            return fail_or_cold(w,7,0)
+        return effect(w,55,5,read64(w,144+read64(w,608)*8),STAT,0,0,0)
+    if phase==55:
+        if io_error(w)!=0:
+            return fail_or_cold(w,0,io_error(w))
+        if (read64(w,STAT+24)&61440)!=16384:
+            return fail_or_cold(w,5,0)
+        stamp_metadata(w,TEMP_STAMP)
+        if same_bytes(w,TEMP_STAMP,w,STAMP+read64(w,608)*96,48)==0:
+            return fail_or_cold(w,7,0)
+        return namespace_begin(w,read64(w,144+read64(w,608)*8),56)
+    if phase==56:
+        i=read64(w,608)
+        if same_bytes(w,TOKEN,w,STAMP+i*96+48,48)==0:
+            return fail_or_cold(w,7,0)
+        i=i+1
+        put(w,608,i)
+        if i<3:
+            return validate_named_directory(w)
+        mode=read64(w,192)
+        if mode==2:
+            put(w,128,1)
+            return result_success(o,w)
+        if mode==1:
+            return effect(w,70,11,read64(w,136),0,0,0,0)
+        put(w,8,71)
+        return AGAIN
+    return FAULT
+
+def validate_named_directory(w:mutbuf) -> u64:
+    i=read64(w,608)
+    region=1
+    n=read64(w,80)
+    if i==1:
+        region=2
+        n=read64(w,88)
+    if i==2:
+        region=4
+        n=read64(w,104)
+    return effect(w,54,3,path_region(w,region),n,STAT,0,0)
+
+def append_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase==70:
+        put(w,136,read64(w,184))
+        put(w,184,0)
+        put(w,8,71)
+        return AGAIN
+    if phase==71:
+        return effect(w,72,8,read64(w,136),read64(w,120)+read64(w,600),read64(w,112)-read64(w,600),0,0)
+    if phase==72:
+        err=io_error(w)
+        if err==4:
+            put(w,8,71)
+            return AGAIN
+        if err!=0:
+            return fail(w,0,err)
+        n=io_result(w)
+        remain=read64(w,112)-read64(w,600)
+        if n>remain:
+            return FAULT
+        if n==0:
+            return fail(w,8,0)
+        put(w,600,read64(w,600)+n)
+        if n<remain:
+            put(w,8,71)
+            return AGAIN
+        return effect(w,73,9,read64(w,136),0,0,0,0)
+    if phase==73:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        if read64(w,192)==1:
+            put(w,192,2)
+            return effect(w,50,5,read64(w,136),STAT,0,0,0)
+        put(w,608,0)
+        return synchronize_next(w)
+    if phase==74:
+        if io_error(w)!=0:
+            return fail(w,0,io_error(w))
+        return synchronize_next(w)
+    return FAULT
+
+def synchronize_next(w:mutbuf) -> u64:
+    index=read64(w,608)
+    if index==0:
+        put(w,608,1)
+        if same_bytes(w,STAMP+192,w,STAMP,16)==0 and same_bytes(w,STAMP+192,w,STAMP+96,16)==0:
+            return effect(w,74,10,read64(w,160),0,0,0,0)
+        index=1
+    if index==1:
+        put(w,608,2)
+        return effect(w,74,10,read64(w,144),0,0,0,0)
+    if index==2:
+        put(w,608,3)
+        if same_bytes(w,STAMP,w,STAMP+96,16)==0:
+            return effect(w,74,10,read64(w,152),0,0,0,0)
+    put(w,192,2)
+    return effect(w,50,5,read64(w,136),STAT,0,0,0)
+
+def cleanup_step(s:readbuf,o:mutbuf,w:mutbuf,phase:u64) -> u64:
+    if phase==502:
+        base=path_region(w,6)
+        size=io_result(w)
+        if io_error(w)!=0 or size<24 or size>read64(w,64):
+            return FAULT
+        if read64(w,base)!=ERRNO_RESPONSE or read64(w,base+8)!=read64(w,232) or read64(w,base+16)!=size-24:
+            return FAULT
+        return result_error(o,w)
+    if phase!=500 and phase!=501:
+        return FAULT
+    i=read64(w,248)
+    limit=5
+    if read64(w,240)==30:
+        limit=4
+    while i<limit:
+        slot=136+i*8
+        if i==4:
+            slot=184
+        handle=read64(w,slot)
+        put(w,slot,0)
+        i=i+1
+        put(w,248,i)
+        if handle!=0:
+            return effect(w,501,11,handle,0,0,0,0)
+    next=read64(w,240)
+    if next==30:
+        put(w,8,30)
+        return AGAIN
+    if next==0:
+        put(w,8,0)
+        return AGAIN
+    return result_error(o,w)
+
+def fail(w:mutbuf,kind:u64,err:u64) -> u64:
+    put(w,128,0)
+    put(w,224,kind)
+    put(w,232,err)
+    put(w,240,1)
+    put(w,248,0)
+    put(w,8,500)
+    return AGAIN
+
+def fail_or_cold(w:mutbuf,kind:u64,err:u64) -> u64:
+    if read64(w,192)==1:
+        return cold_binding(w)
+    return fail(w,kind,err)
+
+def result_success(o:mutbuf,w:mutbuf) -> u64:
+    put(o,0,MESSAGE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,0)
+    put(w,8,0)
+    return 32
+
+def result_error(o:mutbuf,w:mutbuf) -> u64:
+    required=read64(w,72)+512
+    if length(o)<required:
+        put(w,216,required)
+        return GROW_OUTPUT
+    kind=read64(w,224)
+    end=32
+    if kind==0:
+        if read64(w,8)!=502:
+            base=path_region(w,5)
+            put(w,base,ERRNO_REQUEST)
+            put(w,base+8,read64(w,232))
+            return effect(w,502,22,base,16,path_region(w,6),read64(w,64),0)
+        size=read64(w,path_region(w,6)+16)
+        copy_range(o,w,32,path_region(w,6)+24,size)
+        end=32+size
+    else:
+        end=audit_error_literal(o,32,kind)
+        if kind>=1 and kind<=3:
+            copy_range(o,w,end,path_region(w,0),read64(w,72))
+            end=end+read64(w,72)
+    put(o,0,MESSAGE)
+    put(o,8,1)
+    put(o,16,0)
+    put(o,24,end-32)
+    put(w,8,0)
+    return end
+
+def path_region(w:mutbuf,index:u64) -> u64:
+    return 8192+index*read64(w,64)
+
+def parent_extent(s:readbuf,base:u64,n:u64) -> u64:
+    if n==0:
+        return 0
+    while n>1 and byte(s,base+n-1)==47:
+        n=n-1
+    while n>1 and byte(s,base+n-1)!=47:
+        n=n-1
+    while n>1 and byte(s,base+n-1)==47:
+        n=n-1
+    return n
+
+def same_bytes(a:readbuf,at:u64,b:readbuf,bt:u64,n:u64) -> u64:
+    i=0
+    while i<n:
+        if byte(a,at+i)!=byte(b,bt+i):
+            return 0
+        i=i+1
+    return 1
+
+def stamp_metadata(w:mutbuf,dst:u64) -> u64:
+    copy_range(w,w,dst,STAT,16)
+    copy_range(w,w,dst+16,STAT+88,16)
+    copy_range(w,w,dst+32,STAT+104,16)
+    return dst
+
+def io_error(w:mutbuf) -> u64:
+    return read64(w,ACTION+80)
+
+def io_result(w:mutbuf) -> u64:
+    return read64(w,ACTION+72)
+
+def effect(w:mutbuf,next:u64,op:u64,a:u64,b:u64,c:u64,d:u64,e:u64) -> u64:
+    seq=read64(w,16)+1
+    if seq==0:
+        return FAULT
+    put(w,8,next)
+    put(w,16,seq)
+    fill_range(w,ACTION,128,0)
+    put(w,ACTION,ACTION_MAGIC)
+    put(w,ACTION+8,seq)
+    put(w,ACTION+16,op)
+    put(w,ACTION+24,a)
+    put(w,ACTION+32,b)
+    put(w,ACTION+40,c)
+    put(w,ACTION+48,d)
+    put(w,ACTION+56,e)
+    return CALL
+
+def resize_paths(w:mutbuf,needed:u64) -> u64:
+    old=read64(w,64)
+    cap=old
+    while cap<needed:
+        if cap>1152921504606838783:
+            return SHORT
+        cap=cap*2
+    size=8192+8*cap+65536+read64(w,112)
+    if length(w)<size:
+        put(w,208,size)
+        return GROW_WORK
+    copy_range(w,w,8192+8*cap,8192+8*old,65536+read64(w,112))
+    i=8
+    while i>0:
+        i=i-1
+        copy_range(w,w,8192+i*cap,8192+i*old,old)
+    put(w,64,cap)
+    put(w,120,8192+8*cap+65536)
+    return canonical_effect(w,read64(w,8),path_region(w,0),read64(w,72))

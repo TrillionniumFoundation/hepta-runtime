@@ -1,0 +1,83 @@
+{
+  "actual_runtime_qualified": false,
+  "complete_original_cleanup_retained": true,
+  "complete_thirteen_effect_dispatcher_retained": true,
+  "exact_transport_edits": [
+    {
+      "after": "    call qword ptr [r15 + 128]\n",
+      "before": "    call policy_image\n"
+    },
+    {
+      "after": "    mov [r15 + 136], rax\n    jmp callable_return\nrefusal:\n    mov [r15 + 136], rax\n    call cleanup\n    mov rax, [r15 + 136]\n    jmp callable_return\n",
+      "before": "    mov dword ptr [r15 + 56], eax\n    lea rsi, [r15 + 56]\n    mov edx, 4\n    call write_exact\n    mov edx, dword ptr [r15 + 56]\n    mov rsi, qword ptr [r15 + 32]\n    call write_exact\n    jmp next_frame\nrefusal:\n    mov dword ptr [r15 + 56], eax\n    call cleanup\n    lea rsi, [r15 + 56]\n    mov edx, 4\n    call write_exact\n    jmp next_frame\n"
+    },
+    {
+      "after": "grow_workspace:\n    mov rsi, [rbx + 40]\n    cmp rsi, [rbx + 32]\n    jbe contract_fail\n    mov rax, 0x1ffffffffffbfeff\n    cmp rsi, rax\n    ja memory_fail\n    shl rsi, 2\n    add rsi, 1049600\n    jc memory_fail\n    lea rdi, [r15 + 16]\n    call jobs_audit_grow\n    test rax, rax\n    jnz memory_fail\n    jmp invoke\n",
+      "before": "grow_workspace:\n    mov rdi, qword ptr [rbx + 40]\n    cmp rdi, qword ptr [rbx + 32]\n    jbe contract_fail\n    mov rax, 0x1ffffffffffbfeff\n    cmp rdi, rax\n    ja memory_fail\n    shl rdi, 2\n    add rdi, 1049600\n    jc memory_fail\n    call round_capacity\n    mov r12, rax\n    cmp r12, qword ptr [r15 + 24]\n    jbe invoke\n    mov rdi, r12\n    call allocate_guarded\n    mov r13, rax\n    mov rdi, rax\n    mov rsi, qword ptr [r15 + 16]\n    mov rcx, qword ptr [r15 + 24]\n    rep movsb\n    mov rdi, qword ptr [r15 + 16]\n    mov rsi, qword ptr [r15 + 24]\n    add rsi, 4096\n    mov qword ptr [r15 + 16], r13\n    mov qword ptr [r15 + 24], r12\n    mov eax, 11\n    syscall\n    test rax, rax\n    jnz io_fail\n    jmp invoke\n"
+    },
+    {
+      "after": "grow_output:\n    mov rsi, [rbx + 48]\n    cmp rsi, [r15 + 40]\n    jbe contract_fail\n    mov eax, 0xffffffef\n    cmp rsi, rax\n    ja contract_fail\n    lea rdi, [r15 + 32]\n    call jobs_audit_grow\n    test rax, rax\n    jnz memory_fail\n    jmp invoke\n\n",
+      "before": "grow_output:\n    mov rdi, qword ptr [rbx + 48]\n    cmp rdi, qword ptr [r15 + 40]\n    jbe contract_fail\n    mov rax, 0xffffffef\n    cmp rdi, rax\n    ja contract_fail\n    call round_capacity\n    mov r12, rax\n    mov rdi, r12\n    call allocate_guarded\n    mov r13, rax\n    mov rdi, qword ptr [r15 + 32]\n    mov rsi, qword ptr [r15 + 40]\n    add rsi, 4096\n    mov qword ptr [r15 + 32], r13\n    mov qword ptr [r15 + 40], r12\n    mov eax, 11\n    syscall\n    test rax, rax\n    jnz io_fail\n    jmp invoke\n\n"
+    }
+  ],
+  "fatal_exit_replaced_with_native_failure": true,
+  "original_path": "scripts/local_canonical_adapter.S",
+  "original_selected_sha256": "c37814621f5c4a0c5d66e88bc22170c4d499b8cf99897d11a649b596954b37ad",
+  "original_sha256": "fbedfb21bdd324381f57048c295e206bec5a0360a880baaf460bb01222a73dbf",
+  "private_descriptor_slots": 2,
+  "private_label_renaming": {
+    "access_go": "jac_access_go",
+    "access_path": "jac_access_path",
+    "acknowledge": "jac_acknowledge",
+    "admit_effect": "jac_admit_effect",
+    "callable_return": "jac_callable_return",
+    "cleanup": "jac_cleanup",
+    "cleanup_done": "jac_cleanup_done",
+    "cleanup_second": "jac_cleanup_second",
+    "close_descriptor": "jac_close_descriptor",
+    "close_phase": "jac_close_phase",
+    "contract_fail": "jac_contract_fail",
+    "cstring": "jac_cstring",
+    "cstring_done": "jac_cstring_done",
+    "cstring_loop": "jac_cstring_loop",
+    "descriptor": "jac_descriptor",
+    "directory_entries": "jac_directory_entries",
+    "error_completion": "jac_error_completion",
+    "get_current": "jac_get_current",
+    "get_flags": "jac_get_flags",
+    "grow_output": "jac_grow_output",
+    "grow_workspace": "jac_grow_workspace",
+    "invoke": "jac_invoke",
+    "io_fail": "jac_io_fail",
+    "lstat_arguments": "jac_lstat_arguments",
+    "lstat_cwd": "jac_lstat_cwd",
+    "lstat_fixed": "jac_lstat_fixed",
+    "lstat_path": "jac_lstat_path",
+    "lstat_root": "jac_lstat_root",
+    "memory_fail": "jac_memory_fail",
+    "open_parent": "jac_open_parent",
+    "open_parent_cwd": "jac_open_parent_cwd",
+    "parent_name": "jac_parent_name",
+    "read_link": "jac_read_link",
+    "refusal": "jac_refusal",
+    "resolved_argument": "jac_resolved_argument",
+    "result_status_valid": "jac_result_status_valid",
+    "result_success": "jac_result_success",
+    "rewind_directory": "jac_rewind_directory",
+    "set_cloexec": "jac_set_cloexec",
+    "stat_access": "jac_stat_access",
+    "stat_at": "jac_stat_at",
+    "stat_completion": "jac_stat_completion",
+    "stat_descriptor": "jac_stat_descriptor",
+    "stat_descriptor_phase": "jac_stat_descriptor_phase",
+    "value_completion": "jac_value_completion",
+    "zero_completion": "jac_zero_completion",
+    "zero_trailing_args": "jac_zero_trailing_args"
+  },
+  "runtime_libc_required": false,
+  "runtime_python_required": false,
+  "schema": "hepta.runtime.jobs-audit.canonical-transport.v1",
+  "semantic_canonicalizer_replaced": false,
+  "source_sha256": "deca6d609186edba299e868ccf94fb13fce208151cb743fa89cd6a3556a631e1",
+  "whole_selected_source_inverse": true
+}

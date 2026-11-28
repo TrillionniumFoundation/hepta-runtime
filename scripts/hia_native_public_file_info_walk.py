@@ -25,6 +25,23 @@ PATCHES=(("public_file_info_walk_body_call_displacement",0),("file_info_at_body_
  ("public_file_info_walk_error_call_displacement",6))
 ASM=("asm/file_info_at_callable.S","asm/binary_read_body_callable.S","asm/file_metadata_callable.S","asm/process_orphans.S")
 VARIANTS={"production":(0,0,0),"observed":(1,0,0),"fd-zero":(1,1,0),"close-error":(1,0,1)}
+def qualified_alignment(source,profile,variant):
+ # Different GNU as releases reverse the two NOPs in this alignment gap.
+ # Author the qualified padding explicitly; all original instructions and
+ # every symbol offset remain checked by the complete original object pin.
+ require(dict(bytes=len(source.encode()),sha256=sha(source.encode()))==profile["variants"][variant]["combined"],
+  "whole qualified assembly differs before alignment authoring")
+ old=profile["original_statement"]
+ padding=bytes.fromhex(profile["explicit_alignment_bytes"])
+ require(padding in (bytes.fromhex("0f1f0066662e0f1f840000000000"),
+  bytes.fromhex("669066662e0f1f840000000000")),"qualified NOP bytes differ")
+ new=old.replace(".balign 16", ".byte "+", ".join("0x%02x"%b for b in padding)+"\n.balign 16")
+ require(source.count(old)==1 and new not in source,"qualified alignment anchor differs")
+ authored=source.replace(old,new)
+ require(authored.replace(new,old)==source,"alignment authoring inverse differs")
+ return authored,dict(original=profile["variants"][variant]["combined"],
+  authored=dict(bytes=len(authored.encode()),sha256=sha(authored.encode())),
+  original_statement=old,authored_statement=new,complete_source_inverse=True)
 def flatten(source):
  names=re.findall(r"^\.global ([A-Za-z_][A-Za-z_0-9]*)$",source,re.M)
  require(len(names)==len(set(names)) and names.count("_start")==1,"global symbols differ")
@@ -72,8 +89,10 @@ def main():
  paths=[root/"scripts/hia_native_public_file_info_walk.py",root/"authoring/public_file_info_walk/author_walk.py",
   root/"authoring/public_file_info_walk/walk.pseudo",root/"native/public_file_info_walk.hepta",
   root/"native/public_file_info_walk_composition.json",root/"asm/public_file_info_walk_stdio.S",
-  root/"scripts/hia_native_build.py",root/"scripts/hia_native_loader.py"]
+  root/"scripts/hia_native_build.py",root/"scripts/hia_native_loader.py",
+  root/"native/public_file_info_alignment.json"]
  bindings={str(x.relative_to(root)):pin(x) for x in paths}
+ alignment=json.loads((root/"native/public_file_info_alignment.json").read_bytes())
  author=process(out,"author",[sys.executable,"-I","-B",root/"authoring/public_file_info_walk/author_walk.py",
   "--source",root,"--hepta",hepta,"--output",out/"authored"],60)
  for name in ("public_file_info_walk.hepta","public_file_info_walk_composition.json"):
@@ -107,9 +126,12 @@ def main():
   observe,zero,fault=VARIANTS[variant]
   prefix=f".set PFIW_OBSERVE,{observe}\n.set PFIW_CLOSE_STDIN,{zero}\n.set PFIW_FAIL_CLOSE,{fault}\n"
   original=prefix+"\n".join((q/n).read_text() for n in ASM)+"\n"+(root/"asm/public_file_info_walk_stdio.S").read_text()
-  (work/"combined.S").write_text(flatten(original))
+  authored,alignment_proof=qualified_alignment(flatten(original),alignment,variant)
+  (work/"combined.S").write_text(authored)
+  (work/"alignment.json").write_bytes(encoded(alignment_proof))
   mechanical=[process(work,"assemble",["as","--64","-o",work/"bridge.o",work/"combined.S"]),
    process(work,"relocations",["readelf","-r",work/"bridge.o"])]
+  require(pin(work/"bridge.o")==alignment["variants"][variant]["object"],"whole original qualified object differs")
   require(b"There are no relocations" in (work/"relocations.stdout").read_bytes(),"unresolved relocations")
   obj=(work/"bridge.o").read_bytes();text,symbols=object_layout(obj)
   frame=b"HIALNK01"+struct.pack("<3Q",1,6,0)+b"_start"+struct.pack("<Q",len(obj))+obj
@@ -141,8 +163,9 @@ def main():
   (work/"pack.output.bin").write_bytes(raw);(work/"pack.workspace.bin").write_bytes(arena)
   require(packed==32 and raw==b"HIAIMR02"+struct.pack("<3Q",0,len(expected),0)+expected,"actual pack differs")
   executable=work/"public-file-info.elf";executable.write_bytes(raw[32:]);executable.chmod(0o500)
+  require(pin(executable)==alignment["variants"][variant]["elf"],"whole original qualified executable differs")
   result=dict(variant=variant,fixture_constants=VARIANTS[variant],mechanical=mechanical,link_return=code,pack_return=packed,
-   patches=patches,image_offsets=positions,executable=pin(executable),
+   patches=patches,image_offsets=positions,executable=pin(executable),alignment_author=alignment_proof,
    artifacts={n:pin(work/n) for n in ("combined.S","bridge.o","link.input.bin","link.output.bin","link.workspace.bin",
     "prefix.elf","pack.input.bin","pack.output.bin","pack.workspace.bin")})
   (work/"BUILD.json").write_bytes(encoded(result));results[variant]=result

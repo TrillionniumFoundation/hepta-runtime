@@ -33,7 +33,7 @@ def main():
  require(not out.exists(),"fresh build output required");out.mkdir(parents=True)
  q=root/"qualification/multi_read_body/v1/codec_reserved_native_build"
  sys.path.insert(0,str(root/"scripts"))
- from hia_native_public_file_info_walk import flatten,process
+ from hia_native_public_file_info_walk import flatten,process,qualified_alignment
  from hia_native_build import NativeBuild
  from hia_native_loader import NativeModule
  sys.path.insert(0,str(q/"scripts"))
@@ -43,8 +43,10 @@ def main():
  paths=[root/"scripts/hia_native_public_multi_read.py",root/"authoring/public_multi_read_helper/author_result.py",
   root/"authoring/public_multi_read_helper/result.pseudo",root/"native/public_multi_read_result.hepta",
   root/"native/public_multi_read_result_composition.json",root/"asm/public_multi_read_stdio.S",
-  root/"scripts/hia_native_build.py",root/"scripts/hia_native_loader.py",root/"scripts/hia_native_public_file_info_walk.py"]
+  root/"scripts/hia_native_build.py",root/"scripts/hia_native_loader.py",root/"scripts/hia_native_public_file_info_walk.py",
+  root/"native/public_multi_read_alignment.json"]
  bindings={str(x.relative_to(root)):pin(x) for x in paths}
+ alignment=json.loads((root/"native/public_multi_read_alignment.json").read_bytes())
  author=process(out,"author",[sys.executable,"-I","-B",root/"authoring/public_multi_read_helper/author_result.py",
   "--source",root,"--hepta",hepta,"--output",out/"authored"],60)
  for name in ("public_multi_read_result.hepta","public_multi_read_result_composition.json"):
@@ -78,9 +80,12 @@ def main():
   observe,zero=VARIANTS[variant]
   prefix=f".set PMR_OBSERVE,{observe}\n.set PMR_CLOSE_STDIN,{zero}\n"
   original=prefix+"\n".join((q/n).read_text() for n in ASM)+"\n"+(root/"asm/public_multi_read_stdio.S").read_text()
-  (work/"combined.S").write_text(flatten(original))
+  authored,alignment_proof=qualified_alignment(flatten(original),alignment,variant)
+  (work/"combined.S").write_text(authored)
+  (work/"alignment.json").write_bytes(encoded(alignment_proof))
   mechanical=[process(work,"assemble",["as","--64","-o",work/"bridge.o",work/"combined.S"]),
    process(work,"relocations",["readelf","-r",work/"bridge.o"])]
+  require(pin(work/"bridge.o")==alignment["variants"][variant]["object"],"whole original qualified object differs")
   require(b"There are no relocations" in (work/"relocations.stdout").read_bytes(),"unresolved relocations")
   obj=(work/"bridge.o").read_bytes();text,symbols=object_layout(obj)
   frame=b"HIALNK01"+struct.pack("<3Q",1,6,0)+b"_start"+struct.pack("<Q",len(obj))+obj
@@ -112,8 +117,9 @@ def main():
   (work/"pack.output.bin").write_bytes(raw);(work/"pack.workspace.bin").write_bytes(arena)
   require(packed==32 and raw==b"HIAIMR02"+struct.pack("<3Q",0,len(expected),0)+expected,"actual pack differs")
   executable=work/"public-multi-read.elf";executable.write_bytes(raw[32:]);executable.chmod(0o500)
+  require(pin(executable)==alignment["variants"][variant]["elf"],"whole original qualified executable differs")
   result=dict(variant=variant,fixture_constants=VARIANTS[variant],mechanical=mechanical,link_return=code,pack_return=packed,
-   patches=patches,image_offsets=positions,executable=pin(executable),
+   patches=patches,image_offsets=positions,executable=pin(executable),alignment_author=alignment_proof,
    artifacts={n:pin(work/n) for n in ("combined.S","bridge.o","link.input.bin","link.output.bin","link.workspace.bin",
     "prefix.elf","pack.input.bin","pack.output.bin","pack.workspace.bin")})
   (work/"BUILD.json").write_bytes(encoded(result));results[variant]=result

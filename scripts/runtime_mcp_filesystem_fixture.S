@@ -61,6 +61,12 @@ fs_fixture_create_session:
     jae fs_fixture_failure
     mov [r12 + r13 * 8], rax
     mov r15, rax
+    lea rdi, [r12 + 312] /* One audit context shared by both fixture engines. */
+    mov [r15 + 488], rdi
+    mov rsi, [r15 + 32]
+    call runtime_jobs_audit_bind
+    test rax, rax
+    jnz fs_fixture_failure
     mov rax, [r12 + 56]
     mov [r15 + 400], rax
     mov qword ptr [r15 + 80], 3 /* private stderr trace, fd+1 */
@@ -112,6 +118,8 @@ fs_fixture_next:
     jne fs_fixture_failure
     cmp qword ptr [r12 + 72], 1
     ja fs_fixture_failure
+    cmp qword ptr [r12 + 80], 82
+    je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 71
     je fs_fixture_authority_selector
     cmp qword ptr [r12 + 80], 72
@@ -236,6 +244,7 @@ fs_fixture_finish_session:
     call runtime_grow_view_release
     test rax, rax
     jnz fs_fixture_failure
+    mov qword ptr [r15 + 488], 0
     call runtime_grow_destroy
     test rax, rax
     jnz fs_fixture_failure
@@ -243,6 +252,10 @@ fs_fixture_finish_session:
     inc r13d
     cmp r13d, 2
     jb fs_fixture_finish_session
+    lea rdi, [r12 + 312]
+    call runtime_jobs_audit_close
+    test rax, rax
+    jnz fs_fixture_failure
     mov rdi, [r12 + 56]
     call runtime_publication_fixture_pool_finish
     test rax, rax
@@ -282,7 +295,7 @@ fs_fixture_failure:
     jmp fatal
 .balign 8
 grow_fixture_images:
-    .zero 656 /* 73 fixed slots; private extract selector64 remains a fixture alias. */
+    .zero 664 /* 83 fixed slots; private extract selector64 remains a fixture alias. */
 
 /* Private qualification observation. These actions never enter stdio JSON. */
 fs_fixture_authority_release:

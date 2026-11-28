@@ -21,7 +21,7 @@ from hia_native_build import NativeBuild, json_bytes, write_new
 from hia_native_runtime_mcp_adapter import combine
 from runtime_mcp_publication_async import combine_async
 from text_editor_create_private_pack import pack
-from public_read_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images
+from public_io_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images, verify_base as verify_public_base
 from public_full_catalog_build import source_paths as catalog_source_paths, build_image as build_catalog_image
 
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
@@ -38,7 +38,10 @@ BOUNDARIES = [
     'scripts/runtime_mcp_task_publication.S',
     'scripts/runtime_mcp_task_read.S',
     'scripts/runtime_mcp_read_bridge.S',
-    'asm/public_read_ssh.S',
+    'asm/public_io_ssh.S',
+    'asm/jobs_audit_pump.S',
+    'asm/jobs_audit_canonical.S',
+    'scripts/jobs_audit_public_bridge.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
@@ -122,7 +125,7 @@ MEMBERS = [
     ('workdir_io', 'workdir_io', 'history.v1'),
     ('workdir_render', 'workdir_render', 'history.v1'),
     ('view_error', 'view_error', 'history.v1'),
-    ('mcp', 'runtime_mcp', 'history.v1'),
+    ('mcp', 'public_io_frontend', 'history.v1'),
     ('protocol', 'sdk_public_protocol', 'sdk-message-target.v1'),
     ('view', 'view_call', 'history.v1'),
     ('endpoint', 'line_endpoint', 'history.v1'),
@@ -204,13 +207,16 @@ MEMBERS = [
     ('binary_call_plan', 'binary_call_plan', 'history.v1'),
     ('file_info_params', 'file_info_params', 'history.v1'),
     ('binary_read_params', 'binary_read_params', 'history.v1'),
-    ('read_gateway', 'public_read_gateway', 'history.v1'),
+    ('read_gateway', 'public_io_gateway', 'history.v1'),
     ('multi_read_params', 'multi_read_params', 'history.v1'),
     ('multi_read_plan', 'multi_read_call_plan', 'history.v1'),
     ('read_result', 'public_read_transport_result', 'history.v1'),
-    ('read_wire', 'public_read_wire', 'history.v1'),
+    ('read_wire', 'public_io_wire', 'history.v1'),
     ('read_bootstrap', 'public_read_bootstrap', 'history.v1'),
     ('read_serde_error', 'serde_error', 'history.v1'),
+    ('jobs_audit', 'jobs_audit_append', 'history.v1'),
+    ('jobs_audit_namespace', 'jobs_audit_namespace', 'history.v1'),
+    ('jobs_audit_canonical', 'local_canonical', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -300,10 +306,12 @@ EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, N
 EXTRA.extend(['binary_write_params', 'binary_call_plan'])
 EXTRA.extend(['file_info_params', 'binary_read_params'])
 EXTRA.extend(['read_gateway','read_ssh','multi_read_params','multi_read_plan','read_result','read_wire','read_bootstrap','read_helpers','read_serde_error'])
+EXTRA.append('jobs_audit')
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
 def source_check(root: Path) -> dict:
+    verify_public_base(root)
     path = root / 'native/runtime_mcp_sources.json'
     raw = path.read_bytes()
     binding = json.loads(raw)
@@ -471,6 +479,11 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                          text_publication_codec=images['rf_sha'],
                          text_publication_errno=images['publisher_errno'],
                          publication_worker_pool=images['publisher_worker'])
+    configuration.update(jobs_audit_owner=images['jobs_audit'],
+                         jobs_audit_namespace=images['jobs_audit_namespace'],
+                         jobs_audit_canonical=images['jobs_audit_canonical'],
+                         jobs_audit_sha=images['rf_sha'],
+                         jobs_audit_errno=images['publisher_errno'])
     extra = {slot: images[member] for slot, member in enumerate(EXTRA) if member is not None}
     extra[57] = images['bellman_port']
     view_images = {member: images[member] for member in VIEW}
@@ -479,7 +492,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 3 or len(MEMBERS) != 127
+    if (len(physical) != len(MEMBERS) + 3 or len(MEMBERS) != 130
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -508,7 +521,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     result = {'schema': 'hepta.runtime.public-task-batch-extract-build.v1', 'status': 'PASS',
               'members': members, 'physical_images': len(physical),
               'runtime_hia_images': len(MEMBERS) + 8 + read_build['runtime_hia_image_instances'] + catalog_build['additional_runtime_hia_images'],
-              'public_read_dependencies': read_build,
+              'public_io_dependencies': read_build,
+              'public_read_dependencies': read_build['read'],
               'public_catalog_dependency': catalog_build,
               'catalog_member_image_retained_inside_composite': True,
               'packed_capabilities': {'57': {'sources': port_sources, 'build': port_evidence,
@@ -581,10 +595,13 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'config_span_footer_from_capacity': 256,
               'physical_image_members': [next(member for member, image in images.items() if image == path) for path in physical],
               'binary_write_params_slot': 69, 'binary_call_plan_slot': 70,
-              'binary_owner_private_graph_installed': True, 'public_binary_write_registered': False,
+              'binary_owner_private_graph_installed': True, 'public_binary_write_registered': True,
+              'jobs_audit_slot': 82, 'jobs_audit_process_cell_offset': 1224,
+              'jobs_audit_engine_cell_borrow_offset': 488,
+              'jobs_audit_native_syscalls_integrated': True,
               'binary_write_effects_qualified': False, 'binary_write_audit_qualified': False,
               'binary_write_lifecycle_qualified': False,
-              'private_slots': 82, 'private_work_high': 13440, 'private_output_high': 13448,
+              'private_slots': 83, 'private_work_high': 13504, 'private_output_high': 13512,
               'file_info_params_slot': 71, 'binary_read_params_slot': 72,
               'configured_ssh_target_operation': 10, 'public_read_routes_qualified': False,
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
@@ -593,11 +610,11 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'json_nesting_depth_policy': 128, 'result_publication_grows': True,
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
-              'implemented_tools': ['batch_edit', 'binary_read', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
+              'implemented_tools': ['batch_edit', 'binary_read', 'binary_write', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
               'implemented_tools_is_source_registration_only': True,
-              'source_registered_tools': ['batch_edit', 'binary_read', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
-              'source_registered_route_count': 16,
-              'source_unregistered_route_count': 120,
+              'source_registered_tools': ['batch_edit', 'binary_read', 'binary_write', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
+              'source_registered_route_count': 17,
+              'source_unregistered_route_count': 119,
               'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'public_text_editor_route_registered_in_candidate_source': True,

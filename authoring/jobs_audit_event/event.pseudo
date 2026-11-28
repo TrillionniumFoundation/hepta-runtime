@@ -1,0 +1,184 @@
+def event(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if admitted(s) == 0:
+        return INVALID
+    needed = event_extent(s)
+    if needed > 4294967294 or length(o) < needed:
+        return SHORT
+    put(o,0,MESSAGE)
+    put(o,8,0)
+    put(o,16,0)
+    put(o,24,needed-32)
+    at = literal_action(o,32)
+    at = decimal(o,at,read64(s,8),read64(s,16))
+    at = literal_host(o,at)
+    at = escaped(s,o,64,read64(s,24),at)
+    at = literal_outcome(o,at)
+    at = escaped(s,o,64+read64(s,24),read64(s,32),at)
+    store(o,at,34)
+    store(o,at+1,125)
+    store(o,at+2,10)
+    return needed
+
+def admitted(s:readbuf) -> u64:
+    if length(s) < 64 or read64(s,0) != REQUEST:
+        return 0
+    if read64(s,16) != 0 or read64(s,48) != 0 or read64(s,56) != 0:
+        return 0
+    a = read64(s,24)
+    b = read64(s,32)
+    c = read64(s,40)
+    rest = length(s)-64
+    if a > rest:
+        return 0
+    rest = rest-a
+    if b > rest:
+        return 0
+    rest = rest-b
+    if c != rest or c != 5:
+        return 0
+    if utf8(s,64,a) == 0 or utf8(s,64+a,b) == 0:
+        return 0
+    at = 64+a+b
+    if byte(s,at) != 119 or byte(s,at+1) != 114 or byte(s,at+2) != 105 or byte(s,at+3) != 116 or byte(s,at+4) != 101:
+        return 0
+    return 1
+
+def event_extent(s:readbuf) -> u64:
+    return 32+FIXED_BYTES+digits(read64(s,8),read64(s,16))+escape_size(s,64,read64(s,24))+escape_size(s,64+read64(s,24),read64(s,32))
+
+def utf8(s:readbuf,at:u64,n:u64) -> u64:
+    end = at+n
+    while at < end:
+        c = byte(s,at)
+        if c < 128:
+            at = at+1
+        else:
+            count = 0
+            lower = 128
+            upper = 191
+            if c >= 194 and c <= 223:
+                count = 2
+            else:
+                if c >= 224 and c <= 239:
+                    count = 3
+                    if c == 224:
+                        lower = 160
+                    if c == 237:
+                        upper = 159
+                else:
+                    if c >= 240 and c <= 244:
+                        count = 4
+                        if c == 240:
+                            lower = 144
+                        if c == 244:
+                            upper = 143
+            if count == 0 or count > end-at:
+                return 0
+            c = byte(s,at+1)
+            if c < lower or c > upper:
+                return 0
+            j = 2
+            while j < count:
+                c = byte(s,at+j)
+                if c < 128 or c > 191:
+                    return 0
+                j = j+1
+            at = at+count
+    return 1
+
+def escape_size(s:readbuf,at:u64,n:u64) -> u64:
+    end = at+n
+    size = 0
+    while at < end:
+        c = byte(s,at)
+        if c == 34 or c == 92 or c == 8 or c == 9 or c == 10 or c == 12 or c == 13:
+            size = size+2
+        else:
+            if c < 32:
+                size = size+6
+            else:
+                size = size+1
+        at = at+1
+    return size
+
+def escaped(s:readbuf,o:mutbuf,at:u64,n:u64,dst:u64) -> u64:
+    end = at+n
+    while at < end:
+        c = byte(s,at)
+        if c == 34 or c == 92:
+            store(o,dst,92)
+            store(o,dst+1,c)
+            dst = dst+2
+        else:
+            if c < 32:
+                dst = escaped_control(o,dst,c)
+            else:
+                store(o,dst,c)
+                dst = dst+1
+        at = at+1
+    return dst
+
+def escaped_control(o:mutbuf,at:u64,c:u64) -> u64:
+    store(o,at,92)
+    short = 0
+    if c == 8:
+        short = 98
+    if c == 9:
+        short = 116
+    if c == 10:
+        short = 110
+    if c == 12:
+        short = 102
+    if c == 13:
+        short = 114
+    if short != 0:
+        store(o,at+1,short)
+        return at+2
+    store(o,at+1,117)
+    store(o,at+2,48)
+    store(o,at+3,48)
+    store(o,at+4,hex_digit(c >> 4))
+    store(o,at+5,hex_digit(c & 15))
+    return at+6
+
+def hex_digit(v:u64) -> u64:
+    if v < 10:
+        return 48+v
+    return 87+v
+
+def quotient_low(low:u64,high:u64) -> u64:
+    rest = high % 10
+    return low // 10 + rest*1844674407370955161 + ((low % 10)+rest*6) // 10
+
+def digits(low:u64,high:u64) -> u64:
+    n = 1
+    while high != 0 or low >= 10:
+        low = quotient_low(low,high)
+        high = high // 10
+        n = n+1
+    return n
+
+def decimal(o:mutbuf,at:u64,low:u64,high:u64) -> u64:
+    end = at+digits(low,high)
+    cursor = end
+    while cursor > at:
+        cursor = cursor-1
+        store(o,cursor,48+((low % 10)+(high % 10)*6) % 10)
+        low = quotient_low(low,high)
+        high = high // 10
+    return end
+
+def read64(s:readbuf,at:u64) -> u64:
+    value = 0
+    i = 0
+    while i < 8:
+        value = value | (byte(s,at+i) << (i*8))
+        i = i+1
+    return value
+
+def put(o:mutbuf,at:u64,value:u64) -> u64:
+    i = 0
+    while i < 8:
+        store(o,at+i,(value >> (i*8)) & 255)
+        i = i+1
+    return value

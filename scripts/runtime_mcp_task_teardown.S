@@ -88,6 +88,7 @@ pump_handlers_retired:
     call pump_read_clear_idle
     mov qword ptr [r15+472],0
     mov qword ptr [r15+480],0
+    mov qword ptr [r15+488],0
     cmp qword ptr [r12+PM_PENDING],0
     jne public_span_fail
     mov edi,12
@@ -151,6 +152,10 @@ pump_reap_publication:
     jmp pump_reap_publication
 pump_publication_retired:
     call pump_close_read
+    lea rdi,[r12+PM_JOBS_AUDIT_HUB]
+    call runtime_jobs_audit_close
+    test rax,rax
+    jnz public_span_fail
     xor eax,eax
     PM_RETURN
 

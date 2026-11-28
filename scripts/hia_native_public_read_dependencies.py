@@ -90,10 +90,13 @@ def build_ssh(root, hepta, output, bootstrap):
         embedded += [".balign 16",".global ssh_hia_"+label,"ssh_hia_"+label+":",'.incbin "'+path.name+'"']
     embedded += ['.section .note.GNU-stack,"",@progbits']
     (native/"images.S").write_text("\n".join(embedded)+"\n")
+    layout_source=root/"asm/ssh_direct/qualified-relocatable.ld"
+    layout_pin=pin(layout_source)
+    shutil.copyfile(layout_source,native/"qualified-relocatable.ld")
     records = [
         tool(["as","--64","-o","owner.o","owner.S"],native,"assemble-owner"),
         tool(["as","--64","-o","images.o","images.S"],native,"assemble-images"),
-        tool(["ld","-r","-o","ssh-direct-owner.o","owner.o","images.o"],native,"link-relocatable"),
+        tool(["ld","-r","-T","qualified-relocatable.ld","-o","ssh-direct-owner.o","owner.o","images.o"],native,"link-relocatable"),
         tool(["ld","-nostdlib","-z","noexecstack","-e","ssh_direct_start","-o","ssh-direct-owner.elf","ssh-direct-owner.o"],native,"link-inspection"),
         tool(["readelf","--all","ssh-direct-owner.elf"],native,"readelf"),
     ]
@@ -110,9 +113,12 @@ def build_ssh(root, hepta, output, bootstrap):
     require(base % 4096 == 0 and len(exports) >= 9, "native library export/layout admission")
     builder._recheck()
     require(sources(root) == binding, "SSH source changed during real build")
+    require(pin(layout_source)==layout_pin==pin(native/"qualified-relocatable.ld"),
+            "fixed original SSH object layout changed")
     result = dict(schema="hepta.runtime.public-read-ssh-dependency.v1",status="PASS",
                   source=binding,members=members,object=pin(obj),elf=str(image),elf_identity=pin(image),
                   build_tools=records,segments=segments,origin=base,memory_bytes=(extent+4095)&~4095,
+                  relocatable_layout=layout_pin,original_complete_object_exact=True,
                   exports={name:value-base for name,value in sorted(exports.items())},
                   original_object_relocation_types=sorted(set(relocations)),
                   applications_executed=0,public_route_qualified=False)
@@ -195,13 +201,14 @@ def build_public_ssh(root,hepta,output,bootstrap):
     require(text[:-len(boundary.read_text())].replace(new,old)==original,
             "whole original native source inverse differs")
     (native/"owner.S").write_text(text)
+    shutil.copyfile(output/"native/qualified-relocatable.ld",native/"qualified-relocatable.ld")
     shutil.copyfile(output/"native/images.S",native/"images.S")
     for path in (output/"native").glob("*.bin"):
         shutil.copyfile(path,native/path.name)
     records=[
         tool(["as","--64","-o","owner.o","owner.S"],native,"assemble-owner"),
         tool(["as","--64","-o","images.o","images.S"],native,"assemble-images"),
-        tool(["ld","-r","-o","ssh-direct-owner.o","owner.o","images.o"],native,"link-relocatable"),
+        tool(["ld","-r","-T","qualified-relocatable.ld","-o","ssh-direct-owner.o","owner.o","images.o"],native,"link-relocatable"),
         tool(["ld","-nostdlib","-z","noexecstack","-e","ssh_direct_start","-o","ssh-direct-owner.elf","ssh-direct-owner.o"],native,"link-inspection"),
         tool(["readelf","--all","ssh-direct-owner.elf"],native,"readelf"),
     ]
