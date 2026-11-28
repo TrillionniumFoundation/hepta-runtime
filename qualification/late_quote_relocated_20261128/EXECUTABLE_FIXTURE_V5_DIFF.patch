@@ -1,0 +1,16 @@
+--- executable_identity_control_continuation.py
++++ executable_identity_control_fixture_v5.py
+@@ -199,6 +199,13 @@
+     def start(label,port):
+         s=t.Server(rec,label,"a",port);servers.append(s);return s
+     try:
++        publication=root/"state"/"weight-artifacts-v1"
++        publication.mkdir(mode=0o700)
++        m.private_dir(publication)
++        require(not any(publication.iterdir()),"publication fixture must start empty")
++        rec.record("publication-fixture.json",{"path":str(publication),"mode":"0700","entries":[],
++          "stage":"after empty-state admission; before owned server or prepare",
++          "model_manifest_or_journal_written":False,"model_forwards":0})
+         original=start("original-before-kill",v["ports"][0]);client=m.Client(original,"main")
+         evidence["original_running_executable"]=actual_exe(original,Path(v["binary"]),v["identity"]["binary_sha256"])
+         sid,p,prewall=m.open_prepare(client,case,"exe137")
