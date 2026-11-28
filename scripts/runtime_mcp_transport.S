@@ -23,6 +23,9 @@ public_span_start:
     cmp rax, -4095
     jae public_span_fail
     mov [r12 + 224], rax
+    /* Borrow the actual kernel environment for the process-owned SSH root.
+     * engine+32 remains the existing AT_SECURE value, never an envp. */
+    mov [rax + 240], r14
     xor ebx, ebx
     xor ebp, ebp
     lea rdi, [rip + grow_fixture_images]
@@ -395,7 +398,7 @@ public_span_write_failed:
     ret
 .balign 8
 grow_fixture_images:
-    .zero 568 /* 71 fixed slots; existing routes plus binary owners69..70. */
+    .zero 624 /* 78 fixed slots; foreground files71..77 retain one process SSH owner. */
 
 /* G2 selects the actual final SDK initialization outcome. This fixed boundary
  * writes its admitted stderr span and retains its exit across config teardown. */

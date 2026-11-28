@@ -8,8 +8,19 @@
 .equ PP_MASK,31
 .equ PP_OWNED,7
 
-/* Return0=settled,1=extract WAIT,2=publisher await; reject mixed ownership. */
+/* Return0=settled,1=extract,2=publisher,3=SSH; reject mixed ownership. */
 pump_waiting_kind:
+    mov rcx,[rbp+PN_H_ACTIVE]
+    cmp rcx,1
+    ja public_span_fail
+    test rcx,rcx
+    jz ph_kind_original
+    mov rax,[rbp+PN_X_ACTIVE]
+    or rax,[rbp+PN_P_ACTIVE]
+    jnz public_span_fail
+    mov eax,3
+    ret
+ph_kind_original:
     mov rax,[rbp+PN_X_ACTIVE]
     cmp rax,1
     ja public_span_fail

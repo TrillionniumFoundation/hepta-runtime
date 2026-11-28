@@ -1,6 +1,6 @@
 """Build the current fixed public HIA stdio executable from one source checkout.
 
-The default build includes 118 direct HIA members and the exact eight-member
+The default build includes 129 direct HIA members and the exact eight-member
 shared worker capability. It needs no existing worker or public binary. The
 previous 58/91/102 graph qualifications keep their explicit frozen source views.
 """
@@ -79,7 +79,7 @@ def main():
         require(SHA((args.bootstrap / "B3.image.bin").read_bytes()) == B3_SHA256, "Verified B3 bytes differ.")
     output.mkdir(parents=True)
     started = time.monotonic()
-    report = dict(schema="hepta.runtime.public126-binary-owners.build.v1", status="RUNNING",
+    report = dict(schema="hepta.runtime.public137-filebytes.build.v1", status="RUNNING",
         source_binding_sha256=source_identity["manifest_sha256"], rust_executed=False,
         actual_target_handshake_compared=False, full_async_runtime_qualified=False,
         full_sdk_qualified=False, independent_cold_qualified=False, production_activated=False,
@@ -92,12 +92,14 @@ def main():
 
     save()
     try:
-        require(len(MEMBERS) == 118 and len(EXTRA) == 71, "Fixed combined graph count changed.")
+        require(len(MEMBERS) == 129 and len(EXTRA) == 78, "Fixed combined graph count changed.")
         require(EXTRA[47:53] == ["batch_gateway", "batch_params", "batch_call", "batch_adapter", "batch_input", None]
                 and EXTRA[53:59] == ["target_shutdown", "current_get_info", "target_connection", None, None, "request_tasks"]
                 and EXTRA[59:64] == ["extract_gateway", "extract_params", "extract_call", "extract_adapter", None]
                 and EXTRA[64:69] == ["publisher_gateway", "publisher_params", "publisher_call", None, None]
-                and EXTRA[69:] == ["binary_write_params", "binary_call_plan"],
+                and EXTRA[69:71] == ["binary_write_params", "binary_call_plan"]
+                and EXTRA[71:] == ["file_gateway","file_info_params","binary_read_params","file_transport_call",
+                                   "file_transport_policy","file_transport_result",None],
                 "Fixed Batch/SDK descriptor bindings changed.")
         package = source / "runtime_support/bellman_port"
         require(SHA((package / "PACKAGE.json").read_bytes()) == PORT_PACKAGE_SHA256, "Fixed dependency package changed.")
@@ -120,14 +122,14 @@ def main():
             bellman_port_package=package, bellman_worker_build=output / "worker")
         raw = manifest.read_bytes()
         md = json.loads(raw)
-        require(md["physical_images"] == 119 and len(md["members"]) == 118 and md["runtime_hia_images"] == 126,
+        require(md["physical_images"] == 130 and len(md["members"]) == 129 and md["runtime_hia_images"] == 137,
                 "Combined physical or HIA count changed.")
         fresh = sum(row["fresh_compile"] is True for row in md["members"])
-        require(fresh == 118 - len(reuse), "Direct member compile/reuse count changed.")
+        require(fresh == 129 - len(reuse), "Direct member compile/reuse count changed.")
         binary = manifest.parent / md["elf"]
         require(SHA(binary.read_bytes()) == md["elf_sha256"], "Actual public binary identity changed.")
-        report.update(status="NATIVE_BUILD_PASS", physical_images=119, runtime_hia_images=126,
-            direct_hia_members=118, packed_hia_members=8, manifest=str(manifest),
+        report.update(status="NATIVE_BUILD_PASS", physical_images=130, runtime_hia_images=137,
+            direct_hia_members=129, packed_hia_members=8, manifest=str(manifest),
             manifest_sha256=SHA(raw), elf=str(binary), elf_bytes=binary.stat().st_size,
             elf_sha256=md["elf_sha256"], fresh_member_compiles=fresh, checked_reused_members=len(reuse),
             fresh_packed_member_compiles=8, bootstrap_reused=args.bootstrap is not None,

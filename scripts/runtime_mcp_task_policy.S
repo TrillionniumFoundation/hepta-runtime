@@ -54,9 +54,14 @@ pump_accept:
     mov rax,[r15+512+18*64+24]
     cmp rax,59
     je pump_accept_extract_wait
+    cmp rax,71
+    je pump_accept_ssh_wait
     cmp rax,64
     jne public_span_fail
     mov qword ptr [rbp+PN_P_ACTIVE],1
+    jmp pump_accept_frontend_returned
+pump_accept_ssh_wait:
+    mov qword ptr [rbp+PN_H_ACTIVE],1
     jmp pump_accept_frontend_returned
 pump_accept_extract_wait:
     mov qword ptr [rbp+PN_X_ACTIVE],1
@@ -114,10 +119,16 @@ pump_handle_frontend:
     call pump_waiting_kind
     test eax,eax
     jz pump_handle_settled_frontend
+    cmp eax,3
+    je pump_handle_ssh_wait
     cmp eax,2
     je pump_handle_publication_wait
     mov rdi,rbp
     call pump_extract_pending
+    jmp pump_frontend_done
+pump_handle_ssh_wait:
+    mov rdi,rbp
+    call pump_ssh_pending
     jmp pump_frontend_done
 pump_handle_publication_wait:
     mov rdi,rbp

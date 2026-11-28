@@ -1,0 +1,417 @@
+def entry(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    if length(o) < 32:
+        return CAPACITY
+    if length(w) < 24576:
+        return grow(o, 1, 24576)
+    if length(s) < 64 or load(s, 0) != REQUEST:
+        return INVALID
+    op = load(s, 8)
+    if op < 1 or op > 4 or load(s, 16) == 0 or load(s, 24) == 0 or load(s, 48) != 0 or load(s, 56) != 0:
+        return INVALID
+    if get(w, 0) == 0:
+        if op != 1 or load(s, 32) != length(s) - 64:
+            return INVALID
+        fill_range(w, 0, 4096, 0)
+        put(w, 0, STATE)
+        put(w, 8, 100)
+        put(w, 24, load(s, 16))
+        put(w, 32, load(s, 24))
+        put(w, 184, load(s, 40))
+        put(w, 192, load(s, 32))
+        put(w, 384, 24576)
+    if get(w, 0) != STATE or get(w, 24) != load(s, 16) or get(w, 32) != load(s, 24) or get(w, 184) != load(s, 40):
+        return INVALID
+    phase = get(w, 8)
+    if phase == 100:
+        if op != 1 or load(s, 32) != get(w, 192) or load(s, 32) != length(s) - 64:
+            return INVALID
+        return initialize(s, o, w)
+    if op == 1 or length(s) != 64 or load(s, 32) != 0:
+        return INVALID
+    if op == 3:
+        put(w, 40, get(w, 40) | 1)
+    if op == 4:
+        put(w, 40, get(w, 40) | 2)
+    if phase == 26:
+        return finish(o, w)
+    if phase == 27:
+        return INVALID
+    if phase == 30 or phase == 31:
+        return append_chunk(o, w, phase - 30)
+    if phase < 1 or phase > 25:
+        return INVALID
+    if valid_completion(w) == False:
+        return CONTRACT
+    result = get(w, 328)
+    error = get(w, 336)
+    auxiliary = get(w, 344)
+    if error > 4095:
+        return CONTRACT
+    if phase == 1 or phase == 4 or phase == 12 or phase == 22:
+        return after_control(o, w, phase, result, error, auxiliary)
+    if phase == 2:
+        if error != 0 or result != 1 or auxiliary != 0:
+            return fail(o, w, 2, error)
+        put(w, 168, 1)
+        return action(w, 3, 3, region(w, 0), get(w, 192), get(w, 24), 0)
+    if phase == 3:
+        if error != 0:
+            if result != 0 or auxiliary != 0:
+                return CONTRACT
+            return fail(o, w, 3, error)
+        if result == 0 or auxiliary < 2 or auxiliary > 2147483647:
+            return CONTRACT
+        put(w, 48, result)
+        put(w, 56, auxiliary)
+        put(w, 224, 1)
+        return action(w, 4, 1, 0, 0, 0, 0)
+    if phase == 13:
+        if result != 0 or auxiliary != 0:
+            return CONTRACT
+        return release(o, w)
+    if phase >= 5 and phase <= 11:
+        return after_io(o, w, phase, result, error, auxiliary)
+    if phase >= 20 and phase <= 25:
+        return after_cleanup(o, w, phase, result, error, auxiliary)
+    return CONTRACT
+
+def initialize(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    size = get(w, 192)
+    if size < 128 or load(s, 64) != PLAN:
+        return INVALID
+    if load(s, 72) != 0 or load(s, 80) < 1 or load(s, 80) > 2 or load(s, 88) == 0:
+        return INVALID
+    if load(s, 96) != 0 or load(s, 104) != 30000 or load(s, 112) != 8388608 or load(s, 120) != 8388608:
+        return INVALID
+    if load(s, 128) != 12 or load(s, 144) != size - 128 or load(s, 152) != 0 or load(s, 160) != 1:
+        return INVALID
+    if load(s, 168) != 0 or load(s, 176) != 0 or load(s, 184) != 0:
+        return INVALID
+    at = 192
+    index = 0
+    while index < 12:
+        if at > length(s) or length(s) - at < 8:
+            return INVALID
+        n = load(s, at)
+        at = at + 8
+        if n == 0 or n > length(s) - at:
+            return INVALID
+        if index < 10 and fixed_argument(s, at, n, index) == False:
+            return INVALID
+        j = 0
+        while j < n:
+            if byte(s, at + j) == 0:
+                return INVALID
+            j = j + 1
+        at = at + n
+        index = index + 1
+    if load(s, 136) != length(s) - at:
+        return INVALID
+    if reserve(w, 0, size) == 0:
+        return grow(o, 1, get(w, 392))
+    copy_range(w, s, region(w, 0), 64, size)
+    put(w, 208, region(w, 0) + at - 64)
+    put(w, 216, length(s) - at)
+    put(w, 200, region(w, 0))
+    return action(w, 1, 1, 0, 0, 0, 0)
+
+def valid_completion(w: mutbuf) -> bool:
+    if get(w, 320) != get(w, 16):
+        return False
+    i = 0
+    while i < 64:
+        if get(w, 256 + i) != get(w, 512 + i):
+            return False
+        i = i + 8
+    return True
+
+def action(w: mutbuf, phase: u64, kind: u64, a: u64, b: u64, c: u64, d: u64) -> u32:
+    if get(w, 16) == MAXIMUM:
+        return CONTRACT
+    seq = get(w, 16) + 1
+    put(w, 16, seq)
+    put(w, 8, phase)
+    put(w, 256, EFFECT)
+    put(w, 264, seq)
+    put(w, 272, kind)
+    put(w, 280, a)
+    put(w, 288, b)
+    put(w, 296, c)
+    put(w, 304, d)
+    put(w, 312, 0)
+    fill_range(w, 320, 32, 0)
+    copy_range(w, w, 512, 256, 64)
+    return PENDING
+
+def after_control(o: mutbuf, w: mutbuf, phase: u64, flags: u64, error: u64, now: u64) -> u32:
+    if flags > 3:
+        return CONTRACT
+    if error != 0:
+        if phase == 22:
+            return quarantine(o, w, 12, error)
+        return fail(o, w, 4, error)
+    put(w, 40, get(w, 40) | flags)
+    if phase == 22:
+        deadline = get(w, 160)
+        if deadline == 0:
+            if now > MAXIMUM - 3000000000:
+                return quarantine(o, w, 12, 0)
+            deadline = now + 3000000000
+            put(w, 160, deadline)
+        if now >= deadline:
+            return quarantine(o, w, 12, 0)
+        if get(w, 232) == 0:
+            put(w, 232, 1)
+            return action(w, 23, 9, get(w, 48), 9, 0, 0)
+        return action(w, 24, 12, get(w, 48), deadline - now, 0, 0)
+    if get(w, 40) & 1 != 0:
+        return fail(o, w, 5, 0)
+    if get(w, 40) & 2 != 0:
+        return fail(o, w, 6, 0)
+    if now >= get(w, 32):
+        return fail(o, w, 7, 0)
+    put(w, 248, get(w, 32) - now)
+    if phase == 1:
+        return action(w, 2, 2, get(w, 24), get(w, 32), get(w, 184), 0)
+    if phase == 12:
+        return action(w, 13, 11, get(w, 48), 0, 0, 0)
+    return next_stdin(w)
+
+def next_stdin(w: mutbuf) -> u32:
+    if get(w, 128) == 0:
+        if get(w, 88) < get(w, 216):
+            n = get(w, 216) - get(w, 88)
+            return action(w, 5, 5, get(w, 48), get(w, 208) + get(w, 88), n, 0)
+        return action(w, 6, 10, get(w, 48), 0, 0, 0)
+    return next_stdout(w)
+
+def next_stdout(w: mutbuf) -> u32:
+    if get(w, 112) == 0:
+        return action(w, 7, 6, get(w, 48), 1, 8192, 8192)
+    return next_stderr(w)
+
+def next_stderr(w: mutbuf) -> u32:
+    if get(w, 120) == 0:
+        return action(w, 8, 6, get(w, 48), 2, 8192, 8192)
+    return next_exec(w)
+
+def next_exec(w: mutbuf) -> u32:
+    if get(w, 136) == 0:
+        return action(w, 9, 7, get(w, 48), 0, 0, 0)
+    return next_wait(w)
+
+def next_wait(w: mutbuf) -> u32:
+    if get(w, 64) != 0:
+        return cycle_done(w)
+    return action(w, 10, 8, get(w, 48), 0, 0, 0)
+
+def cycle_done(w: mutbuf) -> u32:
+    if get(w, 64) != 0 and get(w, 128) != 0 and get(w, 112) != 0 and get(w, 120) != 0 and get(w, 136) != 0:
+        return action(w, 12, 1, 0, 0, 0, 0)
+    return action(w, 11, 12, get(w, 48), get(w, 248), 0, 0)
+
+def after_io(o: mutbuf, w: mutbuf, phase: u64, result: u64, error: u64, aux: u64) -> u32:
+    if phase == 5:
+        if aux != 0 or result > get(w, 216) - get(w, 88):
+            return CONTRACT
+        if error != 0 and result != 0:
+            return CONTRACT
+        if error != 0 and error != 11:
+            return fail(o, w, 8, error)
+        if error == 0:
+            if result == 0:
+                return fail(o, w, 8, 0)
+            put(w, 88, get(w, 88) + result)
+        return next_stdout(w)
+    if phase == 6:
+        if result != 0 or aux != 0:
+            return CONTRACT
+        put(w, 128, 1)
+        return next_stdout(w)
+    if phase == 7 or phase == 8:
+        if aux != 0 or result > 8192:
+            return CONTRACT
+        if error != 0 and result != 0:
+            return CONTRACT
+        if error == 11:
+            return choose_next_stream(w, phase - 7)
+        if error != 0:
+            return fail(o, w, 9, error)
+        index = phase - 7
+        if result == 0:
+            put(w, 112 + index * 8, 1)
+            return choose_next_stream(w, index)
+        if result > 8388608 - get(w, 96 + index * 8):
+            return fail(o, w, 10, 0)
+        put(w, 240, result)
+        put(w, 8, 30 + index)
+        return append_chunk(o, w, index)
+    if phase == 9:
+        if result > 2 or aux != 0:
+            return CONTRACT
+        if error != 0:
+            return fail(o, w, 3, error)
+        if result == 2:
+            return CONTRACT
+        if result == 1:
+            put(w, 136, 1)
+        return next_wait(w)
+    if phase == 10:
+        if get(w, 64) != 0:
+            if error != 0 or result != 1 or aux != get(w, 80):
+                return CONTRACT
+        elif error != 0:
+            put(w, 72, 1)
+            return fail(o, w, 11, error)
+        elif result == 1:
+            if aux > 4294967295:
+                return CONTRACT
+            put(w, 64, 1)
+            put(w, 80, aux)
+        elif result != 0 or aux != 0:
+            return CONTRACT
+        return cycle_done(w)
+    if error != 0:
+        return fail(o, w, 4, error)
+    return action(w, 4, 1, 0, 0, 0, 0)
+
+def choose_next_stream(w: mutbuf, index: u64) -> u32:
+    if index == 0:
+        return next_stderr(w)
+    return next_exec(w)
+
+def append_chunk(o: mutbuf, w: mutbuf, index: u64) -> u32:
+    count = get(w, 240)
+    current = get(w, 96 + index * 8)
+    if count > 8192 or current > 8388608 or count > 8388608 - current:
+        return CONTRACT
+    if reserve(w, 1 + index, current + count) == 0:
+        return grow(o, 1, get(w, 392))
+    copy_range(w, w, region(w, 1 + index) + current, 8192, count)
+    put(w, 96 + index * 8, current + count)
+    return choose_next_stream(w, index)
+
+def fail(o: mutbuf, w: mutbuf, reason: u64, error: u64) -> u32:
+    if get(w, 144) == 0:
+        put(w, 144, reason)
+        put(w, 152, error)
+    if get(w, 224) == 0:
+        return release(o, w)
+    return action(w, 20, 11, get(w, 48), 0, 0, 0)
+
+def after_cleanup(o: mutbuf, w: mutbuf, phase: u64, result: u64, error: u64, aux: u64) -> u32:
+    if phase == 20:
+        if result != 0 or aux != 0:
+            return CONTRACT
+        put(w, 128, 1)
+        if get(w, 72) != 0:
+            return quarantine(o, w, 11, get(w, 152))
+        if get(w, 64) != 0:
+            return release(o, w)
+        return action(w, 21, 8, get(w, 48), 0, 0, 0)
+    if phase == 21:
+        if error != 0:
+            put(w, 72, 1)
+            return quarantine(o, w, 11, error)
+        if result == 1:
+            if aux > 4294967295:
+                return CONTRACT
+            put(w, 64, 1)
+            put(w, 80, aux)
+            return release(o, w)
+        if result != 0 or aux != 0:
+            return CONTRACT
+        return action(w, 22, 1, 0, 0, 0, 0)
+    if phase == 23 or phase == 24:
+        if result != 0 or aux != 0:
+            return CONTRACT
+        return action(w, 21, 8, get(w, 48), 0, 0, 0)
+    if phase == 25:
+        if result != 0 or error != 0 or aux != 0:
+            return quarantine(o, w, 13, error)
+        put(w, 176, 1)
+        put(w, 8, 26)
+        return finish(o, w)
+    return CONTRACT
+
+def release(o: mutbuf, w: mutbuf) -> u32:
+    if get(w, 224) != 0 and get(w, 64) == 0:
+        return quarantine(o, w, 11, get(w, 152))
+    if get(w, 168) == 0:
+        put(w, 176, 1)
+        put(w, 8, 26)
+        return finish(o, w)
+    return action(w, 25, 13, get(w, 24), get(w, 48), get(w, 64), 0)
+
+def quarantine(o: mutbuf, w: mutbuf, reason: u64, error: u64) -> u32:
+    put(w, 144, reason)
+    put(w, 152, error)
+    put(w, 400, 1)
+    put(w, 8, 26)
+    return finish(o, w)
+
+def finish(o: mutbuf, w: mutbuf) -> u32:
+    first = get(w, 96)
+    second = get(w, 104)
+    size = 128 + first + second
+    if length(o) < size:
+        return grow(o, 2, size)
+    fill_range(o, 0, 128, 0)
+    put(o, 0, RESULT)
+    put(o, 8, choose(get(w, 400) != 0, 2, choose(get(w, 144) != 0, 1, 0)))
+    put(o, 16, get(w, 24))
+    put(o, 24, get(w, 144))
+    put(o, 32, get(w, 152))
+    status = get(w, 80)
+    code = choose((status & 127) == 0 and get(w, 64) != 0, (status >> 8) & 255, MAXIMUM)
+    put(o, 40, code)
+    put(o, 48, status)
+    put(o, 56, first)
+    put(o, 64, second)
+    put(o, 72, get(w, 56))
+    put(o, 80, get(w, 168) | (get(w, 224) << 1) | (get(w, 64) << 2) | (get(w, 176) << 3))
+    put(o, 88, get(w, 16))
+    put(o, 96, get(w, region(w, 0) + 16))
+    put(o, 104, get(w, region(w, 0) + 24))
+    if first != 0:
+        copy_range(o, w, 128, region(w, 1), first)
+    if second != 0:
+        copy_range(o, w, 128 + first, region(w, 2), second)
+    put(w, 8, 27)
+    return size
+
+def region(w: mutbuf, index: u64) -> u64:
+    return get(w, 1024 + index * 16)
+
+def reserve(w: mutbuf, index: u64, need: u64) -> u64:
+    if index > 2:
+        return 0
+    at = 1024 + index * 16
+    prior = get(w, at)
+    cap = get(w, at + 8)
+    if cap >= need:
+        return 1
+    fresh = choose(cap > MAXIMUM // 2, need, choose(cap * 2 > need, cap * 2, need))
+    if fresh < 256:
+        fresh = 256
+    start = get(w, 384)
+    if fresh > MAXIMUM - start:
+        put(w, 392, MAXIMUM)
+        return 0
+    end = start + fresh
+    if end > length(w):
+        put(w, 392, end)
+        return 0
+    if cap != 0:
+        copy_range(w, w, start, prior, cap)
+    put(w, at, start)
+    put(w, at + 8, fresh)
+    put(w, 384, end)
+    return 1
+
+def grow(o: mutbuf, kind: u64, need: u64) -> u32:
+    put(o, 0, GROW_TAG)
+    put(o, 8, kind)
+    put(o, 16, need)
+    put(o, 24, 0)
+    return GROW

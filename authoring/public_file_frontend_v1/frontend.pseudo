@@ -1,0 +1,62 @@
+def tool_kind(w: mutbuf, at: u64, size: u64) -> u64:
+    if size == 9:
+        if get(w, at) == FILE_WORD and byte(w, at + 8) == 111:
+            return 14
+    if size == 11:
+        if get(w, at) == BINARY_WORD and byte(w, at + 8) == 101 and byte(w, at + 9) == 97 and byte(w, at + 10) == 100:
+            return 15
+    return retained_file_tool_kind(w, at, size)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf, phase: u64) -> u32:
+    kind = get(w, 112)
+    if phase == 6 and (kind == 14 or kind == 15):
+        put(w, 8, 106)
+        if reserve(w, 1, 192) == 0:
+            return pending_grow(o, w)
+        return prepare_file(s, o, w)
+    if phase == 4:
+        operation = get(w, 120)
+        if operation == 7 or operation == 8:
+            if get(w, 144) != 0:
+                return INVALID
+            put(w, 8, 104)
+            if reserve(w, 0, 40) == 0:
+                return pending_grow(o, w)
+            if reserve(w, 1, 32) == 0:
+                return pending_grow(o, w)
+            at = region(w, 0)
+            put(w, at, CATALOG_QUERY)
+            put(w, at + 8, 7)
+            put(w, at + 16, get(w, 128))
+            put(w, at + 24, operation - 7)
+            put(w, at + 32, 13)
+            return child(w, 2, 40, 4)
+    return retained_file_prepare(s, o, w, phase)
+
+def prepare_file(s: readbuf, o: mutbuf, w: mutbuf) -> u32:
+    kind = get(w, 112)
+    if kind != 14 and kind != 15:
+        return INVALID
+    size = get(w, 656)
+    if size > MAXIMUM - 48:
+        return request_grow(o, w, 3, 0)
+    if reserve(w, 0, size + 48) == 0:
+        return pending_grow(o, w)
+    at = region(w, 0)
+    put(w, at, FILE_REQUEST)
+    put(w, at + 8, kind - 13)
+    put(w, at + 16, 0)
+    put(w, at + 24, size)
+    put(w, at + 32, 0)
+    put(w, at + 40, 0)
+    copy_range(w, w, at + 48, region(w, 4), size)
+    return child(w, 17, size + 48, 6)
+
+def after_tool(s: readbuf, o: mutbuf, w: mutbuf, code: u64, size: u64) -> u32:
+    if code == CANCELLED and get(w, 48) == 17:
+        kind = get(w, 112)
+        if size != 0 or get(w, 8) != 6 or (kind != 14 and kind != 15):
+            return INVALID
+        put(w, 152, 0)
+        return finish(o, w, 0, 0, 0, 0)
+    return retained_file_after_tool(s, o, w, code, size)

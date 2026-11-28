@@ -79,6 +79,14 @@
 .equ PN_P_OUTMAP,1872
 .equ PN_P_TAG,1880
 .equ PN_P_JOB,1888
+/* Seven file/SSH rows use the former empty space before the fixed fence. */
+.equ PN_H_ACTIVE,1920
+.equ PN_H_PRESENT,1928
+.equ PN_H_DESCRIPTORS,1952
+.equ PN_H_CONTINUATIONS,2400
+.equ PN_H_CONTEXT,2848
+.equ PN_H_WORKMAP,2856
+.equ PN_H_OUTMAP,2864
 /* Actual request-owned effect-fence controller; native context remains session-owned. */
 .equ PN_F_DESCRIPTOR,3584
 .equ PN_F_CONTINUATION,3648
@@ -466,6 +474,8 @@ pump_detach_frontend_admitted:
     mov rdi,rbp
     call pump_publication_detach
     mov rdi,rbp
+    call pump_ssh_detach
+    mov rdi,rbp
     call pump_fence_detach
     mov rdi,rbp
     call pump_scope_detach
@@ -525,6 +535,8 @@ pump_restore_frontend:
     mov rdi,rbp
     call pump_publication_restore
     mov rdi,rbp
+    call pump_ssh_restore
+    mov rdi,rbp
     call pump_fence_restore
     mov rdi,rbp
     call pump_scope_restore
@@ -581,6 +593,8 @@ pump_retire_untracked:
     call pump_extract_retire
     mov rdi,rbp
     call pump_publication_retire
+    mov rdi,rbp
+    call pump_ssh_retire
     lea rbx,[r12+PM_ALL]
 pump_unlink_node:
     mov rax,[rbx]
@@ -635,6 +649,8 @@ pump_scope_detach:
     or rax,[rbp+PN_S_VIEW]
     jnz public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je ps_detach_done /* This exact foreground file route has no Scope. */
     test eax,eax
     jz ps_detach_done
     call pump_waiting_context
@@ -858,6 +874,8 @@ ps_restore_absent:
     cmp qword ptr [rbp+PN_S_VIEW],0
     jne public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je ps_restore_done /* No file-route effect entry is installed. */
     test eax,eax
     jnz public_span_fail
 ps_restore_done:
@@ -944,6 +962,8 @@ pf_detach_absent:
     cmp qword ptr [r15+232],0
     jne public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je pf_detach_done /* No file-route effect entry is installed. */
     test eax,eax
     jnz public_span_fail
 pf_detach_done:
@@ -1079,6 +1099,8 @@ pf_restore_absent:
     or rax,[rbp+PN_F_HUB]
     jnz public_span_fail
     call pump_waiting_kind
+    cmp eax,3
+    je pf_restore_done /* No file-route effect entry is installed. */
     test eax,eax
     jnz public_span_fail
 pf_restore_done:

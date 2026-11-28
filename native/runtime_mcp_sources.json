@@ -191,7 +191,7 @@
     "transport_pointer_table_slots": 56
   },
   "current_layout": {
-    "advertised_catalog_tools": 10,
+    "advertised_catalog_tools": 13,
     "authority_slot": 56,
     "batch_slots": [
       47,
@@ -204,11 +204,11 @@
     "bellman_slot": 57,
     "connection_slot": 55,
     "descriptor_base": 8192,
-    "descriptor_slots": 64,
-    "direct_hia_members": 110,
+    "descriptor_slots": 78,
+    "direct_hia_members": 129,
     "engine_bytes": 16384,
-    "expected_physical_containers": 111,
-    "expected_runtime_hia_images": 118,
+    "expected_physical_containers": 130,
+    "expected_runtime_hia_images": 137,
     "extract_catalog_integration_pending": false,
     "extract_context_offset": 456,
     "extract_install_offset": 464,
@@ -220,12 +220,31 @@
       62,
       63
     ],
+    "file_foreground_slots": [
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77
+    ],
     "get_info_slot": 54,
     "new_catalog_configuration_not_installed": true,
     "packed_hia_members": 8,
+    "private_output_high": 15368,
+    "private_work_high": 15360,
     "registry_slot": 58,
     "reserved_successor_slots": [],
-    "shutdown_slot": 53
+    "shutdown_slot": 53,
+    "ssh_engine_offsets": [
+      480,
+      488
+    ],
+    "ssh_process_hub_offsets": [
+      224,
+      232
+    ]
   },
   "extract_local_policy_header_repair": {
     "after": {
@@ -270,6 +289,44 @@
       "bytes": 21434,
       "sha256": "ef1295de4b81b86301fc04b5148b7c7c1605b55d9e06a695e177d5b4429427e6"
     }
+  },
+  "file_read_foreground_extension": {
+    "base": "d86c48218497cb31a65d84543d92bec3a94cee32",
+    "catalog_source": "native/runtime_mcp_catalog_filebytes.hepta",
+    "child_reap_survives_future_drop": true,
+    "default_public_qualified": false,
+    "engine_call_offset": 488,
+    "engine_root_offset": 480,
+    "file_pool_qualified": false,
+    "frontend_source": "native/runtime_mcp_filebytes.hepta",
+    "future_drop_cancels_owned_ssh": true,
+    "installed_config_operations": [
+      9,
+      10,
+      12
+    ],
+    "job_operation11_not_borrowed": true,
+    "no_new_application_queue_cap": true,
+    "notification_cancel_drops_future": false,
+    "original_nineteen_qualified": false,
+    "outer_call_lifetimes": "single process event-loop",
+    "request_node_span": [
+      1920,
+      2872
+    ],
+    "schema": "hepta.runtime.file-read-foreground-source.v1",
+    "shared_install_offset": 232,
+    "shared_root_offset": 224,
+    "slots": [
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77
+    ],
+    "whole_runtime_replaced": false
   },
   "get_info_extension": {
     "fixed_current_get_info": true,
@@ -904,6 +961,14 @@
     "slot": 56
   },
   "sources": {
+    "authoring/file_transport_call_v1/author.py": {
+      "bytes": 4384,
+      "sha256": "55748b6b5f373dcc0de5784216e02f7b323098994ee15433d81896ad80328bc2"
+    },
+    "authoring/file_transport_call_v1/call.pseudo": {
+      "bytes": 17157,
+      "sha256": "3fc94676d3f4ece064922f16931674621b19936f90edabaa4f0c45cd1fde675c"
+    },
     "authoring/public_authority/author_frontend.py": {
       "bytes": 8005,
       "sha256": "3328d256e1a6c03ddbe90e354ccabfd347bfcfe290276120928af6d37f74f405"
@@ -1047,6 +1112,14 @@
     "authoring/public_extract_wait_v1/runtime_mcp_task_extract.S": {
       "bytes": 11214,
       "sha256": "a836c72a7e7d56102ade8ffe74c8c8f73d8e528a6c8b9d0aae24fa9f6352cf2b"
+    },
+    "authoring/public_file_frontend_v1/author.py": {
+      "bytes": 12282,
+      "sha256": "1a654965bfec43159e4a9dac63c7f709f7ed8e3d8b5136ca8cc7776b4e4d5788"
+    },
+    "authoring/public_file_frontend_v1/frontend.pseudo": {
+      "bytes": 2227,
+      "sha256": "6d61a5f3df63aadac91894aec439fc6d8a5421aa4a4c136ee7367026c41e3182"
     },
     "authoring/public_mixed_opener/INPUTS.json": {
       "bytes": 4077,
@@ -1320,6 +1393,50 @@
       "bytes": 11199,
       "sha256": "73ed04df99353d00c2a48e5f5f972b650e3dae44f187f03edd3955fc477f3995"
     },
+    "authoring/ssh_direct_descriptor_v1/author.py": {
+      "bytes": 4255,
+      "sha256": "f5cf4cb25d3dcfd2b7d81e438aa6a8f6171d81b9e5b8882bf668b2e6b0573a10"
+    },
+    "authoring/ssh_direct_descriptor_v1/code.json": {
+      "bytes": 10849,
+      "sha256": "cd141c975a459db88f22b23334b3ab273be01ed61375175e6157d212792b316e"
+    },
+    "authoring/ssh_direct_descriptor_v1/generated.pseudo": {
+      "bytes": 24841,
+      "sha256": "aff0632d896857cfa863346ea96f6b8cf0ca418d39d5d67aea31fad646bf3742"
+    },
+    "authoring/ssh_direct_owner_v1/author.py": {
+      "bytes": 3437,
+      "sha256": "1df97eb1887e00a813b131858c28bf2da1915e1d52342194ef39c1151f3c1c4c"
+    },
+    "authoring/ssh_direct_owner_v1/owner.pseudo": {
+      "bytes": 13577,
+      "sha256": "1dc4f76c66e123739a4c630503af0e74b54ede0fc553896c9e07475dd2ba3e58"
+    },
+    "authoring/ssh_direct_registry_v1/author.py": {
+      "bytes": 2555,
+      "sha256": "55349528fefa35b0c51cd77a1fe30683a3b3718c5cf1e642eb986eac94b22d13"
+    },
+    "authoring/ssh_direct_registry_v1/registry.pseudo": {
+      "bytes": 10837,
+      "sha256": "26d81b4e73879a4238949bd1fc5a2787a3fd1861765251a48434185f4935054d"
+    },
+    "authoring/ssh_private_bindings_v1/author.py": {
+      "bytes": 4932,
+      "sha256": "114cf6310cad1d7fcd9086b284eb76842366bf93dd9da4c42012e4dab9eb7f60"
+    },
+    "authoring/ssh_private_bindings_v1/code.json": {
+      "bytes": 9281,
+      "sha256": "181c08cf9a41231c0001d520c2022b442559b9db439efd6e063e76e4d9595d42"
+    },
+    "authoring/ssh_private_bindings_v1/ssh_file_binding_packer.pseudo": {
+      "bytes": 13471,
+      "sha256": "1e8eda867f372dcce665f40a77f75e366f4f9a98bba2b2b8c3508ff02582b532"
+    },
+    "authoring/ssh_private_bindings_v1/ssh_registry_engine_packer.pseudo": {
+      "bytes": 7383,
+      "sha256": "d7808b4bfa5436653e86ed2cab6ebb09a83f91387c2191017ad3f43ea4f7092f"
+    },
     "authoring/view_call/text_editor_local_body.pseudo": {
       "bytes": 8338,
       "sha256": "f489270f96cb7a6c2c6dcf56c3267d1ed97bc77ec7f206a1aa17326ae0056dc2"
@@ -1396,6 +1513,10 @@
       "bytes": 61996,
       "sha256": "f58ab824ecb47545f19cd1d0daded9e41fca5457110693677d84e393e3098f23"
     },
+    "native/binary_read_params.hepta": {
+      "bytes": 292923,
+      "sha256": "cd452dbd4d54751a1308a0cf2dc71e514d262113de1af5d2ef8115d070417dd2"
+    },
     "native/binary_write_params.hepta": {
       "bytes": 296970,
       "sha256": "f1779101f1edf27e0e8dd384f14f88b4ae877392b02b2c772105fbf5645e693b"
@@ -1452,6 +1573,14 @@
       "bytes": 173403,
       "sha256": "59c849f25aa88c5dc9a86b8dc1990889a17abfbedc5d58557e193689894710ad"
     },
+    "native/config_identity_native_files.hepta": {
+      "bytes": 185001,
+      "sha256": "662880f6341b629b339430e8b12fa4c7d8d11a9d336ca07d2044c48723cb9ad5"
+    },
+    "native/config_json_native_files_span.hepta": {
+      "bytes": 247544,
+      "sha256": "bb056923e059815d7291c9e07c4a787557448c9ae3293dcd9f695d34b983faa1"
+    },
     "native/config_json_span.hepta": {
       "bytes": 236250,
       "sha256": "2a2758e62ba30773c91a9709bba5d1a2efb133b9c4edc4f49b330630af1aa0fd"
@@ -1463,6 +1592,14 @@
     "native/config_op8_growth_composition.json": {
       "bytes": 6239,
       "sha256": "3d8d58de7c22c53dc782c0320ef2030d2cd381a50c1b90d49ef08fbfc2657a66"
+    },
+    "native/config_transport_files_owner_span.hepta": {
+      "bytes": 364565,
+      "sha256": "fc5c95e6497fafe9c766f4944ea93891edbaf77d2e78d39d1e62ec3e370a67de"
+    },
+    "native/config_validation_native_files_span.hepta": {
+      "bytes": 444318,
+      "sha256": "95843692fec33acb157c6cf4cd2ba8b63acaa242912b8f1563acf13c5aaf51f5"
     },
     "native/config_validation_span.hepta": {
       "bytes": 409025,
@@ -1576,6 +1713,10 @@
       "bytes": 104050,
       "sha256": "48e5985c40e560a387e1607f40682671388317356af176daba4e9d2739e212d0"
     },
+    "native/file_info_params.hepta": {
+      "bytes": 285246,
+      "sha256": "244a0ff281d5c3a35464d8ad2a0b043bb3525958f82629fcc078dc7f580ae883"
+    },
     "native/file_lock_key.hepta": {
       "bytes": 153353,
       "sha256": "99174dd26e97882b65489e9f913a2a22663546dcc783a678c9f571458841ddce"
@@ -1591,6 +1732,38 @@
     "native/file_move_input_schema.json": {
       "bytes": 298,
       "sha256": "05cab5dc3948495f8f2f69657ce1d7ce92e386ccf6227b7ae3853c57555e1c80"
+    },
+    "native/file_transport_call.hepta": {
+      "bytes": 110655,
+      "sha256": "3707abdf5a091a1f899b019c74c2e25c0f539d4ea206d5dbb7523e56ba3a6327"
+    },
+    "native/file_transport_call_composition.json": {
+      "bytes": 5507,
+      "sha256": "f65fa82bd0b16db9898de0e7f3a9c57b76970282a6da47d5b46d52b3f70d488c"
+    },
+    "native/file_transport_policy_v3.hepta": {
+      "bytes": 229648,
+      "sha256": "aefb207c049c72b92e26a4dc978f3578bc45eda1addd018344b16599705585cd"
+    },
+    "native/file_transport_policy_v3_composition.json": {
+      "bytes": 5232,
+      "sha256": "4b0863ec79dda4d3d1f6efe18ce5d1e2c84d572d28e566e7dba6dd5837a2da3e"
+    },
+    "native/file_transport_result.hepta": {
+      "bytes": 64736,
+      "sha256": "3d4a22dc61c65ba8fb75ecfd16cd39531f28a04a781ae3c2761e010ee24858ad"
+    },
+    "native/file_transport_result_composition.json": {
+      "bytes": 4312,
+      "sha256": "c3e61e40114483ec2d74e7a3dcb51f398445a527d0d471e7d93275c942d3bf8e"
+    },
+    "native/filebytes_gateway_v3.hepta": {
+      "bytes": 82974,
+      "sha256": "1a5bf48b48b303ef0980bda6248cbd39603619688baf1e4d7b2fa9add8dc79fa"
+    },
+    "native/filebytes_gateway_v3_composition.json": {
+      "bytes": 5724,
+      "sha256": "e6b52c437756520663cfd700119e4b7ec01746bd0dd9ece67288c0ab33c2c77c"
     },
     "native/filesystem_call.hepta": {
       "bytes": 192241,
@@ -1800,6 +1973,14 @@
       "bytes": 10448,
       "sha256": "49999bac186f5eabba4aabdba4338edb3119e9b1af64ab25310e2dec2f5124cc"
     },
+    "native/runtime_mcp_catalog_filebytes.hepta": {
+      "bytes": 317314,
+      "sha256": "8149956401a3d2a07a31fb23c45f8dcf5b5283177c5af60a86b2ec1f60eee98d"
+    },
+    "native/runtime_mcp_catalog_filebytes_composition.json": {
+      "bytes": 47963,
+      "sha256": "df83c7b571ee72e8378b2fe92c340cf24ffa58fc62a0fcb4dd16511b79c72dcf"
+    },
     "native/runtime_mcp_catalog_ninth.hepta": {
       "bytes": 286226,
       "sha256": "c555bec54b9f7affd6ea85b8db005e334fecc4388897433b7b03ed557aa585c8"
@@ -1843,6 +2024,14 @@
     "native/runtime_mcp_extract_wait_composition.json": {
       "bytes": 21434,
       "sha256": "ef1295de4b81b86301fc04b5148b7c7c1605b55d9e06a695e177d5b4429427e6"
+    },
+    "native/runtime_mcp_filebytes.hepta": {
+      "bytes": 398339,
+      "sha256": "b3c54719e223da83d970c70331c6d6de919b7b148425271b537ae64816ecbeda"
+    },
+    "native/runtime_mcp_filebytes_composition.json": {
+      "bytes": 143120,
+      "sha256": "2712d534785ba6a8a6750be96c76606f1e615302007d0ed012dc94872a3a2d7f"
     },
     "native/runtime_mcp_filesystem_composition.json": {
       "bytes": 5343,
@@ -2011,6 +2200,46 @@
     "native/shell_capture_path.hepta": {
       "bytes": 47942,
       "sha256": "ce3f9ab277ad16cdcfb27c860fc97203de5dc0790072da5ff5f186632f7c69c2"
+    },
+    "native/ssh_direct_descriptor_packer.hepta": {
+      "bytes": 93587,
+      "sha256": "caaf09cac0506464e08cc37242a47fb23e54c9123ed6a681a66dcf79354224f4"
+    },
+    "native/ssh_direct_descriptor_packer_composition.json": {
+      "bytes": 2916,
+      "sha256": "6515d00f6956919196f933e58d3b29cd0ddb61524a109d661f0a43a5e6c73058"
+    },
+    "native/ssh_direct_owner.hepta": {
+      "bytes": 126323,
+      "sha256": "c2392ba832434b2e73fb696bb71312e09280e9f0dd19285347b075dc7fba64b2"
+    },
+    "native/ssh_direct_owner_composition.json": {
+      "bytes": 4046,
+      "sha256": "841e7f5a29ee54dd99ce006ceb2c827e505156f83eb7e06db08c5b39d948d542"
+    },
+    "native/ssh_direct_registry.hepta": {
+      "bytes": 78435,
+      "sha256": "196df96f5e1e105f2a0f0163f88f34c41503f46b017d3aa3bb07b029a8b5a856"
+    },
+    "native/ssh_direct_registry_composition.json": {
+      "bytes": 3238,
+      "sha256": "700a9734939dbf2a461573f954234160c2a0f6666857cd4eebd7d8fbce8fcc4f"
+    },
+    "native/ssh_file_binding_packer.hepta": {
+      "bytes": 51538,
+      "sha256": "7604fc0d697e8a56e845000125ecda34eac7ad27cc7e077c62813870440fbb3e"
+    },
+    "native/ssh_file_binding_packer_composition.json": {
+      "bytes": 2997,
+      "sha256": "58bf6d8137002978e1ac3ec8cead9243c4159d414baecdecf55716fdd29e2488"
+    },
+    "native/ssh_registry_engine_packer.hepta": {
+      "bytes": 29561,
+      "sha256": "5d9c8e937d864c305ced53818ee79f93720bfd1149afaa2b50f28bee060705ac"
+    },
+    "native/ssh_registry_engine_packer_composition.json": {
+      "bytes": 2907,
+      "sha256": "6f246ed04419990d413480c28b81d5303c1e189698391dd8a31b17d2148abd5a"
     },
     "native/text_budget.hepta": {
       "bytes": 47464,
@@ -2777,8 +3006,8 @@
       "sha256": "54f809a2b335acb30c659111c2559e9f7f2aa7c57825629ec64de9ef7ce694e8"
     },
     "scripts/hia_native_runtime_mcp_build.py": {
-      "bytes": 9179,
-      "sha256": "9480f9e41a09973e2898c0d102afbf1d1c094aba53353215a7cf96d19c72d50b"
+      "bytes": 9379,
+      "sha256": "7e8cfc50dddc53da89258fd74bc64a9749c602364b645f5130baa5dfc8f7f276"
     },
     "scripts/hia_native_runtime_mcp_pack.py": {
       "bytes": 5387,
@@ -2825,8 +3054,8 @@
       "sha256": "63697bc29af84e40aac62160d52cf3688eeac8c74eeb5b2aba9268fb3f7826a9"
     },
     "scripts/public_nine_build.py": {
-      "bytes": 37316,
-      "sha256": "10a9763e2dded295df4619217eaddc4787d18f71a2d7fbff445bcd1523e1a762"
+      "bytes": 39051,
+      "sha256": "728352ba7c023acd5fe1e614345b35c0f937964bda1378453ae77a11a5704b86"
     },
     "scripts/publication_worker.S": {
       "bytes": 23720,
@@ -2877,8 +3106,8 @@
       "sha256": "f87aabd80901fed0c19a3030df809ecc1bbe1b54239f7b1c0d3b692bc94c5b2f"
     },
     "scripts/runtime_mcp_extra_engine.S": {
-      "bytes": 62440,
-      "sha256": "5d3c8ed77e2e0eddf136a3490b4f6cf2110151a4ecd15604dd163fac32cbf406"
+      "bytes": 65874,
+      "sha256": "fa2896866987ca946e798c516e1d319263e357564f106bbc95c6f6124bb0d11e"
     },
     "scripts/runtime_mcp_filesystem_fence_bridge.S": {
       "bytes": 12652,
@@ -2917,36 +3146,40 @@
       "sha256": "a836c72a7e7d56102ade8ffe74c8c8f73d8e528a6c8b9d0aae24fa9f6352cf2b"
     },
     "scripts/runtime_mcp_task_policy.S": {
-      "bytes": 8566,
-      "sha256": "24757a8db52ea35df784ef6452ca3524c5291b87c03d61aa5d2c5159ee25dfa8"
+      "bytes": 8840,
+      "sha256": "e69b12f801b4a0ba474681aa29464f4df9949efdc926d08fddd8aa3533d267eb"
     },
     "scripts/runtime_mcp_task_publication.S": {
-      "bytes": 17822,
-      "sha256": "287f648ee8bebfc039e476cf84f91959ba411e9a093e8685236afc2b9e64ac61"
+      "bytes": 18050,
+      "sha256": "7022d0b6eac67fa399f4a1eaf61ba9607adb6c2cdf9b4ee9956204c20132f6be"
     },
     "scripts/runtime_mcp_task_send.S": {
-      "bytes": 6961,
-      "sha256": "a5bbfba10ab9bf95b5f12be72ba301a39bf0fed79c4f467660481a3b14abb228"
+      "bytes": 7189,
+      "sha256": "ee8c511b6b49ca7edcb083be17bbb90fdb868ac89ef8315f10c1172cb537cd77"
+    },
+    "scripts/runtime_mcp_task_ssh.S": {
+      "bytes": 11410,
+      "sha256": "e72259cc7149978543b536e56d0b789d2953f94985ae76e904bd0f22a1ef41d7"
     },
     "scripts/runtime_mcp_task_storage.S": {
-      "bytes": 26185,
-      "sha256": "995a4f597e39a58be44ecf0b044b6c448d0a54fe096829fe8994da68ed12082c"
+      "bytes": 26895,
+      "sha256": "502cd1fbdb706cbbea9fe0ce78ee516b2cb0c07f70057c0960f7ac2eeba6e590"
     },
     "scripts/runtime_mcp_task_teardown.S": {
-      "bytes": 5160,
-      "sha256": "410c5a1203affd90c349d1d9538161ab803547d9d4915ab4165c4e19f5b4ff1d"
+      "bytes": 5364,
+      "sha256": "e8e85897af4fbfd9fc4d6e2f845bb2edcea2b6a8ce5cce359bdaabf7d337f0a5"
     },
     "scripts/runtime_mcp_task_trace.S": {
       "bytes": 11034,
       "sha256": "b413b94a5621bb6fdbbf83c30b12e51e4671403a396d965e128da7a38456ab05"
     },
     "scripts/runtime_mcp_task_worker.S": {
-      "bytes": 4769,
-      "sha256": "fe8f5dbfbbb65ea5131a7a928551ebbed613876626c25321bd9901623f13b146"
+      "bytes": 4910,
+      "sha256": "6299ab5d2428509887b6f7270b5a6de9097968cdbb25433a5eab137e54e5680b"
     },
     "scripts/runtime_mcp_transport.S": {
-      "bytes": 12715,
-      "sha256": "70385401c053e98884c37907b99f3a2311b3cbc460a590928d0ca8f9a2f25555"
+      "bytes": 12900,
+      "sha256": "0d0e62b1d2398392bc9688b98bb8cd871484fbc0da6fd365d701e014877a71e4"
     },
     "scripts/runtime_mcp_view_bridge.S": {
       "bytes": 5142,
@@ -2972,9 +3205,17 @@
       "bytes": 5308,
       "sha256": "76a3249b4f6c8288040694ba317d7ca74ce961494314d920666cc389b588a737"
     },
+    "scripts/runtime_ssh_file_bridge.S": {
+      "bytes": 3219,
+      "sha256": "efc09c34a7a0b8ef873f1864474b361f4f7ee723d71efea723168ed13e34ac53"
+    },
+    "scripts/runtime_ssh_file_install.S": {
+      "bytes": 10567,
+      "sha256": "2795de0fe8f82384d0943b8af464fe7ed2f33c1d5c798a1461552493421003c9"
+    },
     "scripts/runtime_text_body_bridge.S": {
-      "bytes": 12471,
-      "sha256": "7cf250798b4969678e39b8f0190e666edd39c1deee8f9c342f851fc7eb150b0f"
+      "bytes": 12589,
+      "sha256": "a8eca3fc8139f7f1c522be8d14598bb67d541ee625c500385b4e0505175ae184"
     },
     "scripts/runtime_text_body_observer.S": {
       "bytes": 1623,
@@ -2992,13 +3233,29 @@
       "bytes": 5554,
       "sha256": "35e48e552090ae7916bf56ee14fba33a14f25f2ad3bfd2b16ac9b9d0e20cafc8"
     },
+    "scripts/ssh_direct_descriptor_engine.S": {
+      "bytes": 27832,
+      "sha256": "518f76f357319333adf1c00b12f2b7f82e84d96d28d0db21f5f09950cc2a9ab9"
+    },
+    "scripts/ssh_direct_registry_engine.S": {
+      "bytes": 8827,
+      "sha256": "c80144e7959c9a2097d580f7c17dc64d2bdd1aca6bf179a9cb3a56e2b1d7ecaf"
+    },
+    "scripts/ssh_file_binding_engine.S": {
+      "bytes": 16326,
+      "sha256": "502abee75b76213cc22e5f36a90a2169b21814748d0dd3899ba60b45b263f35a"
+    },
+    "scripts/ssh_native_worker.S": {
+      "bytes": 22742,
+      "sha256": "ca91da1199f1d12303b6f74d7ca40ed3305155299e4145c83f1551450eac56b2"
+    },
     "scripts/text_editor_create_private_build.py": {
       "bytes": 20497,
       "sha256": "82a8159e1e1810fef995acbee08ecb9b1e37379632987c706509e397067c6482"
     },
     "scripts/text_editor_create_private_pack.py": {
-      "bytes": 6507,
-      "sha256": "8e83ddc5348aac1373dc6bef16b2f61aee9ef8b5d6a095cc17a5d944bed35c49"
+      "bytes": 6754,
+      "sha256": "bf5daf87a9b1e7bbd113676796b2841bd795b457f73d0bcf0f73ef6b72d66567"
     },
     "scripts/text_publication_callable.S": {
       "bytes": 21941,

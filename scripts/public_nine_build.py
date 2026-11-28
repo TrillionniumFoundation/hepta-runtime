@@ -34,6 +34,7 @@ BOUNDARIES = [
     'scripts/runtime_mcp_task_storage.S',
     'scripts/runtime_mcp_task_extract.S',
     'scripts/runtime_mcp_task_publication.S',
+    'scripts/runtime_mcp_task_ssh.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
@@ -48,6 +49,9 @@ BOUNDARIES = [
     'scripts/runtime_batch_install.S',
     'scripts/local_batch_body_callable.S',
     'scripts/runtime_mcp_extra_engine.S',
+    'scripts/ssh_native_worker.S',
+    'scripts/runtime_ssh_file_install.S',
+    'scripts/runtime_ssh_file_bridge.S',
     'scripts/runtime_mcp_authority_bridge.S',
     'scripts/runtime_text_install.S',
     'scripts/runtime_text_create_bridge.S',
@@ -84,11 +88,11 @@ HELPERS = ['scripts/hia_native_runtime_mcp_build.py',
 # are specified separately. The configuration Value ABI remains an actual,
 # separately compiled dependency while the public Value interface uses spans.
 MEMBERS = [
-    ('owner', 'config_directory_owner_span', 'history.v1'),
+    ('owner', 'config_transport_files_owner_span', 'history.v1'),
     ('fs', 'config_fs_span', 'history.v1'),
-    ('json', 'config_json_span', 'history.v1'),
-    ('validation', 'config_validation_span', 'history.v1'),
-    ('identity', 'config_identity', 'history.v1'),
+    ('json', 'config_json_native_files_span', 'history.v1'),
+    ('validation', 'config_validation_native_files_span', 'history.v1'),
+    ('identity', 'config_identity_native_files', 'history.v1'),
     ('config_mcp', 'config_mcp', 'history.v1'),
     ('execution', 'execution_controller', 'history.v1'),
     ('execution_json', 'execution_json', 'history.v1'),
@@ -101,7 +105,7 @@ MEMBERS = [
     ('regex_nfa', 'regex_nfa', 'history.v1'),
     ('regex_match', 'regex_match', 'history.v1'),
     ('regex_controller', 'regex_controller', 'history.v1'),
-    ('catalog', 'runtime_mcp_catalog_ninth', 'history.v1'),
+    ('catalog', 'runtime_mcp_catalog_filebytes', 'history.v1'),
     ('admission', 'runtime_mcp_admission', 'history.v1'),
     ('gateway', 'view_gateway', 'history.v1'),
     ('client', 'client_context', 'history.v1'),
@@ -117,7 +121,7 @@ MEMBERS = [
     ('workdir_io', 'workdir_io', 'history.v1'),
     ('workdir_render', 'workdir_render', 'history.v1'),
     ('view_error', 'view_error', 'history.v1'),
-    ('mcp', 'runtime_mcp', 'history.v1'),
+    ('mcp', 'runtime_mcp_filebytes', 'history.v1'),
     ('protocol', 'sdk_public_protocol', 'sdk-message-target.v1'),
     ('view', 'view_call', 'history.v1'),
     ('endpoint', 'line_endpoint', 'history.v1'),
@@ -197,6 +201,17 @@ MEMBERS = [
     ('publisher_worker', 'publication_worker', 'history.v1'),
     ('binary_write_params', 'binary_write_params', 'history.v1'),
     ('binary_call_plan', 'binary_call_plan', 'history.v1'),
+    ('file_gateway', 'filebytes_gateway_v3', 'history.v1'),
+    ('file_info_params', 'file_info_params', 'history.v1'),
+    ('binary_read_params', 'binary_read_params', 'history.v1'),
+    ('file_transport_call', 'file_transport_call', 'history.v1'),
+    ('file_transport_policy', 'file_transport_policy_v3', 'history.v1'),
+    ('file_transport_result', 'file_transport_result', 'history.v1'),
+    ('ssh_owner', 'ssh_direct_owner', 'history.v1'),
+    ('ssh_registry', 'ssh_direct_registry', 'history.v1'),
+    ('ssh_descriptor_packer', 'ssh_direct_descriptor_packer', 'history.v1'),
+    ('ssh_registry_packer', 'ssh_registry_engine_packer', 'history.v1'),
+    ('ssh_binding_packer', 'ssh_file_binding_packer', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -284,6 +299,8 @@ EXTRA.extend([None, 'request_tasks'])
 EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])
 EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])
 EXTRA.extend(['binary_write_params', 'binary_call_plan'])
+EXTRA.extend(['file_gateway','file_info_params','binary_read_params','file_transport_call',
+              'file_transport_policy','file_transport_result',None])
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
@@ -460,7 +477,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 118
+    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 129
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -469,7 +486,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
                                     body_images=[images[n] for n in ('tb_body','lc_read','key','tb_lock','tb_edit','tb_match','tb_history','tb_atomic','cache','tb_render','tb_unlink','view_error')],
                                     authority_images=[images[n] for n in ('authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader')],
                                     batch_images=[images[n] for n in ('batch_body','batch_lock','key','tb_history','tb_atomic','cache','lc_read','tb_lock','tb_edit','batch_plan','endpoint','batch_verify','batch_apply','batch_render')],
-                                    extract_images=[images[n] for n in ('extract_body','lc_read','key','tb_lock','tb_edit','extract_data','tb_history','tb_atomic','cache','lc_path','lc_mkdir','view_error','endpoint','extract_line_verify')])
+                                    extract_images=[images[n] for n in ('extract_body','lc_read','key','tb_lock','tb_edit','extract_data','tb_history','tb_atomic','cache','lc_path','lc_mkdir','view_error','endpoint','extract_line_verify')],
+                                    ssh_images=[images[n] for n in ('ssh_owner','ssh_registry','ssh_descriptor_packer','ssh_registry_packer','ssh_binding_packer')])
     processes.extend(steps)
     binary = folder / ('filesystem-fixture.elf' if private_fixture else 'task-pump-fixture.elf' if private_pump_fixture else 'runtime-mcp.elf')
     write_new(binary, elf, 0o500)
@@ -543,7 +561,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'publication_public_route_registered': True,
               'batch_public_route_registered': True, 'batch_public_route_qualified': False,
               'batch_gateway_caller_qualified': False, 'batch_callable_scope_borrow_maximum': 1048672,
-              'advertised_catalog_tools': 11,
+              'advertised_catalog_tools': 13,
               'candidate_extra_registered_tools': ['batch_edit', 'weight_bellman_plan'],
               'combined_installed102_task_pump_qualified': False,
               'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
@@ -560,7 +578,14 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'binary_owner_private_graph_installed': True, 'public_binary_write_registered': False,
               'binary_write_effects_qualified': False, 'binary_write_audit_qualified': False,
               'binary_write_lifecycle_qualified': False,
-              'private_slots': 71, 'private_work_high': 12736, 'private_output_high': 12744,
+              'private_slots': 78, 'private_work_high': 15360, 'private_output_high': 15368,
+              'file_gateway_slots': [71,72,73,74,75,76,77],
+              'ssh_shared_process_hub_offsets': [224,232],
+              'ssh_request_owned_node_span': [1920,2872],
+              'file_foreground_hia_route_integrated': True,
+              'file_foreground_public_qualified': False,
+              'file_observation_pool_qualified': False,
+              'ssh_original_nineteen_qualified': False,
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
               'frontend_transport_fixed_input_limit': 16777216, 'frontend_reply_fixed_byte_limit': None,
@@ -568,7 +593,8 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
               'implemented_tools': ['host_list', 'effective_config', 'execution_shadow_admit', 'view', 'workdir',
-                                    'directory_create', 'file_move', 'directory_move', 'text_editor', 'extract_lines'],
+                                    'directory_create', 'file_move', 'directory_move', 'text_editor', 'extract_lines',
+                                    'file_info', 'binary_read'],
               'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'public_text_editor_route_registered_in_candidate_source': True,

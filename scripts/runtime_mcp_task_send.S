@@ -198,6 +198,7 @@ pump_tick:
     call pump_service_worker
     call pump_service_extract
     call pump_service_publication
+    call pump_service_ssh
     call pump_deliver_context_cancellation
     call pump_claim_responses
     call pump_send_progress
@@ -251,6 +252,14 @@ pump_poll_worker:
 pump_poll_publication_ready:
     mov [r12+PM_POLL+24],eax
     mov dword ptr [r12+PM_POLL+28],1
+    call pump_ssh_wake_fd
+    cmp rax,-1
+    je pump_poll_ssh_ready
+    cmp rax,0x7fffffff
+    ja public_span_fail
+pump_poll_ssh_ready:
+    mov [r12+PM_POLL+32],eax
+    mov dword ptr [r12+PM_POLL+36],1
     mov rdx,-1
     cmp qword ptr [r12+PM_PENDING],0
     jne pump_poll_finite
@@ -260,7 +269,7 @@ pump_poll_finite:
     mov edx,10
 pump_poll_ready:
     lea rdi,[r12+PM_POLL]
-    mov esi,4
+    mov esi,5
     mov eax,7
     syscall
     cmp rax,-4

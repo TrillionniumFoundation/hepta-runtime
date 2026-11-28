@@ -125,6 +125,7 @@ pump_finish_runtime:
     test rax,rax
     jnz public_span_fail
     call pump_publication_close
+    call pump_ssh_close
 pump_reap_workers:
     call pump_service_worker
     mov rdi,[r12+PM_PORT]
@@ -147,6 +148,15 @@ pump_reap_publication:
     call pump_wait
     jmp pump_reap_publication
 pump_publication_retired:
+pump_reap_ssh:
+    call pump_ssh_destroy
+    test eax,eax
+    jz pump_ssh_retired
+    cmp eax,1
+    jne public_span_fail
+    call pump_wait
+    jmp pump_reap_ssh
+pump_ssh_retired:
     xor eax,eax
     PM_RETURN
 

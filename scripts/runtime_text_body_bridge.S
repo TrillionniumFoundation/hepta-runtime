@@ -93,6 +93,10 @@ runtime_text_body_hub_destroy:
     cmp [r12], rax
     jne rtbh_destroy_invalid
     /* The process-owned executor must be fully reaped before the hub dies. */
+    cmp qword ptr [r12+224],0
+    jne rtbh_destroy_invalid
+    cmp qword ptr [r12+232],0
+    jne rtbh_destroy_invalid
     cmp qword ptr [r12+216],0
     jne rtbh_destroy_invalid
 .ifdef RUNTIME_LOCK_WAKE_HOOK
