@@ -1,0 +1,39 @@
+name: Read complete fixed text publication body failure
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publication-body-failure-read-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  full-bytes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime variables
+        run: |
+          printf '%s\n' "PB_READ=$RUNNER_TEMP/text-publication-body-failure-v1" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/text_publication_body_failure_v1
+      - name: Complete ZIP, TAR and member verification without execution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum qualification/text_publication_body_failure_v1/read_archive.py | cut -d' ' -f1)" = 5774f0099f2311d8897f3b23acc6f6364d10f7b93669ac6ac147fbbc5b6164d5
+          python3 -I -S -B qualification/text_publication_body_failure_v1/read_archive.py --output "$PB_READ"
+      - name: Preserve complete readback and selected exact original evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-body-failure-read-${{ github.sha }}
+          path: ${{ env.PB_READ }}/proof
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

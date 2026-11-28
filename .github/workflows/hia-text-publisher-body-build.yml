@@ -1,0 +1,57 @@
+name: Current text publisher HIA body source and fresh compilation
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-text-publisher-body-build-6780-v1-20261117']
+    paths: ['tests/hia_native/text_file_publication_ci/**', '.github/workflows/hia-text-publisher-body-build.yml']
+permissions:
+  contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  LC_ALL: C.UTF-8
+jobs:
+  body-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set runtime paths
+        run: |
+          printf '%s\n' "PB_SOURCE=$GITHUB_WORKSPACE/runtime/tests/hia_native/text_file_publication_ci/source" "PB_OUTPUT=$RUNNER_TEMP/text-publication-body-build" "PB_EXPORT=$RUNNER_TEMP/text-publication-body-export" "PB_DRIVER=$RUNNER_TEMP/text-publication-body-driver" >> "$GITHUB_ENV"
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            tests/hia_native/text_file_publication_ci/source
+      - name: Checkout exact Hepta compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+      - name: Verify complete candidate and compiler source
+        run: |
+          test "$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(sha256sum "$PB_SOURCE/SOURCE_MANIFEST.json" | cut -d' ' -f1)" = b6e95ed02b2a183c0a965484c8dde1973d72ca2411dcbcff0c6bc052171971e4
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse HEAD)" = d3e2c90173cf733e42b299d0c4274df4b593a12f
+          test "$(git -C "$GITHUB_WORKSPACE/compiler" rev-parse 'HEAD^{tree}')" = 8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49
+          python3 -I -S -B "$PB_SOURCE/scripts/build_body.py" check --source "$PB_SOURCE"
+      - name: Generate current policy and fresh compile both HIA owners
+        run: |
+          python3 -I -S -B "$PB_SOURCE/scripts/build_body.py" run --source "$PB_SOURCE" --hepta "$GITHUB_WORKSPACE/compiler" --output "$PB_OUTPUT" > "$PB_DRIVER.stdout" 2> "$PB_DRIVER.stderr"
+      - name: Preserve complete source and build success or failure
+        if: always()
+        run: |
+          python3 -I -S -B "$PB_SOURCE/scripts/archive.py" pack --source "$PB_SOURCE" --capture "$PB_OUTPUT" --output "$PB_EXPORT" --driver-prefix "$PB_DRIVER"
+      - name: Upload full evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: text-publication-body-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PB_EXPORT }}
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
