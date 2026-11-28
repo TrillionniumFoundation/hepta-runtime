@@ -1,0 +1,80 @@
+name: Main99 retained control input inspection
+on:
+  push:
+    branches: [hia-history99-controls-inspect-6780-20261117]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inputs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: reader
+          persist-credentials: false
+          sparse-checkout: qualification/history99/inspect-v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: 99d107c062a6eb3f226dd82b05283aeecbd3c495
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            authoring
+            runtime_support
+            src
+            vendor
+            tests/hia_native
+            tests/oracles
+            .github
+      - name: Admit frozen inspection source
+        run: |
+          mkdir -p "$RUNNER_TEMP/history99-inspection/logs"
+          timeout --signal=KILL 60s python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('reader/qualification/history99/inspect-v1')
+          raw=(root/'SOURCE.json').read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=='f5ae7ecb70fe6af2723996d0b716bd014ab5c1372e5e25e2d2b392f2ae30e212'
+          files=json.loads(raw)['files']
+          assert {p.name for p in root.iterdir()}==set(files)|{'SOURCE.json'}
+          for name,row in files.items():
+              body=(root/name).read_bytes()
+              assert len(body)==row['bytes'] and hashlib.sha256(body).hexdigest()==row['sha256']
+              assert hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest()==row['git_blob']
+              if name.endswith('.py'):compile(body,str(root/name),'exec')
+          print('EXACT_INSPECTION_SOURCE_PASS')
+          PY
+      - name: Materialize only the exact original qualification source
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = 99d107c062a6eb3f226dd82b05283aeecbd3c495
+          timeout --signal=KILL 180s python3 -I -B runtime/tests/hia_native/historical_public58/materialize.py --source "$GITHUB_WORKSPACE/runtime" --output "$RUNNER_TEMP/hia-historical-public58" > "$RUNNER_TEMP/history99-inspection/logs/materialize.stdout" 2> "$RUNNER_TEMP/history99-inspection/logs/materialize.stderr"
+      - name: Download the complete immutable first read index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309198930 > "$RUNNER_TEMP/history99-inspection/ARTIFACT.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14309198930/zip > "$RUNNER_TEMP/history99-index.zip"
+      - name: Read complete index and every bound source
+        run: |
+          timeout --signal=KILL 180s python3 -I -S -B reader/qualification/history99/inspect-v1/inspect.py --zip "$RUNNER_TEMP/history99-index.zip" --source "$RUNNER_TEMP/hia-historical-public58" --output "$RUNNER_TEMP/history99-inspection/result" > "$RUNNER_TEMP/history99-inspection/logs/inspect.stdout" 2> "$RUNNER_TEMP/history99-inspection/logs/inspect.stderr"
+      - name: Retain exact terminal diagnostics
+        if: always()
+        run: |
+          for path in "$RUNNER_TEMP/history99-inspection"/logs/*.stdout "$RUNNER_TEMP/history99-inspection"/logs/*.stderr; do
+            if test -f "$path"; then cat "$path"; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: history99-control-inputs-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/history99-inspection
+            reader/qualification/history99/inspect-v1
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 1

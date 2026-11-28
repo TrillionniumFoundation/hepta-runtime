@@ -1,0 +1,63 @@
+name: Read complete main99 historical control failure archive
+on:
+  workflow_dispatch:
+  push:
+    branches: [hia-history99-controls-6780-20261117]
+    paths: ['.github/workflows/hia-history99-index.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  full-byte-index:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          sparse-checkout: qualification/history99/index-v1
+      - name: Admit the complete frozen pure reader
+        run: |
+          mkdir -p "$RUNNER_TEMP/history99-proof/logs"
+          timeout --signal=KILL 60s python3 -I -S -B - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          root=Path('qualification/history99/index-v1')
+          raw=(root/'SOURCE.json').read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=='b169487b181a5555ddf306139a1df209157853298da0e6719ebe24fe3213ad58'
+          manifest=json.loads(raw)
+          assert {p.name for p in root.iterdir()}==set(manifest['files'])|{'SOURCE.json'}
+          for name,row in manifest['files'].items():
+              body=(root/name).read_bytes()
+              assert len(body)==row['bytes'] and hashlib.sha256(body).hexdigest()==row['sha256']
+              assert hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest()==row['git_blob']
+              if name.endswith('.py'):compile(body,str(root/name),'exec')
+          print('EXACT_SOURCE_PASS; NO_NATIVE_OR_RUST')
+          PY
+      - name: Download the immutable complete original failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14308317195 > "$RUNNER_TEMP/history99-proof/ARTIFACT.json"
+          gh api repos/TrillionniumFoundation/hepta-runtime/actions/artifacts/14308317195/zip > "$RUNNER_TEMP/history99-failure.zip"
+      - name: Read every ZIP TAR and retained file byte
+        run: |
+          timeout --signal=KILL 900s python3 -I -S -B qualification/history99/index-v1/index_archive.py --zip "$RUNNER_TEMP/history99-failure.zip" --metadata "$RUNNER_TEMP/history99-proof/ARTIFACT.json" --output "$RUNNER_TEMP/history99-proof/index" > "$RUNNER_TEMP/history99-proof/logs/index.stdout" 2> "$RUNNER_TEMP/history99-proof/logs/index.stderr"
+      - name: Keep exact terminal diagnostics
+        if: always()
+        run: |
+          for path in "$RUNNER_TEMP/history99-proof/logs/index.stdout" "$RUNNER_TEMP/history99-proof/logs/index.stderr"; do
+            if test -f "$path"; then cat "$path"; fi
+          done
+      - name: Retain complete small index and original diagnostic JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: history99-complete-index-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/history99-proof
+            qualification/history99/index-v1
+          if-no-files-found: error
+          include-hidden-files: true
+          compression-level: 1
+          retention-days: 14
