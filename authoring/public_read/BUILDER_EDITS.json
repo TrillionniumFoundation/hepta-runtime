@@ -1,0 +1,43 @@
+{
+  "after_sha256": "b0a537434074e62e0f8d01073ae7a40ce929912265579823161a29d40658cc8a",
+  "before_sha256": "ed020ad46fe7329eab950eea4a62382e7154b3f2af19235b4896aebbfc4d14cb",
+  "complete_inverse": true,
+  "edits": [
+    {
+      "after": "from text_editor_create_private_pack import pack\nfrom public_read_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images",
+      "before": "from text_editor_create_private_pack import pack"
+    },
+    {
+      "after": "    'scripts/runtime_mcp_task_publication.S',\n    'scripts/runtime_mcp_task_read.S',\n    'scripts/runtime_mcp_read_bridge.S',\n    'asm/public_read_ssh.S',",
+      "before": "    'scripts/runtime_mcp_task_publication.S',"
+    },
+    {
+      "after": "    ('binary_read_params', 'binary_read_params', 'history.v1'),\n    ('read_gateway', 'public_read_gateway', 'history.v1'),\n    ('multi_read_params', 'multi_read_params', 'history.v1'),\n    ('multi_read_plan', 'multi_read_call_plan', 'history.v1'),\n    ('read_result', 'public_read_transport_result', 'history.v1'),\n    ('read_wire', 'public_read_wire', 'history.v1'),\n    ('read_bootstrap', 'public_read_bootstrap', 'history.v1'),\n    ('read_serde_error', 'serde_error', 'history.v1'),",
+      "before": "    ('binary_read_params', 'binary_read_params', 'history.v1'),"
+    },
+    {
+      "after": "EXTRA.extend(['file_info_params', 'binary_read_params'])\nEXTRA.extend(['read_gateway','read_ssh','multi_read_params','multi_read_plan','read_result','read_wire','read_bootstrap','read_helpers','read_serde_error'])",
+      "before": "EXTRA.extend(['file_info_params', 'binary_read_params'])"
+    },
+    {
+      "after": "    required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS, *read_source_paths(root),",
+      "before": "    required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS,"
+    },
+    {
+      "after": "              + '.equ RUNTIME_LOCK_WAKE_HOOK,1\\n' + read_constants(root) + source)",
+      "before": "              + '.equ RUNTIME_LOCK_WAKE_HOOK,1\\n' + source)"
+    },
+    {
+      "after": "    read_images, read_build = read_build_images(root, build, folder)\n    images.update(read_images)\n    assembly = adapter_source(root, private_fixture=private_fixture,",
+      "before": "    assembly = adapter_source(root, private_fixture=private_fixture,"
+    },
+    {
+      "after": "len(physical) != len(MEMBERS) + 3 or len(MEMBERS) != 127",
+      "before": "len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 120"
+    },
+    {
+      "after": "'runtime_hia_images': len(MEMBERS) + 8 + read_build['runtime_hia_image_instances'],\n              'public_read_dependencies': read_build,",
+      "before": "'runtime_hia_images': len(MEMBERS) + 8,"
+    }
+  ]
+}

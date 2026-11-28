@@ -113,11 +113,18 @@ pump_resume_prepare:
     call pump_waiting_kind
     test eax,eax
     jz pump_resume_bellman_prepare
+    cmp eax,3
+    je pump_resume_read_prepare
     cmp eax,2
     je pump_resume_publication_prepare
     mov rdi,rbp
     mov rsi,r13
     call pump_resume_extract
+    PM_RETURN
+pump_resume_read_prepare:
+    mov rdi,rbp
+    mov rsi,r13
+    call pump_resume_read
     PM_RETURN
 pump_resume_publication_prepare:
     mov rdi,rbp

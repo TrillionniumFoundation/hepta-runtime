@@ -1,0 +1,30 @@
+def tool_kind(w: mutbuf, at: u64, size: u64) -> u64:
+    if size == 9:
+        if get(w, at) == INFO_WORD and byte(w, at + 8) == 111:
+            return 14
+    if size == 11:
+        if get(w, at) == READ_WORD and byte(w, at + 8) == 101 and byte(w, at + 9) == 97 and byte(w, at + 10) == 100:
+            return 15
+    if size==19:
+        if get(w,at)==MULTI_WORD0 and get(w,at+8)==MULTI_WORD1 and byte(w,at+16)==108 and byte(w,at+17)==101 and byte(w,at+18)==115:
+            return 16
+    return retained_read_tool_kind(w, at, size)
+
+def prepare(s: readbuf, o: mutbuf, w: mutbuf, phase: u64) -> u32:
+    if phase == 6 and (get(w,112)==14 or get(w,112)==15 or get(w,112)==16):
+        put(w, 8, 106)
+        if reserve(w, 1, 192) == 0:
+            return pending_grow(o, w)
+        if get(w, 112) == 14:
+            return prepare_file_info(s, o, w)
+        return prepare_binary_read(s, o, w)
+    return retained_read_prepare(s, o, w, phase)
+
+def after_tool(s:readbuf,o:mutbuf,w:mutbuf,code:u64,size:u64) -> u32:
+    if code==4294967287 and size==0 and get(w,8)==6 and get(w,48)==17:
+        put(w,152,0)
+        return finish(o,w,0,0,0,0)
+    return retained_read_after_tool(s,o,w,code,size)
+
+def binary_request_magic(w:mutbuf) -> u64:
+    return choose(get(w,112)==16,MULTI_REQUEST,READ_REQUEST)

@@ -1,0 +1,480 @@
+def entry(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    if length(o)<64:
+        return 4294967294
+    if valid(s)==0:
+        return INVALID
+    if length(w)<4096:
+        return grow(o,1,4096)
+    capture=64+load(s,16)
+    if load(s,capture+8)==1:
+        if load(s,8)!=0:
+            return INVALID
+        return owner_error(s,o,w)
+    if load(s,capture+32)!=0:
+        if load(s,8)!=0:
+            return INVALID
+        return exited(s,o,w)
+    if load(s,8)==0:
+        size=load(s,capture+40)
+        if length(o)<88+size:
+            return grow(o,2,88+size)
+        header(o,2,24+size)
+        put(o,64,VALUE_QUERY)
+        put(o,72,1)
+        put(o,80,size)
+        copy_range(o,s,88,capture+128,size)
+        return 64
+    feedback=capture+load(s,24)
+    size=load(s,32)
+    if load(s,8)==2:
+        if size<64 or load(s,feedback)!=DIAGNOSTIC_RESULT or load(s,feedback+8)!=1:
+            return INVALID
+        if load(s,feedback+40)!=size-64 or load(s,feedback+48)!=0 or load(s,feedback+56)!=0:
+            return INVALID
+        return invalid_json(s,o,w)
+    if size<32 or load(s,feedback)!=VALUE_RESULT or load(s,feedback+8)>1 or load(s,feedback+16)!=size-32 or load(s,feedback+24)!=0:
+        return INVALID
+    if load(s,feedback+8)==1:
+        return INVALID
+    if length(o)<64+size-32:
+        return grow(o,2,64+size-32)
+    header(o,0,size-32)
+    copy_range(o,s,64,feedback+32,size-32)
+    return 64
+
+def valid(s:readbuf) -> u64:
+    if length(s)<64 or length(s)>=4294901760 or load(s,0)!=REQUEST or load(s,8)>2:
+        return 0
+    if load(s,40)!=0 or load(s,48)!=0 or load(s,56)!=0:
+        return 0
+    left=length(s)-64
+    if load(s,16)>left:
+        return 0
+    left=left-load(s,16)
+    if load(s,24)<128 or load(s,24)>left or load(s,32)!=left-load(s,24):
+        return 0
+    if load(s,8)==0 and load(s,32)!=0:
+        return 0
+    at=64+load(s,16)
+    if load(s,at)!=CAPTURE or load(s,at+8)>1:
+        return 0
+    i=64
+    while i<128:
+        if load(s,at+i)!=0:
+            return 0
+        i=i+8
+    left=load(s,24)-128
+    if load(s,at+40)>left or load(s,at+48)!=left-load(s,at+40):
+        return 0
+    if load(s,at+40)>8388608 or load(s,at+48)>8388608:
+        return 0
+    if load(s,at+8)==1:
+        if left!=0 or load(s,at+32)!=0:
+            return 0
+    elif load(s,at+16)!=0 or load(s,at+24)!=0:
+        return 0
+    return 1
+
+def header(o:mutbuf,status:u64,size:u64) -> u64:
+    i=0
+    while i<64:
+        put(o,i,0)
+        i=i+8
+    put(o,0,RESPONSE)
+    put(o,8,status)
+    put(o,56,size)
+    return 0
+
+def grow(o:mutbuf,kind:u64,size:u64) -> u32:
+    put(o,0,GROW)
+    put(o,8,kind)
+    put(o,16,size)
+    put(o,24,0)
+    return 4294967248
+
+def whitespace(value:u64) -> bool:
+    if value>=9 and value<=13:
+        return True
+    if value==32 or value==133 or value==160 or value==5760:
+        return True
+    if value>=8192 and value<=8202:
+        return True
+    return value==8232 or value==8233 or value==8239 or value==8287 or value==12288
+
+def trim_start(s:readbuf,at:u64,size:u64) -> u64:
+    end=at+size
+    while at<end:
+        decoded=next_lossy(s,at,end)
+        if whitespace(decoded & 4294967295)==False:
+            return at
+        at=decoded>>32
+    return at
+
+def trim_end(s:readbuf,at:u64,size:u64) -> u64:
+    end=at+size
+    kept=at
+    while at<end:
+        decoded=next_lossy(s,at,end)
+        at=decoded>>32
+        if whitespace(decoded & 4294967295)==False:
+            kept=at
+    return kept
+
+def exited(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    cap=64+load(s,16)
+    out=cap+128
+    err=out+load(s,cap+40)
+    begin=trim_start(s,out,load(s,cap+40))
+    put(w,0,begin)
+    put(w,8,trim_end(s,begin,out+load(s,cap+40)-begin)-begin)
+    begin=trim_start(s,err,load(s,cap+48))
+    put(w,16,begin)
+    put(w,24,trim_end(s,begin,err+load(s,cap+48)-begin)-begin)
+    number_end=64
+    if (load(s,cap+32)&127)==0:
+        number_end=decimal(w,64,(load(s,cap+32)>>8)&255)
+    else:
+        number_end=literal(w,64,23)
+    put(w,32,number_end-64)
+    total=literal_size(1)+load(s,16)+literal_size(2)+get(w,32)+literal_size(3)+literal_size(4)
+    total=total+lossy_size(s,get(w,0),get(w,8))+lossy_size(s,get(w,16),get(w,24))
+    if length(o)<64+total:
+        return grow(o,2,64+total)
+    header(o,1,total)
+    at=literal(o,64,1)
+    copy_range(o,s,at,64,load(s,16))
+    at=literal(o,at+load(s,16),2)
+    copy_range(o,w,at,64,get(w,32))
+    at=literal(o,at+get(w,32),3)
+    at=lossy_copy(s,o,get(w,0),get(w,8),at)
+    at=literal(o,at,4)
+    lossy_copy(s,o,get(w,16),get(w,24),at)
+    return 64
+
+def invalid_json(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    cap=64+load(s,16)
+    feedback=cap+load(s,24)
+    error_size=load(s,32)-64
+    total=literal_size(1)+load(s,16)+literal_size(5)+error_size+literal_size(6)+lossy_size(s,cap+128,load(s,cap+40))
+    if length(o)<64+total:
+        return grow(o,2,64+total)
+    header(o,1,total)
+    at=literal(o,64,1)
+    copy_range(o,s,at,64,load(s,16))
+    at=literal(o,at+load(s,16),5)
+    copy_range(o,s,at,feedback+64,error_size)
+    at=literal(o,at+error_size,6)
+    lossy_copy(s,o,cap+128,load(s,cap+40),at)
+    return 64
+
+def reason_literal(reason:u64) -> u64:
+    if reason==105 or reason==205:
+        return 7
+    if reason==101 or reason==704:
+        return 8
+    if reason==106:
+        return 9
+    if reason==103:
+        return 10
+    if reason==403 or reason==703:
+        return 11
+    if reason==401:
+        return 12
+    if reason==402:
+        return 13
+    if reason==404:
+        return 14
+    if reason==405:
+        return 15
+    if reason==406:
+        return 16
+    if reason==408:
+        return 17
+    if reason==411 or reason==412:
+        return 18
+    if reason==501 or reason==502:
+        return 19
+    if reason==504:
+        return 20
+    if reason==503:
+        return 21
+    if reason==505:
+        return 22
+    return 0
+
+def owner_error(s:readbuf,o:mutbuf,w:mutbuf) -> u32:
+    cap=64+load(s,16)
+    reason=load(s,cap+16)
+    ident=reason_literal(reason)
+    if ident==0:
+        if reason!=407 and reason!=409 and reason!=410 and reason!=413 and reason!=206:
+            return INVALID
+        if load(s,cap+24)<1 or load(s,cap+24)>4095:
+            return INVALID
+        size=errno_text(w,128,load(s,cap+24))-128
+        if length(o)<64+size:
+            return grow(o,2,64+size)
+        header(o,1,size)
+        copy_range(o,w,64,128,size)
+        return 64
+    size=literal_size(ident)
+    if ident==7:
+        size=size+load(s,16)
+    if length(o)<64+size:
+        return grow(o,2,64+size)
+    header(o,1,size)
+    at=literal(o,64,ident)
+    if ident==7:
+        copy_range(o,s,at,64,load(s,16))
+    return 64
+
+def literal_size(ident:u64) -> u64:
+    if ident==1:
+        return 17
+    if ident==2:
+        return 13
+    if ident==3:
+        return 9
+    if ident==4:
+        return 9
+    if ident==5:
+        return 24
+    if ident==6:
+        return 9
+    if ident==7:
+        return 24
+    if ident==8:
+        return 69
+    if ident==9:
+        return 47
+    if ident==10:
+        return 48
+    if ident==11:
+        return 56
+    if ident==12:
+        return 47
+    if ident==13:
+        return 38
+    if ident==14:
+        return 17
+    if ident==15:
+        return 18
+    if ident==16:
+        return 18
+    if ident==17:
+        return 28
+    if ident==18:
+        return 43
+    if ident==19:
+        return 62
+    if ident==20:
+        return 61
+    if ident==21:
+        return 68
+    if ident==22:
+        return 56
+    if ident==23:
+        return 2
+    return 0
+
+def literal(o:mutbuf,at:u64,ident:u64) -> u64:
+    if ident==1:
+        put(o,at+0,7503108529959298418)
+        put(o,at+8,7957614742287182949)
+        store(o,at+16,32)
+        return at+17
+    if ident==2:
+        put(o,at+0,2334102023183623712)
+        store(o,at+8,119)
+        store(o,at+9,105)
+        store(o,at+10,116)
+        store(o,at+11,104)
+        store(o,at+12,32)
+        return at+13
+    if ident==3:
+        put(o,at+0,4212120672785429258)
+        store(o,at+8,10)
+        return at+9
+    if ident==4:
+        put(o,at+0,4211554381347451658)
+        store(o,at+8,10)
+        return at+9
+    if ident==5:
+        put(o,at+0,7308905094058439200)
+        put(o,at+8,7596553832753602660)
+        put(o,at+16,2322254660469661796)
+        return at+24
+    if ident==6:
+        put(o,at+0,8391737126163521595)
+        store(o,at+8,61)
+        return at+9
+    if ident==7:
+        put(o,at+0,8367798494427701606)
+        put(o,at+8,2338619869403226223)
+        put(o,at+16,2338053640979772275)
+        return at+24
+    if ident==8:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7305804385079019603)
+        put(o,at+16,2338053341472713836)
+        put(o,at+24,7809644627822735983)
+        put(o,at+32,7956009395113255968)
+        put(o,at+40,7310021076952883301)
+        put(o,at+48,8458077238139566948)
+        put(o,at+56,2333824980479733620)
+        store(o,at+64,114)
+        store(o,at+65,101)
+        store(o,at+66,116)
+        store(o,at+67,114)
+        store(o,at+68,121)
+        return at+69
+    if ident==9:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,8316298464809994323)
+        put(o,at+16,8030593375032797555)
+        put(o,at+24,2337207816343676282)
+        put(o,at+32,8463143740446959715)
+        store(o,at+40,98)
+        store(o,at+41,109)
+        store(o,at+42,105)
+        store(o,at+43,116)
+        store(o,at+44,116)
+        store(o,at+45,101)
+        store(o,at+46,100)
+        return at+47
+    if ident==10:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,8243116152216111187)
+        put(o,at+16,7811882189719500064)
+        put(o,at+24,8029390625124934241)
+        put(o,at+32,8295740930404148000)
+        put(o,at+40,7234316419774374517)
+        return at+48
+    if ident==11:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7595155236795205715)
+        put(o,at+16,7233173957248835950)
+        put(o,at+24,8104338719268301164)
+        put(o,at+32,8029390625107702377)
+        put(o,at+40,8386104306603221280)
+        put(o,at+48,8751185004989539177)
+        return at+56
+    if ident==12:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7308335460846159955)
+        put(o,at+16,7810758454475432050)
+        put(o,at+24,2337207816343020908)
+        put(o,at+32,7598805593930102113)
+        store(o,at+40,99)
+        store(o,at+41,32)
+        store(o,at+42,114)
+        store(o,at+43,101)
+        store(o,at+44,116)
+        store(o,at+45,114)
+        store(o,at+46,121)
+        return at+47
+    if ident==13:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,8102098275577907283)
+        put(o,at+16,6998716339711599717)
+        put(o,at+24,7163384644106155125)
+        store(o,at+32,32)
+        store(o,at+33,114)
+        store(o,at+34,101)
+        store(o,at+35,116)
+        store(o,at+36,114)
+        store(o,at+37,121)
+        return at+38
+    if ident==14:
+        put(o,at+0,2334956331002456429)
+        put(o,at+8,7594322909465170771)
+        store(o,at+16,110)
+        return at+17
+    if ident==15:
+        put(o,at+0,2334956331002456429)
+        put(o,at+8,8026668473692738387)
+        store(o,at+16,117)
+        store(o,at+17,116)
+        return at+18
+    if ident==16:
+        put(o,at+0,2334956331002456429)
+        put(o,at+8,7306092533313459027)
+        store(o,at+16,114)
+        store(o,at+17,114)
+        return at+18
+    if ident==17:
+        put(o,at+0,8367798494427701606)
+        put(o,at+8,2334399978102268015)
+        put(o,at+16,8458358670138239095)
+        store(o,at+24,102)
+        store(o,at+25,102)
+        store(o,at+26,101)
+        store(o,at+27,114)
+        return at+28
+    if ident==18:
+        put(o,at+0,8223684470338577778)
+        put(o,at+8,2334398900014707557)
+        put(o,at+16,2338323018190911589)
+        put(o,at+24,7017488113979957304)
+        put(o,at+32,7596482291551270000)
+        store(o,at+40,109)
+        store(o,at+41,105)
+        store(o,at+42,116)
+        return at+43
+    if ident==19:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7595155236795205715)
+        put(o,at+16,8388342945227235694)
+        put(o,at+24,7305804469859739936)
+        put(o,at+32,8223638264978961522)
+        put(o,at+40,7596562547242656613)
+        put(o,at+48,7309940803863409761)
+        store(o,at+56,113)
+        store(o,at+57,117)
+        store(o,at+58,105)
+        store(o,at+59,114)
+        store(o,at+60,101)
+        store(o,at+61,100)
+        return at+62
+    if ident==20:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7595155236795205715)
+        put(o,at+16,8388342945227235694)
+        put(o,at+24,4279657062207677984)
+        put(o,at+32,7956017164792984096)
+        put(o,at+40,7164792839344300135)
+        put(o,at+48,8295751912502096485)
+        store(o,at+56,105)
+        store(o,at+57,103)
+        store(o,at+58,110)
+        store(o,at+59,97)
+        store(o,at+60,108)
+        return at+61
+    if ident==21:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7595155236795205715)
+        put(o,at+16,8097865145833513326)
+        put(o,at+24,7956009395113255968)
+        put(o,at+32,8319662987961245797)
+        put(o,at+40,7162256265163597172)
+        put(o,at+48,8386099895486082671)
+        put(o,at+56,8462656715650658153)
+        store(o,at+64,105)
+        store(o,at+65,114)
+        store(o,at+66,101)
+        store(o,at+67,100)
+        return at+68
+    if ident==22:
+        put(o,at+0,5989915474655340900)
+        put(o,at+8,7595155236795205715)
+        put(o,at+16,8097865145833513326)
+        put(o,at+24,4279657062207677984)
+        put(o,at+32,7594034821364806176)
+        put(o,at+40,2336927755366656364)
+        put(o,at+48,7234314173708068210)
+        return at+56
+    if ident==23:
+        store(o,at+0,45)
+        store(o,at+1,49)
+        return at+2
+    return at

@@ -16,13 +16,21 @@ pump_waiting_kind:
     mov rdx,[rbp+PN_P_ACTIVE]
     cmp rdx,1
     ja public_span_fail
+    mov rcx,[rbp+PN_R_ACTIVE]
+    cmp rcx,1
+    ja public_span_fail
+    add rcx,rdx
+    add rcx,rax
+    cmp rcx,1
+    ja public_span_fail
     test rax,rax
-    jz pp_kind_publisher
-    test rdx,rdx
-    jnz public_span_fail
-    ret
-pp_kind_publisher:
+    jnz pp_kind_done
     lea rax,[rdx+rdx]
+    test rax,rax
+    jnz pp_kind_done
+    mov rcx,[rbp+PN_R_ACTIVE]
+    lea rax,[rcx+rcx*2]
+pp_kind_done:
     ret
 pump_waiting_context:
     sub rsp,8

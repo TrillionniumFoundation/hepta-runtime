@@ -21,6 +21,8 @@ from hia_native_build import NativeBuild, json_bytes, write_new
 from hia_native_runtime_mcp_adapter import combine
 from runtime_mcp_publication_async import combine_async
 from text_editor_create_private_pack import pack
+from public_read_build import source_paths as read_source_paths, constants as read_constants, build_images as read_build_images
+from public_full_catalog_build import source_paths as catalog_source_paths, build_image as build_catalog_image
 
 sha = lambda raw: hashlib.sha256(raw).hexdigest()
 BASE = 'scripts/config_mcp_grow_adapter.S'
@@ -34,6 +36,9 @@ BOUNDARIES = [
     'scripts/runtime_mcp_task_storage.S',
     'scripts/runtime_mcp_task_extract.S',
     'scripts/runtime_mcp_task_publication.S',
+    'scripts/runtime_mcp_task_read.S',
+    'scripts/runtime_mcp_read_bridge.S',
+    'asm/public_read_ssh.S',
     'scripts/runtime_mcp_task_trace.S',
     'scripts/runtime_mcp_task_policy.S',
     'scripts/runtime_mcp_task_worker.S',
@@ -197,6 +202,15 @@ MEMBERS = [
     ('publisher_worker', 'publication_worker', 'history.v1'),
     ('binary_write_params', 'binary_write_params', 'history.v1'),
     ('binary_call_plan', 'binary_call_plan', 'history.v1'),
+    ('file_info_params', 'file_info_params', 'history.v1'),
+    ('binary_read_params', 'binary_read_params', 'history.v1'),
+    ('read_gateway', 'public_read_gateway', 'history.v1'),
+    ('multi_read_params', 'multi_read_params', 'history.v1'),
+    ('multi_read_plan', 'multi_read_call_plan', 'history.v1'),
+    ('read_result', 'public_read_transport_result', 'history.v1'),
+    ('read_wire', 'public_read_wire', 'history.v1'),
+    ('read_bootstrap', 'public_read_bootstrap', 'history.v1'),
+    ('read_serde_error', 'serde_error', 'history.v1'),
     ('rf_owner', 'effect_owner_fence', 'standard'),
     ('rf_fs', 'effect_fence_fs', 'standard'),
     ('rf_json', 'fence_json', 'standard'),
@@ -284,6 +298,8 @@ EXTRA.extend([None, 'request_tasks'])
 EXTRA.extend(['extract_gateway', 'extract_params', 'extract_call', 'extract_adapter', None])
 EXTRA.extend(['publisher_gateway', 'publisher_params', 'publisher_call', None, None])
 EXTRA.extend(['binary_write_params', 'binary_call_plan'])
+EXTRA.extend(['file_info_params', 'binary_read_params'])
+EXTRA.extend(['read_gateway','read_ssh','multi_read_params','multi_read_plan','read_result','read_wire','read_bootstrap','read_helpers','read_serde_error'])
 PORT_PACKAGE_SHA256 = '2563acb466285cc6d9fbf3f91508b1ea0785904230263bcdea5866c30f801bb1'
 
 
@@ -295,7 +311,7 @@ def source_check(root: Path) -> dict:
         raise ValueError('public source-closure schema differs')
     if type(binding.get('sources')) is not dict:
         raise ValueError('public source list must be an object')
-    required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS,
+    required = {BASE, TRANSPORT, *BOUNDARIES, *FIXTURE_BOUNDARIES, *HELPERS, *read_source_paths(root), *catalog_source_paths(root),
                 'native/runtime_mcp_image_packer.hepta',
                 *('native/' + source + '.hepta' for _, source, _ in MEMBERS)}
     if not required <= binding['sources'].keys():
@@ -342,7 +358,7 @@ def adapter_source(root: Path, images=None, *, private_fixture=False,
                   + '.equ PM_FIXED_TRACE_FD,' + str(int(private_pump_trace)) + '\n'
                   + '\n'.join((root / name).read_text() for name in BOUNDARIES) + '\n' + fixed)
     source = ('.equ PM_FIXED_PUBLICATION_TRACE,' + str(int(private_publication_trace)) + '\n'
-              + '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + source)
+              + '.equ RUNTIME_LOCK_WAKE_HOOK,1\n' + read_constants(root) + source)
     for name in re.findall(r'^\.global ([A-Za-z_][A-Za-z_0-9]*)$', source, re.M):
         if name == '_start':
             continue
@@ -419,6 +435,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         actual = next(row for row in members if row['name'] == authority_name)
         if any(actual[key] != expected[key] for key in ('source_sha256','image_sha256','image_bytes')):
             raise ValueError('fixed authority source/image identity differs: ' + authority_name)
+    read_images, read_build = read_build_images(root, build, folder)
+    images.update(read_images)
+    images['catalog'], catalog_build = build_catalog_image(root, build, folder, images['catalog'])
     assembly = adapter_source(root, private_fixture=private_fixture,
                               private_pump_fixture=private_pump_fixture,
                               private_pump_trace=private_pump_trace,
@@ -460,7 +479,7 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
         physical.setdefault(image, []).append('grow_image_' + str(slot))
     for member, source, profile in MEMBERS:
         physical.setdefault(images[member], []).append('member_' + member)
-    if (len(physical) != len(MEMBERS) + 1 or len(MEMBERS) != 118
+    if (len(physical) != len(MEMBERS) + 3 or len(MEMBERS) != 127
         or list(physical)[-5:] != [images[name] for name in FENCE]):
         raise ValueError('fixed public graph physical images or fence signal range differ')
     elf, link, packed, steps = pack(folder, build, physical, configuration, extra,
@@ -488,7 +507,10 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
     manifest = folder / 'manifest.json'
     result = {'schema': 'hepta.runtime.public-task-batch-extract-build.v1', 'status': 'PASS',
               'members': members, 'physical_images': len(physical),
-              'runtime_hia_images': len(MEMBERS) + 8,
+              'runtime_hia_images': len(MEMBERS) + 8 + read_build['runtime_hia_image_instances'] + catalog_build['additional_runtime_hia_images'],
+              'public_read_dependencies': read_build,
+              'public_catalog_dependency': catalog_build,
+              'catalog_member_image_retained_inside_composite': True,
               'packed_capabilities': {'57': {'sources': port_sources, 'build': port_evidence,
                   'package': str(package), 'build_root': str(port_build),
                   'worker_build_root': str(worker_build), 'runtime_hia_images': 8,
@@ -543,7 +565,9 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'publication_public_route_registered': True,
               'batch_public_route_registered': True, 'batch_public_route_qualified': False,
               'batch_gateway_caller_qualified': False, 'batch_callable_scope_borrow_maximum': 1048672,
-              'advertised_catalog_tools': 11,
+              'advertised_catalog_tools': 113,
+              'advertised_catalog_tools_by_presence': {'0': 10, '1': 113},
+              'original_catalog_declaration_input_count': 136,
               'candidate_extra_registered_tools': ['batch_edit', 'weight_bellman_plan'],
               'combined_installed102_task_pump_qualified': False,
               'authority_fixed_local_members': ['authority','authority_record','authority_kdf','rf_sha','authority_aead','authority_nonce','authority_scope','authority_entropy','authority_loader'],
@@ -560,15 +584,20 @@ def build_runtime_mcp(hepta: Path, output: Path, *, name='runtime-mcp',
               'binary_owner_private_graph_installed': True, 'public_binary_write_registered': False,
               'binary_write_effects_qualified': False, 'binary_write_audit_qualified': False,
               'binary_write_lifecycle_qualified': False,
-              'private_slots': 71, 'private_work_high': 12736, 'private_output_high': 12744,
+              'private_slots': 82, 'private_work_high': 13440, 'private_output_high': 13448,
+              'file_info_params_slot': 71, 'binary_read_params_slot': 72,
+              'configured_ssh_target_operation': 10, 'public_read_routes_qualified': False,
               'shared_session_slot': 6, 'shared_installed_config_owner_slot': 11,
               'public_frontend_slot': 18, 'protocol_slot': 19,
               'frontend_transport_fixed_input_limit': 16777216, 'frontend_reply_fixed_byte_limit': None,
               'json_nesting_depth_policy': 128, 'result_publication_grows': True,
               'public_configuration_from_stdin': False, 'public_private_instance_selectors': False,
               'actual_fixture_private_selectors': private_fixture,
-              'implemented_tools': ['host_list', 'effective_config', 'execution_shadow_admit', 'view', 'workdir',
-                                    'directory_create', 'file_move', 'directory_move', 'text_editor', 'extract_lines'],
+              'implemented_tools': ['batch_edit', 'binary_read', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
+              'implemented_tools_is_source_registration_only': True,
+              'source_registered_tools': ['batch_edit', 'binary_read', 'directory_create', 'directory_move', 'effective_config', 'execution_shadow_admit', 'extract_lines', 'file_info', 'file_move', 'host_list', 'read_multiple_files', 'text_editor', 'text_file_write', 'view', 'weight_bellman_plan', 'workdir'],
+              'source_registered_route_count': 16,
+              'source_unregistered_route_count': 120,
               'filesystem_sdk_semantic_qualification': 'NOT_RUN',
               'runtime_host_semantics': False, 'semantic_qualification': 'NOT_RUN',
               'public_text_editor_route_registered_in_candidate_source': True,
