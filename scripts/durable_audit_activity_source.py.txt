@@ -1,0 +1,157 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) != 128 or read64(s, 0) != REQUEST or zeros(s, 32, 32) == 0:
+        return INVALID
+    if length(o) < 64 or length(w) < 128 or length(w) % 128 != 0:
+        return CAPACITY
+    operation = read64(s, 8)
+    token = read64(s, 16)
+    value = read64(s, 24)
+    if operation > 6:
+        return INVALID
+    if operation == 1 or operation == 5:
+        if token != 0 or value != 0 or valid_id(s, 64) == 0:
+            return INVALID
+    else:
+        if zeros(s, 64, 64) == 0:
+            return INVALID
+        if operation == 2 or operation == 4:
+            if token == 0 or value != 0:
+                return INVALID
+        else:
+            if operation == 3:
+                if token == 0 or value > 1:
+                    return INVALID
+            else:
+                if token != 0 or value != 0:
+                    return INVALID
+    capacity = (length(w) - 128) // 128
+    if operation == 0:
+        if zeros(w, 0, length(w)) == 0:
+            return INVALID
+        put(w, 0, STATE)
+        put(w, 8, capacity)
+        return reply(w, o, 0, 0, 0, 0)
+    if get(w, 0) != STATE or get(w, 8) > capacity or get(w, 24) > 1 or zeros(w, 32, 96) == 0:
+        return INVALID
+    if get(w, 8) < capacity:
+        start = 128 + get(w, 8) * 128
+        if zeros(w, start, length(w) - start) == 0:
+            return INVALID
+        put(w, 8, capacity)
+    index = 0
+    while index < capacity:
+        at = 128 + index * 128
+        if get(w, at + 64) == 0:
+            if zeros(w, at, 128) == 0:
+                return INVALID
+        else:
+            if get(w, at + 64) > get(w, 16) or get(w, at + 72) > MAX_REFS or get(w, at + 80) > 1 or get(w, at + 88) > 1 or zeros(w, at + 96, 32) == 0:
+                return INVALID
+            if valid_id(w, at) == 0:
+                return INVALID
+        index = index + 1
+    if operation == 6:
+        put(w, 24, 1)
+        return reply(w, o, 0, 0, 0, 0)
+    if operation == 1 or operation == 5:
+        if get(w, 24) == 1:
+            return reply(w, o, 2, 0, 0, 0)
+        if operation == 1:
+            return begin(s, o, w)
+        return query(s, o, w)
+    found = 0
+    index = 0
+    while index < capacity:
+        at = 128 + index * 128
+        if get(w, at + 64) == token:
+            found = at
+        index = index + 1
+    if found == 0 or get(w, found + 72) == 0:
+        return reply(w, o, 3, 0, 0, 0)
+    references = get(w, found + 72)
+    if operation == 2:
+        if references == MAX_REFS:
+            return reply(w, o, 4, 0, 0, 0)
+        put(w, found + 72, references + 1)
+    if operation == 3:
+        put(w, found + 80, value)
+    if operation == 4:
+        put(w, found + 72, references - 1)
+        if references == 1 and get(w, found + 88) == 0:
+            fill_range(w, found, 128, 0)
+    return reply(w, o, 0, token, 0, 0)
+
+def begin(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if get(w, 16) == MAXWORD:
+        return reply(w, o, 4, 0, 0, 0)
+    chosen = 0
+    old = 0
+    index = 0
+    while index < get(w, 8):
+        at = 128 + index * 128
+        if get(w, at + 64) == 0 and chosen == 0:
+            chosen = at
+        if get(w, at + 88) == 1 and equal_id(s, w, at) == 1:
+            old = at
+            if get(w, at + 72) == 0:
+                chosen = at
+        index = index + 1
+    if chosen == 0:
+        if length(w) > MAXWORD - 128:
+            return CAPACITY
+        return reply(w, o, 1, 0, 0, length(w) + 128)
+    if old != 0:
+        put(w, old + 88, 0)
+        if get(w, old + 72) == 0:
+            fill_range(w, old, 128, 0)
+    next_token = get(w, 16) + 1
+    put(w, 16, next_token)
+    fill_range(w, chosen, 128, 0)
+    copy_range(w, s, chosen, 64, 64)
+    put(w, chosen + 64, next_token)
+    put(w, chosen + 72, 1)
+    put(w, chosen + 80, 1)
+    put(w, chosen + 88, 1)
+    return reply(w, o, 0, next_token, 1, 0)
+
+def query(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    index = 0
+    value = 0
+    while index < get(w, 8):
+        at = 128 + index * 128
+        if get(w, at + 64) != 0 and get(w, at + 88) == 1:
+            if get(w, at + 72) == 0:
+                fill_range(w, at, 128, 0)
+            else:
+                if equal_id(s, w, at) == 1:
+                    value = get(w, at + 80)
+        index = index + 1
+    return reply(w, o, 0, 0, value, 0)
+
+def equal_id(s:readbuf, w:mutbuf, at:u64) -> u64:
+    index = 0
+    while index < 64:
+        if byte(s, 64 + index) != byte(w, at + index):
+            return 0
+        index = index + 1
+    return 1
+
+def reply(w:mutbuf, o:mutbuf, status:u64, token:u64, value:u64, required:u64) -> u32:
+    mapped = 0
+    allocated = 0
+    index = 0
+    while index < get(w, 8):
+        at = 128 + index * 128
+        mapped = mapped + get(w, at + 88)
+        if get(w, at + 64) != 0:
+            allocated = allocated + 1
+        index = index + 1
+    fill_range(o, 0, 64, 0)
+    put(o, 0, RESPONSE)
+    put(o, 8, status)
+    put(o, 16, token)
+    put(o, 24, value)
+    put(o, 32, required)
+    put(o, 40, mapped)
+    put(o, 48, allocated)
+    return 64
