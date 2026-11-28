@@ -1,0 +1,283 @@
+def entry(s:readbuf, o:mutbuf, w:mutbuf) -> u32:
+    if length(s) < 192 or read64(s, 0) != REQUEST or read64(s, 24) != length(s) - 192:
+        return INVALID
+    if zeros(s, 32, 32) == 0 or length(s) > (MAXWORD - 1048608) // 2:
+        return INVALID
+    if length(w) < 1048608 + length(s) * 2 or length(o) < 65568:
+        return CAPACITY
+    if get(w, 0) == 0:
+        if zeros(w, 0, length(w)) == 0:
+            return INVALID
+        put(w, 120, STATE)
+        put(w, 128, length(o))
+        put(w, 136, length(w))
+        put(w, 144, length(s))
+        copy_range(w, s, 1048576, 0, length(s))
+        put(w, 0, 10)
+        if valid_id(s, 64) == 0:
+            fail(w, 1, 1)
+        else:
+            if read64(s, 8) < 1 or read64(s, 8) > 32 or read64(s, 16) > 1:
+                fail(w, 1, 2)
+            else:
+                if read64(s, 16) == 1:
+                    if valid_id(s, 128) == 0:
+                        fail(w, 1, 2)
+                else:
+                    if zeros(s, 128, 64) == 0:
+                        return INVALID
+    else:
+        if get(w, 120) != STATE or get(w, 0) == 999 or get(w, 104) != 1:
+            return INVALID
+        if get(w, 128) != length(o) or get(w, 136) != length(w) or get(w, 144) != length(s):
+            return INVALID
+        if equal_inputs(s, w, 1048576) == 0 or ack_valid(w) == 0:
+            return INVALID
+        put(w, 104, 0)
+    while True:
+        phase = get(w, 0)
+        result = 4294967295
+        if phase >= 10 and phase <= 19:
+            result = acquire_and_open(s, w)
+        if phase >= 20 and phase <= 29:
+            result = capture_hot(s, w)
+        if phase >= 30 and phase <= 39:
+            result = select_page(s, w)
+        if phase >= 40 and phase <= 49:
+            result = active_rows(s, w)
+        if phase >= 50 and phase <= 59:
+            result = page_result(w)
+        if phase >= 900 and phase <= 904:
+            result = finish(o, w)
+        if result != 0:
+            return result
+        if get(w, 0) == phase and phase != 21 and phase != 30 and phase != 40:
+            return INVALID
+    return INVALID
+
+def acquire_and_open(s:readbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    error_number = get(w, 336)
+    if phase == 10:
+        return action(w, 110, 0, 0, 0, 0, 11)
+    if phase == 11:
+        if error_number != 0:
+            fail(w, 1, 3)
+        else:
+            put(w, 48, 1)
+            at = 1048576 + length(s)
+            put(w, at, ROOT_REQUEST)
+            put(w, at + 8, 2)
+            put(w, at + 16, length(s) - 192)
+            put(w, at + 24, 0)
+            copy_range(w, s, at + 32, 192, length(s) - 192)
+            return action(w, 101, at, length(s) - 160, 4096, 160, 12)
+    if phase == 12:
+        if error_number != 0 or get(w, 328) != 160 or get(w, 4096) != ROOT_RESPONSE:
+            fail(w, 1, 9)
+        else:
+            if get(w, 4128) != 160 or get(w, 4136) != 2 or zeros(w, 4144, 16) == 0 or zeros(w, 4248, 8) == 0:
+                fail(w, 1, 9)
+            else:
+                if get(w, 4104) != 0:
+                    fail(w, 1, 4)
+                else:
+                    lease = get(w, 4120)
+                    if lease < 1 or lease > 3 or get(w, 4112) != 0:
+                        fail(w, 1, 9)
+                    else:
+                        put(w, 56, 1)
+                        put(w, 0, 20)
+    return 0
+
+def capture_hot(s:readbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 20:
+        put(w, 512, HOT_REQUEST)
+        put(w, 520, 512)
+        put(w, 528, 0)
+        return action(w, 102, 512, 24, 8192, 131136, 22)
+    if phase == 22:
+        size = get(w, 328)
+        if get(w, 336) != 0 or size < 64 or size > 131136 or get(w, 8192) != HOT_RESPONSE:
+            fail(w, 1, 9)
+        else:
+            count = get(w, 8216)
+            if count > 512 or size != 64 + count * 256 or get(w, 8224) != size:
+                fail(w, 1, 9)
+            else:
+                if get(w, 8200) != 0:
+                    fail(w, 1, 4)
+                else:
+                    if get(w, 8208) != 0 or zeros(w, 8232, 24) == 0:
+                        fail(w, 1, 9)
+                    else:
+                        put(w, 16, count)
+                        put(w, 24, 0)
+                        put(w, 0, 21)
+    if phase == 21:
+        index = get(w, 24)
+        if index == get(w, 16):
+            fill_range(w, 150000, 192, 0)
+            put(w, 150000, PAGE_REQUEST)
+            put(w, 150008, 1)
+            put(w, 150016, get(w, 16))
+            put(w, 150024, read64(s, 8))
+            put(w, 150032, read64(s, 16))
+            copy_range(w, s, 150064, 64, 128)
+            copy_range(w, w, 150192, 8256, get(w, 16) * 256)
+            put(w, 24, 0)
+            put(w, 32, 0)
+            put(w, 40, 0)
+            put(w, 64, choose(read64(s, 16) == 0, 1, 0))
+            put(w, 0, 30)
+        else:
+            at = 8256 + index * 256
+            if valid_row(w, at) == 0 or get(w, at + 240) != 0:
+                fail(w, 1, 9)
+            else:
+                if index > 0 and row_less(w, at - 256, at) == 0:
+                    fail(w, 1, 9)
+                else:
+                    put(w, 24, index + 1)
+    return 0
+
+def select_page(s:readbuf, w:mutbuf) -> u64:
+    index = get(w, 24)
+    if index == get(w, 16):
+        if get(w, 64) == 0:
+            fail(w, 2, 5)
+        else:
+            put(w, 24, 0)
+            put(w, 32, 0)
+            put(w, 72, 0)
+            put(w, 0, 40)
+    else:
+        at = 150192 + index * 256
+        put(w, 24, index + 1)
+        if equal(w, at + 64, 1048640, 64) == 1:
+            own_index = get(w, 32)
+            put(w, 32, own_index + 1)
+            if read64(s, 16) == 1 and equal(w, at, 1048704, 64) == 1:
+                put(w, 40, own_index + 1)
+                put(w, 64, 1)
+    return 0
+
+def active_rows(s:readbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 40:
+        index = get(w, 24)
+        if index == get(w, 16) or get(w, 72) == read64(s, 8):
+            return action(w, 104, 150000, 192 + get(w, 16) * 256, 300000, 65568, 50)
+        at = 150192 + index * 256
+        put(w, 24, index + 1)
+        if equal(w, at + 64, 1048640, 64) == 1:
+            own_index = get(w, 32)
+            put(w, 32, own_index + 1)
+            if own_index >= get(w, 40):
+                put(w, 72, get(w, 72) + 1)
+                put(w, 80, at)
+                if get(w, at + 200) == 0:
+                    return action(w, 103, at, 64, 0, 0, 41)
+                put(w, 0, 42)
+    if phase == 41:
+        if get(w, 336) != 0:
+            fail(w, 1, 6)
+        else:
+            put(w, get(w, 80) + 240, get(w, 328))
+            put(w, 0, 42)
+    if phase == 42:
+        if get(w, get(w, 80) + 216) != 0:
+            fail(w, 3, 7)
+        else:
+            put(w, 0, 40)
+    return 0
+
+def page_result(w:mutbuf) -> u64:
+    size = get(w, 328)
+    if get(w, 336) != 0 or size < 32 or size > 65568 or get(w, 300000) != PAGE_RESPONSE:
+        fail(w, 1, 9)
+    else:
+        diagnostic = get(w, 300008)
+        if diagnostic != 0:
+            if size != 32 or diagnostic > 5:
+                fail(w, 1, 9)
+            else:
+                fail(w, choose(diagnostic == 3, 3, choose(diagnostic == 2, 2, 1)), 8)
+        else:
+            if get(w, 300016) != size - 32 or get(w, 300024) != size:
+                fail(w, 1, 9)
+            else:
+                put(w, 88, size - 32)
+                put(w, 0, 900)
+    return 0
+
+def finish(o:mutbuf, w:mutbuf) -> u64:
+    phase = get(w, 0)
+    if phase == 901:
+        put(w, 56, 0)
+        put(w, 0, 900)
+    if phase == 902:
+        put(w, 48, 0)
+        put(w, 0, 900)
+    if phase == 900:
+        if get(w, 56) == 1:
+            return action(w, 105, 0, 0, 0, 0, 901)
+        if get(w, 48) == 1:
+            return action(w, 111, 0, 0, 0, 0, 902)
+        count = choose(get(w, 152) == 0, get(w, 88), 0)
+        fill_range(o, 0, 32, 0)
+        put(o, 0, RESPONSE)
+        put(o, 8, get(w, 152))
+        put(o, 16, count)
+        put(o, 24, 32 + count)
+        copy_range(o, w, 32, 300032, count)
+        put(w, 0, 999)
+        return 32 + count
+    return 0
+
+def action(w:mutbuf, kind:u64, span:u64, count:u64, target:u64, capacity:u64, phase:u64) -> u64:
+    sequence = get(w, 8)
+    if sequence == MAXWORD:
+        return INVALID
+    fill_range(w, 256, 96, 0)
+    put(w, 256, ACTION)
+    put(w, 264, sequence + 1)
+    put(w, 272, kind)
+    put(w, 288, span)
+    put(w, 296, count)
+    put(w, 304, target)
+    put(w, 312, capacity)
+    copy_range(w, w, 384, 256, 64)
+    put(w, 8, sequence + 1)
+    put(w, 104, 1)
+    put(w, 0, phase)
+    return YIELD
+
+def ack_valid(w:mutbuf) -> u64:
+    if get(w, 256) != ACTION or equal(w, 256, 384, 64) == 0 or get(w, 320) != get(w, 8) or get(w, 344) != 0:
+        return 0
+    error_number = get(w, 336)
+    result = get(w, 328)
+    if error_number > 4095 or error_number != 0 and result != 0:
+        return 0
+    kind = get(w, 272)
+    if kind == 101 or kind == 102 or kind == 104:
+        if result > get(w, 312):
+            return 0
+    else:
+        if kind == 103:
+            if result > 1:
+                return 0
+        else:
+            if result != 0:
+                return 0
+            if kind == 111 and error_number != 0:
+                return 0
+    return 1
+
+def fail(w:mutbuf, diagnostic:u64, reason:u64) -> u64:
+    put(w, 152, diagnostic)
+    put(w, 160, reason)
+    put(w, 0, 900)
+    return 0
