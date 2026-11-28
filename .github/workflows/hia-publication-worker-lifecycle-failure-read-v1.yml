@@ -1,0 +1,36 @@
+name: Read complete failed publication worker lifecycle bytes
+on:
+  workflow_dispatch:
+  push:
+    branches: ['hia-publication-worker-lifecycle-failure-read-6780-v1-20261117']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: qualification/publication_worker_lifecycle_failure_v1
+      - name: Read every retained proof byte without any application
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -I -S -B "$GITHUB_WORKSPACE/runtime/qualification/publication_worker_lifecycle_failure_v1/read_proof.py" --output "$RUNNER_TEMP/publisher-lifecycle-failure-read" > "$RUNNER_TEMP/publisher-lifecycle-failure-read.stdout" 2> "$RUNNER_TEMP/publisher-lifecycle-failure-read.stderr"
+          cat "$RUNNER_TEMP/publisher-lifecycle-failure-read.stdout"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: publisher-lifecycle-failure-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/publisher-lifecycle-failure-read
+            ${{ runner.temp }}/publisher-lifecycle-failure-read.stdout
+            ${{ runner.temp }}/publisher-lifecycle-failure-read.stderr
+          compression-level: 0
+          if-no-files-found: error
