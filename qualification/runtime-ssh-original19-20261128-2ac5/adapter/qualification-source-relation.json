@@ -1,0 +1,77 @@
+{
+  "files": {
+    "api.S": {
+      "bytes": 17493,
+      "original": "2cbdb8b069f5118f1202bc67e6937f91937e4c4fbdc857042da97ffdd4284ae9",
+      "projected": "a01528940a50139e1a1feaa7e506338781a7a530a6d2b4325198e6725d738067"
+    },
+    "core.S": {
+      "bytes": 16914,
+      "original": "6032713d4ff69dfb5968f39ce1d75d32a1beb6f4a8e505c0dd2bc22a7f7ea979",
+      "projected": "6032713d4ff69dfb5968f39ce1d75d32a1beb6f4a8e505c0dd2bc22a7f7ea979"
+    },
+    "future.S": {
+      "bytes": 4064,
+      "original": "39caf8cb278b49689cb135454c04eae56ab2468f8f67e709bf93043904aaa3c4",
+      "projected": "39caf8cb278b49689cb135454c04eae56ab2468f8f67e709bf93043904aaa3c4"
+    },
+    "io.S": {
+      "bytes": 11789,
+      "original": "e12fde415ca6936ce6ff094179a0be7bb47734baec1d772e14481778d3f9f331",
+      "projected": "0cbaa4223d05a9c49e6c194fe1791cb25606eb9d4e8fa5b9a782f998ab8bc72c"
+    },
+    "owner.S": {
+      "bytes": 10906,
+      "original": "2ebdfc6f455e9db175573a58cb7639e518df31e006315d2902245f7b93a43ca6",
+      "projected": "2ebdfc6f455e9db175573a58cb7639e518df31e006315d2902245f7b93a43ca6"
+    },
+    "ownership.S": {
+      "bytes": 13037,
+      "original": "00010530d34a8e95871ea5c8e40ed8b7a6dba74529dc7812790846fc86f0a96e",
+      "projected": "49752f1b87340c1e6bf5067e1c545fac41d83c3481ce726907221d563d55ac4c"
+    },
+    "spawn.S": {
+      "bytes": 7056,
+      "original": "59d056b323660fc8ceaecee024cbd5795a5899562bcb4a28a7a135bdae393036",
+      "projected": "59d056b323660fc8ceaecee024cbd5795a5899562bcb4a28a7a135bdae393036"
+    }
+  },
+  "relations": [
+    {
+      "after": "    cmp QWORD PTR [r14+48], 0\n    je .Lsubmit_invalid\n    mov rax, 0x3130415144535348\n    cmp QWORD PTR [r14+56], rax\n    jne .Lsubmit_invalid\n",
+      "before": "    cmp QWORD PTR [r14+48], 0\n    jne .Lsubmit_invalid\n    cmp QWORD PTR [r14+56], 0\n    jne .Lsubmit_invalid\n",
+      "path": "api.S"
+    },
+    {
+      "after": "    mov QWORD PTR [r13+R_CTX], r12\n    mov rax, [r14+48]\n    mov [r13+496], rax\n",
+      "before": "    mov QWORD PTR [r13+R_CTX], r12\n",
+      "path": "api.S"
+    },
+    {
+      "after": "    call ssh_admission\n    cmp eax, 320\n    jne .Lsubmit_protocol_failed\n    mov rdi, [r13+496]\n    mov rsi, r13\n    call ssh_qa_prepared\n    test rax, rax\n    jnz .Lsubmit_protocol_failed\n    mov rdi, r13\n    mov esi, 1\n",
+      "before": "    call ssh_admission\n    cmp eax, 320\n    jne .Lsubmit_protocol_failed\n    mov rdi, r13\n    mov esi, 1\n",
+      "path": "api.S"
+    },
+    {
+      "after": "    mov QWORD PTR [r13+R_ID], r9\n    mov rdi, r13\n    call ssh_qa_spawn_prepared\n    test rax, rax\n    jnz .Lbegin_abort_protocol\n    mov rdi, r13\n    call ssh_commit\n",
+      "before": "    mov QWORD PTR [r13+R_ID], r9\n    mov rdi, r13\n    call ssh_commit\n",
+      "path": "ownership.S"
+    },
+    {
+      "after": "    mov QWORD PTR [r13+R_PHASE], 2\n    mov rdi, r13\n    call ssh_qa_registered\n    test rax, rax\n    jz .Lbegin_return\n    mov QWORD PTR [r12+C_ERROR], 71\n    mov QWORD PTR [r13+R_KIND], 1\n    mov QWORD PTR [r13+R_REASON], 203\n    mov QWORD PTR [r13+R_ERRNO], 71\n    mov rdi, r12\n    call ssh_core_stop\n    jmp .Lbegin_return\n",
+      "before": "    mov QWORD PTR [r13+R_PHASE], 2\n    jmp .Lbegin_return\n",
+      "path": "ownership.S"
+    },
+    {
+      "after": "    lock inc QWORD PTR [r12+C_REAPED]\n    mov rdi, r13\n    mov rsi, r14\n    mov edx, DWORD PTR [r13+R_STATUS]\n    call ssh_qa_observe_wait\n    mov r14, rax\n    mov edx, 1\n    mov rcx, rax\n    neg rcx\n    test rax, rax\n    js .Ldrive_child_wait_ack\n    xor edx, edx\n    mov ecx, DWORD PTR [r13+R_STATUS]\n.Ldrive_child_wait_ack:\n",
+      "before": "    lock inc QWORD PTR [r12+C_REAPED]\n    xor edx, edx\n    mov ecx, DWORD PTR [r13+R_STATUS]\n.Ldrive_child_wait_ack:\n",
+      "path": "io.S"
+    },
+    {
+      "after": "    # Queue acquires its own reference; the QA cancellation capability\n    # already retains the exact request before admission publication.\n    lock inc QWORD PTR [r13+R_REFS]\n",
+      "before": "    mov QWORD PTR [r13+R_REFS], 2\n",
+      "path": "api.S"
+    }
+  ],
+  "scope": "exact qualification-only callback/fault effect projection; production seven originals unchanged"
+}
